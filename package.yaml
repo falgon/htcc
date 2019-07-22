@@ -14,6 +14,7 @@ description:         Please see the README on GitHub at <https://github.com/falg
 
 dependencies:
 - base >= 4.7 && < 5
+- extra
 
 library:
   source-dirs: src
@@ -42,6 +43,7 @@ tests:
     - -with-rtsopts=-N
     - -Wall
     - -Werror
+    - -O2
     dependencies:
     - htcc
     - HUnit

@@ -4,17 +4,17 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ad8e19a82045944c30fc55d0c2de504c7f51c431239a08f73dbaf2e503c86e02
+-- hash: f257c49f4eafa0d4bda27938f5c8379592c1c61f48773dfb788f9797bba1659e
 
 name:           htcc
-version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/githubuser/htcc#readme>
-homepage:       https://github.com/githubuser/htcc#readme
-bug-reports:    https://github.com/githubuser/htcc/issues
-author:         Author name here
-maintainer:     example@example.com
-copyright:      2019 Author name here
-license:        BSD3
+version:        0.0.0.1
+description:    Please see the README on GitHub at <https://github.com/falgon/htcc#readme>
+homepage:       https://github.com/falgon/htcc#readme
+bug-reports:    https://github.com/falgon/htcc/issues
+author:         roki
+maintainer:     falgon53@yahoo.co.jp
+copyright:      2019 roki
+license:        MIT
 license-file:   LICENSE
 build-type:     Simple
 extra-source-files:
@@ -23,10 +23,12 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/githubuser/htcc
+  location: https://github.com/falgon/htcc
 
 library
   exposed-modules:
+      C.Generate
+      C.Parse
       C.Token
       C.Utils
   other-modules:
@@ -35,6 +37,7 @@ library
       src
   build-depends:
       base >=4.7 && <5
+    , extra
   default-language: Haskell2010
 
 executable htcc
@@ -59,11 +62,12 @@ test-suite htcc-test
       Paths_htcc
   hs-source-dirs:
       test
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall -Werror
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall -Werror -O2
   build-depends:
       HUnit
     , base >=4.7 && <5
     , directory
+    , extra
     , htcc
     , text
     , time
