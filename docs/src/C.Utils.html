@@ -1,0 +1,25 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">{-|
+Module      : C.Utils
+Description : Utilities
+Copyright   : (c) roki, 2019
+License     : MIT
+Maintainer  : falgon53@yahoo.co.jp
+Stability   : experimental
+Portability : POSIX
+-}</span><span>
+</span><a name="line-10"></a><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">C.Utils</span><span> </span><span class="hs-special">(</span><span>
+</span><a name="line-11"></a><span>    </span><a href="C.Utils.html#putStrLnErr"><span class="hs-identifier hs-var">putStrLnErr</span></a><span class="hs-special">,</span><span>
+</span><a name="line-12"></a><span>    </span><a href="C.Utils.html#err"><span class="hs-identifier hs-var">err</span></a><span>
+</span><a name="line-13"></a><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><a name="line-14"></a><span>
+</span><a name="line-15"></a><span class="hs-keyword">import</span><span> </span><span class="hs-identifier">System.IO</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">hPutStrLn</span><span class="hs-special">,</span><span> </span><span class="hs-identifier hs-var">stderr</span><span class="hs-special">)</span><span>
+</span><a name="line-16"></a><span class="hs-keyword">import</span><span> </span><span class="hs-identifier">System.Exit</span><span> </span><span class="hs-special">(</span><span class="hs-identifier hs-var">exitFailure</span><span class="hs-special">)</span><span>
+</span><a name="line-17"></a><span>
+</span><a name="line-18"></a><span class="hs-comment">-- | Standard error output shortcut</span><span>
+</span><a name="line-19"></a><span class="hs-identifier">putStrLnErr</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-identifier hs-type">String</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-identifier hs-type">IO</span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span>
+</span><a name="line-20"></a><a name="putStrLnErr"><a href="C.Utils.html#putStrLnErr"><span class="hs-identifier">putStrLnErr</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-identifier hs-var">hPutStrLn</span><span> </span><span class="hs-identifier hs-var">stderr</span><span>
+</span><a name="line-21"></a><span>
+</span><a name="line-22"></a><span class="hs-comment">-- | Standard error output and exit shortcut</span><span>
+</span><a name="line-23"></a><span class="hs-identifier">err</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-identifier hs-type">String</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-identifier hs-type">IO</span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span><span>
+</span><a name="line-24"></a><a name="err"><a href="C.Utils.html#err"><span class="hs-identifier">err</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-identifier hs-var">flip</span><span> </span><span class="hs-special">(</span><span class="hs-operator hs-var">&gt;&gt;</span><span class="hs-special">)</span><span> </span><span class="hs-identifier hs-var">exitFailure</span><span> </span><span class="hs-operator hs-var">.</span><span> </span><a href="C.Utils.html#putStrLnErr"><span class="hs-identifier hs-var">putStrLnErr</span></a><span>
+</span><a name="line-25"></a></pre></body></html>
