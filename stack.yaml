@@ -47,5 +47,5 @@ build:
     haddock-args:
     - --odir=docs
   open-haddocks: false
-  haddock-internal: true
+  haddock-internal: false
   haddock-hyperlink-source: true

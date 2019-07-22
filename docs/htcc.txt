@@ -37,6 +37,33 @@ data ATree a
 ATEmpty :: ATree a
 ATNode :: ATKind a -> ATree a -> ATree a -> ATree a
 
+-- | <a>inners</a> is a general function for creating expr and factor in
+--   the following syntax (EBNF) of LL (1).
+--   
+--   &lt;math&gt;
+inners :: ([Token i] -> ATree i -> Maybe ([Token i], ATree i)) -> [(Char, ATKind i)] -> [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+
+-- | <a>expr</a> indicates &lt;math&gt; among the comments of
+--   <a>inners</a>. This is equivalent to the following code:
+--   
+--   <pre>
+--   expr ::  [Token i] -&gt; ATree i -&gt; Maybe ([Token i], ATree i)
+--   expr xs atn = flip (maybe Nothing) (factor xs atn) $ \(ert, erat) -&gt; expr' ert erat
+--       where
+--           expr' (TKReserved '+':ys) era = maybe Nothing (\(zrt, zrat) -&gt; expr' zrt $ ATNode ATAdd era zrat) $ factor ys era
+--           expr' (TKReserved '-':ys) era = maybe Nothing (\(zrt, zrat) -&gt; expr' zrt $ ATNode ATSub era zrat) $ factor ys era
+--           expr' ert era = Just (ert, era)
+--   </pre>
+expr :: [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+
+-- | <a>factor</a> indicates &lt;math&gt; amount the comments of
+--   <a>inners</a>.
+factor :: [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+
+-- | <a>term</a> indicates &lt;math&gt; amont the comments of
+--   <a>inners</a>. Same as <a>expr</a>.
+term :: [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+
 -- | Constructs the abstract syntax tree based on the list of token
 --   strings. if construction fails, <a>Nothing</a> is returned.
 parse :: [Token i] -> Maybe (ATree i)
@@ -56,13 +83,3 @@ putStrLnErr :: String -> IO ()
 
 -- | Standard error output and exit shortcut
 err :: String -> IO ()
-
-module Paths_htcc
-version :: Version
-getBinDir :: IO FilePath
-getLibDir :: IO FilePath
-getDynLibDir :: IO FilePath
-getDataDir :: IO FilePath
-getLibexecDir :: IO FilePath
-getDataFileName :: FilePath -> IO FilePath
-getSysconfDir :: IO FilePath

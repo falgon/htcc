@@ -6,10 +6,10 @@ import Data.Bool (bool)
 import Data.Tuple.Extra (second, dupe)
 import Data.Either (isLeft, fromLeft, fromRight)
 
-import C.Token
-import C.Parse
-import C.Generate
-import C.Utils
+import C.Token (Token (..), tokenize)
+import C.Parse (parse)
+import C.Generate (generate)
+import C.Utils (err)
 
 checkArgs :: IO (Maybe [String])
 checkArgs = uncurry (bool Nothing . Just) . second (not . null) . dupe <$> getArgs

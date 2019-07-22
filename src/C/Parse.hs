@@ -10,6 +10,10 @@ Portability : POSIX
 module C.Parse (
     ATKind (..),
     ATree (..),
+    inners,
+    expr,
+    factor,
+    term,
     parse
 ) where
 
@@ -23,49 +27,50 @@ data ATKind a = ATAdd | ATSub | ATMul | ATDiv | ATNum a
 -- | Abstract syntax tree
 data ATree a = ATEmpty | ATNode (ATKind a) (ATree a) (ATree a)
 
--- | `inners` is a general function for creating expr and factor in the following syntax (EBNF)
--- 
--- expr     = factor ("+" factor | "-" factor)*
--- factor   = term ("*" term | "/" term)*
--- term     = num | "(" expr ")"
+-- | `inners` is a general function for creating expr and factor in the following syntax (EBNF) of LL (1).
 --
--- of LL (1).
+-- \[
+-- \begin{eqnarray}
+-- {\rm expr} &=& {\rm term}\ ("+"\ {\rm term}\ \mid\ "-"\ {\rm term})^\ast \\
+-- {\rm term} &=& {\rm factor}\ ("\ast"\ {\rm factor}\ \mid\ "/"\ {\rm factor})^\ast \\
+-- {\rm factor} &=& {\rm num} \mid\ "(" {\rm expr} ")"
+-- \end{eqnarray}
+-- \]
 inners :: ([Token i] -> ATree i -> Maybe ([Token i], ATree i)) -> [(Char, ATKind i)] -> [Token i] -> ATree i -> Maybe ([Token i], ATree i)
 inners _ _ [] atn = Just ([], atn)
-inners f cs xs atn = maybe Nothing (uncurry (inners' f cs)) $ f xs atn --  flip (maybe Nothing) (f xs atn) $ \(ert, erat) -> inners' f cs ert erat 
+inners f cs xs atn = maybe Nothing (uncurry (inners' f cs)) $ f xs atn
     where
         inners' _ _ [] at = Just ([], at)
         inners' g ds ys at = flip (maybe (Just (ys, at))) (find (\(c, _) -> case head ys of TKReserved cc -> cc == c; _ -> False) ds) $ \(_, k) -> 
             maybe Nothing (uncurry id . first (inners' f cs) . second (ATNode k at)) $ g (tail ys) at
 
 
--- | `expr` indicates "expr = factor ("+" factor | "-" factor)*" among the comments of `inners`.
+-- | `expr` indicates \({\rm expr} = {\rm term}\ ("+"\ {\rm term}\ \mid\ "-"\ {\rm term})^\ast\) among the comments of `inners`.
 -- This is equivalent to the following code:
--- @
---      expr ::  [Token i] -> ATree i -> Maybe ([Token i], ATree i)
---      expr xs atn = flip (maybe Nothing) (factor xs atn) $ \(ert, erat) -> expr' ert erat
---          where
---              expr' (TKReserved '+':ys) era = maybe Nothing (\(zrt, zrat) -> expr' zrt $ ATNode ATAdd era zrat) $ factor ys era
---              expr' (TKReserved '-':ys) era = maybe Nothing (\(zrt, zrat) -> expr' zrt $ ATNode ATSub era zrat) $ factor ys era
---              expr' ert era = Just (ert, era)
 --
--- @
+-- 
+-- > expr ::  [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+-- > expr xs atn = flip (maybe Nothing) (factor xs atn) $ \(ert, erat) -> expr' ert erat
+-- >     where
+-- >         expr' (TKReserved '+':ys) era = maybe Nothing (\(zrt, zrat) -> expr' zrt $ ATNode ATAdd era zrat) $ factor ys era
+-- >         expr' (TKReserved '-':ys) era = maybe Nothing (\(zrt, zrat) -> expr' zrt $ ATNode ATSub era zrat) $ factor ys era
+-- >         expr' ert era = Just (ert, era)
 expr ::  [Token i] -> ATree i -> Maybe ([Token i], ATree i)
-expr = inners factor [('+', ATAdd), ('-', ATSub)]
+expr = inners term [('+', ATAdd), ('-', ATSub)]
 
--- | `factor` indicates "term ("*" term | "/" term)*" amont the comments of `inners`.
+-- | `term` indicates \({\rm term} = {\rm factor}\ ("\ast"\ {\rm factor}\ \mid\ "/"\ {\rm factor})^\ast\) amont the comments of `inners`.
 -- Same as `expr`.
-factor ::  [Token i] -> ATree i -> Maybe ([Token i], ATree i)
-factor = inners term [('*', ATMul), ('/', ATDiv)]
-
--- | `term` indicates "num | "(" expr ")"" amount the comments of `inners`.
 term ::  [Token i] -> ATree i -> Maybe ([Token i], ATree i)
-term [] atn = Just ([], atn)
-term (TKReserved '(':xs) atn = flip (maybe Nothing) (expr xs atn) $ \(ert, erat) -> case ert of
+term = inners factor [('*', ATMul), ('/', ATDiv)]
+
+-- | `factor` indicates \({\rm factor} = {\rm num} \mid\ "(" {\rm expr} ")"\) amount the comments of `inners`.
+factor ::  [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+factor [] atn = Just ([], atn)
+factor (TKReserved '(':xs) atn = flip (maybe Nothing) (expr xs atn) $ \(ert, erat) -> case ert of
     TKReserved ')':ys -> Just (ys, erat)
     _ -> Nothing
-term (TKNum n:xs) _ = Just (xs, ATNode (ATNum n) ATEmpty ATEmpty)
-term _ _ = Nothing
+factor (TKNum n:xs) _ = Just (xs, ATNode (ATNum n) ATEmpty ATEmpty)
+factor _ _ = Nothing
 
 -- | Constructs the abstract syntax tree based on the list of token strings.
 -- if construction fails, `Nothing` is returned.
