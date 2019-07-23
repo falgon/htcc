@@ -26,9 +26,10 @@ outError :: String -> Int -> IO ()
 outError xs n = putStrLn xs >> putStr (replicate n ' ') >> putStrLn "^ Invalid token" >> exitFailure
 
 srcCode :: String -> IO ()
-srcCode xs = let tk = tokenize xs :: Either Int [Token Int] in 
-    if isLeft tk then outError xs (fromLeft 0 tk) else flip (maybe (err "Failed to generate abstract tree")) (parse $ fromRight [] tk) $ \x -> 
-        outHead >> generate x >> putStrLn "\tpop rax" >> putStrLn "\tret"
+srcCode xs = let tk = tokenize xs :: Either Int [Token Int] in
+    if isLeft tk then outError xs (fromLeft 0 tk) else flip (maybe (err "Failed to generate abstract tree")) (parse $ fromRight [] tk) $ \ys ->
+        outHead >> putStrLn "\tpush rbp" >> putStrLn "\tmov rbp, rsp" >> putStrLn "\tsub rsp, 208" >> mapM_ generate ys >> putStrLn "\tpop rax" 
+            >> putStrLn "\tmov rsp, rbp" >> putStrLn "\tpop rbp" >> putStrLn "\tret"
 
 main :: IO ()
 main = checkArgs >>= maybeExit >>= srcCode . head

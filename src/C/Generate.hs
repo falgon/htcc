@@ -15,9 +15,15 @@ import Control.Exception (finally)
 import C.Utils (err)
 import C.Parse (ATKind (..), ATree (..))
 
+generateLValue :: Show i => ATree i -> IO ()
+generateLValue (ATNode (ATLVar v) _ _) = putStrLn "\tmov rax, rbp" >> putStrLn ("\tsub rax, " ++ show v) >> putStrLn "\tpush rax"
+generateLValue _ = err "lvalue required as left operand of assignment"
+
 -- | Simulate the stack machine by traversing an abstract syntax tree and output assembly codes.
 generate :: Show i => ATree i -> IO ()
 generate (ATNode (ATNum x) _ _) = putStrLn $ "\tpush " ++ show x
+generate n@(ATNode (ATLVar _) _ _) = generateLValue n >> putStrLn "\tpop rax" >> putStrLn "\tmov rax, [rax]" >> putStrLn "\tpush rax"
+generate (ATNode ATAssign lhs rhs) = generateLValue lhs >> generate rhs >> putStrLn "\tpop rdi" >> putStrLn "\tpop rax" >> putStrLn "\tmov [rax], rdi" >> putStrLn "\tpush rdi"
 generate (ATNode k lhs rhs) = flip finally (putStrLn "\tpush rax") $ generate lhs >> generate rhs >> putStrLn "\tpop rdi" >> putStrLn "\tpop rax" >> case k of
     ATAdd -> putStrLn "\tadd rax, rdi"
     ATSub -> putStrLn "\tsub rax, rdi"

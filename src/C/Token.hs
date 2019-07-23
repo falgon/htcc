@@ -12,14 +12,17 @@ module C.Token (
     tokenize
 ) where
 
-import Data.Char (isDigit, isSpace)
+import Data.Char (isDigit, isSpace, isAlpha)
 
 -- | Token type
-data Token i = TKReserved String | TKNum i deriving (Eq, Show)
+data Token i = TKReserved String -- ^ The reserved token
+    | TKNum i -- ^ The number data
+    | TKIdent String -- ^ The identifier
+    deriving (Eq, Show)
 
 {-# INLINE charOps #-}
-charOps :: String -- Char
-charOps = "+-*/()<>"
+charOps :: String
+charOps = "+-*/()<>=;"
 
 {-# INLINE strOps #-}
 strOps :: [String]
@@ -35,10 +38,10 @@ tokenize :: Read i => String -> Either Int [Token i]
 tokenize = tokenize' 0
     where
         tokenize' _ [] = Right []
-        tokenize' n (x:xs)
+        tokenize' n xxs@(x:xs)
             | isDigit x = let ts = takeWhile isDigit xs in 
                 (TKNum (read (x:ts)) :) <$> tokenize' (succ (n + length ts)) (drop (length ts) xs)
             | isSpace x = tokenize' (succ n) xs
             | not (null xs) && [x, head xs] `elem` strOps = (TKReserved [x, head xs] :) <$> tokenize' (n + 2) (tail xs)
             | x `elem` charOps = (TKReserved [x] :) <$> tokenize' (succ n) xs
-            | otherwise = Left n
+            | otherwise = let var = takeWhile isAlpha xxs in if null var then Left n else (TKIdent var :) <$> tokenize' (succ (n + length var)) (drop (length var) xxs)

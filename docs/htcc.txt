@@ -12,8 +12,15 @@ module C.Token
 
 -- | Token type
 data Token i
+
+-- | The reserved token
 TKReserved :: String -> Token i
+
+-- | The number data
 TKNum :: i -> Token i
+
+-- | The identifier
+TKIdent :: String -> Token i
 
 -- | Tokenize from <a>String</a>. If it fails, the Left that wraps the
 --   value representing that point is returned.
@@ -59,6 +66,12 @@ ATNEQ :: ATKind a
 
 -- | The number
 ATNum :: a -> ATKind a
+
+-- | The assign operator
+ATAssign :: ATKind a
+
+-- | The local variable. It has a offset value
+ATLVar :: a -> ATKind a
 
 -- | The data structure of abstract syntax tree
 data ATree a
@@ -138,12 +151,25 @@ relational :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
 --   </pre>
 equality :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
 
--- | <a>expr</a> is equivalent to <a>equality</a>
+-- | <a>assign</a> indicates &lt;math&gt; among the comments of
+--   <a>inners</a>.
+assign :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+
+-- | <a>expr</a> is equivalent to <a>equality</a>.
 expr :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+
+-- | <a>stmt</a> indicates &lt;math&gt; among the comments of
+--   <a>inners</a>.
+stmt :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+
+-- | <a>program</a> indicates &lt;math&gt; among the comments of
+--   <a>inners</a>.
+program :: Num i => [Token i] -> Maybe [ATree i]
 
 -- | Constructs the abstract syntax tree based on the list of token
 --   strings. if construction fails, <a>Nothing</a> is returned.
-parse :: Num i => [Token i] -> Maybe (ATree i)
+--   <a>parse</a> is equivalent to <a>program</a>.
+parse :: Num i => [Token i] -> Maybe [ATree i]
 instance GHC.Show.Show a => GHC.Show.Show (C.Parse.ATree a)
 instance GHC.Show.Show a => GHC.Show.Show (C.Parse.ATKind a)
 

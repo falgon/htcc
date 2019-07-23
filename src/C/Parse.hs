@@ -17,12 +17,17 @@ module C.Parse (
     factor,
     relational,
     equality,
+    assign,
     expr,
+    stmt,
+    program,
     parse
 ) where
 
 import Data.Tuple.Extra (first, second)
 import Data.List (find)
+import Data.Char (ord)
+
 import C.Token
 
 -- | The syntax tree type
@@ -37,24 +42,54 @@ data ATKind a = ATAdd -- ^ \(+\)
     | ATEQ  -- ^ \(=\)
     | ATNEQ -- ^ \(\not=\)
     | ATNum a -- ^ The number
-
+    | ATAssign -- ^ The assign operator
+    | ATLVar a -- ^ The local variable. It has a offset value
+    deriving Show
 
 -- | The data structure of abstract syntax tree
 data ATree a = ATEmpty -- ^ The empty node 
     | ATNode (ATKind a) (ATree a) (ATree a) -- ^ `ATKind` representing the kind of node and the two branches `ATree` it has
+    deriving Show
+
+-- | `program` indicates \(\eqref{eq:eigth}\) among the comments of `inners`.
+program :: Num i => [Token i] -> Maybe [ATree i]
+program [] = Just []
+program xs = maybe Nothing (\(ys, btn) -> (btn :) <$> program ys) $ stmt xs ATEmpty
+
+-- | `stmt` indicates \(\eqref{eq:nineth}\) among the comments of `inners`.
+stmt :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+stmt xs atn = flip (maybe Nothing) (expr xs atn) $ \(ert, erat) -> case ert of
+    TKReserved ";":ys -> Just (ys, erat)
+    _ -> Nothing
+
+
+{-# INLINE expr #-}
+-- | `expr` is equivalent to `equality`.
+expr :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+expr = assign
+
+
+-- | `assign` indicates \(\eqref{eq:seventh}\) among the comments of `inners`.
+assign :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+assign xs atn = flip (maybe Nothing) (equality xs atn) $ \(ert, erat) -> case ert of
+    TKReserved "=":ys -> second (ATNode ATAssign erat) <$> assign ys erat
+    _ -> Just (ert, erat)
 
 
 -- | `inners` is a general function for creating `equality`, `relational`, `add` and `term` in the following syntax (EBNF) of LL (1).
 --
 -- \[
 -- \begin{eqnarray}
--- {\rm expr} &=& {\rm equality}\\
--- {\rm equality} &=& {\rm relational}\ \left("=="\ {\rm relational}\ \mid\ "!="\ {\rm relational}\right)^\ast\label{eq:fifth}\tag{1}\\
--- {\rm relational} &=& {\rm add}\ \left("\lt"\ {\rm add}\mid\ "\lt ="\ {\rm add}\mid\ "\gt"\ {\rm add}\mid\ "\gt ="\ {\rm add}\right)^\ast\label{eq:sixth}\tag{2}\\
--- {\rm add} &=& {\rm term}\ \left("+"\ {\rm term}\ \mid\ "-"\ {\rm term}\right)^\ast\label{eq:first}\tag{3} \\
--- {\rm term} &=& {\rm factor}\ \left("\ast"\ {\rm factor}\ \mid\ "/"\ {\rm factor}\right)^\ast\label{eq:second}\tag{4} \\
--- {\rm unary} &=& \left("+"\ \mid\ "-"\right)?\ {\rm factor}\label{eq:fourth}\tag{5} \\
--- {\rm factor} &=& {\rm num} \mid\ "(" {\rm add} ")"\label{eq:third}\tag{6}
+-- {\rm program} &=& {\rm stmt}^\ast\label{eq:eigth}\tag{1}\\
+-- {\rm stmt} &=& {\rm expr}\ ";"\label{eq:nineth}\tag{2}\\
+-- {\rm expr} &=& {\rm assign}\\
+-- {\rm assign} &=& {\rm equality} \left("="\ {\rm assign}\right)?\label{eq:seventh}\tag{3}\\
+-- {\rm equality} &=& {\rm relational}\ \left("=="\ {\rm relational}\ \mid\ "!="\ {\rm relational}\right)^\ast\label{eq:fifth}\tag{4}\\
+-- {\rm relational} &=& {\rm add}\ \left("\lt"\ {\rm add}\mid\ "\lt ="\ {\rm add}\mid\ "\gt"\ {\rm add}\mid\ "\gt ="\ {\rm add}\right)^\ast\label{eq:sixth}\tag{5}\\
+-- {\rm add} &=& {\rm term}\ \left("+"\ {\rm term}\ \mid\ "-"\ {\rm term}\right)^\ast\label{eq:first}\tag{6} \\
+-- {\rm term} &=& {\rm factor}\ \left("\ast"\ {\rm factor}\ \mid\ "/"\ {\rm factor}\right)^\ast\label{eq:second}\tag{7} \\
+-- {\rm unary} &=& \left("+"\ \mid\ "-"\right)?\ {\rm factor}\label{eq:fourth}\tag{8} \\
+-- {\rm factor} &=& {\rm num} \mid\ {\rm ident} \mid\ "(" {\rm add} ")"\label{eq:third}\tag{9}
 -- \end{eqnarray}
 -- \]
 inners :: ([Token i] -> ATree i -> Maybe ([Token i], ATree i)) -> [(String, ATKind i)] -> [Token i] -> ATree i -> Maybe ([Token i], ATree i)
@@ -65,10 +100,6 @@ inners f cs xs atn = maybe Nothing (uncurry (inners' f cs)) $ f xs atn
         inners' g ds ys at = flip (maybe (Just (ys, at))) (find (\(c, _) -> case head ys of TKReserved cc -> cc == c; _ -> False) ds) $ \(_, k) -> 
             maybe Nothing (uncurry id . first (inners' f cs) . second (ATNode k at)) $ g (tail ys) at
 
-{-# INLINE expr #-}
--- | `expr` is equivalent to `equality`
-expr :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
-expr = equality
 
 -- | `equality` indicates \(\eqref{eq:fifth}\) among the comments of `inners`.
 -- This is equivalent to the following code:
@@ -123,7 +154,7 @@ term = inners unary [("*", ATMul), ("/", ATDiv)]
 -- | `unary` indicates \(\eqref{eq:fourth}\) amount the comments of `inners`.
 unary :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
 unary (TKReserved "+":xs) at = factor xs at
-unary (TKReserved "-":xs) at = maybe Nothing (Just . second (ATNode ATSub (ATNode (ATNum 0) ATEmpty ATEmpty))) $ factor xs at
+unary (TKReserved "-":xs) at = second (ATNode ATSub (ATNode (ATNum 0) ATEmpty ATEmpty)) <$> factor xs at
 unary xs at = factor xs at
 
 -- | `factor` indicates \(\eqref{eq:third}\) amount the comments of `inners`.
@@ -133,9 +164,13 @@ factor (TKReserved "(":xs) atn = flip (maybe Nothing) (add xs atn) $ \(ert, erat
     TKReserved ")":ys -> Just (ys, erat)
     _ -> Nothing
 factor (TKNum n:xs) _ = Just (xs, ATNode (ATNum n) ATEmpty ATEmpty)
+factor (TKIdent v:xs) _ = Just (xs, ATNode (ATLVar $ fromIntegral (succ (ord (head v) - ord 'a') * 8)) ATEmpty ATEmpty)
 factor _ _ = Nothing
 
+{-# INLINE parse #-}
 -- | Constructs the abstract syntax tree based on the list of token strings.
 -- if construction fails, `Nothing` is returned.
-parse :: Num i => [Token i] -> Maybe (ATree i)
-parse = fmap snd . flip expr ATEmpty
+-- `parse` is equivalent to `program`.
+parse :: Num i => [Token i] -> Maybe [ATree i]
+parse = program
+
