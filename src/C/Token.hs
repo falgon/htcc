@@ -15,17 +15,19 @@ module C.Token (
 import Data.Char (isDigit, isSpace)
 
 -- | Token type
-data Token i = TKReserved Char | TKNum i deriving (Eq, Show)
+data Token i = TKReserved String | TKNum i deriving (Eq, Show)
 
-{-# INLINE reservedChar #-}
-reservedChar :: String
-reservedChar = [
-    '+',
-    '-',
-    '*',
-    '/',
-    '(',
-    ')'
+{-# INLINE charOps #-}
+charOps :: String -- Char
+charOps = "+-*/()<>"
+
+{-# INLINE strOps #-}
+strOps :: [String]
+strOps = [
+    "<=",
+    ">=",
+    "==",
+    "!="
     ]
 
 -- | Tokenize from `String`. If it fails, the Left that wraps the value representing that point is returned.
@@ -37,5 +39,6 @@ tokenize = tokenize' 0
             | isDigit x = let ts = takeWhile isDigit xs in 
                 (TKNum (read (x:ts)) :) <$> tokenize' (succ (n + length ts)) (drop (length ts) xs)
             | isSpace x = tokenize' (succ n) xs
-            | x `elem` reservedChar = (TKReserved x :) <$> tokenize' (succ n) xs
+            | not (null xs) && [x, head xs] `elem` strOps = (TKReserved [x, head xs] :) <$> tokenize' (n + 2) (tail xs)
+            | x `elem` charOps = (TKReserved [x] :) <$> tokenize' (succ n) xs
             | otherwise = Left n

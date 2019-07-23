@@ -12,7 +12,7 @@ module C.Token
 
 -- | Token type
 data Token i
-TKReserved :: Char -> Token i
+TKReserved :: String -> Token i
 TKNum :: i -> Token i
 
 -- | Tokenize from <a>String</a>. If it fails, the Left that wraps the
@@ -24,48 +24,82 @@ instance GHC.Classes.Eq i => GHC.Classes.Eq (C.Token.Token i)
 
 module C.Parse
 
--- | Syntax tree type
+-- | The syntax tree type
 data ATKind a
+
+-- | &lt;math&gt;
 ATAdd :: ATKind a
+
+-- | &lt;math&gt;
 ATSub :: ATKind a
+
+-- | &lt;math&gt;
 ATMul :: ATKind a
+
+-- | &lt;math&gt;
 ATDiv :: ATKind a
+
+-- | &lt;math&gt;
+ATLT :: ATKind a
+
+-- | &lt;math&gt;
+ATLEQ :: ATKind a
+
+-- | &lt;math&gt;
+ATGT :: ATKind a
+
+-- | &lt;math&gt;
+ATGEQ :: ATKind a
+
+-- | &lt;math&gt;
+ATEQ :: ATKind a
+
+-- | &lt;math&gt;
+ATNEQ :: ATKind a
+
+-- | The number
 ATNum :: a -> ATKind a
 
--- | Abstract syntax tree
+-- | The data structure of abstract syntax tree
 data ATree a
+
+-- | The empty node
 ATEmpty :: ATree a
+
+-- | <a>ATKind</a> representing the kind of node and the two branches
+--   <a>ATree</a> it has
 ATNode :: ATKind a -> ATree a -> ATree a -> ATree a
 
--- | <a>inners</a> is a general function for creating expr and factor in
---   the following syntax (EBNF) of LL (1).
+-- | <a>inners</a> is a general function for creating <a>equality</a>,
+--   <a>relational</a>, <a>add</a> and <a>term</a> in the following syntax
+--   (EBNF) of LL (1).
 --   
 --   &lt;math&gt;
-inners :: ([Token i] -> ATree i -> Maybe ([Token i], ATree i)) -> [(Char, ATKind i)] -> [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+inners :: ([Token i] -> ATree i -> Maybe ([Token i], ATree i)) -> [(String, ATKind i)] -> [Token i] -> ATree i -> Maybe ([Token i], ATree i)
 
--- | <a>expr</a> indicates &lt;math&gt; among the comments of
---   <a>inners</a>. This is equivalent to the following code:
+-- | <a>add</a> indicates &lt;math&gt; among the comments of <a>inners</a>.
+--   This is equivalent to the following code:
 --   
 --   <pre>
---   expr ::  [Token i] -&gt; ATree i -&gt; Maybe ([Token i], ATree i)
---   expr xs atn = flip (maybe Nothing) (term xs atn) $ \(ert, erat) -&gt; expr' ert erat
+--   add ::  [Token i] -&gt; ATree i -&gt; Maybe ([Token i], ATree i)
+--   add xs atn = flip (maybe Nothing) (term xs atn) $ \(ert, erat) -&gt; add' ert erat
 --       where
---           expr' (TKReserved '+':ys) era = maybe Nothing (uncurry id . first expr' . second (ATNode ATAdd era)) $ term ys era
---           expr' (TKReserved '-':ys) era = maybe Nothing (uncurry id . first expr' . second (ATNode ATSub era)) $ term ys era
---           expr' ert era = Just (ert, era)
+--           add' (TKReserved "+":ys) era = maybe Nothing (uncurry id . first add' . second (ATNode ATAdd era)) $ term ys era
+--           add' (TKReserved "-":ys) era = maybe Nothing (uncurry id . first add' . second (ATNode ATSub era)) $ term ys era
+--           add' ert era = Just (ert, era)
 --   </pre>
-expr :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+add :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
 
 -- | <a>term</a> indicates &lt;math&gt; amont the comments of
---   <a>inners</a>. Same as <a>expr</a>. This is equivalent to the
---   following code:
+--   <a>inners</a>. Same as <a>add</a>. This is equivalent to the following
+--   code:
 --   
 --   <pre>
 --   term ::  [Token i] -&gt; ATree i -&gt; Maybe ([Token i], ATree i)
 --   term xs atn = flip (maybe Nothing) (unary xs atn) $ \(ert, erat) -&gt; term' ert erat
 --       where
---           term' (TKReserved '*':ys) era = maybe Nothing (uncurry id . first expr' . second (ATNode ATMul era)) $ unary ys era
---           term' (TKReserved '/':ys) era = maybe Nothing (uncurry id . first expr' . second (ATNode ATDiv era)) $ unary ys era
+--           term' (TKReserved "*":ys) era = maybe Nothing (uncurry id . first term' . second (ATNode ATMul era)) $ unary ys era
+--           term' (TKReserved "/":ys) era = maybe Nothing (uncurry id . first term' . second (ATNode ATDiv era)) $ unary ys era
 --           term' ert era = Just (ert, era)
 --   </pre>
 term :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
@@ -78,16 +112,40 @@ unary :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
 --   <a>inners</a>.
 factor :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
 
+-- | <a>relational</a> indicates &lt;math&gt; among the comments of
+--   <a>inners</a>. This is equivalent to the following code:
+--   
+--   <pre>
+--   relational ::  [Token i] -&gt; ATree i -&gt; Maybe ([Token i], ATree i)
+--   relational xs atn = flip (maybe Nothing) (add xs atn) $ \(ert, erat) -&gt; relational' ert erat
+--       where
+--           relational' (TKReserved "&lt;":ys) era = maybe Nothing (uncurry id . first relational' . second (ATNode ATLT era)) $ add ys era
+--           relational' (TKReserved "&lt;=":ys) era = maybe Nothing (uncurry id . first relational' . second (ATNode ATLEQ era)) $ add ys era
+--           relational' ert era = Just (ert, era)
+--   </pre>
+relational :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+
+-- | <a>equality</a> indicates &lt;math&gt; among the comments of
+--   <a>inners</a>. This is equivalent to the following code:
+--   
+--   <pre>
+--   equality ::  [Token i] -&gt; ATree i -&gt; Maybe ([Token i], ATree i)
+--   equality xs atn = flip (maybe Nothing) (relational xs atn) $ \(ert, erat) -&gt; equality' ert erat
+--       where
+--           equality' (TKReserved "+":ys) era = maybe Nothing (uncurry id . first equality' . second (ATNode ATEQ era)) $ relational ys era
+--           equality' (TKReserved "-":ys) era = maybe Nothing (uncurry id . first equality' . second (ATNode ATNEQ era)) $ relational ys era
+--           equality' ert era = Just (ert, era)
+--   </pre>
+equality :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+
+-- | <a>expr</a> is equivalent to <a>equality</a>
+expr :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+
 -- | Constructs the abstract syntax tree based on the list of token
 --   strings. if construction fails, <a>Nothing</a> is returned.
 parse :: Num i => [Token i] -> Maybe (ATree i)
-
-
-module C.Generate
-
--- | Simulate the stack machine by traversing an abstract syntax tree and
---   output assembly codes.
-generate :: Show i => ATree i -> IO ()
+instance GHC.Show.Show a => GHC.Show.Show (C.Parse.ATree a)
+instance GHC.Show.Show a => GHC.Show.Show (C.Parse.ATKind a)
 
 
 module C.Utils
@@ -97,3 +155,10 @@ putStrLnErr :: String -> IO ()
 
 -- | Standard error output and exit shortcut
 err :: String -> IO ()
+
+
+module C.Generate
+
+-- | Simulate the stack machine by traversing an abstract syntax tree and
+--   output assembly codes.
+generate :: Show i => ATree i -> IO ()

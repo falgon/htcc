@@ -15,5 +15,15 @@ main = runTestsEx [
     (Test1.test "(3+5)/2", 4),
     (Test1.test "(4-2)*8+20/4",21),
     (Test1.test "-(-3*+5)", 15),
-    (Test1.test "-25+30", 5)
+    (Test1.test "-25+30", 5),
+    (Test1.test "42 == 42", 1),
+    (Test1.test "42 != 53", 1),
+    (Test1.test "42 < 53", 1),
+    (Test1.test "53 > 42", 1),
+    (Test1.test "42 <= 42", 1),
+    (Test1.test "32 <= 42", 1),
+    (Test1.test "42 >= 42", 1),
+    (Test1.test "53 >= 42", 1),
+    (Test1.test "(1 + 1) == 2", 1),
+    (Test1.test "(2 * 3) != 2", 1)
     ]
