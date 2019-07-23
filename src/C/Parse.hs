@@ -12,8 +12,9 @@ module C.Parse (
     ATree (..),
     inners,
     expr,
-    factor,
     term,
+    unary,
+    factor,
     parse
 ) where
 
@@ -33,7 +34,8 @@ data ATree a = ATEmpty | ATNode (ATKind a) (ATree a) (ATree a)
 -- \begin{eqnarray}
 -- {\rm expr} &=& {\rm term}\ \left("+"\ {\rm term}\ \mid\ "-"\ {\rm term}\right)^\ast\label{eq:first}\tag{1} \\
 -- {\rm term} &=& {\rm factor}\ \left("\ast"\ {\rm factor}\ \mid\ "/"\ {\rm factor}\right)^\ast\label{eq:second}\tag{2} \\
--- {\rm factor} &=& {\rm num} \mid\ "(" {\rm expr} ")"\label{eq:third}\tag{3}
+-- {\rm unary} &=& \left("+"\ \mid\ "-"\right)?\ {\rm factor}\label{eq:fourth}\tag{3} \\
+-- {\rm factor} &=& {\rm num} \mid\ "(" {\rm expr} ")"\label{eq:third}\tag{4}
 -- \end{eqnarray}
 -- \]
 inners :: ([Token i] -> ATree i -> Maybe ([Token i], ATree i)) -> [(Char, ATKind i)] -> [Token i] -> ATree i -> Maybe ([Token i], ATree i)
@@ -55,23 +57,29 @@ inners f cs xs atn = maybe Nothing (uncurry (inners' f cs)) $ f xs atn
 -- >         expr' (TKReserved '+':ys) era = maybe Nothing (uncurry id . first expr' . second (ATNode ATAdd era)) $ term ys era
 -- >         expr' (TKReserved '-':ys) era = maybe Nothing (uncurry id . first expr' . second (ATNode ATSub era)) $ term ys era
 -- >         expr' ert era = Just (ert, era)
-expr ::  [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+expr :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
 expr = inners term [('+', ATAdd), ('-', ATSub)]
 
 -- | `term` indicates \(\eqref{eq:second}\) amont the comments of `inners`.
 -- Same as `expr`. This is equivalent to the following code:
 --
 -- > term ::  [Token i] -> ATree i -> Maybe ([Token i], ATree i)
--- > term xs atn = flip (maybe Nothing) (factor xs atn) $ \(ert, erat) -> term' ert erat
+-- > term xs atn = flip (maybe Nothing) (unary xs atn) $ \(ert, erat) -> term' ert erat
 -- >     where
--- >         term' (TKReserved '*':ys) era = maybe Nothing (uncurry id . first expr' . second (ATNode ATMul era)) $ factor ys era
--- >         term' (TKReserved '/':ys) era = maybe Nothing (uncurry id . first expr' . second (ATNode ATDiv era)) $ factor ys era
+-- >         term' (TKReserved '*':ys) era = maybe Nothing (uncurry id . first expr' . second (ATNode ATMul era)) $ unary ys era
+-- >         term' (TKReserved '/':ys) era = maybe Nothing (uncurry id . first expr' . second (ATNode ATDiv era)) $ unary ys era
 -- >         term' ert era = Just (ert, era)
-term ::  [Token i] -> ATree i -> Maybe ([Token i], ATree i)
-term = inners factor [('*', ATMul), ('/', ATDiv)]
+term ::  Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+term = inners unary [('*', ATMul), ('/', ATDiv)]
+
+-- | `unary` indicates \(\eqref{eq:fourth}\) amount the comments of `inners`.
+unary :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+unary (TKReserved '+':xs) at = factor xs at
+unary (TKReserved '-':xs) at = maybe Nothing (Just . second (ATNode ATSub (ATNode (ATNum 0) ATEmpty ATEmpty))) $ factor xs at
+unary xs at = factor xs at
 
 -- | `factor` indicates \(\eqref{eq:third}\) amount the comments of `inners`.
-factor ::  [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+factor :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
 factor [] atn = Just ([], atn)
 factor (TKReserved '(':xs) atn = flip (maybe Nothing) (expr xs atn) $ \(ert, erat) -> case ert of
     TKReserved ')':ys -> Just (ys, erat)
@@ -81,5 +89,5 @@ factor _ _ = Nothing
 
 -- | Constructs the abstract syntax tree based on the list of token strings.
 -- if construction fails, `Nothing` is returned.
-parse ::  [Token i] -> Maybe (ATree i)
+parse :: Num i => [Token i] -> Maybe (ATree i)
 parse = fmap snd . flip expr ATEmpty

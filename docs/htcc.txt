@@ -54,11 +54,7 @@ inners :: ([Token i] -> ATree i -> Maybe ([Token i], ATree i)) -> [(Char, ATKind
 --           expr' (TKReserved '-':ys) era = maybe Nothing (uncurry id . first expr' . second (ATNode ATSub era)) $ term ys era
 --           expr' ert era = Just (ert, era)
 --   </pre>
-expr :: [Token i] -> ATree i -> Maybe ([Token i], ATree i)
-
--- | <a>factor</a> indicates &lt;math&gt; amount the comments of
---   <a>inners</a>.
-factor :: [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+expr :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
 
 -- | <a>term</a> indicates &lt;math&gt; amont the comments of
 --   <a>inners</a>. Same as <a>expr</a>. This is equivalent to the
@@ -66,17 +62,25 @@ factor :: [Token i] -> ATree i -> Maybe ([Token i], ATree i)
 --   
 --   <pre>
 --   term ::  [Token i] -&gt; ATree i -&gt; Maybe ([Token i], ATree i)
---   term xs atn = flip (maybe Nothing) (factor xs atn) $ \(ert, erat) -&gt; term' ert erat
+--   term xs atn = flip (maybe Nothing) (unary xs atn) $ \(ert, erat) -&gt; term' ert erat
 --       where
---           term' (TKReserved '*':ys) era = maybe Nothing (uncurry id . first expr' . second (ATNode ATMul era)) $ factor ys era
---           term' (TKReserved '/':ys) era = maybe Nothing (uncurry id . first expr' . second (ATNode ATDiv era)) $ factor ys era
+--           term' (TKReserved '*':ys) era = maybe Nothing (uncurry id . first expr' . second (ATNode ATMul era)) $ unary ys era
+--           term' (TKReserved '/':ys) era = maybe Nothing (uncurry id . first expr' . second (ATNode ATDiv era)) $ unary ys era
 --           term' ert era = Just (ert, era)
 --   </pre>
-term :: [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+term :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+
+-- | <a>unary</a> indicates &lt;math&gt; amount the comments of
+--   <a>inners</a>.
+unary :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+
+-- | <a>factor</a> indicates &lt;math&gt; amount the comments of
+--   <a>inners</a>.
+factor :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
 
 -- | Constructs the abstract syntax tree based on the list of token
 --   strings. if construction fails, <a>Nothing</a> is returned.
-parse :: [Token i] -> Maybe (ATree i)
+parse :: Num i => [Token i] -> Maybe (ATree i)
 
 
 module C.Generate
