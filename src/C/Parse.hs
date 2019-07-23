@@ -31,9 +31,9 @@ data ATree a = ATEmpty | ATNode (ATKind a) (ATree a) (ATree a)
 --
 -- \[
 -- \begin{eqnarray}
--- {\rm expr} &=& {\rm term}\ ("+"\ {\rm term}\ \mid\ "-"\ {\rm term})^\ast \\
--- {\rm term} &=& {\rm factor}\ ("\ast"\ {\rm factor}\ \mid\ "/"\ {\rm factor})^\ast \\
--- {\rm factor} &=& {\rm num} \mid\ "(" {\rm expr} ")"
+-- {\rm expr} &=& {\rm term}\ \left("+"\ {\rm term}\ \mid\ "-"\ {\rm term}\right)^\ast\label{eq:first}\tag{1} \\
+-- {\rm term} &=& {\rm factor}\ \left("\ast"\ {\rm factor}\ \mid\ "/"\ {\rm factor}\right)^\ast\label{eq:second}\tag{2} \\
+-- {\rm factor} &=& {\rm num} \mid\ "(" {\rm expr} ")"\label{eq:third}\tag{3}
 -- \end{eqnarray}
 -- \]
 inners :: ([Token i] -> ATree i -> Maybe ([Token i], ATree i)) -> [(Char, ATKind i)] -> [Token i] -> ATree i -> Maybe ([Token i], ATree i)
@@ -45,25 +45,32 @@ inners f cs xs atn = maybe Nothing (uncurry (inners' f cs)) $ f xs atn
             maybe Nothing (uncurry id . first (inners' f cs) . second (ATNode k at)) $ g (tail ys) at
 
 
--- | `expr` indicates \({\rm expr} = {\rm term}\ ("+"\ {\rm term}\ \mid\ "-"\ {\rm term})^\ast\) among the comments of `inners`.
+-- | `expr` indicates \(\eqref{eq:first}\) among the comments of `inners`.
 -- This is equivalent to the following code:
 --
 -- 
 -- > expr ::  [Token i] -> ATree i -> Maybe ([Token i], ATree i)
--- > expr xs atn = flip (maybe Nothing) (factor xs atn) $ \(ert, erat) -> expr' ert erat
+-- > expr xs atn = flip (maybe Nothing) (term xs atn) $ \(ert, erat) -> expr' ert erat
 -- >     where
--- >         expr' (TKReserved '+':ys) era = maybe Nothing (\(zrt, zrat) -> expr' zrt $ ATNode ATAdd era zrat) $ factor ys era
--- >         expr' (TKReserved '-':ys) era = maybe Nothing (\(zrt, zrat) -> expr' zrt $ ATNode ATSub era zrat) $ factor ys era
+-- >         expr' (TKReserved '+':ys) era = maybe Nothing (uncurry id . first expr' . second (ATNode ATAdd era)) $ term ys era
+-- >         expr' (TKReserved '-':ys) era = maybe Nothing (uncurry id . first expr' . second (ATNode ATSub era)) $ term ys era
 -- >         expr' ert era = Just (ert, era)
 expr ::  [Token i] -> ATree i -> Maybe ([Token i], ATree i)
 expr = inners term [('+', ATAdd), ('-', ATSub)]
 
--- | `term` indicates \({\rm term} = {\rm factor}\ ("\ast"\ {\rm factor}\ \mid\ "/"\ {\rm factor})^\ast\) amont the comments of `inners`.
--- Same as `expr`.
+-- | `term` indicates \(\eqref{eq:second}\) amont the comments of `inners`.
+-- Same as `expr`. This is equivalent to the following code:
+--
+-- > term ::  [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+-- > term xs atn = flip (maybe Nothing) (factor xs atn) $ \(ert, erat) -> term' ert erat
+-- >     where
+-- >         term' (TKReserved '*':ys) era = maybe Nothing (uncurry id . first expr' . second (ATNode ATMul era)) $ factor ys era
+-- >         term' (TKReserved '/':ys) era = maybe Nothing (uncurry id . first expr' . second (ATNode ATDiv era)) $ factor ys era
+-- >         term' ert era = Just (ert, era)
 term ::  [Token i] -> ATree i -> Maybe ([Token i], ATree i)
 term = inners factor [('*', ATMul), ('/', ATDiv)]
 
--- | `factor` indicates \({\rm factor} = {\rm num} \mid\ "(" {\rm expr} ")"\) amount the comments of `inners`.
+-- | `factor` indicates \(\eqref{eq:third}\) amount the comments of `inners`.
 factor ::  [Token i] -> ATree i -> Maybe ([Token i], ATree i)
 factor [] atn = Just ([], atn)
 factor (TKReserved '(':xs) atn = flip (maybe Nothing) (expr xs atn) $ \(ert, erat) -> case ert of
