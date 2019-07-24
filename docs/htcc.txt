@@ -29,7 +29,28 @@ instance GHC.Show.Show i => GHC.Show.Show (C.Token.Token i)
 instance GHC.Classes.Eq i => GHC.Classes.Eq (C.Token.Token i)
 
 
+module C.Utils
+
+-- | Standard error output shortcut
+putStrLnErr :: String -> IO ()
+
+-- | Standard error output and exit shortcut
+err :: String -> IO ()
+first3 :: (a -> d) -> (a, b, c) -> (d, b, c)
+second3 :: (b -> d) -> (a, b, c) -> (a, d, c)
+
+
 module C.Parse
+data LVar a
+
+-- | The local variable
+LVar :: String -> a -> LVar a
+
+-- | The name of local variable
+[name] :: LVar a -> String
+
+-- | The offset value
+[offset] :: LVar a -> a
 
 -- | The syntax tree type
 data ATKind a
@@ -88,99 +109,59 @@ ATNode :: ATKind a -> ATree a -> ATree a -> ATree a
 --   (EBNF) of LL (1).
 --   
 --   &lt;math&gt;
-inners :: ([Token i] -> ATree i -> Maybe ([Token i], ATree i)) -> [(String, ATKind i)] -> [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+inners :: ([Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])) -> [(String, ATKind i)] -> [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>add</a> indicates &lt;math&gt; among the comments of <a>inners</a>.
---   This is equivalent to the following code:
---   
---   <pre>
---   add ::  [Token i] -&gt; ATree i -&gt; Maybe ([Token i], ATree i)
---   add xs atn = flip (maybe Nothing) (term xs atn) $ \(ert, erat) -&gt; add' ert erat
---       where
---           add' (TKReserved "+":ys) era = maybe Nothing (uncurry id . first add' . second (ATNode ATAdd era)) $ term ys era
---           add' (TKReserved "-":ys) era = maybe Nothing (uncurry id . first add' . second (ATNode ATSub era)) $ term ys era
---           add' ert era = Just (ert, era)
---   </pre>
-add :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+add :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>term</a> indicates &lt;math&gt; amont the comments of
---   <a>inners</a>. Same as <a>add</a>. This is equivalent to the following
---   code:
---   
---   <pre>
---   term ::  [Token i] -&gt; ATree i -&gt; Maybe ([Token i], ATree i)
---   term xs atn = flip (maybe Nothing) (unary xs atn) $ \(ert, erat) -&gt; term' ert erat
---       where
---           term' (TKReserved "*":ys) era = maybe Nothing (uncurry id . first term' . second (ATNode ATMul era)) $ unary ys era
---           term' (TKReserved "/":ys) era = maybe Nothing (uncurry id . first term' . second (ATNode ATDiv era)) $ unary ys era
---           term' ert era = Just (ert, era)
---   </pre>
-term :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+--   <a>inners</a>.
+term :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>unary</a> indicates &lt;math&gt; amount the comments of
 --   <a>inners</a>.
-unary :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+unary :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>factor</a> indicates &lt;math&gt; amount the comments of
 --   <a>inners</a>.
-factor :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+factor :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>relational</a> indicates &lt;math&gt; among the comments of
---   <a>inners</a>. This is equivalent to the following code:
---   
---   <pre>
---   relational ::  [Token i] -&gt; ATree i -&gt; Maybe ([Token i], ATree i)
---   relational xs atn = flip (maybe Nothing) (add xs atn) $ \(ert, erat) -&gt; relational' ert erat
---       where
---           relational' (TKReserved "&lt;":ys) era = maybe Nothing (uncurry id . first relational' . second (ATNode ATLT era)) $ add ys era
---           relational' (TKReserved "&lt;=":ys) era = maybe Nothing (uncurry id . first relational' . second (ATNode ATLEQ era)) $ add ys era
---           relational' ert era = Just (ert, era)
---   </pre>
-relational :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+--   <a>inners</a>.
+relational :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>equality</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>. This is equivalent to the following code:
 --   
 --   <pre>
---   equality ::  [Token i] -&gt; ATree i -&gt; Maybe ([Token i], ATree i)
---   equality xs atn = flip (maybe Nothing) (relational xs atn) $ \(ert, erat) -&gt; equality' ert erat
+--   equality ::  [Token i] -&gt; ATree i -&gt; [LVar i] -&gt; Maybe ([Token i], ATree i)
+--   equality xs atn vars = flip (maybe Nothing) (relational xs atn vars) $ uncurry3 equality'
 --       where
---           equality' (TKReserved "+":ys) era = maybe Nothing (uncurry id . first equality' . second (ATNode ATEQ era)) $ relational ys era
---           equality' (TKReserved "-":ys) era = maybe Nothing (uncurry id . first equality' . second (ATNode ATNEQ era)) $ relational ys era
---           equality' ert era = Just (ert, era)
+--           equality' (TKReserved "+":ys) era ars = maybe Nothing (uncurry id . first3 equality' . second3 (ATNode ATEQ era)) $ relational ys era ars
+--           equality' (TKReserved "-":ys) era ars = maybe Nothing (uncurry id . first3 equality' . second3 (ATNode ATNEQ era)) $ relational ys era ars
+--           equality' ert era ars = Just (ert, era, ars)
 --   </pre>
-equality :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+equality :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>assign</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-assign :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+assign :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>expr</a> is equivalent to <a>equality</a>.
-expr :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+expr :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>stmt</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-stmt :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+stmt :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>program</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-program :: Num i => [Token i] -> Maybe [ATree i]
+program :: Num i => [Token i] -> [LVar i] -> Maybe [(ATree i, [LVar i])]
 
 -- | Constructs the abstract syntax tree based on the list of token
 --   strings. if construction fails, <a>Nothing</a> is returned.
 --   <a>parse</a> is equivalent to <a>program</a>.
-parse :: Num i => [Token i] -> Maybe [ATree i]
-instance GHC.Show.Show a => GHC.Show.Show (C.Parse.ATree a)
-instance GHC.Show.Show a => GHC.Show.Show (C.Parse.ATKind a)
-
-
-module C.Utils
-
--- | Standard error output shortcut
-putStrLnErr :: String -> IO ()
-
--- | Standard error output and exit shortcut
-err :: String -> IO ()
+parse :: Num i => [Token i] -> Maybe ([ATree i], Int)
 
 
 module C.Generate

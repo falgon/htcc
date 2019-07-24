@@ -27,8 +27,8 @@ outError xs n = putStrLn xs >> putStr (replicate n ' ') >> putStrLn "^ Invalid t
 
 srcCode :: String -> IO ()
 srcCode xs = let tk = tokenize xs :: Either Int [Token Int] in
-    if isLeft tk then outError xs (fromLeft 0 tk) else flip (maybe (err "Failed to generate abstract tree")) (parse $ fromRight [] tk) $ \ys ->
-        outHead >> putStrLn "\tpush rbp" >> putStrLn "\tmov rbp, rsp" >> putStrLn "\tsub rsp, 208" >> mapM_ generate ys >> putStrLn "\tpop rax" 
+    if isLeft tk then outError xs (fromLeft 0 tk) else flip (maybe (err "Failed to generate abstract tree")) (parse $ fromRight [] tk) $ \(ys, n) ->
+        outHead >> putStrLn "\tpush rbp" >> putStrLn "\tmov rbp, rsp" >> putStrLn ("\tsub rsp, " ++ show (n * 8)) >> mapM_ generate ys >> putStrLn "\tpop rax" 
             >> putStrLn "\tmov rsp, rbp" >> putStrLn "\tpop rbp" >> putStrLn "\tret"
 
 main :: IO ()

@@ -8,6 +8,7 @@ Stability   : experimental
 Portability : POSIX
 -}
 module C.Parse (
+    LVar (..),
     ATKind (..),
     ATree (..),
     inners,
@@ -24,11 +25,22 @@ module C.Parse (
     parse
 ) where
 
-import Data.Tuple.Extra (first, second)
+import Data.Tuple.Extra (first, second, dupe, uncurry3)
 import Data.List (find)
-import Data.Char (ord)
 
+import C.Utils (first3, second3)
 import C.Token
+
+data LVar a = LVar -- ^ The local variable
+    {
+        name :: String, -- ^ The name of local variable
+        offset :: a -- ^ The offset value
+    } 
+
+{-# INLINE lookupLVar #-}
+lookupLVar :: Num i => Token i -> [LVar i] -> Maybe (LVar i)
+lookupLVar (TKIdent s) lvs = find (\(LVar ss _) -> ss == s) lvs
+lookupLVar _ _ = Nothing
 
 -- | The syntax tree type
 data ATKind a = ATAdd -- ^ \(+\) 
@@ -44,36 +56,34 @@ data ATKind a = ATAdd -- ^ \(+\)
     | ATNum a -- ^ The number
     | ATAssign -- ^ The assign operator
     | ATLVar a -- ^ The local variable. It has a offset value
-    deriving Show
 
 -- | The data structure of abstract syntax tree
 data ATree a = ATEmpty -- ^ The empty node 
     | ATNode (ATKind a) (ATree a) (ATree a) -- ^ `ATKind` representing the kind of node and the two branches `ATree` it has
-    deriving Show
 
 -- | `program` indicates \(\eqref{eq:eigth}\) among the comments of `inners`.
-program :: Num i => [Token i] -> Maybe [ATree i]
-program [] = Just []
-program xs = maybe Nothing (\(ys, btn) -> (btn :) <$> program ys) $ stmt xs ATEmpty
+program :: Num i => [Token i] -> [LVar i] -> Maybe [(ATree i, [LVar i])]
+program [] _ = Just []
+program xs vars = maybe Nothing (\(ys, btn, ars) -> ((btn, ars) :) <$> program ys ars) $ stmt xs ATEmpty vars
 
 -- | `stmt` indicates \(\eqref{eq:nineth}\) among the comments of `inners`.
-stmt :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
-stmt xs atn = flip (maybe Nothing) (expr xs atn) $ \(ert, erat) -> case ert of
-    TKReserved ";":ys -> Just (ys, erat)
+stmt :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+stmt xs atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of
+    TKReserved ";":ys -> Just (ys, erat, ervars)
     _ -> Nothing
 
 
 {-# INLINE expr #-}
 -- | `expr` is equivalent to `equality`.
-expr :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+expr :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 expr = assign
 
 
 -- | `assign` indicates \(\eqref{eq:seventh}\) among the comments of `inners`.
-assign :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
-assign xs atn = flip (maybe Nothing) (equality xs atn) $ \(ert, erat) -> case ert of
-    TKReserved "=":ys -> second (ATNode ATAssign erat) <$> assign ys erat
-    _ -> Just (ert, erat)
+assign :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+assign xs atn vars = flip (maybe Nothing) (equality xs atn vars) $ \(ert, erat, ervars) -> case ert of
+    TKReserved "=":ys -> second3 (ATNode ATAssign erat) <$> assign ys erat ervars
+    _ -> Just (ert, erat, ervars)
 
 
 -- | `inners` is a general function for creating `equality`, `relational`, `add` and `term` in the following syntax (EBNF) of LL (1).
@@ -92,85 +102,62 @@ assign xs atn = flip (maybe Nothing) (equality xs atn) $ \(ert, erat) -> case er
 -- {\rm factor} &=& {\rm num} \mid\ {\rm ident} \mid\ "(" {\rm add} ")"\label{eq:third}\tag{9}
 -- \end{eqnarray}
 -- \]
-inners :: ([Token i] -> ATree i -> Maybe ([Token i], ATree i)) -> [(String, ATKind i)] -> [Token i] -> ATree i -> Maybe ([Token i], ATree i)
-inners _ _ [] atn = Just ([], atn)
-inners f cs xs atn = maybe Nothing (uncurry (inners' f cs)) $ f xs atn
+inners :: ([Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])) -> [(String, ATKind i)] -> [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+inners _ _ [] atn vars = Just ([], atn, vars)
+inners f cs xs atn vars = maybe Nothing (uncurry3 (inners' f cs)) $ f xs atn vars
     where
-        inners' _ _ [] at = Just ([], at)
-        inners' g ds ys at = flip (maybe (Just (ys, at))) (find (\(c, _) -> case head ys of TKReserved cc -> cc == c; _ -> False) ds) $ \(_, k) -> 
-            maybe Nothing (uncurry id . first (inners' f cs) . second (ATNode k at)) $ g (tail ys) at
+        inners' _ _ [] at ars = Just ([], at, ars)
+        inners' g ds ys at ars = flip (maybe (Just (ys, at, ars))) (find (\(c, _) -> case head ys of TKReserved cc -> cc == c; _ -> False) ds) $ \(_, k) -> 
+            maybe Nothing (uncurry3 id . first3 (inners' f cs) . second3 (ATNode k at)) $ g (tail ys) at ars
 
 
 -- | `equality` indicates \(\eqref{eq:fifth}\) among the comments of `inners`.
 -- This is equivalent to the following code:
 --
 --
--- > equality ::  [Token i] -> ATree i -> Maybe ([Token i], ATree i)
--- > equality xs atn = flip (maybe Nothing) (relational xs atn) $ \(ert, erat) -> equality' ert erat
+-- > equality ::  [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i)
+-- > equality xs atn vars = flip (maybe Nothing) (relational xs atn vars) $ uncurry3 equality'
 -- >     where
--- >         equality' (TKReserved "+":ys) era = maybe Nothing (uncurry id . first equality' . second (ATNode ATEQ era)) $ relational ys era
--- >         equality' (TKReserved "-":ys) era = maybe Nothing (uncurry id . first equality' . second (ATNode ATNEQ era)) $ relational ys era
--- >         equality' ert era = Just (ert, era)
-equality :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+-- >         equality' (TKReserved "+":ys) era ars = maybe Nothing (uncurry id . first3 equality' . second3 (ATNode ATEQ era)) $ relational ys era ars
+-- >         equality' (TKReserved "-":ys) era ars = maybe Nothing (uncurry id . first3 equality' . second3 (ATNode ATNEQ era)) $ relational ys era ars
+-- >         equality' ert era ars = Just (ert, era, ars)
+equality :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 equality = inners relational [("==", ATEQ), ("!=", ATNEQ)]
 
 -- | `relational` indicates \(\eqref{eq:sixth}\) among the comments of `inners`.
--- This is equivalent to the following code:
---
--- > relational ::  [Token i] -> ATree i -> Maybe ([Token i], ATree i)
--- > relational xs atn = flip (maybe Nothing) (add xs atn) $ \(ert, erat) -> relational' ert erat
--- >     where
--- >         relational' (TKReserved "<":ys) era = maybe Nothing (uncurry id . first relational' . second (ATNode ATLT era)) $ add ys era
--- >         relational' (TKReserved "<=":ys) era = maybe Nothing (uncurry id . first relational' . second (ATNode ATLEQ era)) $ add ys era
--- >         relational' ert era = Just (ert, era)
-relational :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+relational :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 relational = inners add [("<", ATLT), ("<=", ATLEQ), (">", ATGT), (">=", ATGEQ)]
 
 -- | `add` indicates \(\eqref{eq:first}\) among the comments of `inners`.
--- This is equivalent to the following code:
---
--- 
--- > add ::  [Token i] -> ATree i -> Maybe ([Token i], ATree i)
--- > add xs atn = flip (maybe Nothing) (term xs atn) $ \(ert, erat) -> add' ert erat
--- >     where
--- >         add' (TKReserved "+":ys) era = maybe Nothing (uncurry id . first add' . second (ATNode ATAdd era)) $ term ys era
--- >         add' (TKReserved "-":ys) era = maybe Nothing (uncurry id . first add' . second (ATNode ATSub era)) $ term ys era
--- >         add' ert era = Just (ert, era)
-add :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+add :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 add = inners term [("+", ATAdd), ("-", ATSub)]
 
 -- | `term` indicates \(\eqref{eq:second}\) amont the comments of `inners`.
--- Same as `add`. This is equivalent to the following code:
---
--- > term ::  [Token i] -> ATree i -> Maybe ([Token i], ATree i)
--- > term xs atn = flip (maybe Nothing) (unary xs atn) $ \(ert, erat) -> term' ert erat
--- >     where
--- >         term' (TKReserved "*":ys) era = maybe Nothing (uncurry id . first term' . second (ATNode ATMul era)) $ unary ys era
--- >         term' (TKReserved "/":ys) era = maybe Nothing (uncurry id . first term' . second (ATNode ATDiv era)) $ unary ys era
--- >         term' ert era = Just (ert, era)
-term ::  Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
+term ::  Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 term = inners unary [("*", ATMul), ("/", ATDiv)]
 
 -- | `unary` indicates \(\eqref{eq:fourth}\) amount the comments of `inners`.
-unary :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
-unary (TKReserved "+":xs) at = factor xs at
-unary (TKReserved "-":xs) at = second (ATNode ATSub (ATNode (ATNum 0) ATEmpty ATEmpty)) <$> factor xs at
-unary xs at = factor xs at
+unary :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+unary (TKReserved "+":xs) at vars = factor xs at vars
+unary (TKReserved "-":xs) at vars = second3 (ATNode ATSub (ATNode (ATNum 0) ATEmpty ATEmpty)) <$> factor xs at vars
+unary xs at vars = factor xs at vars
 
 -- | `factor` indicates \(\eqref{eq:third}\) amount the comments of `inners`.
-factor :: Num i => [Token i] -> ATree i -> Maybe ([Token i], ATree i)
-factor [] atn = Just ([], atn)
-factor (TKReserved "(":xs) atn = flip (maybe Nothing) (add xs atn) $ \(ert, erat) -> case ert of
-    TKReserved ")":ys -> Just (ys, erat)
+factor :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+factor [] atn vars = Just ([], atn, vars)
+factor (TKReserved "(":xs) atn vars = flip (maybe Nothing) (add xs atn vars) $ \(ert, erat, ervars) -> case ert of
+    TKReserved ")":ys -> Just (ys, erat, ervars)
     _ -> Nothing
-factor (TKNum n:xs) _ = Just (xs, ATNode (ATNum n) ATEmpty ATEmpty)
-factor (TKIdent v:xs) _ = Just (xs, ATNode (ATLVar $ fromIntegral (succ (ord (head v) - ord 'a') * 8)) ATEmpty ATEmpty)
-factor _ _ = Nothing
+factor (TKNum n:xs) _ vars = Just (xs, ATNode (ATNum n) ATEmpty ATEmpty, vars)
+factor (TKIdent v:xs) _ vars = maybe
+    (let lvars = (LVar v (if null vars then 8 else offset (head vars) + 8)):vars in Just (xs, ATNode (ATLVar $ offset $ head lvars) ATEmpty ATEmpty, lvars))
+    (\(LVar _ o) -> Just (xs, ATNode (ATLVar o) ATEmpty ATEmpty, vars)) $
+    lookupLVar (TKIdent v) vars
+factor _ _ _ = Nothing
 
 {-# INLINE parse #-}
 -- | Constructs the abstract syntax tree based on the list of token strings.
 -- if construction fails, `Nothing` is returned.
 -- `parse` is equivalent to `program`.
-parse :: Num i => [Token i] -> Maybe [ATree i]
-parse = program
-
+parse :: Num i => [Token i] -> Maybe ([ATree i], Int)
+parse = fmap (first (map fst) . second (length . snd . last) . dupe) . flip program []
