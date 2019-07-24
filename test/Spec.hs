@@ -28,5 +28,7 @@ main = runTestsEx [
     (Test1.test "(2 * 3) != 2;", 1),
     (Test1.test "a=42; b=20; a+b;", 62),
     (Test1.test "a=42; b=20; c=32; (a - c) * b / 10;", 20),
-    (Test1.test "hoge=42; foo=20; hoge - foo;", 22)
+    (Test1.test "hoge=42; foo=20; hoge - foo;", 22),
+    (Test1.test "hoge=42; return hoge;", 42),
+    (Test1.test "returnx = 42; return returnx; return 53;", 42)
     ]

@@ -36,7 +36,7 @@ data LVar a = LVar -- ^ The constructor of local variable
     {
         name :: String, -- ^ The name of local variable
         offset :: a -- ^ The offset value
-    } 
+    } deriving Show
 
 {-# INLINE lookupLVar #-}
 lookupLVar :: Num i => Token i -> [LVar i] -> Maybe (LVar i)
@@ -56,19 +56,26 @@ data ATKind a = ATAdd -- ^ \(+\)
     | ATNEQ -- ^ \(\not=\)
     | ATNum a -- ^ The number
     | ATAssign -- ^ The assign operator
+    | ATReturn -- ^ The return keyword
     | ATLVar a -- ^ The local variable. It has a offset value
+    deriving Show
 
 -- | The data structure of abstract syntax tree
 data ATree a = ATEmpty -- ^ The empty node 
     | ATNode (ATKind a) (ATree a) (ATree a) -- ^ `ATKind` representing the kind of node and the two branches `ATree` it has
+    deriving Show
 
 -- | `program` indicates \(\eqref{eq:eigth}\) among the comments of `inners`.
 program :: Num i => [Token i] -> [LVar i] -> Maybe [(ATree i, [LVar i])]
 program [] _ = Just []
 program xs vars = maybe Nothing (\(ys, btn, ars) -> ((btn, ars) :) <$> program ys ars) $ stmt xs ATEmpty vars
 
+
 -- | `stmt` indicates \(\eqref{eq:nineth}\) among the comments of `inners`.
 stmt :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+stmt (TKReturn:xs) atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of
+    TKReserved ";":ys -> Just (ys, ATNode ATReturn erat ATEmpty, ervars)
+    _ -> Nothing
 stmt xs atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of
     TKReserved ";":ys -> Just (ys, erat, ervars)
     _ -> Nothing
