@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f257c49f4eafa0d4bda27938f5c8379592c1c61f48773dfb788f9797bba1659e
+-- hash: 7f646c0b369dcfb60260e010f40bda8af64099f4f326a75828318b2e8fd27fd2
 
 name:           htcc
 version:        0.0.0.1
@@ -27,10 +27,10 @@ source-repository head
 
 library
   exposed-modules:
-      C.Generate
-      C.Parse
-      C.Token
-      C.Utils
+      Htcc.CAsm
+      Htcc.Parse
+      Htcc.Token
+      Htcc.Utils
   other-modules:
       Paths_htcc
   hs-source-dirs:
@@ -38,6 +38,7 @@ library
   build-depends:
       base >=4.7 && <5
     , extra
+    , text
   default-language: Haskell2010
 
 executable htcc
@@ -51,6 +52,7 @@ executable htcc
       base >=4.7 && <5
     , extra
     , htcc
+    , text
   default-language: Haskell2010
 
 test-suite htcc-test

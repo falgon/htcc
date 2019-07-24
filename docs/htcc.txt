@@ -8,7 +8,7 @@
 @version 0.0.0.1
 
 
-module C.Token
+module Htcc.Token
 
 -- | Token type
 data Token i
@@ -25,25 +25,34 @@ TKIdent :: String -> Token i
 -- | Tokenize from <a>String</a>. If it fails, the Left that wraps the
 --   value representing that point is returned.
 tokenize :: Read i => String -> Either Int [Token i]
-instance GHC.Show.Show i => GHC.Show.Show (C.Token.Token i)
-instance GHC.Classes.Eq i => GHC.Classes.Eq (C.Token.Token i)
+instance GHC.Show.Show i => GHC.Show.Show (Htcc.Token.Token i)
+instance GHC.Classes.Eq i => GHC.Classes.Eq (Htcc.Token.Token i)
 
 
-module C.Utils
+module Htcc.Utils
 
 -- | Standard error output shortcut
-putStrLnErr :: String -> IO ()
+putStrLnErr :: Text -> IO ()
 
 -- | Standard error output and exit shortcut
-err :: String -> IO ()
+err :: Text -> IO ()
+
+-- | Update the first component of triple
 first3 :: (a -> d) -> (a, b, c) -> (d, b, c)
+
+-- | Update the second component of triple
 second3 :: (b -> d) -> (a, b, c) -> (a, d, c)
 
+-- | Update the third component of triple
+third3 :: (c -> d) -> (a, b, c) -> (a, b, d)
 
-module C.Parse
-data LVar a
+
+module Htcc.Parse
 
 -- | The local variable
+data LVar a
+
+-- | The constructor of local variable
 LVar :: String -> a -> LVar a
 
 -- | The name of local variable
@@ -164,8 +173,11 @@ program :: Num i => [Token i] -> [LVar i] -> Maybe [(ATree i, [LVar i])]
 parse :: Num i => [Token i] -> Maybe ([ATree i], Int)
 
 
-module C.Generate
+module Htcc.CAsm
 
 -- | Simulate the stack machine by traversing an abstract syntax tree and
 --   output assembly codes.
-generate :: Show i => ATree i -> IO ()
+genStmt :: Show i => ATree i -> IO ()
+
+-- | Generate full assembly code from C language program
+casm :: String -> IO ()

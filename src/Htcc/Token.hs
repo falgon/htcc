@@ -1,5 +1,5 @@
 {-|
-Module      : C.Token
+Module      : Htcc.Token
 Description : Tokenizer
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -7,7 +7,7 @@ Maintainer  : falgon53@yahoo.co.jp
 Stability   : experimental
 Portability : POSIX
 -}
-module C.Token (
+module Htcc.Token (
     Token (..),
     tokenize
 ) where

@@ -1,5 +1,5 @@
 {-|
-Module      : C.Parse
+Module      : Htcc.Parse
 Description : LL (1) Parser
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -7,7 +7,7 @@ Maintainer  : falgon53@yahoo.co.jp
 Stability   : experimental
 Portability : POSIX
 -}
-module C.Parse (
+module Htcc.Parse (
     LVar (..),
     ATKind (..),
     ATree (..),
@@ -28,10 +28,11 @@ module C.Parse (
 import Data.Tuple.Extra (first, second, dupe, uncurry3)
 import Data.List (find)
 
-import C.Utils (first3, second3)
-import C.Token
+import Htcc.Utils (first3, second3)
+import Htcc.Token
 
-data LVar a = LVar -- ^ The local variable
+-- | The local variable
+data LVar a = LVar -- ^ The constructor of local variable
     {
         name :: String, -- ^ The name of local variable
         offset :: a -- ^ The offset value
