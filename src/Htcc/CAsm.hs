@@ -45,6 +45,7 @@ genLVal _ = err "lvalue required as left operand of assignment"
 
 -- | Simulate the stack machine by traversing an abstract syntax tree and output assembly codes.
 genStmt :: Show i => ATree i -> IO ()
+genStmt (ATNode ATIf lhs rhs) = genStmt lhs >> T.putStrLn "\tpop rax\n\tcmp rax, 0\n\tje .LendXXX" >> genStmt rhs >> T.putStrLn ".LendXXX:" -- HACK: .Lend"XXX" must be serial numbers
 genStmt (ATNode ATReturn lhs _) = genStmt lhs >> T.putStrLn "\tpop rax\n\tmov rsp, rbp\n\tpop rbp\n\tret"
 genStmt (ATNode (ATNum x) _ _) = T.putStrLn $ T.append "\tpush " $ tshow x
 genStmt n@(ATNode (ATLVar _) _ _) = genLVal n >> T.putStrLn "\tpop rax" >> T.putStrLn "\tmov rax, [rax]" >> T.putStrLn "\tpush rax"
@@ -65,7 +66,7 @@ genStmt _ = return ()
 
 -- | Generate full assembly code from C language program
 casm :: String -> IO ()
-casm xs = flip (either (outErr (T.pack xs))) (tokenize xs :: Either Int [Token Int]) $ \x -> flip (maybe (err "Failed to construct abstract tree")) (parse x) $ \(ys, n) ->
+casm xs = flip (either (outErr (T.pack xs))) (tokenize xs :: Either Int [Token Int]) $ \x -> flip (maybe (err "Syntax error (Failed to construct abstract tree)")) (parse x) $ \(ys, n) ->
         T.putStrLn declMain >> T.putStrLn (prologue n) >> mapM_ genStmt ys >> T.putStrLn "\tpop rax" >> T.putStrLn epilogue
     where
         outErr ys n = putStrLnErr ys >> putStrLnErr (T.pack $ replicate n ' ') >> putStrLnErr "^ Invalid token here" >> exitFailure

@@ -57,6 +57,7 @@ data ATKind a = ATAdd -- ^ \(+\)
     | ATNum a -- ^ The number
     | ATAssign -- ^ The assign operator
     | ATReturn -- ^ The return keyword
+    | ATIf -- ^ The if keyword
     | ATLVar a -- ^ The local variable. It has a offset value
     deriving Show
 
@@ -72,14 +73,28 @@ program xs vars = maybe Nothing (\(ys, btn, ars) -> ((btn, ars) :) <$> program y
 
 
 -- | `stmt` indicates \(\eqref{eq:nineth}\) among the comments of `inners`.
+--
+-- NOTE: 
+-- 
+-- Current status
+--
+-- \[
+-- \begin{eqnarray}
+-- {\rm stmt} &=& {\rm expr\ ";"}\\
+-- &\mid& {\rm "if"\ "("\ expr\ ")"\ stmt}\\
+-- &\mid& {\rm "return"\ expr\ ";"}
+-- \end{eqnarray}
+-- \]
 stmt :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
-stmt (TKReturn:xs) atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of
+stmt (TKReturn:xs) atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for `return`
     TKReserved ";":ys -> Just (ys, ATNode ATReturn erat ATEmpty, ervars)
     _ -> Nothing
-stmt xs atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of
+stmt (TKIf:TKReserved "(":ys) atn vars = flip (maybe Nothing) (expr ys atn vars) $ \(ert, erat, ervars) -> case ert of -- for `if`
+    TKReserved ")":zs -> second3 (ATNode ATIf erat) <$> stmt zs erat ervars -- NOTE: not implemented yet else seciton
+    _ -> Nothing
+stmt xs atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for only `;`
     TKReserved ";":ys -> Just (ys, erat, ervars)
     _ -> Nothing
-
 
 {-# INLINE expr #-}
 -- | `expr` is equivalent to `equality`.
@@ -99,7 +114,7 @@ assign xs atn vars = flip (maybe Nothing) (equality xs atn vars) $ \(ert, erat, 
 -- \[
 -- \begin{eqnarray}
 -- {\rm program} &=& {\rm stmt}^\ast\label{eq:eigth}\tag{1}\\
--- {\rm stmt} &=& {\rm expr}\ ";"\label{eq:nineth}\tag{2}\\
+-- {\rm stmt} &=& {\rm expr}\ {\rm ";"}\label{eq:nineth}\ \mid\ {\rm "return"}\ {\rm expr}\ ";"\ \mid\ "{\rm if}"\ "("\ {\rm expr}\ ")"\ {\rm stmt}\ ("{\rm else}"\ {\rm stmt})?\tag{2}\\
 -- {\rm expr} &=& {\rm assign}\\
 -- {\rm assign} &=& {\rm equality} \left("="\ {\rm assign}\right)?\label{eq:seventh}\tag{3}\\
 -- {\rm equality} &=& {\rm relational}\ \left("=="\ {\rm relational}\ \mid\ "!="\ {\rm relational}\right)^\ast\label{eq:fifth}\tag{4}\\

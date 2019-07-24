@@ -30,5 +30,8 @@ main = runTestsEx [
     (Test1.test "a=42; b=20; c=32; (a - c) * b / 10;", 20),
     (Test1.test "hoge=42; foo=20; hoge - foo;", 22),
     (Test1.test "hoge=42; return hoge;", 42),
-    (Test1.test "returnx = 42; return returnx; return 53;", 42)
+    (Test1.test "returnx = 42; return returnx; return 53;", 42),
+    (Test1.test "a = 3; b = 5 * 6 - 8; return a + b / 2;", 14),
+    (Test1.test "if (1) return 42; return 53;", 42),
+    (Test1.test "if (20*3-60) return 42; return 53;", 53)
     ]
