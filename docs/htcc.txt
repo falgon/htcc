@@ -127,6 +127,9 @@ ATIf :: ATKind a
 -- | The else keyword
 ATElse :: ATKind a
 
+-- | The while keyword
+ATWhile :: ATKind a
+
 -- | The local variable. It has a offset value
 ATLVar :: a -> ATKind a
 

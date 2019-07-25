@@ -40,5 +40,7 @@ main = runTestsEx [
     (Test1.test "a = 0; b = 2; if (a) return b; else return b * 2;", 4),
     (Test1.test "a = 1; b = 0; if (b) return 42; if (0) return 42; else return a;", 1),
     (Test1.test "a = 1; b = 2; if (a) if (b) return b; else return 53; else return 24;", 2),
-    (Test1.test "if (1) if (1) if (1) if (1) if (1) if (0) return 1; else return 2; else return 3; else return 4; else return 5; else return 6; else return 7;", 2)
+    (Test1.test "if (1) if (1) if (1) if (1) if (1) if (0) return 1; else return 2; else return 3; else return 4; else return 5; else return 6; else return 7;", 2),
+    (Test1.test "a = 1; while (a < 10) a = a + 1; return a;", 10),
+    (Test1.test "a = 1; while (a < 10) a = a + 1; b = 1; while (b < 20) b = b + 2; return a + b;", 31)
     ]

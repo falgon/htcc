@@ -45,6 +45,9 @@ genLVal _ = err "lvalue required as left operand of assignment"
 
 -- | Simulate the stack machine by traversing an abstract syntax tree and output assembly codes.
 genStmt :: Show i => IO Int -> ATree i -> IO ()
+genStmt c (ATNode ATWhile lhs rhs) = do
+    n <- show <$> c
+    T.putStr ".Lbegin" >> putStrLn (n ++ ":") >> genStmt c lhs >> T.putStr "\tpop rax\n\tcmp rax, 0\n\tje .Lend" >> putStrLn n >> genStmt c rhs >> T.putStr "\tjmp .Lbegin" >> putStrLn n >> T.putStr ".Lend" >> putStrLn (n ++ ":") 
 genStmt c (ATNode ATIf lhs rhs) = do
     genStmt c lhs >> T.putStr "\tpop rax\n\tcmp rax, 0\n\tje .Lend"
     n <- show <$> c

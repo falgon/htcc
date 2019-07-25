@@ -59,6 +59,7 @@ data ATKind a = ATAdd -- ^ \(+\)
     | ATReturn -- ^ The return keyword
     | ATIf -- ^ The if keyword
     | ATElse -- ^ The else keyword
+    | ATWhile -- ^ The while keyword
     | ATLVar a -- ^ The local variable. It has a offset value
     deriving Show
 
@@ -83,6 +84,7 @@ program xs vars = maybe Nothing (\(ys, btn, ars) -> ((btn, ars) :) <$> program y
 -- \begin{eqnarray}
 -- {\rm stmt} &=& {\rm expr\ ";"}\\
 -- &\mid& {\rm "if"\ "("\ expr\ ")"\ stmt}\ \left({\rm "else"\ stmt}\right)?\\
+-- &\mid& {\rm "while"\ "("\ expr\ ")"\ stmt}\\
 -- &\mid& {\rm "return"\ expr\ ";"}
 -- \end{eqnarray}
 -- \]
@@ -94,6 +96,9 @@ stmt (TKIf:TKReserved "(":xs) atn vars = flip (maybe Nothing) (expr xs atn vars)
     TKReserved ")":ys -> flip (maybe Nothing) (stmt ys erat ervars) $ \x -> case second3 (ATNode ATIf erat) x of
         (TKElse:zs, eerat, eervars) -> second3 (ATNode ATElse eerat) <$> stmt zs eerat eervars -- for `else`
         zs -> Just zs
+    _ -> Nothing
+stmt (TKWhile:TKReserved "(":xs) atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for `while`
+    TKReserved ")":ys -> second3 (ATNode ATWhile erat) <$> stmt ys erat ervars
     _ -> Nothing
 stmt xs atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for only `;`
     TKReserved ";":ys -> Just (ys, erat, ervars)
@@ -117,7 +122,13 @@ assign xs atn vars = flip (maybe Nothing) (equality xs atn vars) $ \(ert, erat, 
 -- \[
 -- \begin{eqnarray}
 -- {\rm program} &=& {\rm stmt}^\ast\label{eq:eigth}\tag{1}\\
--- {\rm stmt} &=& {\rm expr}\ {\rm ";"}\label{eq:nineth}\ \mid\ {\rm "return"}\ {\rm expr}\ ";"\ \mid\ "{\rm if}"\ "("\ {\rm expr}\ ")"\ {\rm stmt}\ ("{\rm else}"\ {\rm stmt})?\tag{2}\\
+-- {\rm stmt} &=& \begin{array}{l}
+-- {\rm expr}\ {\rm ";"}\\ 
+-- \mid\ {\rm "return"}\ {\rm expr}\ ";"\\
+-- \mid\ "{\rm if}"\ "("\ {\rm expr}\ ")"\ {\rm stmt}\ ("{\rm else}"\ {\rm stmt})?\\
+-- \mid\ {\rm "while"\ "("\ expr\ ")"\ stmt}\\
+-- \mid\ {\rm "for"\ "("\ expr?\ ";" expr?\ ";"\ expr?\ ")"\ stmt}
+-- \end{array}\label{eq:nineth}\tag{2}\\
 -- {\rm expr} &=& {\rm assign}\\
 -- {\rm assign} &=& {\rm equality} \left("="\ {\rm assign}\right)?\label{eq:seventh}\tag{3}\\
 -- {\rm equality} &=& {\rm relational}\ \left("=="\ {\rm relational}\ \mid\ "!="\ {\rm relational}\right)^\ast\label{eq:fifth}\tag{4}\\
