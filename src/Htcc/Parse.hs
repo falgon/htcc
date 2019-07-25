@@ -58,6 +58,7 @@ data ATKind a = ATAdd -- ^ \(+\)
     | ATAssign -- ^ The assign operator
     | ATReturn -- ^ The return keyword
     | ATIf -- ^ The if keyword
+    | ATElse -- ^ The else keyword
     | ATLVar a -- ^ The local variable. It has a offset value
     deriving Show
 
@@ -81,7 +82,7 @@ program xs vars = maybe Nothing (\(ys, btn, ars) -> ((btn, ars) :) <$> program y
 -- \[
 -- \begin{eqnarray}
 -- {\rm stmt} &=& {\rm expr\ ";"}\\
--- &\mid& {\rm "if"\ "("\ expr\ ")"\ stmt}\\
+-- &\mid& {\rm "if"\ "("\ expr\ ")"\ stmt}\ \left({\rm "else"\ stmt}\right)?\\
 -- &\mid& {\rm "return"\ expr\ ";"}
 -- \end{eqnarray}
 -- \]
@@ -89,8 +90,10 @@ stmt :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, 
 stmt (TKReturn:xs) atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for `return`
     TKReserved ";":ys -> Just (ys, ATNode ATReturn erat ATEmpty, ervars)
     _ -> Nothing
-stmt (TKIf:TKReserved "(":ys) atn vars = flip (maybe Nothing) (expr ys atn vars) $ \(ert, erat, ervars) -> case ert of -- for `if`
-    TKReserved ")":zs -> second3 (ATNode ATIf erat) <$> stmt zs erat ervars -- NOTE: not implemented yet else seciton
+stmt (TKIf:TKReserved "(":xs) atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for `if`
+    TKReserved ")":ys -> flip (maybe Nothing) (stmt ys erat ervars) $ \x -> case second3 (ATNode ATIf erat) x of
+        (TKElse:zs, eerat, eervars) -> second3 (ATNode ATElse eerat) <$> stmt zs eerat eervars
+        zs -> Just zs
     _ -> Nothing
 stmt xs atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for only `;`
     TKReserved ";":ys -> Just (ys, erat, ervars)

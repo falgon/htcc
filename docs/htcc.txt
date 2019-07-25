@@ -121,6 +121,9 @@ ATReturn :: ATKind a
 -- | The if keyword
 ATIf :: ATKind a
 
+-- | The else keyword
+ATElse :: ATKind a
+
 -- | The local variable. It has a offset value
 ATLVar :: a -> ATKind a
 

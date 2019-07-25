@@ -46,6 +46,8 @@ genLVal _ = err "lvalue required as left operand of assignment"
 -- | Simulate the stack machine by traversing an abstract syntax tree and output assembly codes.
 genStmt :: Show i => ATree i -> IO ()
 genStmt (ATNode ATIf lhs rhs) = genStmt lhs >> T.putStrLn "\tpop rax\n\tcmp rax, 0\n\tje .LendXXX" >> genStmt rhs >> T.putStrLn ".LendXXX:" -- HACK: .Lend"XXX" must be serial numbers
+genStmt (ATNode ATElse (ATNode ATIf llhs rrhs) rhs) = genStmt llhs >> T.putStrLn "\tpop rax\n\tcmp rax, 0\n\tje .LelseXXX" >> genStmt rrhs >> T.putStrLn "\tjmp .LendXXX\n.LelseXXX:" >> genStmt rhs >> T.putStrLn ".LendXXX:"  -- HACK: ditto
+genStmt (ATNode ATElse _ _) = error "Asm code generator shold not reached here. Maybe abstract tree is broken it cause (bug)."
 genStmt (ATNode ATReturn lhs _) = genStmt lhs >> T.putStrLn "\tpop rax\n\tmov rsp, rbp\n\tpop rbp\n\tret"
 genStmt (ATNode (ATNum x) _ _) = T.putStrLn $ T.append "\tpush " $ tshow x
 genStmt n@(ATNode (ATLVar _) _ _) = genLVal n >> T.putStrLn "\tpop rax" >> T.putStrLn "\tmov rax, [rax]" >> T.putStrLn "\tpush rax"

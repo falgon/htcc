@@ -34,5 +34,8 @@ main = runTestsEx [
     (Test1.test "a = 3; b = 5 * 6 - 8; return a + b / 2;", 14),
     (Test1.test "if (1) return 42; return 53;", 42),
     (Test1.test "if (20*3-60) return 42; return 53;", 53),
-    (Test1.test "a = 1; b = 2; if (a) return b; return 42;", 2)
+    (Test1.test "a = 1; b = 2; if (a) return b; return 42;", 2),
+    (Test1.test "if (1) return 42; else return 53;", 42),
+    (Test1.test "if (0) return 42; else return 53;", 53),
+    (Test1.test "a = 0; b = 2; if (a) return b; else return b * 2;", 4)
     ]
