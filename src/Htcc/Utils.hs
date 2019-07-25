@@ -12,11 +12,13 @@ module Htcc.Utils (
     err,
     first3,
     second3,
-    third3
+    third3,
+    counter
 ) where
 
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import Data.IORef (newIORef, readIORef, writeIORef)
 import System.IO (stderr)
 import System.Exit (exitFailure)
 
@@ -42,3 +44,12 @@ second3 f (x, y, z) = (x, f y, z)
 -- | Update the third component of triple
 third3 :: (c -> d) -> (a, b, c) -> (a, b, d)
 third3 f (x, y, z) = (x, y, f z)
+
+-- | The counter is incremented by one each time it is executed
+counter :: Enum a => a -> IO (IO a)
+counter n = do
+    c <- newIORef n
+    return $ do
+        t <- readIORef c
+        writeIORef c $ succ t
+        readIORef c

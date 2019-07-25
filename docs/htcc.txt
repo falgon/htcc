@@ -61,6 +61,9 @@ second3 :: (b -> d) -> (a, b, c) -> (a, d, c)
 -- | Update the third component of triple
 third3 :: (c -> d) -> (a, b, c) -> (a, b, d)
 
+-- | The counter is incremented by one each time it is executed
+counter :: Enum a => a -> IO (IO a)
+
 
 module Htcc.Parse
 
@@ -210,7 +213,7 @@ module Htcc.CAsm
 
 -- | Simulate the stack machine by traversing an abstract syntax tree and
 --   output assembly codes.
-genStmt :: Show i => ATree i -> IO ()
+genStmt :: Show i => IO Int -> ATree i -> IO ()
 
 -- | Generate full assembly code from C language program
 casm :: String -> IO ()

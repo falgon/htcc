@@ -37,5 +37,8 @@ main = runTestsEx [
     (Test1.test "a = 1; b = 2; if (a) return b; return 42;", 2),
     (Test1.test "if (1) return 42; else return 53;", 42),
     (Test1.test "if (0) return 42; else return 53;", 53),
-    (Test1.test "a = 0; b = 2; if (a) return b; else return b * 2;", 4)
+    (Test1.test "a = 0; b = 2; if (a) return b; else return b * 2;", 4),
+    (Test1.test "a = 1; b = 0; if (b) return 42; if (0) return 42; else return a;", 1),
+    (Test1.test "a = 1; b = 2; if (a) if (b) return b; else return 53; else return 24;", 2),
+    (Test1.test "if (1) if (1) if (1) if (1) if (1) if (0) return 1; else return 2; else return 3; else return 4; else return 5; else return 6; else return 7;", 2)
     ]
