@@ -10,6 +10,24 @@
 
 module Htcc.Token
 
+-- | Utility for TKFor
+isTKFor :: Token i -> Bool
+
+-- | Specially for token data type
+data TokenFor i
+
+-- | The for keyword
+TKForkw :: TokenFor i
+
+-- | The initial section of for statement
+TKForInit :: [Token i] -> TokenFor i
+
+-- | The conditional section of for statement
+TKForCond :: [Token i] -> TokenFor i
+
+-- | The incremental section of for statement
+TKForIncr :: [Token i] -> TokenFor i
+
 -- | Token type
 data Token i
 
@@ -35,13 +53,13 @@ TKElse :: Token i
 TKWhile :: Token i
 
 -- | The for keyword
-TKFor :: Token i
+TKFor :: TokenFor i -> Token i
 
 -- | Tokenize from <a>String</a>. If it fails, the Left that wraps the
 --   value representing that point is returned.
 tokenize :: Read i => String -> Either Int [Token i]
+instance GHC.Show.Show i => GHC.Show.Show (Htcc.Token.TokenFor i)
 instance GHC.Show.Show i => GHC.Show.Show (Htcc.Token.Token i)
-instance GHC.Classes.Eq i => GHC.Classes.Eq (Htcc.Token.Token i)
 
 
 module Htcc.Utils
@@ -78,6 +96,24 @@ LVar :: String -> a -> LVar a
 
 -- | The offset value
 [offset] :: LVar a -> a
+
+-- | Specially for syntax tree type
+data ATKindFor a
+
+-- | The for keyword
+ATForkw :: ATKindFor a
+
+-- | The initial section of for statement
+ATForInit :: ATree a -> ATKindFor a
+
+-- | The conditional section of for statement
+ATForCond :: ATree a -> ATKindFor a
+
+-- | The incremental section of for statement
+ATForIncr :: ATree a -> ATKindFor a
+
+-- | The statement section of for statement
+ATForStmt :: ATree a -> ATKindFor a
 
 -- | The syntax tree type
 data ATKind a
@@ -130,6 +166,9 @@ ATElse :: ATKind a
 -- | The while keyword
 ATWhile :: ATKind a
 
+-- | The for keyword
+ATFor :: [ATKindFor a] -> ATKind a
+
 -- | The local variable. It has a offset value
 ATLVar :: a -> ATKind a
 
@@ -142,6 +181,25 @@ ATEmpty :: ATree a
 -- | <a>ATKind</a> representing the kind of node and the two branches
 --   <a>ATree</a> it has
 ATNode :: ATKind a -> ATree a -> ATree a -> ATree a
+
+-- | An utility of <a>ATForInit</a>. When an argument is <a>ATForInit</a>,
+--   return <a>True</a> otherwise <a>False</a>
+isATForInit :: ATKindFor a -> Bool
+
+-- | An utility of <a>ATForCond</a>. When an argument is <a>ATForCond</a>,
+--   return <a>True</a> otherwise <a>False</a>
+isATForCond :: ATKindFor a -> Bool
+
+-- | An utility <a>ATForStmt</a>. When an argument is <a>ATForStmt</a>,
+--   return <a>True</a> otherwise <a>False</a>
+isATForStmt :: ATKindFor a -> Bool
+
+-- | An utility <a>ATForIncr</a>. When an argument is <a>ATForIncr</a>,
+--   return <a>True</a> otherwise <a>False</a>
+isATForIncr :: ATKindFor a -> Bool
+
+-- | take ATree data from <a>ATKindFor</a>.
+fromATKindFor :: ATKindFor a -> ATree a
 
 -- | <a>inners</a> is a general function for creating <a>equality</a>,
 --   <a>relational</a>, <a>add</a> and <a>term</a> in the following syntax
@@ -191,12 +249,6 @@ expr :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, 
 
 -- | <a>stmt</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
---   
---   NOTE:
---   
---   Current status
---   
---   &lt;math&gt;
 stmt :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>program</a> indicates &lt;math&gt; among the comments of
@@ -207,8 +259,9 @@ program :: Num i => [Token i] -> [LVar i] -> Maybe [(ATree i, [LVar i])]
 --   strings. if construction fails, <a>Nothing</a> is returned.
 --   <a>parse</a> is equivalent to <a>program</a>.
 parse :: Num i => [Token i] -> Maybe ([ATree i], Int)
-instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.ATree a)
+instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.ATKindFor a)
 instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.ATKind a)
+instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.ATree a)
 instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.LVar a)
 
 

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7f646c0b369dcfb60260e010f40bda8af64099f4f326a75828318b2e8fd27fd2
+-- hash: 7bba6dbd0e0e3169d211941e8b03b7ff64efe1e08d74935c07f7a8bc51941fe5
 
 name:           htcc
 version:        0.0.0.1
@@ -38,6 +38,7 @@ library
   build-depends:
       base >=4.7 && <5
     , extra
+    , split
     , text
   default-language: Haskell2010
 
@@ -52,6 +53,7 @@ executable htcc
       base >=4.7 && <5
     , extra
     , htcc
+    , split
     , text
   default-language: Haskell2010
 
@@ -71,6 +73,7 @@ test-suite htcc-test
     , directory
     , extra
     , htcc
+    , split
     , text
     , time
     , turtle

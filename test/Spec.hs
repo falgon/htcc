@@ -41,6 +41,13 @@ main = runTestsEx [
     (Test1.test "a = 1; b = 0; if (b) return 42; if (0) return 42; else return a;", 1),
     (Test1.test "a = 1; b = 2; if (a) if (b) return b; else return 53; else return 24;", 2),
     (Test1.test "if (1) if (1) if (1) if (1) if (1) if (0) return 1; else return 2; else return 3; else return 4; else return 5; else return 6; else return 7;", 2),
+    (Test1.test "if(1)if(1)return 42;return 53;", 42),
+    (Test1.test "if(0); return 0;", 0),
     (Test1.test "a = 1; while (a < 10) a = a + 1; return a;", 10),
-    (Test1.test "a = 1; while (a < 10) a = a + 1; b = 1; while (b < 20) b = b + 2; return a + b;", 31)
+    (Test1.test "a = 1; while (a < 10) a = a + 1; b = 1; while (b < 20) b = b + 2; return a + b;", 31),
+    (Test1.test "a = 0; while (a); return 0;", 0),
+    (Test1.test "a = 0; for (i = 1; i <= 10; i = i + 1) a = a + i * 2; return a;", 110),
+    (Test1.test "i = 0; for (; i <= 10;) i = i + 2; return i;", 12),
+    (Test1.test "i = 0; for (; i <= 10; i = i + 2);  return i;", 12),
+    (Test1.test "a = 0; for (i = 0; i < 10; i = i + 1) if (a) a = 0; else a = 1; return a;", 0)
     ]

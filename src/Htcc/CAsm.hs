@@ -14,6 +14,7 @@ module Htcc.CAsm (
 ) where
 
 import Control.Exception (finally)
+import Data.List (find)
 import Data.Either (either)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -21,7 +22,7 @@ import System.Exit (exitFailure)
 
 import Htcc.Utils (err, putStrLnErr, counter)
 import Htcc.Token (Token (..), tokenize)
-import Htcc.Parse (ATKind (..), ATree (..), parse)
+import Htcc.Parse (ATKind (..), ATree (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, parse)
 
 {-# INLINE tshow #-}
 tshow :: Show a => a -> T.Text
@@ -40,11 +41,20 @@ epilogue :: T.Text
 epilogue = "\tmov rsp, rbp\n\tpop rbp\n\tret"
 
 genLVal :: Show i => ATree i -> IO ()
-genLVal (ATNode (ATLVar v) _ _) = T.putStr "\tmov rax, rbp\n\tsub rax, " >> putStrLn (show v) >> T.putStrLn "\tpush rax"
+genLVal (ATNode (ATLVar v) _ _) = T.putStr "\tmov rax, rbp\n\tsub rax, " >> print v >> T.putStrLn "\tpush rax"
 genLVal _ = err "lvalue required as left operand of assignment"
 
 -- | Simulate the stack machine by traversing an abstract syntax tree and output assembly codes.
 genStmt :: Show i => IO Int -> ATree i -> IO ()
+genStmt c (ATNode (ATFor exps) _ _) = do
+    n <- show <$> c
+    maybe (return ()) (genStmt c . fromATKindFor) $ find isATForInit exps
+    T.putStr ".Lbegin" >> putStrLn (n ++ ":")
+    maybe (return ()) (genStmt c . fromATKindFor) $ find isATForCond exps
+    T.putStr "\tpop rax\n\tcmp rax, 0\n\tje .Lend" >> putStrLn n
+    maybe (return ()) (genStmt c . fromATKindFor) $ find isATForStmt exps
+    maybe (return ()) (genStmt c . fromATKindFor) $ find isATForIncr exps
+    T.putStr "\tjmp .Lbegin" >> putStrLn n >> T.putStr ".Lend" >> putStrLn (n ++ ":")
 genStmt c (ATNode ATWhile lhs rhs) = do
     n <- show <$> c
     T.putStr ".Lbegin" >> putStrLn (n ++ ":") >> genStmt c lhs >> T.putStr "\tpop rax\n\tcmp rax, 0\n\tje .Lend" >> putStrLn n >> genStmt c rhs >> T.putStr "\tjmp .Lbegin" >> putStrLn n >> T.putStr ".Lend" >> putStrLn (n ++ ":") 
