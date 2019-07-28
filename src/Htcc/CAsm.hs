@@ -14,6 +14,7 @@ module Htcc.CAsm (
 ) where
 
 import Control.Exception (finally)
+import Control.Monad ((>=>))
 import Data.List (find)
 import Data.Either (either)
 import qualified Data.Text as T
@@ -46,6 +47,7 @@ genLVal _ = err "lvalue required as left operand of assignment"
 
 -- | Simulate the stack machine by traversing an abstract syntax tree and output assembly codes.
 genStmt :: Show i => IO Int -> ATree i -> IO ()
+genStmt c (ATNode (ATBlock stmts) _ _) = mapM_ (genStmt c >=> const (T.putStrLn "\tpop rax")) stmts
 genStmt c (ATNode (ATFor exps) _ _) = do
     n <- show <$> c
     maybe (return ()) (genStmt c . fromATKindFor) $ find isATForInit exps

@@ -32,12 +32,13 @@ module Htcc.Parse (
     parse
 ) where
 
-import Data.Tuple.Extra (first, second, dupe, uncurry3)
+import Data.Tuple.Extra (first, second, dupe, uncurry3, snd3, thd3)
 import Data.List (find)
 import Data.Maybe (fromJust, isNothing)
 import Data.STRef (newSTRef, readSTRef, writeSTRef)
 import Control.Monad (forM)
 import Control.Monad.ST (runST)
+import Control.Monad.Loops (unfoldrM)
 
 import Htcc.Utils (first3, second3)
 import Htcc.Token
@@ -113,6 +114,7 @@ data ATKind a = ATAdd -- ^ \(+\)
     | ATElse -- ^ The else keyword
     | ATWhile -- ^ The while keyword
     | ATFor [ATKindFor a] -- ^ The for keyword
+    | ATBlock [ATree a] -- ^ The block
     | ATLVar a -- ^ The local variable. It has a offset value
     deriving Show
 
@@ -121,18 +123,13 @@ data ATree a = ATEmpty -- ^ The empty node
     | ATNode (ATKind a) (ATree a) (ATree a) -- ^ `ATKind` representing the kind of node and the two branches `ATree` it has
     deriving Show
 
-appendRight :: ATree i -> ATree i -> ATree i
-appendRight ATEmpty x = x
-appendRight (ATNode k l r) x = ATNode k l $ appendRight r x
-
 -- | `program` indicates \(\eqref{eq:eigth}\) among the comments of `inners`.
-program :: Num i => [Token i] -> [LVar i] -> Maybe [(ATree i, [LVar i])]
+program :: (Num i, Eq i) => [Token i] -> [LVar i] -> Maybe [(ATree i, [LVar i])]
 program [] _ = Just []
 program xs vars = maybe Nothing (\(ys, btn, ars) -> ((btn, ars) :) <$> program ys ars) $ stmt xs ATEmpty vars
 
-
 -- | `stmt` indicates \(\eqref{eq:nineth}\) among the comments of `inners`.
-stmt :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+stmt :: (Num i, Eq i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 stmt (TKReturn:xs) atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for `return`
     TKReserved ";":ys -> Just (ys, ATNode ATReturn erat ATEmpty, ervars)
     _ -> Nothing
@@ -146,22 +143,31 @@ stmt (TKWhile:TKReserved "(":xs) atn vars = flip (maybe Nothing) (expr xs atn va
     _ -> Nothing
 stmt (TKFor TKForkw:xs) atn vars = runST $ do
     v <- newSTRef (atn, vars)
-    mk <- forM (takeWhile isTKFor xs) $ \case
+    mkk <- forM (takeWhile isTKFor xs) $ \case
         TKFor (TKForInit tk) -> f v tk ATForInit
         TKFor (TKForCond tk) -> f v tk ATForCond
         TKFor (TKForIncr tk) -> f v tk ATForIncr
         _ -> error "this function should not reach here"
-    if any isNothing mk then return Nothing else do
+    if any isNothing mkk then return Nothing else do
+        let jo = map fromJust mkk
+            mk = maybe (ATForCond (ATNode (ATNum 1) ATEmpty ATEmpty) : jo) (const jo) $ find isATForCond jo -- `for (;;)` means `for (;1;)`
+            elseTkf = dropWhile isTKFor xs
         (anr, vsr) <- readSTRef v
-        let elseTkf = dropWhile isTKFor xs
         case elseTkf of
-            (TKReserved ";":ys) -> return $ Just (ys, ATNode (ATFor (map fromJust mk)) ATEmpty ATEmpty, vsr)
-            _ -> return $ second3 (flip (flip ATNode ATEmpty) ATEmpty . ATFor . (map fromJust mk ++) . (:[]) . ATForStmt) <$> stmt elseTkf anr vsr
+            (TKReserved ";":ys) -> return $ Just (ys, ATNode (ATFor mk) ATEmpty ATEmpty, vsr)
+            _ -> return $ second3 (flip (flip ATNode ATEmpty) ATEmpty . ATFor . (mk ++) . (:[]) . ATForStmt) <$> stmt elseTkf anr vsr
     where
         f v tk fk = do
             aw <- readSTRef v
             maybe (return Nothing) (\(_, ert, ervars) -> Just (fk ert) <$ writeSTRef v (ert, ervars)) $ uncurry (expr tk) aw 
-stmt (TKReserved ";":ys) atn vars = Just (ys, atn, vars) -- for only ";"
+stmt (TKReserved "{":xs) atn vars = let scope = takeWhile (TKReserved "}" /=) xs in runST $ do -- for block
+    v <- newSTRef vars
+    mk <- flip unfoldrM (scope, atn, vars) $ \(ert, erat, ervars) -> if null ert then return Nothing else
+            maybe (return $ Just (Nothing, (ert, erat, ervars))) (\y -> Just (Just (snd3 y), y) <$ writeSTRef v (thd3 y)) $ stmt ert erat ervars
+    nvars <- readSTRef v
+    return $ if any isNothing mk then Nothing else
+        Just (tail $ dropWhile (TKReserved "}" /=) xs, ATNode (ATBlock (map fromJust mk)) ATEmpty ATEmpty, nvars)
+stmt (TKReserved ";":xs) atn vars = Just (xs, atn, vars) -- for only ";"
 stmt xs atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for stmt;
     TKReserved ";":ys -> Just (ys, erat, ervars)
     _ -> Nothing
@@ -186,6 +192,7 @@ assign xs atn vars = flip (maybe Nothing) (equality xs atn vars) $ \(ert, erat, 
 -- {\rm program} &=& {\rm stmt}^\ast\label{eq:eigth}\tag{1}\\
 -- {\rm stmt} &=& \begin{array}{l}
 -- {\rm expr}?\ {\rm ";"}\\ 
+-- \mid\ {\rm "\{"\ stmt}^\ast\ {\rm "\}"}\\
 -- \mid\ {\rm "return"}\ {\rm expr}\ ";"\\
 -- \mid\ "{\rm if}"\ "("\ {\rm expr}\ ")"\ {\rm stmt}\ ("{\rm else}"\ {\rm stmt})?\\
 -- \mid\ {\rm "while"\ "("\ expr\ ")"\ stmt}\\
@@ -258,6 +265,5 @@ factor _ _ _ = Nothing
 {-# INLINE parse #-}
 -- | Constructs the abstract syntax tree based on the list of token strings.
 -- if construction fails, `Nothing` is returned.
--- `parse` is equivalent to `program`.
-parse :: Num i => [Token i] -> Maybe ([ATree i], Int)
+parse :: (Num i, Eq i) => [Token i] -> Maybe ([ATree i], Int)
 parse = fmap (first (map fst) . second (length . snd . last) . dupe) . flip program []

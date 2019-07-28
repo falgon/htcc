@@ -49,5 +49,11 @@ main = runTestsEx [
     (Test1.test "a = 0; for (i = 1; i <= 10; i = i + 1) a = a + i * 2; return a;", 110),
     (Test1.test "i = 0; for (; i <= 10;) i = i + 2; return i;", 12),
     (Test1.test "i = 0; for (; i <= 10; i = i + 2);  return i;", 12),
-    (Test1.test "a = 0; for (i = 0; i < 10; i = i + 1) if (a) a = 0; else a = 1; return a;", 0)
+    (Test1.test "a = 0; for (i = 0; i < 10; i = i + 1) if (a) a = 0; else a = 1; return a;", 0),
+    (Test1.test "{ a = 42; b = 2; return a / b; }", 21),
+    (Test1.test "a = 0; for (i = 0; i < 10; i = i + 1) { a = a + i; a = a - i; } return a;", 0),
+    (Test1.test "a = 10; if (a) { a = a * a; a = a / 10; } return a;", 10),
+    (Test1.test "a = 0; while (1) { if (a < 10) a = a + 1; else return a; }", 10),
+    (Test1.test "a = 0; for (;;) { a = 42; return a; } return a;", 42),
+    (Test1.test "a = 0; for (;;) { if (a < 10) a = a + 1; else return a; }", 10)
     ]

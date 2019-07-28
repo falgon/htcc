@@ -58,7 +58,9 @@ TKFor :: TokenFor i -> Token i
 -- | Tokenize from <a>String</a>. If it fails, the Left that wraps the
 --   value representing that point is returned.
 tokenize :: Read i => String -> Either Int [Token i]
+instance GHC.Classes.Eq i => GHC.Classes.Eq (Htcc.Token.TokenFor i)
 instance GHC.Show.Show i => GHC.Show.Show (Htcc.Token.TokenFor i)
+instance GHC.Classes.Eq i => GHC.Classes.Eq (Htcc.Token.Token i)
 instance GHC.Show.Show i => GHC.Show.Show (Htcc.Token.Token i)
 
 
@@ -169,6 +171,9 @@ ATWhile :: ATKind a
 -- | The for keyword
 ATFor :: [ATKindFor a] -> ATKind a
 
+-- | The block
+ATBlock :: [ATree a] -> ATKind a
+
 -- | The local variable. It has a offset value
 ATLVar :: a -> ATKind a
 
@@ -249,16 +254,15 @@ expr :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, 
 
 -- | <a>stmt</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-stmt :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+stmt :: (Num i, Eq i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>program</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-program :: Num i => [Token i] -> [LVar i] -> Maybe [(ATree i, [LVar i])]
+program :: (Num i, Eq i) => [Token i] -> [LVar i] -> Maybe [(ATree i, [LVar i])]
 
 -- | Constructs the abstract syntax tree based on the list of token
 --   strings. if construction fails, <a>Nothing</a> is returned.
---   <a>parse</a> is equivalent to <a>program</a>.
-parse :: Num i => [Token i] -> Maybe ([ATree i], Int)
+parse :: (Num i, Eq i) => [Token i] -> Maybe ([ATree i], Int)
 instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.ATKindFor a)
 instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.ATKind a)
 instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.ATree a)

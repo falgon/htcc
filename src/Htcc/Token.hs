@@ -24,7 +24,7 @@ data TokenFor i = TKForkw -- ^ The for keyword
     | TKForInit [Token i] -- ^ The initial section of for statement
     | TKForCond [Token i] -- ^ The conditional section of for statement
     | TKForIncr [Token i] -- ^ The incremental section of for statement
-    deriving Show
+    deriving (Show, Eq)
 
 -- | Token type
 data Token i = TKReserved String -- ^ The reserved token
@@ -35,7 +35,7 @@ data Token i = TKReserved String -- ^ The reserved token
     | TKElse -- ^ The else keyword
     | TKWhile -- ^ The while keyword
     | TKFor (TokenFor i) -- ^ The for keyword
-    deriving Show
+    deriving (Show, Eq)
 
 {-# INLINE isTKFor #-}
 -- | Utility for TKFor
@@ -45,7 +45,7 @@ isTKFor _ = False
 
 {-# INLINE charOps #-}
 charOps :: String
-charOps = "+-*/()<>=;"
+charOps = "+-*/()<>=;{}"
 
 {-# INLINE strOps #-}
 strOps :: [String]
