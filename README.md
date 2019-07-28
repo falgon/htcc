@@ -10,7 +10,7 @@ A tiny C language compiler (x86-64).
 - [x] `else` statement
 - [x] `while` statement
 - [x] `for` statement
-- [ ] block scope
+- [x] block scope
 - [ ] function call
 
 and will add more some features...
