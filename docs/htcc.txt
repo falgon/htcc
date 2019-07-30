@@ -13,6 +13,12 @@ module Htcc.Token
 -- | Utility for TKFor
 isTKFor :: Token i -> Bool
 
+-- | Utility for TKIdent
+isTKIdent :: Token i -> Bool
+
+-- | Utility for TKNum
+isTKNum :: Token i -> Bool
+
 -- | Specially for token data type
 data TokenFor i
 
@@ -177,6 +183,9 @@ ATBlock :: [ATree a] -> ATKind a
 -- | The local variable. It has a offset value
 ATLVar :: a -> ATKind a
 
+-- | The function. It has a offset value and arguments (<a>Maybe</a>).
+ATCallFunc :: Text -> Maybe [ATree a] -> ATKind a
+
 -- | The data structure of abstract syntax tree
 data ATree a
 
@@ -214,23 +223,23 @@ fromATKindFor :: ATKindFor a -> ATree a
 inners :: ([Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])) -> [(String, ATKind i)] -> [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>add</a> indicates &lt;math&gt; among the comments of <a>inners</a>.
-add :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+add :: (Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>term</a> indicates &lt;math&gt; amont the comments of
 --   <a>inners</a>.
-term :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+term :: (Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>unary</a> indicates &lt;math&gt; amount the comments of
 --   <a>inners</a>.
-unary :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+unary :: (Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>factor</a> indicates &lt;math&gt; amount the comments of
 --   <a>inners</a>.
-factor :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+factor :: (Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>relational</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-relational :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+relational :: (Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>equality</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>. This is equivalent to the following code:
@@ -243,22 +252,22 @@ relational :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATr
 --           equality' (TKReserved "-":ys) era ars = maybe Nothing (uncurry id . first3 equality' . second3 (ATNode ATNEQ era)) $ relational ys era ars
 --           equality' ert era ars = Just (ert, era, ars)
 --   </pre>
-equality :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+equality :: (Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>assign</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-assign :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+assign :: (Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>expr</a> is equivalent to <a>equality</a>.
-expr :: Num i => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+expr :: (Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>stmt</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-stmt :: (Num i, Eq i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+stmt :: (Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>program</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-program :: (Num i, Eq i) => [Token i] -> [LVar i] -> Maybe [(ATree i, [LVar i])]
+program :: (Eq i, Num i) => [Token i] -> [LVar i] -> Maybe [(ATree i, [LVar i])]
 
 -- | Constructs the abstract syntax tree based on the list of token
 --   strings. if construction fails, <a>Nothing</a> is returned.

@@ -3,6 +3,8 @@ module Main where
 
 import Tests.Utils
 import qualified Tests.Test1 as Test1
+import qualified Tests.Test2 as Test2
+import qualified Tests.Test3 as Test3
 
 main :: IO ()
 main = runTestsEx [
@@ -55,5 +57,8 @@ main = runTestsEx [
     (Test1.test "a = 10; if (a) { a = a * a; a = a / 10; } return a;", 10),
     (Test1.test "a = 0; while (1) { if (a < 10) a = a + 1; else return a; }", 10),
     (Test1.test "a = 0; for (;;) { a = 42; return a; } return a;", 42),
-    (Test1.test "a = 0; for (;;) { if (a < 10) a = a + 1; else return a; }", 10)
+    (Test1.test "a = 0; for (;;) { if (a < 10) a = a + 1; else return a; }", 10),
+    (Test2.test "a = test_func1(); test_func1(); return a;", 0)
+    ] >> runTestsEx [
+    (Test3.test "return test_func1();", Right "test/Tests/csrc/test_func1.c::test_func1(): [OK]")
     ]

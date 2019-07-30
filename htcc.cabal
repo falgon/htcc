@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 13b4c5a1527f70b3cc2463d152665202c77ef62af8ef3c886a117fefb3b08847
+-- hash: 550f14a6bc0103b5d70b27dc355f833bb0bdd84ae65d207ce0c66549233d6409
 
 name:           htcc
 version:        0.0.0.1
@@ -64,6 +64,8 @@ test-suite htcc-test
   main-is: Spec.hs
   other-modules:
       Tests.Test1
+      Tests.Test2
+      Tests.Test3
       Tests.Utils
       Paths_htcc
   hs-source-dirs:
@@ -74,6 +76,7 @@ test-suite htcc-test
     , base >=4.7 && <5
     , directory
     , extra
+    , foldl
     , htcc
     , monad-loops
     , split

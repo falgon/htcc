@@ -54,3 +54,4 @@ tests:
     - text
     - directory
     - time
+    - foldl

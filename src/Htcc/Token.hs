@@ -9,6 +9,8 @@ Portability : POSIX
 -}
 module Htcc.Token (
     isTKFor,
+    isTKIdent,
+    isTKNum,
     TokenFor (..),
     Token (..),
     tokenize
@@ -43,9 +45,21 @@ isTKFor :: Token i -> Bool
 isTKFor (TKFor _) = True
 isTKFor _ = False
 
+{-# INLINE isTKIdent #-}
+-- | Utility for TKIdent
+isTKIdent :: Token i -> Bool
+isTKIdent (TKIdent _) = True
+isTKIdent _ = False
+
+{-# INLINE isTKNum #-}
+-- | Utility for TKNum
+isTKNum :: Token i -> Bool
+isTKNum (TKNum _) = True
+isTKNum _ = False
+
 {-# INLINE charOps #-}
 charOps :: String
-charOps = "+-*/()<>=;{}"
+charOps = "+-*/()<>=;{},"
 
 {-# INLINE strOps #-}
 strOps :: [String]
