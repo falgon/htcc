@@ -8,16 +8,78 @@
 @version 0.0.0.1
 
 
+module Htcc.Utils
+
+-- | Standard error output shortcut
+putStrLnErr :: Text -> IO ()
+
+-- | Standard error output and exit shortcut
+err :: Text -> IO ()
+
+-- | Update the first component of triple
+first3 :: (a -> d) -> (a, b, c) -> (d, b, c)
+
+-- | Update the second component of triple
+second3 :: (b -> d) -> (a, b, c) -> (a, d, c)
+
+-- | Update the third component of triple
+third3 :: (c -> d) -> (a, b, c) -> (a, b, d)
+
+-- | The counter is incremented by one each time it is executed
+counter :: Enum a => a -> IO (IO a)
+
+-- | For mappings &lt;math&gt; to an element &lt;math&gt; of a set
+--   &lt;math&gt;, &lt;math&gt; where &lt;math&gt; is the boolean domain.
+--   This function will stop evaluation when the result of &lt;math&gt; is
+--   <a>True</a> (short circuit evaluation). This is equivalent to:
+--   
+--   <pre>
+--   f1 x || f2 x || f3 x == lor [f1, f2, f3] x
+--   </pre>
+lor :: [a -> Bool] -> a -> Bool
+
+-- | Sum of product form. For mappings &lt;math&gt; to an element
+--   &lt;math&gt; of a set &lt;math&gt;, &lt;math&gt; where &lt;math&gt; is
+--   the Boolean domain. This function will stop evaluation when the result
+--   of &lt;math&gt; is <a>True</a> (short circuit evaluation).
+sop :: [a -> Bool] -> [a] -> Bool
+
+-- | The <a>Text</a> version of <a>sop</a>.
+sopText :: [Char -> Bool] -> Text -> Bool
+
+
+module Htcc.CRules.Char
+
+-- | Return <a>True</a> if it is a valid character.
+isValidChar :: Char -> Bool
+
+-- | Class of type that can be treated as a set of characters.
+class GenericStr a
+
+-- | Returns <a>True</a> if the set of characters is a valid C language
+--   characters.
+isValid :: GenericStr a => a -> Bool
+instance Htcc.CRules.Char.GenericStr GHC.Base.String
+instance Htcc.CRules.Char.GenericStr Data.Text.Internal.Text
+
+
 module Htcc.Token
 
--- | Utility for TKFor
+-- | Utility for <a>TKFor</a>. When the argument is <a>TKFor</a>, it
+--   returns <a>True</a>, otherwise <a>False</a>.
 isTKFor :: Token i -> Bool
 
--- | Utility for TKIdent
+-- | Utility for <a>TKIdent</a>. When the argument is <a>TKIdent</a>, it
+--   returns <a>True</a>, otherwise <a>False</a>.
 isTKIdent :: Token i -> Bool
 
--- | Utility for TKNum
+-- | Utility for <a>TKNum</a>. When the argument is <a>TKNum</a>, it
+--   returns <a>True</a>, otherwise <a>False</a>.
 isTKNum :: Token i -> Bool
+
+-- | Utility for <a>TKReserved</a>. When the argument is <a>TKReserved</a>,
+--   it returns <a>True</a>, otherwise <a>False</a>.
+isTKReserved :: Token i -> Bool
 
 -- | Specially for token data type
 data TokenFor i
@@ -70,27 +132,6 @@ instance GHC.Classes.Eq i => GHC.Classes.Eq (Htcc.Token.Token i)
 instance GHC.Show.Show i => GHC.Show.Show (Htcc.Token.Token i)
 
 
-module Htcc.Utils
-
--- | Standard error output shortcut
-putStrLnErr :: Text -> IO ()
-
--- | Standard error output and exit shortcut
-err :: Text -> IO ()
-
--- | Update the first component of triple
-first3 :: (a -> d) -> (a, b, c) -> (d, b, c)
-
--- | Update the second component of triple
-second3 :: (b -> d) -> (a, b, c) -> (a, d, c)
-
--- | Update the third component of triple
-third3 :: (c -> d) -> (a, b, c) -> (a, b, d)
-
--- | The counter is incremented by one each time it is executed
-counter :: Enum a => a -> IO (IO a)
-
-
 module Htcc.Parse
 
 -- | The local variable
@@ -137,6 +178,21 @@ ATMul :: ATKind a
 
 -- | &lt;math&gt;
 ATDiv :: ATKind a
+
+-- | modulus
+ATMod :: ATKind a
+
+-- | bitwise and
+ATAnd :: ATKind a
+
+-- | bitwise or
+ATOr :: ATKind a
+
+-- | bitwise xor
+ATXor :: ATKind a
+
+-- | bitwise not
+ATNot :: ATKind a
 
 -- | &lt;math&gt;
 ATLT :: ATKind a
@@ -217,29 +273,41 @@ fromATKindFor :: ATKindFor a -> ATree a
 
 -- | <a>inners</a> is a general function for creating <a>equality</a>,
 --   <a>relational</a>, <a>add</a> and <a>term</a> in the following syntax
---   (EBNF) of LL (1).
+--   (EBNF) of &lt;math&gt; where &lt;math&gt;.
 --   
 --   &lt;math&gt;
 inners :: ([Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])) -> [(String, ATKind i)] -> [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
+-- | <a>bitwiseOr</a> indicates &lt;math&gt; among the comments of
+--   <a>inners</a>.
+bitwiseOr :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+
+-- | <a>bitwiseXor</a> indicates &lt;math&gt; amont the comments of
+--   <a>inners</a>.
+bitwiseXor :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+
+-- | <a>bitwiseAnd</a> indicates &lt;math&gt; among the comments of
+--   <a>inners</a>.
+bitwiseAnd :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+
 -- | <a>add</a> indicates &lt;math&gt; among the comments of <a>inners</a>.
-add :: (Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+add :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>term</a> indicates &lt;math&gt; amont the comments of
 --   <a>inners</a>.
-term :: (Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+term :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>unary</a> indicates &lt;math&gt; amount the comments of
 --   <a>inners</a>.
-unary :: (Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+unary :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>factor</a> indicates &lt;math&gt; amount the comments of
 --   <a>inners</a>.
-factor :: (Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+factor :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>relational</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-relational :: (Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+relational :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>equality</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>. This is equivalent to the following code:
@@ -252,26 +320,26 @@ relational :: (Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token
 --           equality' (TKReserved "-":ys) era ars = maybe Nothing (uncurry id . first3 equality' . second3 (ATNode ATNEQ era)) $ relational ys era ars
 --           equality' ert era ars = Just (ert, era, ars)
 --   </pre>
-equality :: (Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+equality :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>assign</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-assign :: (Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+assign :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>expr</a> is equivalent to <a>equality</a>.
-expr :: (Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+expr :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>stmt</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-stmt :: (Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+stmt :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
 -- | <a>program</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-program :: (Eq i, Num i) => [Token i] -> [LVar i] -> Maybe [(ATree i, [LVar i])]
+program :: (Show i, Eq i, Num i) => [Token i] -> [LVar i] -> Maybe [(ATree i, [LVar i])]
 
 -- | Constructs the abstract syntax tree based on the list of token
 --   strings. if construction fails, <a>Nothing</a> is returned.
-parse :: (Num i, Eq i) => [Token i] -> Maybe ([ATree i], Int)
+parse :: (Show i, Num i, Eq i) => [Token i] -> Maybe ([ATree i], Int)
 instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.ATKindFor a)
 instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.ATKind a)
 instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.ATree a)

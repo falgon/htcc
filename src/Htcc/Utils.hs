@@ -13,7 +13,10 @@ module Htcc.Utils (
     first3,
     second3,
     third3,
-    counter
+    counter,
+    lor,
+    sop,
+    sopText
 ) where
 
 import qualified Data.Text as T
@@ -53,3 +56,22 @@ counter n = do
         t <- readIORef c
         writeIORef c $ succ t
         readIORef c
+
+-- | For mappings \(f_i:X\to B\) to an element \(x\in X\) of a set \(X\), \(\displaystyle\bigvee_{i} f_i(x)\) where \(B\) is the boolean domain. 
+-- This function will stop evaluation when the result of \(f_i(x)\) is `True` (short circuit evaluation).
+-- This is equivalent to:
+--
+-- > f1 x || f2 x || f3 x == lor [f1, f2, f3] x
+lor :: [(a -> Bool)] -> a -> Bool
+lor [] _ = False
+lor (f:fs) x | f x = True | otherwise = lor fs x
+
+-- | Sum of product form.
+-- For mappings \(f_i:X\to B\) to an element \(x\in X\) of a set \(X\), \(\displaystyle\bigwedge_{j}\bigvee_{i} f_i(x_j)\) where \(B\) is the Boolean domain.
+-- This function will stop evaluation when the result of \(f_i(x)\) is `True` (short circuit evaluation).
+sop :: [(a -> Bool)] -> [a] -> Bool
+sop = all . lor 
+
+-- | The `T.Text` version of `sop`.
+sopText :: [(Char -> Bool)] -> T.Text -> Bool
+sopText = T.all . lor

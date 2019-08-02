@@ -11,15 +11,18 @@ module Htcc.Token (
     isTKFor,
     isTKIdent,
     isTKNum,
+    isTKReserved,
     TokenFor (..),
     Token (..),
     tokenize
 ) where
 
-import Data.Char (isDigit, isSpace, isAlpha)
+import Data.Char (isDigit, isSpace)
 import Data.List.Split (endBy)
 import Data.Maybe (catMaybes)
 import Data.Either (lefts, rights)
+
+import qualified Htcc.CRules.Char as CRC
 
 -- | Specially for token data type
 data TokenFor i = TKForkw -- ^ The for keyword
@@ -40,26 +43,32 @@ data Token i = TKReserved String -- ^ The reserved token
     deriving (Show, Eq)
 
 {-# INLINE isTKFor #-}
--- | Utility for TKFor
+-- | Utility for `TKFor`. When the argument is `TKFor`, it returns `True`, otherwise `False`.
 isTKFor :: Token i -> Bool
 isTKFor (TKFor _) = True
 isTKFor _ = False
 
 {-# INLINE isTKIdent #-}
--- | Utility for TKIdent
+-- | Utility for `TKIdent`. When the argument is `TKIdent`, it returns `True`, otherwise `False`.
 isTKIdent :: Token i -> Bool
 isTKIdent (TKIdent _) = True
 isTKIdent _ = False
 
 {-# INLINE isTKNum #-}
--- | Utility for TKNum
+-- | Utility for `TKNum`. When the argument is `TKNum`, it returns `True`, otherwise `False`.
 isTKNum :: Token i -> Bool
 isTKNum (TKNum _) = True
 isTKNum _ = False
 
+-- | Utility for `TKReserved`. When the argument is `TKReserved`, it returns `True`, otherwise `False`.
+{-# INLINE isTKReserved #-}
+isTKReserved :: Token i -> Bool
+isTKReserved (TKReserved _) = True
+isTKReserved _ = False
+
 {-# INLINE charOps #-}
 charOps :: String
-charOps = "+-*/()<>=;{},"
+charOps = "+-*/()<>=;{},&|^%!~"
 
 {-# INLINE strOps #-}
 strOps :: [String]
@@ -74,6 +83,7 @@ strOps = [
 forSect :: String -> (Int, String)
 forSect xs = let ds = dropWhile isSpace xs; ts = takeWhile (/=')') ds in (length (takeWhile isSpace xs) + length ts + 1, tail ts)
 
+
 -- | Tokenize from `String`. If it fails, the Left that wraps the value representing that point is returned.
 tokenize :: Read i => String -> Either Int [Token i]
 tokenize = tokenize' 0
@@ -85,7 +95,7 @@ tokenize = tokenize' 0
             | isSpace x = tokenize' (succ n) xs
             | not (null xs) && [x, head xs] `elem` strOps = (TKReserved [x, head xs]:) <$> tokenize' (n + 2) (tail xs)
             | x `elem` charOps = (TKReserved [x]:) <$> tokenize' (succ n) xs
-            | otherwise = let tk = takeWhile (\y -> isAlpha y || isDigit y || y == '_') xxs in 
+            | otherwise = let tk = takeWhile CRC.isValidChar xxs in 
                 if null tk then Left n else let len = length tk; dxxs = drop len xxs; cn = callNext tk (n + len) dxxs in case tk of
                     "return" -> cn TKReturn
                     "while" -> cn TKWhile 

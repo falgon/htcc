@@ -71,6 +71,7 @@ genStmt c (ATNode ATElse (ATNode ATIf llhs rrhs) rhs) = do
     putStrLn n >> genStmt c rrhs >> T.putStr "\tjmp .Lend" >> putStrLn n >> T.putStr ".Lelse" >> putStrLn (n ++ ":") >> genStmt c rhs >> T.putStr ".Lend" >> putStrLn (n ++ ":")
 genStmt _ (ATNode ATElse _ _) = error "Asm code generator shold not reached here. Maybe abstract tree is broken it cause (bug)."
 genStmt c (ATNode ATReturn lhs _) = genStmt c lhs >> T.putStrLn "\tpop rax\n\tmov rsp, rbp\n\tpop rbp\n\tret"
+genStmt c (ATNode ATNot lhs _) = genStmt c lhs >> T.putStrLn "\tpop rax\n\tnot rax\n\tpush rax"
 genStmt _ (ATNode (ATNum x) _ _) = T.putStrLn $ T.append "\tpush " $ tshow x
 genStmt _ n@(ATNode (ATLVar _) _ _) = genLVal n >> T.putStrLn "\tpop rax" >> T.putStrLn "\tmov rax, [rax]" >> T.putStrLn "\tpush rax"
 genStmt c (ATNode ATAssign lhs rhs) = genLVal lhs >> genStmt c rhs >> T.putStrLn "\tpop rdi" >> T.putStrLn "\tpop rax" >> T.putStrLn "\tmov [rax], rdi" >> T.putStrLn "\tpush rdi"
@@ -79,6 +80,10 @@ genStmt c (ATNode k lhs rhs) = flip finally (T.putStrLn "\tpush rax") $ genStmt 
     ATSub -> T.putStrLn "\tsub rax, rdi"
     ATMul -> T.putStrLn "\timul rax, rdi"
     ATDiv -> T.putStrLn "\tcqo\n\tidiv rdi"
+    ATMod -> T.putStrLn "\tcqo\n\tidiv rdi\n\tmov rax, rdx"
+    ATAnd -> T.putStrLn "\tand rax, rdi"
+    ATOr -> T.putStrLn "\tor rax, rdi"
+    ATXor -> T.putStrLn "\txor rax, rdi"
     ATEQ -> T.putStrLn "\tcmp rax, rdi\n\tsete al\n\tmovzb rax, al"
     ATNEQ -> T.putStrLn "\tcmp rax, rdi\n\tsetne al\n\tmovzb rax, al"
     ATLT -> T.putStrLn "\tcmp rax, rdi\n\tsetl al\n\tmovzb rax, al"

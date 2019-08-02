@@ -58,7 +58,17 @@ main = runTestsEx [
     (Test1.test "a = 0; while (1) { if (a < 10) a = a + 1; else return a; }", 10),
     (Test1.test "a = 0; for (;;) { a = 42; return a; } return a;", 42),
     (Test1.test "a = 0; for (;;) { if (a < 10) a = a + 1; else return a; }", 10),
-    (Test2.test "a = test_func1(); test_func1(); return a;", 0)
+    (Test2.test "a = test_func1(); test_func1(); return a;", 0),
+    (Test1.test "a = 1; b = 1; return a & b;", 1),
+    (Test1.test "a = 42; b = 53; a = a ^ b; b = b ^ a; a = a ^ b; if (a == 53) if (b == 42) return 1; return 0;", 1),
+    (Test1.test "return 1 | 0;", 1),
+    (Test1.test "a = 1; b = 0; return a & b ^ a | b;", 1),
+    (Test1.test "a = 0; for (i = 0; i < 10; i = i + 1) if (i % 2 == 0) a = a + i; return a;", 20),
+    (Test1.test "return !0;", 1),
+    (Test1.test "return !42;", 0),
+    (Test1.test "return !!!0;", 1),
+    (Test1.test "return ~(-42);", 41),
+    (Test1.test "return ~~~~42;", 42)
     ] >> runTestsEx [
     (Test3.test "return test_func1();", Right "test/Tests/csrc/test_func1.c::test_func1(): [OK]")
     ]
