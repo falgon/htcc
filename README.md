@@ -11,7 +11,8 @@ A tiny C language compiler (x86-64).
 - [x] `while` statement
 - [x] `for` statement
 - [x] block scope
-- [ ] function call
+- [x] function call
+- [ ] function definition
 
 and will add more some features...
 

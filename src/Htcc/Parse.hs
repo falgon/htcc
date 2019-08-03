@@ -47,8 +47,6 @@ import Control.Monad.Loops (unfoldrM)
 import Htcc.Utils (first3, second3)
 import Htcc.Token
 
-import Debug.Trace (trace)
-
 -- | The local variable
 data LVar a = LVar -- ^ The constructor of local variable
     {

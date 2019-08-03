@@ -51,7 +51,7 @@ genStmt _ (ATNode (ATCallFunc x Nothing) _ _) = T.putStrLn "\tmov rbx, rsp\n\tan
 genStmt c (ATNode (ATCallFunc x (Just args)) _ _) = let toReg = take 6 args; toStack = drop 6 args in 
     zipWithM_ (\t reg -> genStmt c t >> T.putStrLn (T.append "\tpop " reg)) toReg ["rdi", "rsi", "rdx", "rcx", "r8", "r9"] *>
     T.putStrLn "\tmov rbx, rsp\n\tand rsp, ~0x0f" *>
-    unless (null toStack) (forM_ (reverse toStack) $ \t -> genStmt c t) *>
+    unless (null toStack) (forM_ (reverse toStack) $ genStmt c) *>
     T.putStr "\tcall " *>
     T.putStrLn x *>
     T.putStrLn "\tmov rsp, rbx\n\tpush rax"
