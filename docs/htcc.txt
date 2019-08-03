@@ -10,22 +10,22 @@
 
 module Htcc.Utils
 
--- | Standard error output shortcut
+-- | Standard error output shortcut.
 putStrLnErr :: Text -> IO ()
 
--- | Standard error output and exit shortcut
+-- | Standard error output and exit shortcut.
 err :: Text -> IO ()
 
--- | Update the first component of triple
+-- | Update the first component of triple.
 first3 :: (a -> d) -> (a, b, c) -> (d, b, c)
 
--- | Update the second component of triple
+-- | Update the second component of triple.
 second3 :: (b -> d) -> (a, b, c) -> (a, d, c)
 
--- | Update the third component of triple
+-- | Update the third component of triple.
 third3 :: (c -> d) -> (a, b, c) -> (a, b, d)
 
--- | The counter is incremented by one each time it is executed
+-- | The counter is incremented by one each time it is executed.
 counter :: Enum a => a -> IO (IO a)
 
 -- | For mappings &lt;math&gt; to an element &lt;math&gt; of a set
@@ -193,6 +193,12 @@ ATXor :: ATKind a
 
 -- | bitwise not
 ATNot :: ATKind a
+
+-- | left shift &lt;math&gt;
+ATShl :: ATKind a
+
+-- | right shift &lt;math&gt;
+ATShr :: ATKind a
 
 -- | &lt;math&gt;
 ATLT :: ATKind a

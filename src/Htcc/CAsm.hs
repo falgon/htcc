@@ -14,7 +14,7 @@ module Htcc.CAsm (
 ) where
 
 import Control.Exception (finally)
-import Control.Monad ((>=>))
+import Control.Monad ((>=>), zipWithM_, forM_, unless)
 import Data.List (find)
 import Data.Either (either)
 import qualified Data.Text as T
@@ -48,6 +48,13 @@ genLVal _ = err "lvalue required as left operand of assignment"
 -- | Simulate the stack machine by traversing an abstract syntax tree and output assembly codes.
 genStmt :: Show i => IO Int -> ATree i -> IO ()
 genStmt _ (ATNode (ATCallFunc x Nothing) _ _) = T.putStrLn "\tmov rbx, rsp\n\tand rsp, ~0x0f" >> T.putStr "\tcall " >> T.putStrLn x >> T.putStrLn "\tmov rsp, rbx\n\tpush rax"
+genStmt c (ATNode (ATCallFunc x (Just args)) _ _) = let toReg = take 6 args; toStack = drop 6 args in 
+    zipWithM_ (\t reg -> genStmt c t >> T.putStrLn (T.append "\tpop " reg)) toReg ["rdi", "rsi", "rdx", "rcx", "r8", "r9"] *>
+    T.putStrLn "\tmov rbx, rsp\n\tand rsp, ~0x0f" *>
+    unless (null toStack) (forM_ (reverse toStack) $ \t -> genStmt c t) *>
+    T.putStr "\tcall " *>
+    T.putStrLn x *>
+    T.putStrLn "\tmov rsp, rbx\n\tpush rax"
 genStmt c (ATNode (ATBlock stmts) _ _) = mapM_ (genStmt c >=> const (T.putStrLn "\tpop rax")) stmts
 genStmt c (ATNode (ATFor exps) _ _) = do
     n <- show <$> c

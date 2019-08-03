@@ -9,7 +9,7 @@ int test_func2(int n)
     const size_t size = n - 3;
     bool* p = calloc(size, sizeof(bool));
     
-    printf("%s::%s() outputs: \"", __FILE__, __func__);
+    printf("%s::%s(%d) outputs: \"", __FILE__, __func__, n);
     
     for (size_t i = 0; i < size; ++i) {
         if (!p[i]) {
@@ -20,9 +20,9 @@ int test_func2(int n)
         }
     }
     
-    puts("\" [OK]");
+    puts("\": [OK]");
     free(p);
     p = NULL;
 
-    return n;
+    return 0;
 }

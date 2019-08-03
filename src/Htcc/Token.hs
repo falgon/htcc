@@ -81,9 +81,10 @@ strOps = [
     ">>"
     ]
 
+
 {-# INLINE forSect #-}
 forSect :: String -> (Int, String)
-forSect xs = let ds = dropWhile isSpace xs; ts = takeWhile (/=')') ds in (length (takeWhile isSpace xs) + length ts + 1, tail ts)
+forSect xs = let ds = dropWhile isSpace xs; ts = takeWhile (/=')') ds in (succ $ length (takeWhile isSpace xs) + length ts, tail ts)
 
 
 -- | Tokenize from `String`. If it fails, the Left that wraps the value representing that point is returned.
@@ -108,6 +109,6 @@ tokenize = tokenize' 0
                             forSts = catMaybes $ zipWith (\ts y -> if null ts then Nothing else Just $ TKFor . y <$> tokenize' n ts) (endBy ";" fs) [TKForInit, TKForCond, TKForIncr]
                             lef = lefts forSts in
                                 if null lef then ((TKFor TKForkw:rights forSts) ++) <$> tokenize' (succ (fslen + n)) (drop fslen dxxs) else Left $ head lef
-                    _ -> (TKIdent tk :) <$> tokenize' (succ (n + len)) dxxs
+                    _ -> (TKIdent tk:) <$> tokenize' (succ (n + len)) dxxs
             where
                 callNext tk nlen dxxs itk = (if not (null dxxs) && (isSpace (head dxxs) || '(' == head dxxs) then (itk:) else (TKIdent tk:)) <$> tokenize' (succ nlen) dxxs
