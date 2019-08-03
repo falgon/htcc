@@ -84,6 +84,8 @@ genStmt c (ATNode k lhs rhs) = flip finally (T.putStrLn "\tpush rax") $ genStmt 
     ATAnd -> T.putStrLn "\tand rax, rdi"
     ATOr -> T.putStrLn "\tor rax, rdi"
     ATXor -> T.putStrLn "\txor rax, rdi"
+    ATShl -> T.putStrLn "\tmov edx, eax\n\tmov rax, rdi\n\tmov ecx, edx\n\tshl rax, cl"
+    ATShr -> T.putStrLn "\tpush rax\n\tmov rax, rdi\n\tmov edx, eax\n\tpop rax\n\tmov ecx, edx\n\tsar rax, cl"
     ATEQ -> T.putStrLn "\tcmp rax, rdi\n\tsete al\n\tmovzb rax, al"
     ATNEQ -> T.putStrLn "\tcmp rax, rdi\n\tsetne al\n\tmovzb rax, al"
     ATLT -> T.putStrLn "\tcmp rax, rdi\n\tsetl al\n\tmovzb rax, al"

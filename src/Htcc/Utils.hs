@@ -25,30 +25,30 @@ import Data.IORef (newIORef, readIORef, writeIORef)
 import System.IO (stderr)
 import System.Exit (exitFailure)
 
--- | Standard error output shortcut
+-- | Standard error output shortcut.
 putStrLnErr :: T.Text -> IO ()
 putStrLnErr = T.hPutStrLn stderr
 
--- | Standard error output and exit shortcut
+-- | Standard error output and exit shortcut.
 err :: T.Text -> IO ()
 err = flip (>>) exitFailure . putStrLnErr
 
 {-# INLINE first3 #-}
--- | Update the first component of triple
+-- | Update the first component of triple.
 first3 :: (a -> d) -> (a, b, c) -> (d, b, c)
 first3 f (x, y, z) = (f x, y, z)
 
 {-# INLINE second3 #-}
--- | Update the second component of triple
+-- | Update the second component of triple.
 second3 :: (b -> d) -> (a, b, c) -> (a, d, c)
 second3 f (x, y, z) = (x, f y, z)
 
 {-# INLINE third3 #-}
--- | Update the third component of triple
+-- | Update the third component of triple.
 third3 :: (c -> d) -> (a, b, c) -> (a, b, d)
 third3 f (x, y, z) = (x, y, f z)
 
--- | The counter is incremented by one each time it is executed
+-- | The counter is incremented by one each time it is executed.
 counter :: Enum a => a -> IO (IO a)
 counter n = do
     c <- newIORef n

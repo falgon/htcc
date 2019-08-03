@@ -62,13 +62,16 @@ main = runTestsEx [
     (Test1.test "a = 1; b = 1; return a & b;", 1),
     (Test1.test "a = 42; b = 53; a = a ^ b; b = b ^ a; a = a ^ b; if (a == 53) if (b == 42) return 1; return 0;", 1),
     (Test1.test "return 1 | 0;", 1),
-    (Test1.test "a = 1; b = 0; return a & b ^ a | b;", 1),
+    (Test1.test "a = 1; b = 0; return a & b ^ a | b;", 1), -- Xor swap
     (Test1.test "a = 0; for (i = 0; i < 10; i = i + 1) if (i % 2 == 0) a = a + i; return a;", 20),
     (Test1.test "return !0;", 1),
     (Test1.test "return !42;", 0),
     (Test1.test "return !!!0;", 1),
     (Test1.test "return ~(-42);", 41),
-    (Test1.test "return ~~~~42;", 42)
+    (Test1.test "return ~~~~42;", 42),
+    (Test1.test "return (2 * 4) == (2 << 2);", 1),
+    (Test1.test "return (8 / 4) == (8 >> 2);", 1),
+    (Test1.test "a = 2 << 4; return (a & (a - 1)) == 0;", 1) -- Determining if an integer is a power of 2
     ] >> runTestsEx [
     (Test3.test "return test_func1();", Right "test/Tests/csrc/test_func1.c::test_func1(): [OK]")
     ]

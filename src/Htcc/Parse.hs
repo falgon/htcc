@@ -112,6 +112,8 @@ data ATKind a = ATAdd -- ^ \(+\)
     | ATOr -- ^ bitwise or
     | ATXor -- ^ bitwise xor
     | ATNot -- ^ bitwise not
+    | ATShl -- ^ left shift `<<`
+    | ATShr -- ^ right shift `>>`
     | ATLT  -- ^ \(\lt\)
     | ATLEQ -- ^ \(\leq\)
     | ATGT  -- ^ \(\gt\)
@@ -259,7 +261,10 @@ equality = inners relational [("==", ATEQ), ("!=", ATNEQ)]
 
 -- | `relational` indicates \(\eqref{eq:sixth}\) among the comments of `inners`.
 relational :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
-relational = inners add [("<", ATLT), ("<=", ATLEQ), (">", ATGT), (">=", ATGEQ)]
+relational = inners shift [("<", ATLT), ("<=", ATLEQ), (">", ATGT), (">=", ATGEQ)]
+
+shift :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+shift = inners add [("<<", ATShl), (">>", ATShr)]
 
 -- | `add` indicates \(\eqref{eq:first}\) among the comments of `inners`.
 add :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
