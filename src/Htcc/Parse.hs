@@ -7,8 +7,11 @@ License     : MIT
 Maintainer  : falgon53@yahoo.co.jp
 Stability   : experimental
 Portability : POSIX
+
+The C languge parser and AST constructor
 -}
 module Htcc.Parse (
+    -- * Abstract tree types
     LVar (..),
     ATKindFor (..),
     ATKind (..),
@@ -18,6 +21,7 @@ module Htcc.Parse (
     isATForStmt,
     isATForIncr,
     fromATKindFor,
+    -- * Recursive descent implementation functions
     inners,
     bitwiseOr,
     bitwiseXor,
@@ -32,11 +36,14 @@ module Htcc.Parse (
     expr,
     stmt,
     program,
+    -- funcDef,
+    -- * Parser
     parse
 ) where
 
 import Data.Tuple.Extra (first, second, dupe, uncurry3, snd3, thd3)
-import Data.List (find, unfoldr)
+import Data.List (find, unfoldr, findIndex)
+import Data.List.Split (endBy)
 import Data.Maybe (fromJust, isNothing)
 import Data.STRef (newSTRef, readSTRef, writeSTRef)
 import qualified Data.Text as T
@@ -46,6 +53,8 @@ import Control.Monad.Loops (unfoldrM)
 
 import Htcc.Utils (first3, second3)
 import Htcc.Token
+
+import Debug.Trace (trace)
 
 -- | The local variable
 data LVar a = LVar -- ^ The constructor of local variable
@@ -127,6 +136,7 @@ data ATKind a = ATAdd -- ^ \(+\)
     | ATFor [ATKindFor a] -- ^ The for keyword
     | ATBlock [ATree a] -- ^ The block
     | ATLVar a -- ^ The local variable. It has a offset value
+    | ATDefFunc T.Text (Maybe [ATree a])
     | ATCallFunc T.Text (Maybe [ATree a]) -- ^ The function. It has a offset value and arguments (`Maybe`).
     deriving Show
 
@@ -135,10 +145,49 @@ data ATree a = ATEmpty -- ^ The empty node
     | ATNode (ATKind a) (ATree a) (ATree a) -- ^ `ATKind` representing the kind of node and the two branches `ATree` it has
     deriving Show
 
+-- | Get an argument from list of `Token` (e.g. Given the token of "f(g(a, b)), 42", return the token of "f(g(a, b))").
+readFn :: Eq i => [Token i] -> Maybe [Token i]
+readFn = readFn' 0 (0 :: Int)
+    where
+        readFn' li ri (TKIdent v:TKReserved "(":xs) = ([TKIdent v, TKReserved "("]++) <$> readFn' (succ li) ri xs
+        readFn' li ri (TKReserved ",":xs)
+            | li == ri = Just []
+            | otherwise = (TKReserved ",":) <$> readFn' li ri xs
+        readFn' li ri (TKReserved ")":xs)
+            | li == ri = Just []
+            | otherwise = (TKReserved ")":) <$> readFn' li (succ ri) xs
+        readFn' li ri (TKReserved "(":xs) = (TKReserved "(":) <$> readFn' (succ li) ri xs
+        readFn' li ri (x:xs) = (x:) <$> readFn' li ri xs
+        readFn' li ri []
+            | li == ri = Just [] 
+            | otherwise = Nothing
+
+-- | Get arguments from list of `Token` (e.g. Given the token of "f(f(g(a, b)), 42);", return expressions that are the token of "f(g(a, b))" and the token of "42".
+takeExps :: (Eq i) => [Token i] -> Maybe [[Token i]]
+takeExps (TKIdent _:TKReserved "(":xs) = if any isNothing exps then Nothing else Just $ filter (not . null) $ map fromJust exps
+    where
+        args = take (length xs - 2) xs
+        exps = flip unfoldr args $ \x -> if null x then Nothing else flip (maybe (Just (Nothing, []))) (readFn x) $ \ex -> Just (Just ex, drop (succ $ length ex) x)
+takeExps _ = Nothing
+
 -- | `program` indicates \(\eqref{eq:eigth}\) among the comments of `inners`.
 program :: (Show i, Eq i, Num i) => [Token i] -> [LVar i] -> Maybe [(ATree i, [LVar i])]
 program [] _ = Just []
 program xs vars = maybe Nothing (\(ys, btn, ars) -> ((btn, ars) :) <$> program ys ars) $ stmt xs ATEmpty vars
+
+{-
+-- | `funcDef` 
+funcDef :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+funcDef tk@(TKIdent fname:TKReserved "(":xs) atn vars 
+    | maybe False (\rpi -> xs !! (succ rpi) == TKReserved ";") (findIndex (==TKReserved ")") xs) = stmt tk atn vars
+    | otherwise = let args = endBy [TKReserved ","] $ takeWhile (/=TKReserved ")") xs in runST $ do
+        v <- newSTRef (atn, vars)
+        mk <- forM args $ \arg -> readSTRef v >>= maybe (return Nothing) (\(_, y, z) -> Just y <$ writeSTRef v (y, z)) . uncurry (factor arg)
+        if any isNothing mk then return Nothing else do
+            (erat, ervar) <- readSTRef v
+            return $ fmap (second3 (ATNode (ATDefFunc (T.pack fname) $ if null mk then Nothing else Just $ map fromJust mk) ATEmpty)) $ stmt (tail $ dropWhile (/=TKReserved ")") xs) erat ervar
+funcDef _ _ _ = Nothing
+-}
 
 -- | `stmt` indicates \(\eqref{eq:nineth}\) among the comments of `inners`.
 stmt :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
@@ -153,7 +202,7 @@ stmt (TKIf:TKReserved "(":xs) atn vars = flip (maybe Nothing) (expr xs atn vars)
 stmt (TKWhile:TKReserved "(":xs) atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for `while`
     TKReserved ")":ys -> second3 (ATNode ATWhile erat) <$> stmt ys erat ervars
     _ -> Nothing
-stmt (TKFor TKForkw:xs) atn vars = runST $ do
+stmt (TKFor TKForkw:xs) atn vars = runST $ do -- for `for`
     v <- newSTRef (atn, vars)
     mkk <- forM (takeWhile isTKFor xs) $ \case
         TKFor (TKForInit tk) -> f v tk ATForInit
@@ -279,31 +328,6 @@ unary (TKReserved "-":xs) at vars = second3 (ATNode ATSub (ATNode (ATNum 0) ATEm
 unary (TKReserved "!":xs) at vars = second3 (\x -> ATNode ATElse (ATNode ATIf (ATNode ATEQ x (ATNode (ATNum 0) ATEmpty ATEmpty)) (ATNode ATReturn (ATNode (ATNum 1) ATEmpty ATEmpty) ATEmpty)) (ATNode ATReturn (ATNode (ATNum 0) ATEmpty ATEmpty) ATEmpty)) <$> unary xs at vars
 unary (TKReserved "~":xs) at vars = second3 (flip (ATNode ATNot) ATEmpty) <$> unary xs at vars
 unary xs at vars = factor xs at vars
-
--- | Get an argument from list of `Token` (e.g. Given the token of "f(g(a, b)), 42", return the token of "f(g(a, b))").
-readFn :: Eq i => [Token i] -> Maybe [Token i]
-readFn = readFn' 0 (0 :: Int)
-    where
-        readFn' li ri (TKIdent v:TKReserved "(":xs) = ([TKIdent v, TKReserved "("]++) <$> readFn' (succ li) ri xs
-        readFn' li ri (TKReserved ",":xs)
-            | li == ri = Just []
-            | otherwise = (TKReserved ",":) <$> readFn' li ri xs
-        readFn' li ri (TKReserved ")":xs)
-            | li == ri = Just []
-            | otherwise = (TKReserved ")":) <$> readFn' li (succ ri) xs
-        readFn' li ri (TKReserved "(":xs) = (TKReserved "(":) <$> readFn' (succ li) ri xs
-        readFn' li ri (x:xs) = (x:) <$> readFn' li ri xs
-        readFn' li ri []
-            | li == ri = Just [] 
-            | otherwise = Nothing
-
--- | Get arguments from list of `Token` (e.g. Given the token of "f(f(g(a, b)), 42);", return expressions that are the token of "f(g(a, b))" and the token of "42".
-takeExps :: (Eq i) => [Token i] -> Maybe [[Token i]]
-takeExps (TKIdent _:TKReserved "(":xs) = if any isNothing exps then Nothing else Just $ filter (not . null) $ map fromJust exps
-    where
-        args = take (length xs - 2) xs
-        exps = flip unfoldr args $ \x -> if null x then Nothing else flip (maybe (Just (Nothing, []))) (readFn x) $ \ex -> Just (Just ex, drop (succ $ length ex) x)
-takeExps _ = Nothing
 
 -- | `factor` indicates \(\eqref{eq:third}\) amount the comments of `inners`.
 factor :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])

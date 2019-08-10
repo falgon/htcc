@@ -6,15 +6,20 @@ License     : MIT
 Maintainer  : falgon53@yahoo.co.jp
 Stability   : experimental
 Portability : POSIX
+
+The tokenizer
 -}
 module Htcc.Token (
+    -- * Token data types
+    TokenFor (..),
+    Token (..),
+    -- * Tokenizer
+    tokenize,
+    -- * Helper functions
     isTKFor,
     isTKIdent,
     isTKNum,
-    isTKReserved,
-    TokenFor (..),
-    Token (..),
-    tokenize
+    isTKReserved
 ) where
 
 import Data.Char (isDigit, isSpace)

@@ -6,14 +6,22 @@ License     : MIT
 Maintainer  : falgon53@yahoo.co.jp
 Stability   : experimental
 Portability : POSIX
+
+General-purpose utilities
 -}
 module Htcc.Utils (
+    -- * For Data.Text
+    tshow,
+    -- * For IO shortcuts
     putStrLnErr,
     err,
+    -- * For triples
     first3,
     second3,
     third3,
+    -- * Counter
     counter,
+    -- * Boolean methods
     lor,
     sop,
     sopText
@@ -24,6 +32,11 @@ import qualified Data.Text.IO as T
 import Data.IORef (newIORef, readIORef, writeIORef)
 import System.IO (stderr)
 import System.Exit (exitFailure)
+
+{-# INLINE tshow #-}
+-- | Convert `Show` class instance to `Data.Text`.
+tshow :: Show a => a -> T.Text
+tshow = T.pack . show
 
 -- | Standard error output shortcut.
 putStrLnErr :: T.Text -> IO ()

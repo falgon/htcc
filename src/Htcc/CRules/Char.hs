@@ -7,9 +7,13 @@ License     : MIT
 Maintainer  : falgon53@yahoo.co.jp
 Stability   : experimental
 Portability : POSIX
+
+Characters rules of C language
 -}
 module Htcc.CRules.Char (
+    -- * The definition of characters rules 
     isValidChar,
+    -- * The helper class for some string types
     GenericStr (..)
 ) where
 

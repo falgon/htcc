@@ -5,7 +5,7 @@ import System.Exit (exitFailure)
 import Data.Bool (bool)
 import Data.Tuple.Extra (second, dupe)
 
-import Htcc.CAsm (casm)
+import Htcc.Asm.Generate (casm)
 
 checkArgs :: IO (Maybe [String])
 checkArgs = uncurry (bool Nothing . Just) . second (not . null) . dupe <$> getArgs

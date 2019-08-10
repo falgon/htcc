@@ -1,5 +1,20 @@
 name:                htcc
 version:             0.0.0.1
+synopsis:            The full scratch implementation of tiny C compiler (x86_64)
+description: |
+    The full scratch implementation of tiny C compiler (x86_64).
+    This compiler outputs x86_64 assembly code from "general" C code.
+    .
+    It consists of:
+    .
+    * the lexical analyzer
+    * the parser that performs parsing with recursive descent and construction of abstract syntax trees (ASTs)
+    * the method that outputs x86_64 assembly code from ASTs
+    .
+    __This compiler is not practical purposes__, but focuses on implementation experiments.
+    .
+    For more information, please see the README on GitHub at <https://github.com/falgon/htcc#readme>.
+category:            Compiler
 github:              "falgon/htcc"
 license:             MIT
 author:              "roki"
@@ -9,8 +24,6 @@ copyright:           "2019 roki"
 extra-source-files:
 - README.md
 - ChangeLog.md
-
-description:         Please see the README on GitHub at <https://github.com/falgon/htcc#readme>
 
 dependencies:
 - base >= 4.7 && < 5

@@ -4,11 +4,24 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 8a28f6f1bff53fe025a9001dd77ad741e2bc1288436b5195f53690b3c5f84977
+-- hash: 17566fccb4e96ba09a04aaf3c5fd2df35b04f23b53dd9c430e641aa33115289f
 
 name:           htcc
 version:        0.0.0.1
-description:    Please see the README on GitHub at <https://github.com/falgon/htcc#readme>
+synopsis:       The full scratch implementation of tiny C compiler (x86_64)
+description:    The full scratch implementation of tiny C compiler (x86_64).
+                This compiler outputs x86_64 assembly code from "general" C code.
+                .
+                It consists of:
+                .
+                * the lexical analyzer
+                * the parser that performs parsing with recursive descent and construction of abstract syntax trees (ASTs)
+                * the method that outputs x86_64 assembly code from ASTs
+                .
+                __This compiler is not practical purposes__, but focuses on implementation experiments.
+                .
+                For more information, please see the README on GitHub at <https://github.com/falgon/htcc#readme>
+category:       Compiler
 homepage:       https://github.com/falgon/htcc#readme
 bug-reports:    https://github.com/falgon/htcc/issues
 author:         roki
@@ -27,7 +40,10 @@ source-repository head
 
 library
   exposed-modules:
-      Htcc.CAsm
+      Htcc.Asm.Generate
+      Htcc.Asm.Instruction
+      Htcc.Asm.Register
+      Htcc.Asm.Utils
       Htcc.CRules.Char
       Htcc.Parse
       Htcc.Token

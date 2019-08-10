@@ -2,13 +2,395 @@
 -- See Hoogle, http://www.haskell.org/hoogle/
 
 
--- | Please see the README on GitHub at
+-- | The full scratch implementation of tiny C compiler (x86_64)
+--   
+--   The full scratch implementation of tiny C compiler (x86_64). This
+--   compiler outputs x86_64 assembly code from "general" C code.
+--   
+--   It consists of:
+--   
+--   <ul>
+--   <li>the lexical analyzer</li>
+--   <li>the parser that performs parsing with recursive descent and
+--   construction of abstract syntax trees (ASTs)</li>
+--   <li>the method that outputs x86_64 assembly code from ASTs</li>
+--   </ul>
+--   
+--   <b>This compiler is not practical purposes</b>, but focuses on
+--   implementation experiments.
+--   
+--   For more information, please see the README on GitHub at
 --   <a>https://github.com/falgon/htcc#readme</a>
 @package htcc
 @version 0.0.0.1
 
 
+-- | Types and classes of the x86_64 registers
+module Htcc.Asm.Register
+
+-- | The register type class
+class Show a => IsRegister a
+
+-- | The byte width of the register.
+byteWidth :: IsRegister a => a -> Int
+
+-- | The accumulator register.
+data AccumulatorReg
+
+-- | Full 64 bits of register
+RAX :: AccumulatorReg
+
+-- | Lower 32 bits of register
+EAX :: AccumulatorReg
+
+-- | Lower 16 bits of register
+AX :: AccumulatorReg
+
+-- | Lower 8 bits of register
+AH :: AccumulatorReg
+
+-- | Upper 8 bits of <a>AX</a> register
+AL :: AccumulatorReg
+
+-- | The Base register.
+data BaseReg
+
+-- | Full 64 bits of register
+RBX :: BaseReg
+
+-- | Lower 32 bits of register
+EBX :: BaseReg
+
+-- | Lower 16 bits of register
+BX :: BaseReg
+
+-- | Lower 8 bit register
+BH :: BaseReg
+
+-- | Upper 8 bit register of <a>BX</a> register
+BL :: BaseReg
+
+-- | The Counter register.
+data CounterReg
+
+-- | Full 64 bits of register
+RCX :: CounterReg
+
+-- | Lower 32 bits of register
+ECX :: CounterReg
+
+-- | Lower 16 bits of register
+CX :: CounterReg
+
+-- | Lower 8 bit register
+CH :: CounterReg
+
+-- | Upper 8 bit register of <a>CX</a> register
+CL :: CounterReg
+
+-- | The Data register.
+data DataReg
+
+-- | Full 64 bits of register
+RDX :: DataReg
+
+-- | Lower 32 bits of register
+EDX :: DataReg
+
+-- | Lower 16 bits of register
+DX :: DataReg
+
+-- | Lower 8 bit register
+DH :: DataReg
+
+-- | Upper 8 bit register of <a>DX</a> register
+DL :: DataReg
+
+-- | The Source Index register.
+data SrcIndexReg
+
+-- | Full 64 bits of register
+RSI :: SrcIndexReg
+
+-- | Lower 32 bits of register
+ESI :: SrcIndexReg
+
+-- | Lower 16 bits of register
+SI :: SrcIndexReg
+
+-- | Lower 8 bits of register
+SIL :: SrcIndexReg
+
+-- | The Destination Index register.
+data DstIndexReg
+
+-- | Full 64 bits of register
+RDI :: DstIndexReg
+
+-- | Lower 32 bits of register
+EDI :: DstIndexReg
+
+-- | Lower 16 bits of register
+DI :: DstIndexReg
+
+-- | Lower 8 bits of register
+DIL :: DstIndexReg
+
+-- | The Base Pointer register.
+data BasePtrReg
+
+-- | Full 64 bits of register
+RBP :: BasePtrReg
+
+-- | Lower 32 bits of register
+EBP :: BasePtrReg
+
+-- | Lower 16 bits of register
+BP :: BasePtrReg
+
+-- | Lower 8 bits of register
+BPL :: BasePtrReg
+
+-- | The Stack Pointer register.
+data StackPtrReg
+
+-- | Full 64 bits of register
+RSP :: StackPtrReg
+
+-- | Lower 32 bits of register
+ESP :: StackPtrReg
+
+-- | Lower 16 bits of register
+SP :: StackPtrReg
+
+-- | Lower 8 bits of register
+SPL :: StackPtrReg
+
+-- | The extended general-purpose register (r8-r15).
+data ExtendedReg
+
+-- | Full 64 bits of register
+Rn :: Int -> ExtendedReg
+
+-- | Lower 32 bits of register
+RnD :: Int -> ExtendedReg
+
+-- | Lower 16 bits of register
+RnW :: Int -> ExtendedReg
+
+-- | Lower 8 bits of register
+RnB :: Int -> ExtendedReg
+
+-- | The registers.
+data Register
+
+-- | The accumulator
+Accumulator :: AccumulatorReg -> Register
+
+-- | The base
+Base :: BaseReg -> Register
+
+-- | The conuter
+Counter :: CounterReg -> Register
+
+-- | The data
+Data :: DataReg -> Register
+
+-- | The source index
+SrcIndex :: SrcIndexReg -> Register
+
+-- | The destination index
+DstIndex :: DstIndexReg -> Register
+
+-- | The base pointer index
+BasePtr :: BasePtrReg -> Register
+
+-- | The stack pointer index
+StackPtr :: StackPtrReg -> Register
+
+-- | The extended general-purpose
+Extended :: ExtendedReg -> Register
+
+-- | The type that specifies that register values are considered address
+--   values. e.g.:
+--   
+--   <pre>
+--   &gt;&gt;&gt; Ref rax
+--   [rax]
+--   
+--   &gt;&gt;&gt; Ref rsp
+--   [rsp]
+--   
+--   &gt;&gt;&gt; import qualified Data.Text as T
+--   
+--   &gt;&gt;&gt; T.putStr $ mov rax (Ref rsp) &lt;&gt; add rsp 8
+--        mov rax, [rsp]
+--        add rsp, 8
+--   </pre>
+newtype Ref
+
+-- | The constructor of <a>Ref</a>.
+Ref :: Register -> Ref
+
+-- | The rax register.
+rax :: Register
+
+-- | The eax register. Lower 32 bits of <a>rax</a>.
+eax :: Register
+
+-- | The ax register. Lower 16 bits of <a>rax</a>.
+ax :: Register
+
+-- | The ah register. Lower 8 bits of <a>rax</a>.
+ah :: Register
+
+-- | The al register. Upper 8 bits of <a>ax</a>.
+al :: Register
+
+-- | The rbx register.
+rbx :: Register
+
+-- | The ebx register. Lower 32 bits of <a>rbx</a>.
+ebx :: Register
+
+-- | The bx register. Lower 16 bits of <a>rbx</a>.
+bx :: Register
+
+-- | The bh register. Lower 8 bits of <a>rbx</a>.
+bh :: Register
+
+-- | The bl register. Upper 8 bits of <a>bx</a>.
+bl :: Register
+
+-- | The rcx register.
+rcx :: Register
+
+-- | The ecx register. Lower 32 bis of <a>rcx</a>.
+ecx :: Register
+
+-- | The cx register. Lower 16 bits of <a>rcx</a>.
+cx :: Register
+
+-- | The ch register. Lower 8 bits of <a>rcx</a>.
+ch :: Register
+
+-- | The cl register. Upper 8 bits of <a>cx</a>.
+cl :: Register
+
+-- | The rdx register.
+rdx :: Register
+
+-- | The edx register. Lower 32 bits of <a>rdx</a>.
+edx :: Register
+
+-- | The dx register. Lower 16 bits of <a>rdx</a>.
+dx :: Register
+
+-- | The dh register. Lower 8 bits of <a>rbx</a>.
+dh :: Register
+
+-- | The dl register. Upper 8 bits of <a>dx</a>.
+dl :: Register
+
+-- | The rsi register.
+rsi :: Register
+
+-- | The esi register. Lower 32 bits of <a>rsi</a>.
+esi :: Register
+
+-- | The si register. Lower 16 bits of <a>rsi</a>.
+si :: Register
+
+-- | The sil register. Lower 8 bits of <a>rsi</a>.
+sil :: Register
+
+-- | The rdi register.
+rdi :: Register
+
+-- | The edi register. Lower 32 bits of <a>rdi</a>.
+edi :: Register
+
+-- | The di register. Lower 16 bits of <a>rdi</a>.
+di :: Register
+
+-- | The dil register. Lower 8 bits of <a>rdi</a>.
+dil :: Register
+
+-- | The rbp register.
+rbp :: Register
+
+-- | The ebp register. Lower 32 bits of <a>rbp</a>.
+ebp :: Register
+
+-- | The bp register. Lower 16 bits of <a>rbp</a>.
+bp :: Register
+
+-- | The bpl register. Lower 8 bits of <a>rbp</a>.
+bpl :: Register
+
+-- | The rsp register.
+rsp :: Register
+
+-- | The esp register. Lower 32 bits of <a>rsp</a>.
+esp :: Register
+
+-- | The sp register. Lower 16 bits of <a>rsp</a>.
+sp :: Register
+
+-- | The spl register. Lower 8 bits of <a>rsp</a>.
+spl :: Register
+
+-- | The rn register (r8-r15).
+rn :: Int -> Register
+
+-- | The rnd register (r8d-r15d). Lower 32 bits of <a>rn</a>.
+rnd :: Int -> Register
+
+-- | The rnw register (r8w-r15w). Lower 16 bits of <a>rn</a>.
+rnw :: Int -> Register
+
+-- | The rnb register (r8b-r15b). Lower 8 bits of <a>rn</a>.
+rnb :: Int -> Register
+instance GHC.Classes.Eq Htcc.Asm.Register.Register
+instance GHC.Classes.Eq Htcc.Asm.Register.ExtendedReg
+instance GHC.Classes.Eq Htcc.Asm.Register.StackPtrReg
+instance GHC.Classes.Eq Htcc.Asm.Register.BasePtrReg
+instance GHC.Classes.Eq Htcc.Asm.Register.DstIndexReg
+instance GHC.Classes.Eq Htcc.Asm.Register.SrcIndexReg
+instance GHC.Classes.Eq Htcc.Asm.Register.DataReg
+instance GHC.Classes.Eq Htcc.Asm.Register.CounterReg
+instance GHC.Classes.Eq Htcc.Asm.Register.BaseReg
+instance GHC.Classes.Eq Htcc.Asm.Register.AccumulatorReg
+instance GHC.Show.Show Htcc.Asm.Register.Ref
+instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.Ref
+instance GHC.Show.Show Htcc.Asm.Register.Register
+instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.Register
+instance GHC.Show.Show Htcc.Asm.Register.ExtendedReg
+instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.ExtendedReg
+instance GHC.Enum.Bounded Htcc.Asm.Register.ExtendedReg
+instance GHC.Show.Show Htcc.Asm.Register.StackPtrReg
+instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.StackPtrReg
+instance GHC.Show.Show Htcc.Asm.Register.BasePtrReg
+instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.BasePtrReg
+instance GHC.Show.Show Htcc.Asm.Register.DstIndexReg
+instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.DstIndexReg
+instance GHC.Show.Show Htcc.Asm.Register.SrcIndexReg
+instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.SrcIndexReg
+instance GHC.Show.Show Htcc.Asm.Register.DataReg
+instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.DataReg
+instance GHC.Show.Show Htcc.Asm.Register.CounterReg
+instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.CounterReg
+instance GHC.Show.Show Htcc.Asm.Register.BaseReg
+instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.BaseReg
+instance GHC.Show.Show Htcc.Asm.Register.AccumulatorReg
+instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.AccumulatorReg
+
+
+-- | General-purpose utilities
 module Htcc.Utils
+
+-- | Convert <a>Show</a> class instance to <a>Text</a>.
+tshow :: Show a => a -> Text
 
 -- | Standard error output shortcut.
 putStrLnErr :: Text -> IO ()
@@ -48,6 +430,7 @@ sop :: [a -> Bool] -> [a] -> Bool
 sopText :: [Char -> Bool] -> Text -> Bool
 
 
+-- | Characters rules of C language
 module Htcc.CRules.Char
 
 -- | Return <a>True</a> if it is a valid character.
@@ -63,23 +446,8 @@ instance Htcc.CRules.Char.GenericStr GHC.Base.String
 instance Htcc.CRules.Char.GenericStr Data.Text.Internal.Text
 
 
+-- | The tokenizer
 module Htcc.Token
-
--- | Utility for <a>TKFor</a>. When the argument is <a>TKFor</a>, it
---   returns <a>True</a>, otherwise <a>False</a>.
-isTKFor :: Token i -> Bool
-
--- | Utility for <a>TKIdent</a>. When the argument is <a>TKIdent</a>, it
---   returns <a>True</a>, otherwise <a>False</a>.
-isTKIdent :: Token i -> Bool
-
--- | Utility for <a>TKNum</a>. When the argument is <a>TKNum</a>, it
---   returns <a>True</a>, otherwise <a>False</a>.
-isTKNum :: Token i -> Bool
-
--- | Utility for <a>TKReserved</a>. When the argument is <a>TKReserved</a>,
---   it returns <a>True</a>, otherwise <a>False</a>.
-isTKReserved :: Token i -> Bool
 
 -- | Specially for token data type
 data TokenFor i
@@ -126,12 +494,29 @@ TKFor :: TokenFor i -> Token i
 -- | Tokenize from <a>String</a>. If it fails, the Left that wraps the
 --   value representing that point is returned.
 tokenize :: Read i => String -> Either Int [Token i]
+
+-- | Utility for <a>TKFor</a>. When the argument is <a>TKFor</a>, it
+--   returns <a>True</a>, otherwise <a>False</a>.
+isTKFor :: Token i -> Bool
+
+-- | Utility for <a>TKIdent</a>. When the argument is <a>TKIdent</a>, it
+--   returns <a>True</a>, otherwise <a>False</a>.
+isTKIdent :: Token i -> Bool
+
+-- | Utility for <a>TKNum</a>. When the argument is <a>TKNum</a>, it
+--   returns <a>True</a>, otherwise <a>False</a>.
+isTKNum :: Token i -> Bool
+
+-- | Utility for <a>TKReserved</a>. When the argument is <a>TKReserved</a>,
+--   it returns <a>True</a>, otherwise <a>False</a>.
+isTKReserved :: Token i -> Bool
 instance GHC.Classes.Eq i => GHC.Classes.Eq (Htcc.Token.TokenFor i)
 instance GHC.Show.Show i => GHC.Show.Show (Htcc.Token.TokenFor i)
 instance GHC.Classes.Eq i => GHC.Classes.Eq (Htcc.Token.Token i)
 instance GHC.Show.Show i => GHC.Show.Show (Htcc.Token.Token i)
 
 
+-- | The C languge parser and AST constructor
 module Htcc.Parse
 
 -- | The local variable
@@ -244,6 +629,7 @@ ATBlock :: [ATree a] -> ATKind a
 
 -- | The local variable. It has a offset value
 ATLVar :: a -> ATKind a
+ATDefFunc :: Text -> Maybe [ATree a] -> ATKind a
 
 -- | The function. It has a offset value and arguments (<a>Maybe</a>).
 ATCallFunc :: Text -> Maybe [ATree a] -> ATKind a
@@ -352,11 +738,133 @@ instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.ATree a)
 instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.LVar a)
 
 
-module Htcc.CAsm
+-- | <a>Utils</a> exports utilities that help generating x86_64 assembly.
+module Htcc.Asm.Utils
+
+-- | Define the .Lbeginx local label
+defBegin :: (Show i, Integral i) => i -> Text
+
+-- | Define the .Lendx local label
+defEnd :: (Show i, Integral i) => i -> Text
+
+-- | refer the .Lbeginx label
+refBegin :: (Show i, Integral i) => i -> Text
+
+-- | refer the .Lendx label
+refEnd :: (Show i, Integral i) => i -> Text
+
+
+-- | <a>Instruction</a> exports types, classes and function of the x86_64
+--   instructions.
+module Htcc.Asm.Instruction
+
+-- | A class of x86_64 instructions with unary arguments.
+class Show a => UnaryInstruction a
+
+-- | THe push instruction.
+push :: UnaryInstruction a => a -> Text
+
+-- | The pop instruction.
+pop :: UnaryInstruction a => a -> Text
+
+-- | The pushl instruction.
+pushl :: UnaryInstruction a => a -> Text
+
+-- | The popl instruction.
+popl :: UnaryInstruction a => a -> Text
+
+-- | The idiv instruction.
+idiv :: UnaryInstruction a => a -> Text
+
+-- | The not instructions.
+not :: UnaryInstruction a => a -> Text
+
+-- | A class of x86_64 instructions with binary arguments.
+class Show a => BinaryInstruction a
+
+-- | The mov instruction.
+mov :: (BinaryInstruction a, BinaryInstruction b) => a -> b -> Text
+
+-- | The movl instruction.
+movl :: (BinaryInstruction a, BinaryInstruction b) => a -> b -> Text
+
+-- | The cmp instruction.
+cmp :: (BinaryInstruction a, BinaryInstruction b) => a -> b -> Text
+
+-- | The add instruction.
+add :: (BinaryInstruction a, BinaryInstruction b) => a -> b -> Text
+
+-- | The sub instruction.
+sub :: (BinaryInstruction a, BinaryInstruction b) => a -> b -> Text
+
+-- | The imul instruction.
+imul :: (BinaryInstruction a, BinaryInstruction b) => a -> b -> Text
+
+-- | The and instruction.
+and :: (BinaryInstruction a, BinaryInstruction b) => a -> b -> Text
+
+-- | The or instruction.
+or :: (BinaryInstruction a, BinaryInstruction b) => a -> b -> Text
+
+-- | The xor instruction.
+xor :: (BinaryInstruction a, BinaryInstruction b) => a -> b -> Text
+
+-- | The shl instruction.
+shl :: (BinaryInstruction a, BinaryInstruction b) => a -> b -> Text
+
+-- | The sar instruction.
+sar :: (BinaryInstruction a, BinaryInstruction b) => a -> b -> Text
+
+-- | The movzb instruction.
+movzb :: BinaryInstruction a => a -> Register -> Text
+
+-- | The sete instruction.
+sete :: Register -> Text
+
+-- | The setne instruction.
+setne :: Register -> Text
+
+-- | The setl instruction.
+setl :: Register -> Text
+
+-- | The setle instruction.
+setle :: Register -> Text
+
+-- | The setg instruction.
+setg :: Register -> Text
+
+-- | The setge instruction.
+setge :: Register -> Text
+
+-- | The cqo instruction.
+cqo :: Text
+
+-- | The ret instruction.
+ret :: Text
+
+-- | The jmp instruction.
+jmp :: Text -> Text
+
+-- | The je instruction.
+je :: Text -> Text
+
+-- | The call instruction.
+call :: Text -> Text
+instance Htcc.Asm.Instruction.BinaryInstruction GHC.Integer.Type.Integer
+instance Htcc.Asm.Instruction.BinaryInstruction GHC.Types.Int
+instance Htcc.Asm.Instruction.BinaryInstruction Htcc.Asm.Register.Register
+instance Htcc.Asm.Instruction.BinaryInstruction Htcc.Asm.Register.Ref
+instance Htcc.Asm.Instruction.UnaryInstruction GHC.Integer.Type.Integer
+instance Htcc.Asm.Instruction.UnaryInstruction GHC.Types.Int
+instance Htcc.Asm.Instruction.UnaryInstruction Htcc.Asm.Register.Register
+
+
+-- | Assembly code generator
+module Htcc.Asm.Generate
 
 -- | Simulate the stack machine by traversing an abstract syntax tree and
 --   output assembly codes.
-genStmt :: Show i => IO Int -> ATree i -> IO ()
+genStmt :: (Show i, UnaryInstruction i, BinaryInstruction i) => IO Int -> ATree i -> IO ()
 
 -- | Generate full assembly code from C language program
 casm :: String -> IO ()
