@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 17566fccb4e96ba09a04aaf3c5fd2df35b04f23b53dd9c430e641aa33115289f
+-- hash: 7642ca93e14309269550d8547909914aa2c6736eaa2df26507fd77ac97d65521
 
 name:           htcc
 version:        0.0.0.1
@@ -20,7 +20,7 @@ description:    The full scratch implementation of tiny C compiler (x86_64).
                 .
                 __This compiler is not practical purposes__, but focuses on implementation experiments.
                 .
-                For more information, please see the README on GitHub at <https://github.com/falgon/htcc#readme>
+                For more information, please see the README on GitHub at <https://github.com/falgon/htcc#readme>.
 category:       Compiler
 homepage:       https://github.com/falgon/htcc#readme
 bug-reports:    https://github.com/falgon/htcc/issues
@@ -41,10 +41,13 @@ source-repository head
 library
   exposed-modules:
       Htcc.Asm.Generate
-      Htcc.Asm.Instruction
-      Htcc.Asm.Register
-      Htcc.Asm.Utils
+      Htcc.Asm.Intrinsic
+      Htcc.Asm.Intrinsic.Instruction
+      Htcc.Asm.Intrinsic.Operand
+      Htcc.Asm.Intrinsic.Register
+      Htcc.Asm.Intrinsic.Utils
       Htcc.CRules.Char
+      Htcc.ErrorTrack
       Htcc.Parse
       Htcc.Token
       Htcc.Utils
@@ -54,6 +57,7 @@ library
       src
   build-depends:
       base >=4.7 && <5
+    , containers
     , extra
     , monad-loops
     , split
@@ -69,6 +73,7 @@ executable htcc
   ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall -Werror
   build-depends:
       base >=4.7 && <5
+    , containers
     , extra
     , htcc
     , monad-loops
@@ -87,10 +92,11 @@ test-suite htcc-test
       Paths_htcc
   hs-source-dirs:
       test
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall -Werror -O2
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall -O2
   build-depends:
       HUnit
     , base >=4.7 && <5
+    , containers
     , directory
     , extra
     , foldl

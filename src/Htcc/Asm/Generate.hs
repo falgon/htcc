@@ -16,8 +16,10 @@ module Htcc.Asm.Generate (
     casm
 ) where
 
+-- Imports universal modules
 import Control.Exception (finally)
 import Control.Monad ((>=>), zipWithM_, forM_, unless)
+import Control.Monad.Fix (fix)
 import Data.Bits (complement)
 import Data.List (find)
 import Data.Either (either)
@@ -25,16 +27,21 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import System.Exit (exitFailure)
 
+-- Imports Tokenizer and parser
 import Htcc.Utils (err, putStrLnErr, counter, tshow)
 import Htcc.Token (Token (..), tokenize)
-import Htcc.Parse (ATKind (..), ATree (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, parse)
-import Htcc.Asm.Register
-import qualified Htcc.Asm.Instruction as I
-import qualified Htcc.Asm.Utils as I
+import Htcc.Parse (ATKind (..), ATree (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, parse, varNum)
+import qualified Htcc.ErrorTrack as E
+
+-- Imports about assembly
+import Htcc.Asm.Intrinsic.Register
+import Htcc.Asm.Intrinsic.Operand
+import qualified Htcc.Asm.Intrinsic.Instruction as I
+import qualified Htcc.Asm.Intrinsic.Utils as I
 
 {-# INLINE declMain #-}
 declMain :: T.Text
-declMain = ".intel_syntax noprefix\n.global main\nmain:"
+declMain = I.declIS <> I.defGLbl "main"
 
 {-# INLINE prologue #-}
 prologue :: (Num i, Show i, I.BinaryInstruction i) => i -> T.Text
@@ -49,7 +56,14 @@ genLVal (ATNode (ATLVar v) _ _) = T.putStr $ I.mov rax rbp <> I.sub rax v <> I.p
 genLVal _ = err "lvalue required as left operand of assignment"
 
 -- | Simulate the stack machine by traversing an abstract syntax tree and output assembly codes.
-genStmt :: (Show i, I.UnaryInstruction i, I.BinaryInstruction i) => IO Int -> ATree i -> IO ()
+genStmt :: (Show i, Ord i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => IO Int -> ATree i -> IO ()
+genStmt c lc@(ATNode (ATDefFunc x Nothing) _ st) = T.putStr ((I.defGLbl x) <> prologue (varNum lc)) >> genStmt c st >> T.putStr epilogue
+genStmt c lc@(ATNode (ATDefFunc x (Just args)) _ st) = do
+    T.putStr $ (I.defGLbl x) <> prologue (varNum lc)
+    zipWithM_ (\(ATNode (ATLVar o) _ _) reg -> T.putStr $ I.mov (Ref $ rax `osub` o) reg) args [rdi, rsi, rdx, rcx, rn 8, rn 9]
+    -- zipWithM_ (\(ATNode (ATLVar o) _ _) reg -> T.putStrLn $ "\tmov [rbp-" <> tshow o <> "], " <> tshow reg) args [rdi, rsi, rdx, rcx, rn 8, rn 9]
+    genStmt c st
+    T.putStr epilogue
 genStmt _ (ATNode (ATCallFunc x Nothing) _ _) = T.putStr $ I.mov rbx rsp <> I.and rsp (complement 0x0f :: Int) <> I.call x <> I.mov rsp rbx <> I.push rax
 genStmt c (ATNode (ATCallFunc x (Just args)) _ _) = let toReg = take 6 args; toStack = drop 6 args in do
     zipWithM_ (\t reg -> genStmt c t >> T.putStr (I.pop reg)) toReg [rdi, rsi, rdx, rcx, rn 8, rn 9]
@@ -84,10 +98,10 @@ genStmt c (ATNode ATIf lhs rhs) = do
 genStmt c (ATNode ATElse (ATNode ATIf llhs rrhs) rhs) = do
     genStmt c llhs
     n <- c
-    T.putStr $ I.pop rax <> I.cmp rax (0 :: Int) <> I.je (".Lelse" <> tshow n)
+    T.putStr $ I.pop rax <> I.cmp rax (0 :: Int) <> I.je (I.refLLbl "else" n)
     genStmt c rrhs
     T.putStr $ I.jmp (I.refEnd n)
-    T.putStr ".Lelse" >> putStrLn (show n ++ ":")
+    T.putStr $ I.defLLbl "else" n
     genStmt c rhs
     T.putStr $ I.defEnd n
 genStmt _ (ATNode ATElse _ _) = error "Asm code generator shold not reached here. Maybe abstract tree is broken it cause (bug)."
@@ -116,10 +130,20 @@ genStmt c (ATNode k lhs rhs) = flip finally (T.putStr $ I.push rax) $ genStmt c 
     _ -> err "Failed to assemble."
 genStmt _ _ = return ()
 
+outErrExit :: T.Text -> E.ErrTracker Int -> IO ()
+outErrExit xs n = do
+    ($ (E.pos n, E.str n)) . fix $ \f (i, s) -> unless (T.null s) $ do
+        putStrLnErr (tshow i <> ": error: stray '" <> T.singleton (T.head s) <> "' in program") 
+        putStrLnErr xs
+        putStrLnErr (T.pack (replicate (pred i) ' ' ++ "^"))
+        f (succ i, T.tail s)
+    exitFailure
+
 -- | Generate full assembly code from C language program
 casm :: String -> IO ()
-casm xs = flip (either (outErr (T.pack xs))) (tokenize xs :: Either Int [Token Int]) $ \x -> flip (maybe (err "Syntax error (Failed to construct abstract tree)")) (parse x) $ \(ys, n) -> do
+casm xs = flip (either (outErrExit (T.pack xs))) (f xs) $ \x -> flip (maybe (err "Syntax error (Failed to construct abstract tree)")) (parse x) $ \ys -> do
     inc <- counter 0
-    T.putStrLn declMain >> T.putStr (prologue n) >> mapM_ (genStmt inc) ys >> T.putStr (I.pop rax) >> T.putStr epilogue
+    -- T.putStr I.declIS >> mapM_ (genStmt inc) ys
+    T.putStr declMain >> T.putStr (prologue $ snd ys) >> mapM_ (genStmt inc) (fst ys) >> T.putStr (I.pop rax) >> T.putStr epilogue
     where
-        outErr ys n = putStrLnErr ys >> putStrLnErr (T.pack $ replicate n ' ') >> putStrLnErr "^ Invalid token here" >> exitFailure
+        f = tokenize :: String -> Either (E.ErrTracker Int) [Token Int]

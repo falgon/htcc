@@ -1,5 +1,5 @@
 {-|
-Module      : Htcc.Asm.Register
+Module      : Htcc.Asm.Intrinsic.Register
 Description : Types and classes of the x86_64 registers
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -9,7 +9,7 @@ Portability : POSIX
 
 Types and classes of the x86_64 registers
 -}
-module Htcc.Asm.Register (
+module Htcc.Asm.Intrinsic.Register (
     -- * Register class
     IsRegister (..),
     -- * Registers data types
@@ -23,7 +23,6 @@ module Htcc.Asm.Register (
     StackPtrReg (..),
     ExtendedReg (..),
     Register (..),
-    Ref (..),
     -- * Registers
     rax, eax, ax, ah, al,
     rbx, ebx, bx, bh, bl,
@@ -47,7 +46,6 @@ data AccumulatorReg = RAX -- ^ Full 64 bits of register
     | AX -- ^ Lower 16 bits of register
     | AH -- ^ Lower 8 bits of register
     | AL -- ^ Upper 8 bits of `AX` register
-    deriving Eq
 
 instance Show AccumulatorReg where
     show RAX = "rax"
@@ -63,13 +61,18 @@ instance IsRegister AccumulatorReg where
     byteWidth AH = 1
     byteWidth AL = 1
 
+instance Eq AccumulatorReg where
+    (==) = flip (.) byteWidth . (==) . byteWidth
+
+instance Ord AccumulatorReg where
+    compare = flip (.) byteWidth . compare . byteWidth
+
 -- | The Base register.
 data BaseReg = RBX -- ^ Full 64 bits of register
     | EBX -- ^ Lower 32 bits of register
     | BX -- ^ Lower 16 bits of register
     | BH -- ^ Lower 8 bit register
     | BL -- ^ Upper 8 bit register of `BX` register
-    deriving Eq
 
 instance Show BaseReg where
     show RBX = "rbx"
@@ -85,13 +88,18 @@ instance IsRegister BaseReg where
     byteWidth BH = 1
     byteWidth BL = 1
 
+instance Eq BaseReg where
+    (==) = flip (.) byteWidth . (==) . byteWidth
+
+instance Ord BaseReg where
+    compare = flip (.) byteWidth . compare . byteWidth
+
 -- | The Counter register.
 data CounterReg = RCX -- ^ Full 64 bits of register
     | ECX -- ^ Lower 32 bits of register
     | CX -- ^ Lower 16 bits of register
     | CH -- ^ Lower 8 bit register
     | CL -- ^ Upper 8 bit register of `CX` register
-    deriving Eq
 
 instance Show CounterReg where
     show RCX = "rcx"
@@ -107,13 +115,18 @@ instance IsRegister CounterReg where
     byteWidth CH = 1
     byteWidth CL = 1
 
+instance Eq CounterReg where
+    (==) = flip (.) byteWidth . (==) . byteWidth
+
+instance Ord CounterReg where
+    compare = flip (.) byteWidth . compare . byteWidth
+
 -- | The Data register.
 data DataReg = RDX -- ^ Full 64 bits of register
     | EDX -- ^ Lower 32 bits of register
     | DX -- ^ Lower 16 bits of register
     | DH -- ^ Lower 8 bit register
     | DL -- ^ Upper 8 bit register of `DX` register
-    deriving Eq
 
 instance Show DataReg where
     show RDX = "rdx"
@@ -129,12 +142,17 @@ instance IsRegister DataReg where
     byteWidth DH = 1
     byteWidth DL = 1
 
+instance Eq DataReg where
+    (==) = flip (.) byteWidth . (==) . byteWidth
+
+instance Ord DataReg where
+    compare = flip (.) byteWidth . compare . byteWidth
+
 -- | The Source Index register.
 data SrcIndexReg = RSI -- ^ Full 64 bits of register
     | ESI -- ^ Lower 32 bits of register
     | SI -- ^ Lower 16 bits of register
     | SIL -- ^ Lower 8 bits of register
-    deriving Eq
 
 instance Show SrcIndexReg where
     show RSI = "rsi"
@@ -148,12 +166,17 @@ instance IsRegister SrcIndexReg where
     byteWidth SI = 2
     byteWidth SIL = 1
 
+instance Eq SrcIndexReg where
+    (==) = flip (.) byteWidth . (==) . byteWidth
+
+instance Ord SrcIndexReg where
+    compare = flip (.) byteWidth . compare . byteWidth
+
 -- | The Destination Index register.
 data DstIndexReg = RDI -- ^ Full 64 bits of register
     | EDI -- ^ Lower 32 bits of register
     | DI -- ^ Lower 16 bits of register
     | DIL -- ^ Lower 8 bits of register
-    deriving Eq
 
 instance Show DstIndexReg where
     show RDI = "rdi"
@@ -167,12 +190,17 @@ instance IsRegister DstIndexReg where
     byteWidth DI = 2
     byteWidth DIL = 1
 
+instance Eq DstIndexReg where
+    (==) = flip (.) byteWidth . (==) . byteWidth
+
+instance Ord DstIndexReg where
+    compare = flip (.) byteWidth . compare . byteWidth
+
 -- | The Base Pointer register.
 data BasePtrReg = RBP -- ^ Full 64 bits of register
     | EBP -- ^ Lower 32 bits of register
     | BP -- ^ Lower 16 bits of register
     | BPL -- ^ Lower 8 bits of register
-    deriving Eq
 
 instance Show BasePtrReg where
     show RBP = "rbp"
@@ -186,12 +214,17 @@ instance IsRegister BasePtrReg where
     byteWidth BP = 2
     byteWidth BPL = 1
 
+instance Eq BasePtrReg where
+    (==) = flip (.) byteWidth . (==) . byteWidth
+
+instance Ord BasePtrReg where
+    compare = flip (.) byteWidth . compare . byteWidth
+
 -- | The Stack Pointer register.
 data StackPtrReg = RSP -- ^ Full 64 bits of register
     | ESP -- ^ Lower 32 bits of register
     | SP -- ^ Lower 16 bits of register
     | SPL -- ^ Lower 8 bits of register
-    deriving Eq
 
 instance Show StackPtrReg where
     show RSP = "rsp"
@@ -205,12 +238,17 @@ instance IsRegister StackPtrReg where
     byteWidth SP = 2
     byteWidth SPL = 1
 
+instance Eq StackPtrReg where
+    (==) = flip (.) byteWidth . (==) . byteWidth
+
+instance Ord StackPtrReg where
+    compare = flip (.) byteWidth . compare . byteWidth
+
 -- | The extended general-purpose register (r8-r15).
 data ExtendedReg = Rn Int -- ^ Full 64 bits of register
     | RnD Int -- ^ Lower 32 bits of register
     | RnW Int -- ^ Lower 16 bits of register
     | RnB Int -- ^ Lower 8 bits of register
-    deriving Eq
 
 instance Show ExtendedReg where
     show (Rn x) 
@@ -236,6 +274,12 @@ instance Bounded ExtendedReg where
     minBound = Rn 8
     maxBound = Rn 15
 
+instance Eq ExtendedReg where
+    (==) = flip (.) byteWidth . (==) . byteWidth
+
+instance Ord ExtendedReg where
+    compare = flip (.) byteWidth . compare . byteWidth
+
 -- | The registers.
 data Register = Accumulator AccumulatorReg -- ^ The accumulator
     | Base BaseReg -- ^ The base
@@ -246,7 +290,6 @@ data Register = Accumulator AccumulatorReg -- ^ The accumulator
     | BasePtr BasePtrReg -- ^ The base pointer index
     | StackPtr StackPtrReg -- ^ The stack pointer index
     | Extended  ExtendedReg -- ^ The extended general-purpose
-    deriving Eq
 
 instance Show Register where
     show (Accumulator x) = show x
@@ -269,6 +312,12 @@ instance IsRegister Register where
     byteWidth (BasePtr x) = byteWidth x
     byteWidth (StackPtr x) = byteWidth x
     byteWidth (Extended x) = byteWidth x
+
+instance Eq Register where
+    (==) = flip (.) byteWidth . (==) . byteWidth
+
+instance Ord Register where
+    compare = flip (.) byteWidth . compare . byteWidth
 
 {-# INLINE rax #-}
 -- | The rax register.
@@ -469,22 +518,3 @@ rnw = Extended . RnW
 -- | The rnb register (r8b-r15b). Lower 8 bits of `rn`.
 rnb :: Int -> Register
 rnb = Extended . RnB
-
--- | The type that specifies that register values are considered address values.
--- e.g.:
---
--- >>> Ref rax
--- [rax]
--- >>> Ref rsp
--- [rsp]
--- >>> import qualified Data.Text as T
--- >>> T.putStr $ mov rax (Ref rsp) <> add rsp 8
---      mov rax, [rsp]
---      add rsp, 8
-newtype Ref = Ref Register -- ^ The constructor of `Ref`.
-
-instance Show Ref where
-    show (Ref x) = "[" ++ show x ++ "]"
-
-instance IsRegister Ref where
-    byteWidth (Ref x) = byteWidth x

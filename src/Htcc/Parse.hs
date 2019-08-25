@@ -35,10 +35,11 @@ module Htcc.Parse (
     assign,
     expr,
     stmt,
+    funcDef,
     program,
-    -- funcDef,
     -- * Parser
-    parse
+    parse,
+    varNum
 ) where
 
 import Data.Tuple.Extra (first, second, dupe, uncurry3, snd3, thd3)
@@ -46,6 +47,7 @@ import Data.List (find, unfoldr, findIndex)
 import Data.List.Split (endBy)
 import Data.Maybe (fromJust, isNothing)
 import Data.STRef (newSTRef, readSTRef, writeSTRef)
+import qualified Data.Set as S
 import qualified Data.Text as T
 import Control.Monad (forM)
 import Control.Monad.ST (runST)
@@ -173,36 +175,35 @@ takeExps _ = Nothing
 -- | `program` indicates \(\eqref{eq:eigth}\) among the comments of `inners`.
 program :: (Show i, Eq i, Num i) => [Token i] -> [LVar i] -> Maybe [(ATree i, [LVar i])]
 program [] _ = Just []
-program xs vars = maybe Nothing (\(ys, btn, ars) -> ((btn, ars) :) <$> program ys ars) $ stmt xs ATEmpty vars
+program xs vars = maybe Nothing (\(ys, btn, ars) -> ((btn, ars) :) <$> program ys ars) $ stmt {- funcDef -} xs ATEmpty vars
 
-{-
 -- | `funcDef` 
 funcDef :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 funcDef tk@(TKIdent fname:TKReserved "(":xs) atn vars 
-    | maybe False (\rpi -> xs !! (succ rpi) == TKReserved ";") (findIndex (==TKReserved ")") xs) = stmt tk atn vars
+    | maybe False (\rpi -> length xs > succ rpi && xs !! (succ rpi) == TKReserved ";") (findIndex (==TKReserved ")") xs) = stmt tk atn vars
     | otherwise = let args = endBy [TKReserved ","] $ takeWhile (/=TKReserved ")") xs in runST $ do
         v <- newSTRef (atn, vars)
         mk <- forM args $ \arg -> readSTRef v >>= maybe (return Nothing) (\(_, y, z) -> Just y <$ writeSTRef v (y, z)) . uncurry (factor arg)
         if any isNothing mk then return Nothing else do
             (erat, ervar) <- readSTRef v
-            return $ fmap (second3 (ATNode (ATDefFunc (T.pack fname) $ if null mk then Nothing else Just $ map fromJust mk) ATEmpty)) $ stmt (tail $ dropWhile (/=TKReserved ")") xs) erat ervar
+            return $ fmap (second3 (ATNode (ATDefFunc (T.pack fname) $ if null mk then Nothing else Just $ map fromJust mk) ATEmpty)) $
+                stmt (tail $ dropWhile (/=TKReserved ")") xs) erat ervar -- FIXME: needs check tail is no empty
 funcDef _ _ _ = Nothing
--}
 
 -- | `stmt` indicates \(\eqref{eq:nineth}\) among the comments of `inners`.
 stmt :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
-stmt (TKReturn:xs) atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for `return`
+stmt (TKReturn:xs) atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for @return@
     TKReserved ";":ys -> Just (ys, ATNode ATReturn erat ATEmpty, ervars)
     _ -> Nothing
-stmt (TKIf:TKReserved "(":xs) atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for `if`
+stmt (TKIf:TKReserved "(":xs) atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for @if@
     TKReserved ")":ys -> flip (maybe Nothing) (stmt ys erat ervars) $ \x -> case second3 (ATNode ATIf erat) x of
-        (TKElse:zs, eerat, eervars) -> second3 (ATNode ATElse eerat) <$> stmt zs eerat eervars -- for `else`
+        (TKElse:zs, eerat, eervars) -> second3 (ATNode ATElse eerat) <$> stmt zs eerat eervars -- for @else@
         zs -> Just zs
     _ -> Nothing
-stmt (TKWhile:TKReserved "(":xs) atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for `while`
+stmt (TKWhile:TKReserved "(":xs) atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for @while@
     TKReserved ")":ys -> second3 (ATNode ATWhile erat) <$> stmt ys erat ervars
     _ -> Nothing
-stmt (TKFor TKForkw:xs) atn vars = runST $ do -- for `for`
+stmt (TKFor TKForkw:xs) atn vars = runST $ do -- for @for@
     v <- newSTRef (atn, vars)
     mkk <- forM (takeWhile isTKFor xs) $ \case
         TKFor (TKForInit tk) -> f v tk ATForInit
@@ -211,7 +212,7 @@ stmt (TKFor TKForkw:xs) atn vars = runST $ do -- for `for`
         _ -> error "this function should not reach here"
     if any isNothing mkk then return Nothing else do
         let jo = map fromJust mkk
-            mk = maybe (ATForCond (ATNode (ATNum 1) ATEmpty ATEmpty) : jo) (const jo) $ find isATForCond jo -- `for (;;)` means `for (;1;)`
+            mk = maybe (ATForCond (ATNode (ATNum 1) ATEmpty ATEmpty) : jo) (const jo) $ find isATForCond jo -- @for (;;)@ means @for (;1;)@
             elseTkf = dropWhile isTKFor xs
         (anr, vsr) <- readSTRef v
         case elseTkf of
@@ -228,7 +229,7 @@ stmt (TKReserved "{":xs) atn vars = let scope = takeWhile (TKReserved "}" /=) xs
     nvars <- readSTRef v
     return $ if any isNothing mk then Nothing else
         Just (tail $ dropWhile (TKReserved "}" /=) xs, ATNode (ATBlock (map fromJust mk)) ATEmpty ATEmpty, nvars)
-stmt (TKReserved ";":xs) atn vars = Just (xs, atn, vars) -- for only ";"
+stmt (TKReserved ";":xs) atn vars = Just (xs, atn, vars) -- for only @;@
 stmt xs atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for stmt;
     TKReserved ";":ys -> Just (ys, erat, ervars)
     _ -> Nothing
@@ -353,5 +354,20 @@ factor _ _ _ = Nothing
 {-# INLINE parse #-}
 -- | Constructs the abstract syntax tree based on the list of token strings.
 -- if construction fails, `Nothing` is returned.
+{-
+parse :: (Show i, Num i, Eq i) => [Token i] -> Maybe [ATree i] -- Maybe ([ATree i])
+parse = fmap (map fst) . flip program []
+-}
 parse :: (Show i, Num i, Eq i) => [Token i] -> Maybe ([ATree i], Int)
-parse = fmap (first (map fst) . second (length . snd . last) . dupe) . flip program []
+parse = fmap (first (map fst) . second (length . snd . last) . dupe) . flip program [] -- 関数単位で変数の個数が異なる?
+
+-- | `varNum` returns the number of variables per function.
+varNum :: Ord i => ATree i -> Int
+varNum (ATNode (ATDefFunc _ args) _ body) = S.size $ f body $ maybe S.empty (foldr (\(ATNode (ATLVar x) _ _) acc -> S.insert x acc) S.empty) args
+    where
+        f ATEmpty s = s
+        f (ATNode (ATLVar x) l r) s = f l (S.insert x s) `S.union` f r (S.insert x s)
+        f (ATNode (ATBlock xs) l r) s = let i = foldr S.union S.empty (map (`f` s) xs) in f l i `S.union` f r i
+        f (ATNode (ATFor xs) l r) s = let i = foldr S.union S.empty $ map (flip f s . fromATKindFor) xs in f l i `S.union` f r i
+        f (ATNode _ l r) s = f l s `S.union` f r s
+varNum _ = 0

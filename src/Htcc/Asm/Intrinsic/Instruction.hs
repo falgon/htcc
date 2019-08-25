@@ -1,5 +1,5 @@
 {-|
-Module      : Htcc.Asm.Instruction
+Module      : Htcc.Asm.Intrinsic.Instruction
 Description : Types, classes and function of the x86_64 instructions
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -7,11 +7,11 @@ Maintainer  : falgon53@yahoo.co.jp
 Stability   : experimental
 Portability : POSIX
 
-`Htcc.Asm.Instruction` exports types, classes and function of the x86_64 instructions.
+`Htcc.Asm.Intrinsic.Instruction` exports types, classes and function of the x86_64 instructions.
 -}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Htcc.Asm.Instruction (
+module Htcc.Asm.Intrinsic.Instruction (
     -- * Instructions
     UnaryInstruction (..),
     BinaryInstruction (..),
@@ -30,16 +30,17 @@ module Htcc.Asm.Instruction (
 
 import qualified Data.Text as T
 
-import Htcc.Asm.Register
+import Htcc.Asm.Intrinsic.Register (Register (..))
+import Htcc.Asm.Intrinsic.Operand (IsOperand (..), Ref (..))
 import Htcc.Utils (tshow)
 
 {-# INLINE intelSyntaxUnaryInst #-}
 intelSyntaxUnaryInst :: Show a => T.Text -> a -> T.Text
-intelSyntaxUnaryInst inst x = "\t" <> inst <> " " <> tshow x <> "\n"
+intelSyntaxUnaryInst = flip (.) (T.append " " . flip T.append "\n" . tshow) . (.) (T.append "\t") . T.append
 
 {-# INLINE intelSyntaxBinaryInst #-}
 intelSyntaxBinaryInst :: (Show a, Show b) => T.Text -> a -> b -> T.Text
-intelSyntaxBinaryInst inst d s = "\t" <> inst <> " " <> tshow d <> ", " <> tshow s <> "\n"
+intelSyntaxBinaryInst = (.) (flip (.) (T.append ", " . flip T.append "\n" . tshow) . (.) (T.append "\t")) . (flip (.) ((.) (T.append " ") . (T.append . tshow)) . (.) . T.append)
 
 -- | A class of x86_64 instructions with unary arguments.
 class Show a => UnaryInstruction a where
@@ -86,9 +87,9 @@ setg = intelSyntaxUnaryInst "setg"
 setge :: Register -> T.Text
 setge = intelSyntaxUnaryInst "setge"
 
-instance UnaryInstruction Integer where
-instance UnaryInstruction Int where
-instance UnaryInstruction Register where
+instance UnaryInstruction Integer
+instance UnaryInstruction Int
+instance UnaryInstruction Register
 
 -- | A class of x86_64 instructions with binary arguments.
 class Show a => BinaryInstruction a where
@@ -129,10 +130,10 @@ class Show a => BinaryInstruction a where
     movzb :: a -> Register -> T.Text
     movzb = intelSyntaxBinaryInst "movzb"
 
-instance BinaryInstruction Integer where
-instance BinaryInstruction Int where
-instance BinaryInstruction Register where
-instance BinaryInstruction Ref where
+instance BinaryInstruction Integer
+instance BinaryInstruction Int
+instance BinaryInstruction Register
+instance IsOperand a => BinaryInstruction (Ref a)
 
 -- | The cqo instruction.
 cqo :: T.Text
@@ -153,3 +154,4 @@ je = flip T.append "\n" . T.append "\tje "
 -- | The call instruction.
 call :: T.Text -> T.Text
 call = flip T.append "\n" . T.append "\tcall "
+

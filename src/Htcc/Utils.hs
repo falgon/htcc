@@ -9,7 +9,11 @@ Portability : POSIX
 
 General-purpose utilities
 -}
+{-# LANGUAGE TupleSections #-}
 module Htcc.Utils (
+    -- * Extra functions for lists
+    takeWhileLen,
+    spanLen,
     -- * For Data.Text
     tshow,
     -- * For IO shortcuts
@@ -32,6 +36,28 @@ import qualified Data.Text.IO as T
 import Data.IORef (newIORef, readIORef, writeIORef)
 import System.IO (stderr)
 import System.Exit (exitFailure)
+
+-- | `takeWhileLen`, applied to a predicate @f@ and a list @xs@, returns the
+-- longest prefix (possibly empty) of @xs@ of elements that satisfy @f@ and
+-- the length of the list taken. The time complexity of this function is
+-- equivalent to `takeWhile`.
+takeWhileLen :: (a -> Bool) -> [a] -> (Int, [a])
+takeWhileLen = takeWhileLen' 0
+    where
+        takeWhileLen' n _ [] = (n, [])
+        takeWhileLen' n f (x:xs)
+            | f x = let (n', ys) = takeWhileLen' (succ n) f xs in (n', x:ys)
+            | otherwise = (n, [])
+
+-- | Almost the same as `span`, but returns the number of elements in the list that
+-- satisfy @f@ at the same time.
+spanLen :: (a -> Bool) -> [a] -> (Int, [a], [a])
+spanLen = spanLen' 0
+    where
+        spanLen' n _ [] = (n, [], [])
+        spanLen' n f xs@(x:xs')
+            | f x = let (n', ys, zs) = spanLen' (succ n) f xs' in (n', x:ys, zs)
+            | otherwise = (n, [], xs)
 
 {-# INLINE tshow #-}
 -- | Convert `Show` class instance to `Data.Text`.

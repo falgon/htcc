@@ -20,13 +20,13 @@
 --   implementation experiments.
 --   
 --   For more information, please see the README on GitHub at
---   <a>https://github.com/falgon/htcc#readme</a>
+--   <a>https://github.com/falgon/htcc#readme</a>.
 @package htcc
 @version 0.0.0.1
 
 
 -- | Types and classes of the x86_64 registers
-module Htcc.Asm.Register
+module Htcc.Asm.Intrinsic.Register
 
 -- | The register type class
 class Show a => IsRegister a
@@ -211,27 +211,6 @@ StackPtr :: StackPtrReg -> Register
 -- | The extended general-purpose
 Extended :: ExtendedReg -> Register
 
--- | The type that specifies that register values are considered address
---   values. e.g.:
---   
---   <pre>
---   &gt;&gt;&gt; Ref rax
---   [rax]
---   
---   &gt;&gt;&gt; Ref rsp
---   [rsp]
---   
---   &gt;&gt;&gt; import qualified Data.Text as T
---   
---   &gt;&gt;&gt; T.putStr $ mov rax (Ref rsp) &lt;&gt; add rsp 8
---        mov rax, [rsp]
---        add rsp, 8
---   </pre>
-newtype Ref
-
--- | The constructor of <a>Ref</a>.
-Ref :: Register -> Ref
-
 -- | The rax register.
 rax :: Register
 
@@ -351,43 +330,138 @@ rnw :: Int -> Register
 
 -- | The rnb register (r8b-r15b). Lower 8 bits of <a>rn</a>.
 rnb :: Int -> Register
-instance GHC.Classes.Eq Htcc.Asm.Register.Register
-instance GHC.Classes.Eq Htcc.Asm.Register.ExtendedReg
-instance GHC.Classes.Eq Htcc.Asm.Register.StackPtrReg
-instance GHC.Classes.Eq Htcc.Asm.Register.BasePtrReg
-instance GHC.Classes.Eq Htcc.Asm.Register.DstIndexReg
-instance GHC.Classes.Eq Htcc.Asm.Register.SrcIndexReg
-instance GHC.Classes.Eq Htcc.Asm.Register.DataReg
-instance GHC.Classes.Eq Htcc.Asm.Register.CounterReg
-instance GHC.Classes.Eq Htcc.Asm.Register.BaseReg
-instance GHC.Classes.Eq Htcc.Asm.Register.AccumulatorReg
-instance GHC.Show.Show Htcc.Asm.Register.Ref
-instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.Ref
-instance GHC.Show.Show Htcc.Asm.Register.Register
-instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.Register
-instance GHC.Show.Show Htcc.Asm.Register.ExtendedReg
-instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.ExtendedReg
-instance GHC.Enum.Bounded Htcc.Asm.Register.ExtendedReg
-instance GHC.Show.Show Htcc.Asm.Register.StackPtrReg
-instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.StackPtrReg
-instance GHC.Show.Show Htcc.Asm.Register.BasePtrReg
-instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.BasePtrReg
-instance GHC.Show.Show Htcc.Asm.Register.DstIndexReg
-instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.DstIndexReg
-instance GHC.Show.Show Htcc.Asm.Register.SrcIndexReg
-instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.SrcIndexReg
-instance GHC.Show.Show Htcc.Asm.Register.DataReg
-instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.DataReg
-instance GHC.Show.Show Htcc.Asm.Register.CounterReg
-instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.CounterReg
-instance GHC.Show.Show Htcc.Asm.Register.BaseReg
-instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.BaseReg
-instance GHC.Show.Show Htcc.Asm.Register.AccumulatorReg
-instance Htcc.Asm.Register.IsRegister Htcc.Asm.Register.AccumulatorReg
+instance GHC.Show.Show Htcc.Asm.Intrinsic.Register.Register
+instance Htcc.Asm.Intrinsic.Register.IsRegister Htcc.Asm.Intrinsic.Register.Register
+instance GHC.Classes.Eq Htcc.Asm.Intrinsic.Register.Register
+instance GHC.Classes.Ord Htcc.Asm.Intrinsic.Register.Register
+instance GHC.Show.Show Htcc.Asm.Intrinsic.Register.ExtendedReg
+instance Htcc.Asm.Intrinsic.Register.IsRegister Htcc.Asm.Intrinsic.Register.ExtendedReg
+instance GHC.Enum.Bounded Htcc.Asm.Intrinsic.Register.ExtendedReg
+instance GHC.Classes.Eq Htcc.Asm.Intrinsic.Register.ExtendedReg
+instance GHC.Classes.Ord Htcc.Asm.Intrinsic.Register.ExtendedReg
+instance GHC.Show.Show Htcc.Asm.Intrinsic.Register.StackPtrReg
+instance Htcc.Asm.Intrinsic.Register.IsRegister Htcc.Asm.Intrinsic.Register.StackPtrReg
+instance GHC.Classes.Eq Htcc.Asm.Intrinsic.Register.StackPtrReg
+instance GHC.Classes.Ord Htcc.Asm.Intrinsic.Register.StackPtrReg
+instance GHC.Show.Show Htcc.Asm.Intrinsic.Register.BasePtrReg
+instance Htcc.Asm.Intrinsic.Register.IsRegister Htcc.Asm.Intrinsic.Register.BasePtrReg
+instance GHC.Classes.Eq Htcc.Asm.Intrinsic.Register.BasePtrReg
+instance GHC.Classes.Ord Htcc.Asm.Intrinsic.Register.BasePtrReg
+instance GHC.Show.Show Htcc.Asm.Intrinsic.Register.DstIndexReg
+instance Htcc.Asm.Intrinsic.Register.IsRegister Htcc.Asm.Intrinsic.Register.DstIndexReg
+instance GHC.Classes.Eq Htcc.Asm.Intrinsic.Register.DstIndexReg
+instance GHC.Classes.Ord Htcc.Asm.Intrinsic.Register.DstIndexReg
+instance GHC.Show.Show Htcc.Asm.Intrinsic.Register.SrcIndexReg
+instance Htcc.Asm.Intrinsic.Register.IsRegister Htcc.Asm.Intrinsic.Register.SrcIndexReg
+instance GHC.Classes.Eq Htcc.Asm.Intrinsic.Register.SrcIndexReg
+instance GHC.Classes.Ord Htcc.Asm.Intrinsic.Register.SrcIndexReg
+instance GHC.Show.Show Htcc.Asm.Intrinsic.Register.DataReg
+instance Htcc.Asm.Intrinsic.Register.IsRegister Htcc.Asm.Intrinsic.Register.DataReg
+instance GHC.Classes.Eq Htcc.Asm.Intrinsic.Register.DataReg
+instance GHC.Classes.Ord Htcc.Asm.Intrinsic.Register.DataReg
+instance GHC.Show.Show Htcc.Asm.Intrinsic.Register.CounterReg
+instance Htcc.Asm.Intrinsic.Register.IsRegister Htcc.Asm.Intrinsic.Register.CounterReg
+instance GHC.Classes.Eq Htcc.Asm.Intrinsic.Register.CounterReg
+instance GHC.Classes.Ord Htcc.Asm.Intrinsic.Register.CounterReg
+instance GHC.Show.Show Htcc.Asm.Intrinsic.Register.BaseReg
+instance Htcc.Asm.Intrinsic.Register.IsRegister Htcc.Asm.Intrinsic.Register.BaseReg
+instance GHC.Classes.Eq Htcc.Asm.Intrinsic.Register.BaseReg
+instance GHC.Classes.Ord Htcc.Asm.Intrinsic.Register.BaseReg
+instance GHC.Show.Show Htcc.Asm.Intrinsic.Register.AccumulatorReg
+instance Htcc.Asm.Intrinsic.Register.IsRegister Htcc.Asm.Intrinsic.Register.AccumulatorReg
+instance GHC.Classes.Eq Htcc.Asm.Intrinsic.Register.AccumulatorReg
+instance GHC.Classes.Ord Htcc.Asm.Intrinsic.Register.AccumulatorReg
+
+
+-- | Types and classes of the x86_64 operands
+module Htcc.Asm.Intrinsic.Operand
+
+-- | <a>IsOperand</a> class has an operand type as instances.
+class Show a => IsOperand a
+
+-- | The operation of add.
+oadd :: (IsOperand a, IsOperand b) => a -> b -> Operand
+
+-- | The operation of sub.
+osub :: (IsOperand a, IsOperand b) => a -> b -> Operand
+
+-- | The operation of mul.
+omul :: (IsOperand a, IsOperand b) => a -> b -> Operand
+
+-- | The operation of div.
+odiv :: (IsOperand a, IsOperand b) => a -> b -> Operand
+
+-- | The operand type.
+newtype Operand
+
+-- | The constructor of <a>Operand</a>.
+Operand :: String -> Operand
+
+-- | The type that specifies that register values are considered address
+--   values. e.g.:
+--   
+--   <pre>
+--   &gt;&gt;&gt; Ref rax
+--   [rax]
+--   
+--   &gt;&gt;&gt; Ref rsp
+--   [rsp]
+--   
+--   &gt;&gt;&gt; import qualified Data.Text as T
+--   
+--   &gt;&gt;&gt; T.putStr $ mov rax (Ref rsp) &lt;&gt; add rsp 8
+--        mov rax, [rsp]
+--        add rsp, 8
+--   </pre>
+newtype Ref a
+
+-- | The constructor of <a>Ref</a>.
+Ref :: a -> Ref a
+instance Htcc.Asm.Intrinsic.Operand.IsOperand a => GHC.Show.Show (Htcc.Asm.Intrinsic.Operand.Ref a)
+instance Htcc.Asm.Intrinsic.Operand.IsOperand Htcc.Asm.Intrinsic.Operand.Operand
+instance Htcc.Asm.Intrinsic.Operand.IsOperand GHC.Types.Int
+instance Htcc.Asm.Intrinsic.Operand.IsOperand GHC.Integer.Type.Integer
+instance Htcc.Asm.Intrinsic.Operand.IsOperand Htcc.Asm.Intrinsic.Register.Register
+instance GHC.Show.Show Htcc.Asm.Intrinsic.Operand.Operand
+
+
+-- | The utility for tracking the location of the error
+module Htcc.ErrorTrack
+
+-- | The data type for tracking error.
+data ErrTracker i
+ErrTracker :: i -> Text -> ErrTracker i
+
+-- | The character position of error.
+[pos] :: ErrTracker i -> i
+
+-- | The string of error.
+[str] :: ErrTracker i -> Text
+
+-- | The initial state of <a>ErrTracker</a>.
+init :: Integral i => ErrTracker i
+
+-- | Advances the position by the specified integer value.
+advance :: (Integral a, Integral b) => a -> ErrTracker b -> ErrTracker b
+instance GHC.Show.Show i => GHC.Show.Show (Htcc.ErrorTrack.ErrTracker i)
+instance GHC.Classes.Ord i => GHC.Classes.Ord (Htcc.ErrorTrack.ErrTracker i)
+instance GHC.Classes.Eq i => GHC.Classes.Eq (Htcc.ErrorTrack.ErrTracker i)
+instance GHC.Real.Integral i => GHC.Enum.Enum (Htcc.ErrorTrack.ErrTracker i)
 
 
 -- | General-purpose utilities
 module Htcc.Utils
+
+-- | <a>takeWhileLen</a>, applied to a predicate <tt>f</tt> and a list
+--   <tt>xs</tt>, returns the longest prefix (possibly empty) of
+--   <tt>xs</tt> of elements that satisfy <tt>f</tt> and the length of the
+--   list taken. The time complexity of this function is equivalent to
+--   <a>takeWhile</a>.
+takeWhileLen :: (a -> Bool) -> [a] -> (Int, [a])
+
+-- | Almost the same as <a>span</a>, but returns the number of elements in
+--   the list that satisfy <tt>f</tt> at the same time.
+spanLen :: (a -> Bool) -> [a] -> (Int, [a], [a])
 
 -- | Convert <a>Show</a> class instance to <a>Text</a>.
 tshow :: Show a => a -> Text
@@ -493,7 +567,7 @@ TKFor :: TokenFor i -> Token i
 
 -- | Tokenize from <a>String</a>. If it fails, the Left that wraps the
 --   value representing that point is returned.
-tokenize :: Read i => String -> Either Int [Token i]
+tokenize :: (Integral i, Read a) => String -> Either (ErrTracker i) [Token a]
 
 -- | Utility for <a>TKFor</a>. When the argument is <a>TKFor</a>, it
 --   returns <a>True</a>, otherwise <a>False</a>.
@@ -725,6 +799,9 @@ expr :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Tok
 --   <a>inners</a>.
 stmt :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
 
+-- | <a>funcDef</a>
+funcDef :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+
 -- | <a>program</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
 program :: (Show i, Eq i, Num i) => [Token i] -> [LVar i] -> Maybe [(ATree i, [LVar i])]
@@ -732,6 +809,9 @@ program :: (Show i, Eq i, Num i) => [Token i] -> [LVar i] -> Maybe [(ATree i, [L
 -- | Constructs the abstract syntax tree based on the list of token
 --   strings. if construction fails, <a>Nothing</a> is returned.
 parse :: (Show i, Num i, Eq i) => [Token i] -> Maybe ([ATree i], Int)
+
+-- | <a>varNum</a> returns the number of variables per function.
+varNum :: Ord i => ATree i -> Int
 instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.ATKindFor a)
 instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.ATKind a)
 instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.ATree a)
@@ -739,7 +819,16 @@ instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.LVar a)
 
 
 -- | <a>Utils</a> exports utilities that help generating x86_64 assembly.
-module Htcc.Asm.Utils
+module Htcc.Asm.Intrinsic.Utils
+
+-- | Define the specified label
+defLLbl :: (Show i, Integral i) => Text -> i -> Text
+
+-- | Refer the specified label
+refLLbl :: (Show i, Integral i) => Text -> i -> Text
+
+-- | Define the global label
+defGLbl :: Text -> Text
 
 -- | Define the .Lbeginx local label
 defBegin :: (Show i, Integral i) => i -> Text
@@ -747,16 +836,19 @@ defBegin :: (Show i, Integral i) => i -> Text
 -- | Define the .Lendx local label
 defEnd :: (Show i, Integral i) => i -> Text
 
--- | refer the .Lbeginx label
+-- | Refer the .Lbeginx label
 refBegin :: (Show i, Integral i) => i -> Text
 
--- | refer the .Lendx label
+-- | Refer the .Lendx label
 refEnd :: (Show i, Integral i) => i -> Text
+
+-- | Declare intel syntax
+declIS :: Text
 
 
 -- | <a>Instruction</a> exports types, classes and function of the x86_64
 --   instructions.
-module Htcc.Asm.Instruction
+module Htcc.Asm.Intrinsic.Instruction
 
 -- | A class of x86_64 instructions with unary arguments.
 class Show a => UnaryInstruction a
@@ -850,13 +942,17 @@ je :: Text -> Text
 
 -- | The call instruction.
 call :: Text -> Text
-instance Htcc.Asm.Instruction.BinaryInstruction GHC.Integer.Type.Integer
-instance Htcc.Asm.Instruction.BinaryInstruction GHC.Types.Int
-instance Htcc.Asm.Instruction.BinaryInstruction Htcc.Asm.Register.Register
-instance Htcc.Asm.Instruction.BinaryInstruction Htcc.Asm.Register.Ref
-instance Htcc.Asm.Instruction.UnaryInstruction GHC.Integer.Type.Integer
-instance Htcc.Asm.Instruction.UnaryInstruction GHC.Types.Int
-instance Htcc.Asm.Instruction.UnaryInstruction Htcc.Asm.Register.Register
+instance Htcc.Asm.Intrinsic.Instruction.BinaryInstruction GHC.Integer.Type.Integer
+instance Htcc.Asm.Intrinsic.Instruction.BinaryInstruction GHC.Types.Int
+instance Htcc.Asm.Intrinsic.Instruction.BinaryInstruction Htcc.Asm.Intrinsic.Register.Register
+instance Htcc.Asm.Intrinsic.Operand.IsOperand a => Htcc.Asm.Intrinsic.Instruction.BinaryInstruction (Htcc.Asm.Intrinsic.Operand.Ref a)
+instance Htcc.Asm.Intrinsic.Instruction.UnaryInstruction GHC.Integer.Type.Integer
+instance Htcc.Asm.Intrinsic.Instruction.UnaryInstruction GHC.Types.Int
+instance Htcc.Asm.Intrinsic.Instruction.UnaryInstruction Htcc.Asm.Intrinsic.Register.Register
+
+
+-- | The modules of intrinsic (x86_64) assembly
+module Htcc.Asm.Intrinsic
 
 
 -- | Assembly code generator
@@ -864,7 +960,7 @@ module Htcc.Asm.Generate
 
 -- | Simulate the stack machine by traversing an abstract syntax tree and
 --   output assembly codes.
-genStmt :: (Show i, UnaryInstruction i, BinaryInstruction i) => IO Int -> ATree i -> IO ()
+genStmt :: (Show i, Ord i, UnaryInstruction i, BinaryInstruction i) => IO Int -> ATree i -> IO ()
 
 -- | Generate full assembly code from C language program
 casm :: String -> IO ()
