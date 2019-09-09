@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings, TupleSections #-}
 {-|
 Module      : Htcc.Parse
 Description : The C languge parser and AST constructor
@@ -22,6 +22,8 @@ module Htcc.Parse (
     isATForIncr,
     fromATKindFor,
     -- * Recursive descent implementation functions
+    program,
+    stmt,
     inners,
     bitwiseOr,
     bitwiseXor,
@@ -34,29 +36,28 @@ module Htcc.Parse (
     equality,
     assign,
     expr,
-    stmt,
-    funcDef,
-    program,
+    -- funcDef,
     -- * Parser
     parse,
     varNum
 ) where
 
 import Data.Tuple.Extra (first, second, dupe, uncurry3, snd3, thd3)
-import Data.List (find, unfoldr, findIndex)
-import Data.List.Split (endBy)
+import Data.List (find, unfoldr{-, elemIndex-})
+import Data.List.Split (linesBy)
 import Data.Maybe (fromJust, isNothing)
+import Data.Either (isLeft, lefts, rights)
 import Data.STRef (newSTRef, readSTRef, writeSTRef)
 import qualified Data.Set as S
 import qualified Data.Text as T
-import Control.Monad (forM)
+import Control.Monad (forM, zipWithM)
 import Control.Monad.ST (runST)
 import Control.Monad.Loops (unfoldrM)
 
-import Htcc.Utils (first3, second3)
-import Htcc.Token
+import Htcc.Utils (first3, second3, tshow)
+import qualified Htcc.Token as HT
 
-import Debug.Trace (trace)
+-- import Debug.Trace (trace)
 
 -- | The local variable
 data LVar a = LVar -- ^ The constructor of local variable
@@ -66,8 +67,8 @@ data LVar a = LVar -- ^ The constructor of local variable
     } deriving Show
 
 {-# INLINE lookupLVar #-}
-lookupLVar :: Num i => Token i -> [LVar i] -> Maybe (LVar i)
-lookupLVar (TKIdent s) lvs = find (\(LVar ss _) -> ss == s) lvs
+lookupLVar :: Num i => HT.Token i -> [LVar i] -> Maybe (LVar i)
+lookupLVar (HT.TKIdent s) lvs = find (\(LVar ss _) -> ss == s) lvs
 lookupLVar _ _ = Nothing
 
 -- | Specially for syntax tree type
@@ -147,105 +148,110 @@ data ATree a = ATEmpty -- ^ The empty node
     | ATNode (ATKind a) (ATree a) (ATree a) -- ^ `ATKind` representing the kind of node and the two branches `ATree` it has
     deriving Show
 
--- | Get an argument from list of `Token` (e.g. Given the token of "f(g(a, b)), 42", return the token of "f(g(a, b))").
-readFn :: Eq i => [Token i] -> Maybe [Token i]
+-- | Get an argument from list of `HT.Token` (e.g. Given the token of "f(g(a, b)), 42", return the token of "f(g(a, b))").
+readFn :: Eq i => [HT.TokenIdx i] -> Maybe [HT.TokenIdx i]
 readFn = readFn' 0 (0 :: Int)
     where
-        readFn' li ri (TKIdent v:TKReserved "(":xs) = ([TKIdent v, TKReserved "("]++) <$> readFn' (succ li) ri xs
-        readFn' li ri (TKReserved ",":xs)
+        readFn' li ri ((i, HT.TKIdent v):(j, HT.TKReserved "("):xs) = ([(i, HT.TKIdent v), (j, HT.TKReserved "(")]++) <$> readFn' (succ li) ri xs
+        readFn' li ri ((i, HT.TKReserved ","):xs)
             | li == ri = Just []
-            | otherwise = (TKReserved ",":) <$> readFn' li ri xs
-        readFn' li ri (TKReserved ")":xs)
+            | otherwise = ((i, HT.TKReserved ","):) <$> readFn' li ri xs
+        readFn' li ri ((i, HT.TKReserved ")"):xs)
             | li == ri = Just []
-            | otherwise = (TKReserved ")":) <$> readFn' li (succ ri) xs
-        readFn' li ri (TKReserved "(":xs) = (TKReserved "(":) <$> readFn' (succ li) ri xs
+            | otherwise = ((i, HT.TKReserved ")"):) <$> readFn' li (succ ri) xs
+        readFn' li ri ((i, HT.TKReserved "("):xs) = ((i, HT.TKReserved "("):) <$> readFn' (succ li) ri xs
         readFn' li ri (x:xs) = (x:) <$> readFn' li ri xs
         readFn' li ri []
             | li == ri = Just [] 
             | otherwise = Nothing
 
--- | Get arguments from list of `Token` (e.g. Given the token of "f(f(g(a, b)), 42);", return expressions that are the token of "f(g(a, b))" and the token of "42".
-takeExps :: (Eq i) => [Token i] -> Maybe [[Token i]]
-takeExps (TKIdent _:TKReserved "(":xs) = if any isNothing exps then Nothing else Just $ filter (not . null) $ map fromJust exps
+
+-- | Get arguments from list of `HT.Token` (e.g. Given the token of "f(f(g(a, b)), 42);", return expressions that are the token of "f(g(a, b))" and the token of "42".
+takeExps :: (Eq i) => [HT.TokenIdx i] -> Maybe [[HT.TokenIdx i]]
+takeExps ((_, HT.TKIdent _):(_, HT.TKReserved "("):xs) = if any isNothing exps then Nothing else Just $ filter (not . null) $ map fromJust exps
     where
         args = take (length xs - 2) xs
         exps = flip unfoldr args $ \x -> if null x then Nothing else flip (maybe (Just (Nothing, []))) (readFn x) $ \ex -> Just (Just ex, drop (succ $ length ex) x)
 takeExps _ = Nothing
 
 -- | `program` indicates \(\eqref{eq:eigth}\) among the comments of `inners`.
-program :: (Show i, Eq i, Num i) => [Token i] -> [LVar i] -> Maybe [(ATree i, [LVar i])]
-program [] _ = Just []
-program xs vars = maybe Nothing (\(ys, btn, ars) -> ((btn, ars) :) <$> program ys ars) $ stmt {- funcDef -} xs ATEmpty vars
+program :: (Show i, Eq i, Num i, Integral i, Read i) => [HT.TokenIdx i] -> [LVar i] -> Either (T.Text, HT.TokenIdx i) [(ATree i, [LVar i])]
+program [] _ = Right []
+program xs vars = either Left (\(ys, btn, ars) -> ((btn, ars):) <$> program ys ars) $ stmt {- funcDef -} xs ATEmpty vars
 
+{-
 -- | `funcDef` 
-funcDef :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
-funcDef tk@(TKIdent fname:TKReserved "(":xs) atn vars 
-    | maybe False (\rpi -> length xs > succ rpi && xs !! (succ rpi) == TKReserved ";") (findIndex (==TKReserved ")") xs) = stmt tk atn vars
-    | otherwise = let args = endBy [TKReserved ","] $ takeWhile (/=TKReserved ")") xs in runST $ do
+funcDef :: (Show i, Eq i, Num i, Integral i, Read i) => [HT.TokenIdx i] -> ATree i -> [LVar i] -> Maybe ([HT.TokenIdx i], ATree i, [LVar i])
+funcDef tk@(HT.TKIdent fname:HT.TKReserved "(":xs) atn vars 
+    | maybe False (\rpi -> length xs > succ rpi && xs !! succ rpi == HT.TKReserved ";") (elemIndex (HT.TKReserved ")") xs) = stmt tk atn vars
+    | otherwise = let args = endBy [HT.TKReserved ","] $ takeWhile (/=HT.TKReserved ")") xs in runST $ do
         v <- newSTRef (atn, vars)
         mk <- forM args $ \arg -> readSTRef v >>= maybe (return Nothing) (\(_, y, z) -> Just y <$ writeSTRef v (y, z)) . uncurry (factor arg)
         if any isNothing mk then return Nothing else do
             (erat, ervar) <- readSTRef v
-            return $ fmap (second3 (ATNode (ATDefFunc (T.pack fname) $ if null mk then Nothing else Just $ map fromJust mk) ATEmpty)) $
-                stmt (tail $ dropWhile (/=TKReserved ")") xs) erat ervar -- FIXME: needs check tail is no empty
+            return $ second3 (ATNode (ATDefFunc (T.pack fname) $ if null mk then Nothing else Just $ map fromJust mk) ATEmpty) <$>
+                stmt (tail $ dropWhile (/=HT.TKReserved ")") xs) erat ervar -- FIXME: needs check tail is no empty
 funcDef _ _ _ = Nothing
+-}
+
+
+expectedMessage :: Show i => T.Text -> HT.TokenIdx i -> [HT.TokenIdx i] -> (T.Text, HT.TokenIdx i)
+expectedMessage x t xs 
+    | length xs > 1 = ("expected '" <> x <> "' token before '" <> tshow (snd (xs !! 1)) <> "'", head xs)
+    | otherwise = ("expected '" <> x <> "' token", if null xs then t else head xs)
 
 -- | `stmt` indicates \(\eqref{eq:nineth}\) among the comments of `inners`.
-stmt :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
-stmt (TKReturn:xs) atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for @return@
-    TKReserved ";":ys -> Just (ys, ATNode ATReturn erat ATEmpty, ervars)
-    _ -> Nothing
-stmt (TKIf:TKReserved "(":xs) atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for @if@
-    TKReserved ")":ys -> flip (maybe Nothing) (stmt ys erat ervars) $ \x -> case second3 (ATNode ATIf erat) x of
-        (TKElse:zs, eerat, eervars) -> second3 (ATNode ATElse eerat) <$> stmt zs eerat eervars -- for @else@
-        zs -> Just zs
-    _ -> Nothing
-stmt (TKWhile:TKReserved "(":xs) atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for @while@
-    TKReserved ")":ys -> second3 (ATNode ATWhile erat) <$> stmt ys erat ervars
-    _ -> Nothing
-stmt (TKFor TKForkw:xs) atn vars = runST $ do -- for @for@
-    v <- newSTRef (atn, vars)
-    mkk <- forM (takeWhile isTKFor xs) $ \case
-        TKFor (TKForInit tk) -> f v tk ATForInit
-        TKFor (TKForCond tk) -> f v tk ATForCond
-        TKFor (TKForIncr tk) -> f v tk ATForIncr
-        _ -> error "this function should not reach here"
-    if any isNothing mkk then return Nothing else do
-        let jo = map fromJust mkk
-            mk = maybe (ATForCond (ATNode (ATNum 1) ATEmpty ATEmpty) : jo) (const jo) $ find isATForCond jo -- @for (;;)@ means @for (;1;)@
-            elseTkf = dropWhile isTKFor xs
-        (anr, vsr) <- readSTRef v
-        case elseTkf of
-            (TKReserved ";":ys) -> return $ Just (ys, ATNode (ATFor mk) ATEmpty ATEmpty, vsr)
-            _ -> return $ second3 (flip (flip ATNode ATEmpty) ATEmpty . ATFor . (mk ++) . (:[]) . ATForStmt) <$> stmt elseTkf anr vsr
-    where
-        f v tk fk = do
-            aw <- readSTRef v
-            maybe (return Nothing) (\(_, ert, ervars) -> Just (fk ert) <$ writeSTRef v (ert, ervars)) $ uncurry (expr tk) aw 
-stmt (TKReserved "{":xs) atn vars = let scope = takeWhile (TKReserved "}" /=) xs in runST $ do -- for block
+stmt :: (Show i, Eq i, Num i, Integral i, Read i) => [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])
+stmt (cur@(_, HT.TKReturn):xs) atn vars = flip (either Left) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for @return@
+    (_, HT.TKReserved ";"):ys -> Right (ys, ATNode ATReturn erat ATEmpty, ervars)
+    ert' -> Left $ expectedMessage ";" cur ert'
+    -- Left (if length ert' > 1 then "expected ';' token" else "expected ';' token before" <> tshow (snd (ert' !! 1)), if null ert' then cur else head ert')
+stmt (cur@(_, HT.TKIf):(_, HT.TKReserved "("):xs) atn vars = flip (either Left) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for @if@
+    (_, HT.TKReserved ")"):ys -> flip (either Left) (stmt ys erat ervars) $ \x -> case second3 (ATNode ATIf erat) x of
+        ((_, HT.TKElse):zs, eerat, eervars) -> second3 (ATNode ATElse eerat) <$> stmt zs eerat eervars -- for @else@
+        zs -> Right zs
+    ert' -> Left $ expectedMessage ")" cur ert'
+stmt (cur@(_, HT.TKWhile):(_, HT.TKReserved "("):xs) atn vars = flip (either Left) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for @while@
+    (_, HT.TKReserved ")"):ys -> second3 (ATNode ATWhile erat) <$> stmt ys erat ervars
+    ert' -> Left $ expectedMessage ")" cur ert'
+stmt xxs@(cur@(_, HT.TKFor):(_, HT.TKReserved "("):_) atn vars = flip (maybe $ Left ("internal compiler error: Please submit a bug report,\nwith preprocessed source if appropriate.\n See this repo: <URL> ", cur)) (HT.takeBrace "(" ")" (tail xxs)) $ -- for @for@
+    either (Left . ("expected ')' token. The subject iteration statement starts here:",)) $ \(forSt, ds) -> let fsect = linesBy ((== HT.TKReserved ";") . snd) (tail (init forSt)); stlen = length fsect in
+        if stlen < 2 || stlen > 3 then Left ("the iteration statement for must be `for (expression_opt; expression_opt; expression_opt) statement`. see section 6.8.5.", cur) else runST $ do
+            v <- newSTRef (atn, vars)
+            mk <- flip (`zipWithM` fsect) [ATForInit, ATForCond, ATForIncr] $ \fs at -> do
+                aw <- readSTRef v
+                either (return . Left) (\(_, ert, ervars) -> Right (at ert) <$ writeSTRef v (ert, ervars)) $ uncurry (expr fs) aw
+            if any isLeft mk then return $ Left $ head $ lefts mk else do
+                let jo = [m | (Right m) <- mk, case fromATKindFor m of ATEmpty -> False; _ -> True] 
+                    mkk = maybe (ATForCond (ATNode (ATNum 1) ATEmpty ATEmpty) : jo) (const jo) $ find isATForCond jo
+                (anr, vsr) <- readSTRef v
+                case ds of 
+                    ((_, HT.TKReserved ";"):ys) -> return $ Right (ys, ATNode (ATFor mkk) ATEmpty ATEmpty, vsr)
+                    _ -> return $ second3 (flip (flip ATNode ATEmpty) ATEmpty . ATFor . (mkk ++) . (:[]) . ATForStmt) <$> stmt ds anr vsr
+stmt ({-cur@-}(_, HT.TKReserved "{"):xs) atn vars = let scope = takeWhile ((HT.TKReserved "}" /=) . snd) xs in runST $ do -- for compound statement (must same brackets size)
+    -- FIXME: must take same size bracket
+    -- let (t, d) = span ((HT.TKReserved "}" /=) . snd) xs, when d is empty (null d == True), must returns Left ("expected %s token", cur)
     v <- newSTRef vars
     mk <- flip unfoldrM (scope, atn, vars) $ \(ert, erat, ervars) -> if null ert then return Nothing else
-            maybe (return $ Just (Nothing, (ert, erat, ervars))) (\y -> Just (Just (snd3 y), y) <$ writeSTRef v (thd3 y)) $ stmt ert erat ervars
+            either (\err -> return $ Just (Left err, (ert, erat, ervars))) (\y -> Just (Right (snd3 y), y) <$ writeSTRef v (thd3 y)) $ stmt ert erat ervars
     nvars <- readSTRef v
-    return $ if any isNothing mk then Nothing else
-        Just (tail $ dropWhile (TKReserved "}" /=) xs, ATNode (ATBlock (map fromJust mk)) ATEmpty ATEmpty, nvars)
-stmt (TKReserved ";":xs) atn vars = Just (xs, atn, vars) -- for only @;@
-stmt xs atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for stmt;
-    TKReserved ";":ys -> Just (ys, erat, ervars)
-    _ -> Nothing
+    return $ if any isLeft mk then Left (head (lefts mk)) else
+        Right (tail $ dropWhile ((HT.TKReserved "}" /=) . snd) xs, ATNode (ATBlock (rights mk)) ATEmpty ATEmpty, nvars)
+stmt ((_, HT.TKReserved ";"):xs) atn vars = Right (xs, atn, vars) -- for only @;@
+stmt xs atn vars = flip (either Left) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for stmt;
+    (_, HT.TKReserved ";"):ys -> Right (ys, erat, ervars)
+    ert' -> Left $ expectedMessage ";" (0, HT.TKEmpty) ert'
 
 {-# INLINE expr #-}
 -- | `expr` is equivalent to `equality`.
-expr :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+expr :: (Show i, Eq i, Num i) => [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])
 expr = assign
 
-
 -- | `assign` indicates \(\eqref{eq:seventh}\) among the comments of `inners`.
-assign :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
-assign xs atn vars = flip (maybe Nothing) (bitwiseOr xs atn vars) $ \(ert, erat, ervars) -> case ert of
-    TKReserved "=":ys -> second3 (ATNode ATAssign erat) <$> assign ys erat ervars
-    _ -> Just (ert, erat, ervars)
-
+assign :: (Show i, Eq i, Num i) => [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])
+assign xs atn vars = flip (either Left) (bitwiseOr xs atn vars) $ \(ert, erat, ervars) -> case ert of
+    (_, HT.TKReserved "="):ys -> second3 (ATNode ATAssign erat) <$> assign ys erat ervars
+    _ -> Right (ert, erat, ervars)
 
 -- | `inners` is a general function for creating `equality`, `relational`, `add` and `term` in the following syntax (EBNF) of \({\rm LL}\left(k\right)\) where \(k\in\mathbb{N}\).
 --
@@ -266,108 +272,110 @@ assign xs atn vars = flip (maybe Nothing) (bitwiseOr xs atn vars) $ \(ert, erat,
 -- {\rm bitwiseXor} &=& {\rm bitwiseAnd}\ \left("\hat{}"\ {\rm bitwiseAnd}\right)^\ast\label{eq:eleventh}\tag{5}\\
 -- {\rm bitwiseAnd} &=& {\rm equality}\ \left("\&"\ {\rm equality}\right)^\ast\label{eq:twelveth}\tag{6}\\
 -- {\rm equality} &=& {\rm relational}\ \left("=="\ {\rm relational}\ \mid\ "!="\ {\rm relational}\right)^\ast\label{eq:fifth}\tag{7}\\
--- {\rm relational} &=& {\rm add}\ \left("\lt"\ {\rm add}\mid\ "\lt ="\ {\rm add}\mid\ "\gt"\ {\rm add}\mid\ "\gt ="\ {\rm add}\right)^\ast\label{eq:sixth}\tag{8}\\
--- {\rm add} &=& {\rm term}\ \left("+"\ {\rm term}\ \mid\ "-"\ {\rm term}\right)^\ast\label{eq:first}\tag{9} \\
--- {\rm term} &=& {\rm factor}\ \left("\ast"\ {\rm factor}\ \mid\ "/"\ {\rm factor}\right)^\ast\label{eq:second}\tag{10} \\
--- {\rm unary} &=& \left("+"\ \mid\ "-"\right)?\ {\rm factor}\mid\ \left("!"\ \mid\ "\sim"\ \right)?\ {\rm unary}\label{eq:fourth}\tag{11} \\
--- {\rm factor} &=& {\rm num} \mid\ {\rm ident}\ \left({\rm "(" \left(expr\ \left(\left(","\ expr\right)^\ast\right)?\right)? ")"}\right)?\ \mid\ "(" {\rm expr} ")"\label{eq:third}\tag{12}
+-- {\rm relational} &=& {\rm shift}\ \left("\lt"\ {\rm shift}\mid\ "\lt ="\ {\rm shift}\mid\ "\gt"\ {\rm shift}\mid\ "\gt ="\ {\rm shift}\right)^\ast\label{eq:sixth}\tag{8}\\
+-- {\rm shift} &=& {\rm add}\ \left("\lt\lt"\ {\rm add}\mid\ "\gt\gt"\ {\rm add}\right)^\ast\label{eq:thirteenth}\tag{9}\\
+-- {\rm add} &=& {\rm term}\ \left("+"\ {\rm term}\ \mid\ "-"\ {\rm term}\right)^\ast\label{eq:first}\tag{10} \\
+-- {\rm term} &=& {\rm factor}\ \left("\ast"\ {\rm factor}\ \mid\ "/"\ {\rm factor}\right)^\ast\label{eq:second}\tag{11} \\
+-- {\rm unary} &=& \left("+"\ \mid\ "-"\right)?\ {\rm factor}\mid\ \left("!"\ \mid\ "\sim"\ \right)?\ {\rm unary}\label{eq:fourth}\tag{12} \\
+-- {\rm factor} &=& {\rm num} \mid\ {\rm ident}\ \left({\rm "(" \left(expr\ \left(\left(","\ expr\right)^\ast\right)?\right)? ")"}\right)?\ \mid\ "(" {\rm expr} ")"\label{eq:third}\tag{13}
 -- \end{eqnarray}
 -- \]
-inners :: ([Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])) -> [(String, ATKind i)] -> [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
-inners _ _ [] atn vars = Just ([], atn, vars)
-inners f cs xs atn vars = maybe Nothing (uncurry3 (inners' f cs)) $ f xs atn vars
+inners :: ([HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])) -> [(String, ATKind i)] -> [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])
+inners _ _ [] atn vars = Right ([], atn, vars)
+inners f cs xs atn vars = either Left (uncurry3 (inners' f cs)) $ f xs atn vars
     where
-        inners' _ _ [] at ars = Just ([], at, ars)
-        inners' g ds ys at ars = flip (maybe (Just (ys, at, ars))) (find (\(c, _) -> case head ys of TKReserved cc -> cc == c; _ -> False) ds) $ \(_, k) -> 
-            maybe Nothing (uncurry3 id . first3 (inners' f cs) . second3 (ATNode k at)) $ g (tail ys) at ars
-
+        inners' _ _ [] at ars = Right ([], at, ars)
+        inners' g ds ys at ars = flip (maybe (Right (ys, at, ars))) (find (\(c, _) -> case snd (head ys) of HT.TKReserved cc -> cc == c; _ -> False) ds) $ \(_, k) -> 
+            either Left (uncurry3 id . first3 (inners' f cs) . second3 (ATNode k at)) $ g (tail ys) at ars
 
 -- | `bitwiseOr` indicates \(\eqref{eq:tenth}\) among the comments of `inners`.
-bitwiseOr :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+bitwiseOr :: (Show i, Eq i, Num i) => [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])
 bitwiseOr = inners bitwiseXor [("|", ATOr)]
 
 -- | `bitwiseXor` indicates \(\eqref{eq:eleventh}\) amont the comments of `inners`.
-bitwiseXor :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+bitwiseXor :: (Show i, Eq i, Num i) => [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])
 bitwiseXor = inners bitwiseAnd [("^", ATXor)]
 
 -- | `bitwiseAnd` indicates \(\eqref{eq:twelveth}\) among the comments of `inners`.
-bitwiseAnd :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+bitwiseAnd :: (Show i, Eq i, Num i) => [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])
 bitwiseAnd = inners equality [("&", ATAnd)]
 
 -- | `equality` indicates \(\eqref{eq:fifth}\) among the comments of `inners`.
 -- This is equivalent to the following code:
 --
 --
--- > equality ::  [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i)
--- > equality xs atn vars = flip (maybe Nothing) (relational xs atn vars) $ uncurry3 equality'
+-- > equality ::  [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i)
+-- > equality xs atn vars = flip (either Nothing) (relational xs atn vars) $ uncurry3 equality'
 -- >     where
--- >         equality' (TKReserved "+":ys) era ars = maybe Nothing (uncurry id . first3 equality' . second3 (ATNode ATEQ era)) $ relational ys era ars
--- >         equality' (TKReserved "-":ys) era ars = maybe Nothing (uncurry id . first3 equality' . second3 (ATNode ATNEQ era)) $ relational ys era ars
--- >         equality' ert era ars = Just (ert, era, ars)
-equality :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+-- >         equality' ((_, HT.TKReserved "+"):ys) era ars = either Left (uncurry id . first3 equality' . second3 (ATNode ATEQ era)) $ relational ys era ars
+-- >         equality' ((_, HT.TKReserved "-"):ys) era ars = either Left (uncurry id . first3 equality' . second3 (ATNode ATNEQ era)) $ relational ys era ars
+-- >         equality' ert era ars = Right (ert, era, ars)
+equality :: (Show i, Eq i, Num i) => [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])
 equality = inners relational [("==", ATEQ), ("!=", ATNEQ)]
 
 -- | `relational` indicates \(\eqref{eq:sixth}\) among the comments of `inners`.
-relational :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+relational :: (Show i, Eq i, Num i) => [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])
 relational = inners shift [("<", ATLT), ("<=", ATLEQ), (">", ATGT), (">=", ATGEQ)]
 
-shift :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+-- | `shift` indicates \(\eqref{eq:thirteenth}\\) among the comments of `inners`.
+shift :: (Show i, Eq i, Num i) => [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])
 shift = inners add [("<<", ATShl), (">>", ATShr)]
 
 -- | `add` indicates \(\eqref{eq:first}\) among the comments of `inners`.
-add :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+add :: (Show i, Eq i, Num i) => [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])
 add = inners term [("+", ATAdd), ("-", ATSub)]
 
 -- | `term` indicates \(\eqref{eq:second}\) amont the comments of `inners`.
-term ::  (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+term ::  (Show i, Eq i, Num i) => [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])
 term = inners unary [("*", ATMul), ("/", ATDiv), ("%", ATMod)]
 
 -- | `unary` indicates \(\eqref{eq:fourth}\) amount the comments of `inners`.
-unary :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
-unary (TKReserved "+":xs) at vars = factor xs at vars
-unary (TKReserved "-":xs) at vars = second3 (ATNode ATSub (ATNode (ATNum 0) ATEmpty ATEmpty)) <$> factor xs at vars
-unary (TKReserved "!":xs) at vars = second3 (\x -> ATNode ATElse (ATNode ATIf (ATNode ATEQ x (ATNode (ATNum 0) ATEmpty ATEmpty)) (ATNode ATReturn (ATNode (ATNum 1) ATEmpty ATEmpty) ATEmpty)) (ATNode ATReturn (ATNode (ATNum 0) ATEmpty ATEmpty) ATEmpty)) <$> unary xs at vars
-unary (TKReserved "~":xs) at vars = second3 (flip (ATNode ATNot) ATEmpty) <$> unary xs at vars
+unary :: (Show i, Eq i, Num i) => [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])
+unary ((_, HT.TKReserved "+"):xs) at vars = factor xs at vars
+unary ((_, HT.TKReserved "-"):xs) at vars = second3 (ATNode ATSub (ATNode (ATNum 0) ATEmpty ATEmpty)) <$> factor xs at vars
+unary ((_, HT.TKReserved "!"):xs) at vars = second3 (\x -> ATNode ATElse (ATNode ATIf (ATNode ATEQ x (ATNode (ATNum 0) ATEmpty ATEmpty)) (ATNode ATReturn (ATNode (ATNum 1) ATEmpty ATEmpty) ATEmpty)) (ATNode ATReturn (ATNode (ATNum 0) ATEmpty ATEmpty) ATEmpty)) <$> unary xs at vars
+unary ((_, HT.TKReserved "~"):xs) at vars = second3 (flip (ATNode ATNot) ATEmpty) <$> unary xs at vars
 unary xs at vars = factor xs at vars
 
 -- | `factor` indicates \(\eqref{eq:third}\) amount the comments of `inners`.
-factor :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
-factor [] atn vars = Just ([], atn, vars)
-factor (TKReserved "(":xs) atn vars = flip (maybe Nothing) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for (expr)
-    TKReserved ")":ys -> Just (ys, erat, ervars)
-    _ -> Nothing
-factor (TKNum n:xs) _ vars = Just (xs, ATNode (ATNum n) ATEmpty ATEmpty, vars) -- for numbers
-factor (TKIdent v:TKReserved "(":TKReserved ")":xs) _ vars = Just (xs, ATNode (ATCallFunc (T.pack v) Nothing) ATEmpty ATEmpty, vars) -- for no arguments function call
-factor (TKIdent v:TKReserved "(":xs) _ vars = let fsec = takeWhile (/=TKReserved ";") xs in 
-    flip (maybe Nothing) (takeExps $ [TKIdent v, TKReserved "("] ++ fsec ++ [TKReserved ";"]) $ \exps -> 
-        if sum (map length exps) + pred (length exps) /= pred (length fsec) then Nothing else runST $ do
+factor :: (Show i, Eq i, Num i) => [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])
+factor [] atn vars = Right ([], atn, vars)
+factor (cur@(_, HT.TKReserved "("):xs) atn vars = flip (either Left) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for (expr)
+    (_, HT.TKReserved ")"):ys -> Right (ys, erat, ervars)
+    ert' -> Left $ expectedMessage ")" cur ert'
+factor ((_, HT.TKNum n):xs) _ vars = Right (xs, ATNode (ATNum n) ATEmpty ATEmpty, vars) -- for numbers
+factor ((_, HT.TKIdent v):(_, HT.TKReserved "("):(_, HT.TKReserved ")"):xs) _ vars = Right (xs, ATNode (ATCallFunc (T.pack v) Nothing) ATEmpty ATEmpty, vars) -- for no arguments function call
+factor (cur@(i, HT.TKIdent v):(j, HT.TKReserved "("):xs) _ vars = let fsec = takeWhile ((/=HT.TKReserved ";") . snd) xs in -- for function call with some arguments
+    flip (maybe (Left ("invalid function call syntax", cur))) (takeExps $ [(i, HT.TKIdent v), (j, HT.TKReserved "(")] ++ fsec ++ [fsec !! length fsec]) $ \exps -> 
+        if sum (map length exps) + pred (length exps) /= pred (length fsec) then Left ("invalid function call syntax", cur) else runST $ do
             mk <- newSTRef vars
-            expl <- forM exps $ \etk -> readSTRef mk >>= maybe (return Nothing) (\(_, erat, ervar) -> Just erat <$ writeSTRef mk ervar) . expr etk ATEmpty
-            if any isNothing expl then return Nothing else 
-                return $ Just (drop (length fsec) xs, ATNode (ATCallFunc (T.pack v) (Just $ map fromJust expl)) ATEmpty ATEmpty, vars)
-factor (TKIdent v:xs) _ vars = maybe -- for variables
-    (let lvars = LVar v (if null vars then 8 else offset (head vars) + 8):vars in Just (xs, ATNode (ATLVar $ offset $ head lvars) ATEmpty ATEmpty, lvars))
-    (\(LVar _ o) -> Just (xs, ATNode (ATLVar o) ATEmpty ATEmpty, vars)) $
-    lookupLVar (TKIdent v) vars
-factor _ _ _ = Nothing
+            expl <- forM exps $ \etk -> readSTRef mk >>= either (return . Left) (\(_, erat, ervar) -> Right erat <$ writeSTRef mk ervar) . expr etk ATEmpty
+            if any isLeft expl then return $ Left $ head $ lefts expl else 
+                return $ Right (drop (length fsec) xs, ATNode (ATCallFunc (T.pack v) (Just $ rights expl)) ATEmpty ATEmpty, vars)
+factor ((_, HT.TKIdent v):xs) _ vars = maybe -- for variables
+    (let lvars = LVar v (if null vars then 8 else offset (head vars) + 8):vars in Right (xs, ATNode (ATLVar $ offset $ head lvars) ATEmpty ATEmpty, lvars))
+    (\(LVar _ o) -> Right (xs, ATNode (ATLVar o) ATEmpty ATEmpty, vars)) $
+    lookupLVar (HT.TKIdent v) vars
+factor ert _ _ = Left (if null ert then "unexpected token in program" else "unexpected token '" <> tshow (snd (head ert)) <> "' in program", 
+    if null ert then (0, HT.TKEmpty) else head ert)
 
 {-# INLINE parse #-}
 -- | Constructs the abstract syntax tree based on the list of token strings.
 -- if construction fails, `Nothing` is returned.
 {-
-parse :: (Show i, Num i, Eq i) => [Token i] -> Maybe [ATree i] -- Maybe ([ATree i])
+parse :: (Show i, Num i, Eq i) => [HT.TokenIdx i] -> Maybe [ATree i] -- Maybe ([ATree i])
 parse = fmap (map fst) . flip program []
 -}
-parse :: (Show i, Num i, Eq i) => [Token i] -> Maybe ([ATree i], Int)
+parse :: (Show i, Num i, Eq i, Integral i, Read i) => [HT.TokenIdx i] -> Either (T.Text, HT.TokenIdx i) ([ATree i], Int)
 parse = fmap (first (map fst) . second (length . snd . last) . dupe) . flip program [] -- 関数単位で変数の個数が異なる?
 
 -- | `varNum` returns the number of variables per function.
-varNum :: Ord i => ATree i -> Int
+varNum :: (Show i, Ord i) => ATree i -> Int
 varNum (ATNode (ATDefFunc _ args) _ body) = S.size $ f body $ maybe S.empty (foldr (\(ATNode (ATLVar x) _ _) acc -> S.insert x acc) S.empty) args
     where
         f ATEmpty s = s
         f (ATNode (ATLVar x) l r) s = f l (S.insert x s) `S.union` f r (S.insert x s)
-        f (ATNode (ATBlock xs) l r) s = let i = foldr S.union S.empty (map (`f` s) xs) in f l i `S.union` f r i
-        f (ATNode (ATFor xs) l r) s = let i = foldr S.union S.empty $ map (flip f s . fromATKindFor) xs in f l i `S.union` f r i
+        f (ATNode (ATBlock xs) l r) s = let i =  foldr (S.union . (`f` s)) s xs in f l i `S.union` f r i
+        f (ATNode (ATFor xs) l r) s = let i =  foldr (S.union . flip f s . fromATKindFor) S.empty xs in f l i `S.union` f r i
         f (ATNode _ l r) s = f l s `S.union` f r s
 varNum _ = 0

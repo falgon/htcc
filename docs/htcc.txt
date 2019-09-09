@@ -388,9 +388,6 @@ osub :: (IsOperand a, IsOperand b) => a -> b -> Operand
 -- | The operation of mul.
 omul :: (IsOperand a, IsOperand b) => a -> b -> Operand
 
--- | The operation of div.
-odiv :: (IsOperand a, IsOperand b) => a -> b -> Operand
-
 -- | The operand type.
 newtype Operand
 
@@ -425,32 +422,21 @@ instance Htcc.Asm.Intrinsic.Operand.IsOperand Htcc.Asm.Intrinsic.Register.Regist
 instance GHC.Show.Show Htcc.Asm.Intrinsic.Operand.Operand
 
 
--- | The utility for tracking the location of the error
-module Htcc.ErrorTrack
+-- | LexicalElements of C language
+module Htcc.CRules.LexicalElements
 
--- | The data type for tracking error.
-data ErrTracker i
-ErrTracker :: i -> Text -> ErrTracker i
+-- | Valid one characters as C language
+charOps :: String
 
--- | The character position of error.
-[pos] :: ErrTracker i -> i
-
--- | The string of error.
-[str] :: ErrTracker i -> Text
-
--- | The initial state of <a>ErrTracker</a>.
-init :: Integral i => ErrTracker i
-
--- | Advances the position by the specified integer value.
-advance :: (Integral a, Integral b) => a -> ErrTracker b -> ErrTracker b
-instance GHC.Show.Show i => GHC.Show.Show (Htcc.ErrorTrack.ErrTracker i)
-instance GHC.Classes.Ord i => GHC.Classes.Ord (Htcc.ErrorTrack.ErrTracker i)
-instance GHC.Classes.Eq i => GHC.Classes.Eq (Htcc.ErrorTrack.ErrTracker i)
-instance GHC.Real.Integral i => GHC.Enum.Enum (Htcc.ErrorTrack.ErrTracker i)
+-- | Valid two characters as C language
+strOps :: [String]
 
 
 -- | General-purpose utilities
 module Htcc.Utils
+
+-- | The exception free implementation of <a>head</a>.
+safeHead :: [a] -> Maybe a
 
 -- | <a>takeWhileLen</a>, applied to a predicate <tt>f</tt> and a list
 --   <tt>xs</tt>, returns the longest prefix (possibly empty) of
@@ -467,6 +453,9 @@ spanLen :: (a -> Bool) -> [a] -> (Int, [a], [a])
 tshow :: Show a => a -> Text
 
 -- | Standard error output shortcut.
+putStrErr :: Text -> IO ()
+
+-- | Standard error output shortcut (with new line).
 putStrLnErr :: Text -> IO ()
 
 -- | Standard error output and exit shortcut.
@@ -481,6 +470,15 @@ second3 :: (b -> d) -> (a, b, c) -> (a, d, c)
 -- | Update the third component of triple.
 third3 :: (c -> d) -> (a, b, c) -> (a, b, d)
 
+-- | Drop first element of triple and returns pair
+dropFst :: (a, b, c) -> (b, c)
+
+-- | Drop second element of triple and returns pair
+dropSnd :: (a, b, c) -> (a, c)
+
+-- | Drop third element of triple and returns pair
+dropThd :: (a, b, c) -> (a, b)
+
 -- | The counter is incremented by one each time it is executed.
 counter :: Enum a => a -> IO (IO a)
 
@@ -494,6 +492,15 @@ counter :: Enum a => a -> IO (IO a)
 --   </pre>
 lor :: [a -> Bool] -> a -> Bool
 
+-- | For mappings &lt;math&gt; to an element (xin X) of a set &lt;math&gt;,
+--   &lt;math&gt; where &lt;math&gt; is the boolean domain. This is
+--   equivalent to:
+--   
+--   <pre>
+--   f1 x &amp;&amp; f2 x &amp;&amp; f3 x == land [f1, f2, f3] x
+--   </pre>
+land :: [a -> Bool] -> a -> Bool
+
 -- | Sum of product form. For mappings &lt;math&gt; to an element
 --   &lt;math&gt; of a set &lt;math&gt;, &lt;math&gt; where &lt;math&gt; is
 --   the Boolean domain. This function will stop evaluation when the result
@@ -502,6 +509,20 @@ sop :: [a -> Bool] -> [a] -> Bool
 
 -- | The <a>Text</a> version of <a>sop</a>.
 sopText :: [Char -> Bool] -> Text -> Bool
+
+-- | Convert the instance of <a>Integral</a> to Int. When it cause
+--   overflow, express it as a list of <a>Int</a>s divided into multiple
+--   values. <a>toInts</a> is useful for functions that have an <a>Int</a>
+--   type as an argument. e.g.:
+--   
+--   <pre>
+--   &gt;&gt;&gt; toInts (fromIntegral (maxBound :: Int) + 1 :: Integer)
+--   [9223372036854775807,1]
+--   
+--   &gt;&gt;&gt; toInts (fromIntegral (maxBound :: Int) * 3 + 4 :: Integer)
+--   [9223372036854775807,9223372036854775807,9223372036854775807,4]
+--   </pre>
+toInts :: Integral i => i -> [Int]
 
 
 -- | Characters rules of C language
@@ -520,23 +541,12 @@ instance Htcc.CRules.Char.GenericStr GHC.Base.String
 instance Htcc.CRules.Char.GenericStr Data.Text.Internal.Text
 
 
+-- | The modules of C Rules
+module Htcc.CRules
+
+
 -- | The tokenizer
 module Htcc.Token
-
--- | Specially for token data type
-data TokenFor i
-
--- | The for keyword
-TKForkw :: TokenFor i
-
--- | The initial section of for statement
-TKForInit :: [Token i] -> TokenFor i
-
--- | The conditional section of for statement
-TKForCond :: [Token i] -> TokenFor i
-
--- | The incremental section of for statement
-TKForIncr :: [Token i] -> TokenFor i
 
 -- | Token type
 data Token i
@@ -563,15 +573,26 @@ TKElse :: Token i
 TKWhile :: Token i
 
 -- | The for keyword
-TKFor :: TokenFor i -> Token i
+TKFor :: Token i
 
--- | Tokenize from <a>String</a>. If it fails, the Left that wraps the
---   value representing that point is returned.
-tokenize :: (Integral i, Read a) => String -> Either (ErrTracker i) [Token a]
+-- | The empty token (This is not used by tokenize, but when errors are
+--   detected during parsing, the token at error locations cannot be
+--   specified)
+TKEmpty :: Token i
 
--- | Utility for <a>TKFor</a>. When the argument is <a>TKFor</a>, it
---   returns <a>True</a>, otherwise <a>False</a>.
-isTKFor :: Token i -> Bool
+-- | <a>Token</a> and its index.
+type TokenIdx i = (i, Token i)
+
+-- | Tokenize the <a>String</a>. If an invalid chraracter matches as C
+--   language, the part and the character are returned. Otherwise,
+--   `[TokenIdx]` is returned.
+tokenize :: (Integral i, Read i, Show i) => String -> Either (i, Text) [TokenIdx i]
+
+-- | Extract the partial token enclosed in parentheses from the token
+--   sequence. If it is invalid, <a>takeBrace</a> returns <tt>(i,
+--   Text)</tt> indicating the error location. Otherwise, <a>takeBrace</a>
+--   returns a partial token enclosed in parentheses and subsequent tokens.
+takeBrace :: forall i. (Integral i, Read i, Show i) => [TokenIdx i] -> Maybe (Either (TokenIdx i) ([TokenIdx i], [TokenIdx i]))
 
 -- | Utility for <a>TKIdent</a>. When the argument is <a>TKIdent</a>, it
 --   returns <a>True</a>, otherwise <a>False</a>.
@@ -584,8 +605,6 @@ isTKNum :: Token i -> Bool
 -- | Utility for <a>TKReserved</a>. When the argument is <a>TKReserved</a>,
 --   it returns <a>True</a>, otherwise <a>False</a>.
 isTKReserved :: Token i -> Bool
-instance GHC.Classes.Eq i => GHC.Classes.Eq (Htcc.Token.TokenFor i)
-instance GHC.Show.Show i => GHC.Show.Show (Htcc.Token.TokenFor i)
 instance GHC.Classes.Eq i => GHC.Classes.Eq (Htcc.Token.Token i)
 instance GHC.Show.Show i => GHC.Show.Show (Htcc.Token.Token i)
 
@@ -737,81 +756,78 @@ isATForIncr :: ATKindFor a -> Bool
 -- | take ATree data from <a>ATKindFor</a>.
 fromATKindFor :: ATKindFor a -> ATree a
 
+-- | <a>program</a> indicates &lt;math&gt; among the comments of
+--   <a>inners</a>.
+program :: (Show i, Eq i, Num i, Integral i, Read i) => [TokenIdx i] -> [LVar i] -> Either (Text, TokenIdx i) [(ATree i, [LVar i])]
+
+-- | <a>stmt</a> indicates &lt;math&gt; among the comments of
+--   <a>inners</a>.
+stmt :: (Show i, Eq i, Num i, Integral i, Read i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
+
 -- | <a>inners</a> is a general function for creating <a>equality</a>,
 --   <a>relational</a>, <a>add</a> and <a>term</a> in the following syntax
 --   (EBNF) of &lt;math&gt; where &lt;math&gt;.
 --   
 --   &lt;math&gt;
-inners :: ([Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])) -> [(String, ATKind i)] -> [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+inners :: ([TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])) -> [(String, ATKind i)] -> [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>bitwiseOr</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-bitwiseOr :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+bitwiseOr :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>bitwiseXor</a> indicates &lt;math&gt; amont the comments of
 --   <a>inners</a>.
-bitwiseXor :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+bitwiseXor :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>bitwiseAnd</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-bitwiseAnd :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+bitwiseAnd :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>add</a> indicates &lt;math&gt; among the comments of <a>inners</a>.
-add :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+add :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>term</a> indicates &lt;math&gt; amont the comments of
 --   <a>inners</a>.
-term :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+term :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>unary</a> indicates &lt;math&gt; amount the comments of
 --   <a>inners</a>.
-unary :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+unary :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>factor</a> indicates &lt;math&gt; amount the comments of
 --   <a>inners</a>.
-factor :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+factor :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>relational</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-relational :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+relational :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>equality</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>. This is equivalent to the following code:
 --   
 --   <pre>
---   equality ::  [Token i] -&gt; ATree i -&gt; [LVar i] -&gt; Maybe ([Token i], ATree i)
---   equality xs atn vars = flip (maybe Nothing) (relational xs atn vars) $ uncurry3 equality'
+--   equality ::  [HT.TokenIdx i] -&gt; ATree i -&gt; [LVar i] -&gt; Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i)
+--   equality xs atn vars = flip (either Nothing) (relational xs atn vars) $ uncurry3 equality'
 --       where
---           equality' (TKReserved "+":ys) era ars = maybe Nothing (uncurry id . first3 equality' . second3 (ATNode ATEQ era)) $ relational ys era ars
---           equality' (TKReserved "-":ys) era ars = maybe Nothing (uncurry id . first3 equality' . second3 (ATNode ATNEQ era)) $ relational ys era ars
---           equality' ert era ars = Just (ert, era, ars)
+--           equality' ((_, HT.TKReserved "+"):ys) era ars = either Left (uncurry id . first3 equality' . second3 (ATNode ATEQ era)) $ relational ys era ars
+--           equality' ((_, HT.TKReserved "-"):ys) era ars = either Left (uncurry id . first3 equality' . second3 (ATNode ATNEQ era)) $ relational ys era ars
+--           equality' ert era ars = Right (ert, era, ars)
 --   </pre>
-equality :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+equality :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>assign</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-assign :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
+assign :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>expr</a> is equivalent to <a>equality</a>.
-expr :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
-
--- | <a>stmt</a> indicates &lt;math&gt; among the comments of
---   <a>inners</a>.
-stmt :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
-
--- | <a>funcDef</a>
-funcDef :: (Show i, Eq i, Num i) => [Token i] -> ATree i -> [LVar i] -> Maybe ([Token i], ATree i, [LVar i])
-
--- | <a>program</a> indicates &lt;math&gt; among the comments of
---   <a>inners</a>.
-program :: (Show i, Eq i, Num i) => [Token i] -> [LVar i] -> Maybe [(ATree i, [LVar i])]
+expr :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | Constructs the abstract syntax tree based on the list of token
 --   strings. if construction fails, <a>Nothing</a> is returned.
-parse :: (Show i, Num i, Eq i) => [Token i] -> Maybe ([ATree i], Int)
+parse :: (Show i, Num i, Eq i, Integral i, Read i) => [TokenIdx i] -> Either (Text, TokenIdx i) ([ATree i], Int)
 
 -- | <a>varNum</a> returns the number of variables per function.
-varNum :: Ord i => ATree i -> Int
+varNum :: (Show i, Ord i) => ATree i -> Int
 instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.ATKindFor a)
 instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.ATKind a)
 instance GHC.Show.Show a => GHC.Show.Show (Htcc.Parse.ATree a)
@@ -960,7 +976,7 @@ module Htcc.Asm.Generate
 
 -- | Simulate the stack machine by traversing an abstract syntax tree and
 --   output assembly codes.
-genStmt :: (Show i, Ord i, UnaryInstruction i, BinaryInstruction i) => IO Int -> ATree i -> IO ()
+genStmt :: (Show i, Ord i, IsOperand i, UnaryInstruction i, BinaryInstruction i) => IO Int -> ATree i -> IO ()
 
 -- | Generate full assembly code from C language program
 casm :: String -> IO ()

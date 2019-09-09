@@ -9,33 +9,47 @@ Portability : POSIX
 
 General-purpose utilities
 -}
-{-# LANGUAGE TupleSections #-}
 module Htcc.Utils (
     -- * Extra functions for lists
+    safeHead,
     takeWhileLen,
     spanLen,
     -- * For Data.Text
     tshow,
     -- * For IO shortcuts
+    putStrErr,
     putStrLnErr,
     err,
     -- * For triples
     first3,
     second3,
     third3,
+    dropFst,
+    dropSnd,
+    dropThd,
     -- * Counter
     counter,
     -- * Boolean methods
     lor,
+    land,
     sop,
-    sopText
+    sopText,
+    -- * For data type
+    toInts
 ) where
 
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import Data.Tuple.Extra (both)
 import Data.IORef (newIORef, readIORef, writeIORef)
 import System.IO (stderr)
 import System.Exit (exitFailure)
+
+-- | The exception free implementation of `head`.
+{-# INLINE safeHead #-}
+safeHead :: [a] -> Maybe a
+safeHead [] = Nothing
+safeHead (x:_) = Just x
 
 -- | `takeWhileLen`, applied to a predicate @f@ and a list @xs@, returns the
 -- longest prefix (possibly empty) of @xs@ of elements that satisfy @f@ and
@@ -64,9 +78,13 @@ spanLen = spanLen' 0
 tshow :: Show a => a -> T.Text
 tshow = T.pack . show
 
--- | Standard error output shortcut.
+-- | Standard error output shortcut (with new line).
 putStrLnErr :: T.Text -> IO ()
 putStrLnErr = T.hPutStrLn stderr
+
+-- | Standard error output shortcut.
+putStrErr :: T.Text -> IO ()
+putStrErr = T.hPutStr stderr
 
 -- | Standard error output and exit shortcut.
 err :: T.Text -> IO ()
@@ -87,6 +105,21 @@ second3 f (x, y, z) = (x, f y, z)
 third3 :: (c -> d) -> (a, b, c) -> (a, b, d)
 third3 f (x, y, z) = (x, y, f z)
 
+{-# INLINE dropFst #-}
+-- | Drop first element of triple and returns pair
+dropFst :: (a, b, c) -> (b, c)
+dropFst (_, y, z) = (y, z)
+
+{-# INLINE dropSnd #-}
+-- | Drop second element of triple and returns pair
+dropSnd :: (a, b, c) -> (a, c)
+dropSnd (x, _, z) = (x, z)
+
+{-# INLINE dropThd #-}
+-- | Drop third element of triple and returns pair
+dropThd :: (a, b, c) -> (a, b)
+dropThd (x, y, _) = (x, y)
+
 -- | The counter is incremented by one each time it is executed.
 counter :: Enum a => a -> IO (IO a)
 counter n = do
@@ -105,6 +138,14 @@ lor :: [a -> Bool] -> a -> Bool
 lor [] _ = False
 lor (f:fs) x | f x = True | otherwise = lor fs x
 
+-- | For mappings \(f_i:X\to B\) to an element (\x\in X\) of a set \(X\), \(\displaystyle\bigwedge_{i} f_i(x)\) where \(B\) is the boolean domain.
+-- This is equivalent to:
+--
+-- > f1 x && f2 x && f3 x == land [f1, f2, f3] x
+land :: [a -> Bool] -> a -> Bool
+land [] _ = False
+land (f:fs) x = foldr ((&&) . flip id x) (f x) fs
+
 -- | Sum of product form.
 -- For mappings \(f_i:X\to B\) to an element \(x\in X\) of a set \(X\), \(\displaystyle\bigwedge_{j}\bigvee_{i} f_i(x_j)\) where \(B\) is the Boolean domain.
 -- This function will stop evaluation when the result of \(f_i(x)\) is `True` (short circuit evaluation).
@@ -114,3 +155,15 @@ sop = all . lor
 -- | The `T.Text` version of `sop`.
 sopText :: [Char -> Bool] -> T.Text -> Bool
 sopText = T.all . lor
+
+-- | Convert the instance of `Integral` to Int. When it cause overflow, express it as a list of `Int`s divided into multiple values.
+-- `toInts` is useful for functions that have an `Int` type as an argument. e.g.:
+--
+-- >>> toInts (fromIntegral (maxBound :: Int) + 1 :: Integer)
+-- [9223372036854775807,1]
+-- >>> toInts (fromIntegral (maxBound :: Int) * 3 + 4 :: Integer)
+-- [9223372036854775807,9223372036854775807,9223372036854775807,4]
+toInts :: Integral i => i -> [Int]
+toInts x = if xd >= 1 && xm == 0 then [fromIntegral x] else replicate xd (maxBound :: Int) ++ [xm]
+    where
+        (xd, xm) = both fromIntegral $ x `divMod` fromIntegral (maxBound :: Int)

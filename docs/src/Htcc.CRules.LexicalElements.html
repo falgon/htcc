@@ -1,0 +1,33 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">{-|
+Module      : Htcc.CRules.LexicalElements
+Description : LexicalElements of C language
+Copyright   : (c) roki, 2019
+License     : MIT
+Maintainer  : falgon53@yahoo.co.jp
+Stability   : experimental
+Portability : POSIX
+
+LexicalElements of C language
+-}</span><span>
+</span><a name="line-12"></a><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Htcc.CRules.LexicalElements</span><span> </span><span class="hs-special">(</span><span>
+</span><a name="line-13"></a><span>    </span><a href="Htcc.CRules.LexicalElements.html#charOps"><span class="hs-identifier hs-var">charOps</span></a><span class="hs-special">,</span><span>
+</span><a name="line-14"></a><span>    </span><a href="Htcc.CRules.LexicalElements.html#strOps"><span class="hs-identifier hs-var">strOps</span></a><span>
+</span><a name="line-15"></a><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><a name="line-16"></a><span>
+</span><a name="line-17"></a><span class="hs-pragma">{-# INLINE</span><span> </span><span class="hs-pragma">charOps</span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><a name="line-18"></a><span class="hs-comment">-- | Valid one characters as C language</span><span>
+</span><a name="line-19"></a><span class="hs-identifier">charOps</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-identifier hs-type">String</span><span>
+</span><a name="line-20"></a><a name="charOps"><a href="Htcc.CRules.LexicalElements.html#charOps"><span class="hs-identifier">charOps</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-string">&quot;+-*/()&lt;&gt;=;{},&amp;|^%!~&quot;</span><span>
+</span><a name="line-21"></a><span>
+</span><a name="line-22"></a><span class="hs-pragma">{-# INLINE</span><span> </span><span class="hs-pragma">strOps</span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><a name="line-23"></a><span class="hs-comment">-- | Valid two characters as C language</span><span>
+</span><a name="line-24"></a><span class="hs-identifier">strOps</span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">[</span><span class="hs-identifier hs-type">String</span><span class="hs-special">]</span><span>
+</span><a name="line-25"></a><a name="strOps"><a href="Htcc.CRules.LexicalElements.html#strOps"><span class="hs-identifier">strOps</span></a></a><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">[</span><span>
+</span><a name="line-26"></a><span>    </span><span class="hs-string">&quot;&lt;=&quot;</span><span class="hs-special">,</span><span>
+</span><a name="line-27"></a><span>    </span><span class="hs-string">&quot;&gt;=&quot;</span><span class="hs-special">,</span><span>
+</span><a name="line-28"></a><span>    </span><span class="hs-string">&quot;==&quot;</span><span class="hs-special">,</span><span>
+</span><a name="line-29"></a><span>    </span><span class="hs-string">&quot;!=&quot;</span><span class="hs-special">,</span><span>
+</span><a name="line-30"></a><span>    </span><span class="hs-string">&quot;&lt;&lt;&quot;</span><span class="hs-special">,</span><span>
+</span><a name="line-31"></a><span>    </span><span class="hs-string">&quot;&gt;&gt;&quot;</span><span>
+</span><a name="line-32"></a><span>    </span><span class="hs-special">]</span><span>
+</span><a name="line-33"></a></pre></body></html>

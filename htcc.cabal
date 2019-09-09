@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.31.1.
+-- This file has been generated from package.yaml by hpack version 0.31.2.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7642ca93e14309269550d8547909914aa2c6736eaa2df26507fd77ac97d65521
+-- hash: 2a44156fe227b3edf4c804d31575613b78ce7f26de39d3eb6fab4c7205ef86e8
 
 name:           htcc
 version:        0.0.0.1
@@ -46,8 +46,9 @@ library
       Htcc.Asm.Intrinsic.Operand
       Htcc.Asm.Intrinsic.Register
       Htcc.Asm.Intrinsic.Utils
+      Htcc.CRules
       Htcc.CRules.Char
-      Htcc.ErrorTrack
+      Htcc.CRules.LexicalElements
       Htcc.Parse
       Htcc.Token
       Htcc.Utils

@@ -12,37 +12,24 @@ The tokenizer
 {-# LANGUAGE ScopedTypeVariables #-}
 module Htcc.Token (
     -- * Token data types
-    TokenFor (..),
     Token (..),
+    TokenIdx,
     -- * Tokenizer
     tokenize,
     -- * Helper functions
-    isTKFor,
+    takeBrace,
     isTKIdent,
     isTKNum,
     isTKReserved
 ) where
 
-import Data.Bool (bool)
 import Data.Char (isDigit, isSpace)
-import Data.List.Split (endBy)
-import Data.Maybe (catMaybes)
-import Data.Either (lefts, rights)
 import qualified Data.Text as T
-import Data.STRef (newSTRef, readSTRef, modifySTRef)
-import Control.Monad.ST (runST)
-import Control.Monad (zipWithM)
+import Data.Tuple.Extra (first)
+import Data.List (find)
 
-import qualified Htcc.CRules.Char as CRC
-import qualified Htcc.ErrorTrack as E
-import Htcc.Utils (takeWhileLen, spanLen)
-
--- | Specially for token data type
-data TokenFor i = TKForkw -- ^ The for keyword
-    | TKForInit [Token i] -- ^ The initial section of for statement
-    | TKForCond [Token i] -- ^ The conditional section of for statement
-    | TKForIncr [Token i] -- ^ The incremental section of for statement
-    deriving (Show, Eq)
+import qualified Htcc.CRules as CR
+import Htcc.Utils (spanLen, dropSnd, first3)
 
 -- | Token type
 data Token i = TKReserved String -- ^ The reserved token
@@ -52,14 +39,27 @@ data Token i = TKReserved String -- ^ The reserved token
     | TKIf -- ^ The if keyword
     | TKElse -- ^ The else keyword
     | TKWhile -- ^ The while keyword
-    | TKFor (TokenFor i) -- ^ The for keyword
-    deriving (Show, Eq)
+    | TKFor -- ^ The for keyword
+    | TKEmpty -- ^ The empty token (This is not used by tokenize, but when errors are detected during parsing, the token at error locations cannot be specified)
+    deriving Eq
 
-{-# INLINE isTKFor #-}
--- | Utility for `TKFor`. When the argument is `TKFor`, it returns `True`, otherwise `False`.
-isTKFor :: Token i -> Bool
-isTKFor (TKFor _) = True
-isTKFor _ = False
+instance Show i => Show (Token i) where
+    show (TKReserved s) = s
+    show (TKNum i) = show i
+    show (TKIdent s) = s
+    show TKReturn = "return"
+    show TKIf = "if"
+    show TKElse = "else"
+    show TKWhile = "while"
+    show TKFor = "for"
+    show TKEmpty = ""
+
+-- | Lookup keyword from `String`. If the specified `String` is not keyword as C language, `lookupKeyword` returns `Nothing`.
+lookupKeyword :: Show i => String -> Maybe (Token i)
+lookupKeyword s = find ((==) s . show) [TKReturn, TKWhile, TKIf, TKElse, TKFor]
+
+-- | `Token` and its index.
+type TokenIdx i = (i, Token i)
 
 {-# INLINE isTKIdent #-}
 -- | Utility for `TKIdent`. When the argument is `TKIdent`, it returns `True`, otherwise `False`.
@@ -79,55 +79,42 @@ isTKReserved :: Token i -> Bool
 isTKReserved (TKReserved _) = True
 isTKReserved _ = False
 
-{-# INLINE charOps #-}
--- | Valid one characters as C language
-charOps :: String
-charOps = "+-*/()<>=;{},&|^%!~"
-
-{-# INLINE strOps #-}
--- | Valid two characters as C language
-strOps :: [String]
-strOps = [
-    "<=",
-    ">=",
-    "==",
-    "!=",
-    "<<",
-    ">>"
-    ]
-
--- | Tokenize @for@ statement
-forSt :: (Integral i, Read a) => E.ErrTracker i -> String -> Either (E.ErrTracker i) [Token a]
-forSt n xs = runST $ do
-    ern <- newSTRef n
-    c <- fmap catMaybes $ flip (`zipWithM` (endBy ";" fs)) [TKForInit, TKForCond, TKForIncr] $ \ts y ->     
-        modifySTRef ern (E.advance $ succ $ length ts) *>
-        flip bool (return Nothing) (Just . fmap (TKFor . y) . flip tokenize' ts <$> readSTRef ern) (null ts)
-    let lef = lefts c
-    return (if null lef then ((TKFor TKForkw:rights c) ++) <$> tokenize' (E.advance (succ fslen) n) (drop fslen xs) else Left $ head lef)
+-- | The core function of `tokenize`
+tokenize' :: (Integral i, Read i, Show i) => i -> String -> Either (i, T.Text) [TokenIdx i]
+tokenize' n xs = f n $ first fromIntegral $ dropSnd $ spanLen isSpace xs
     where
-        (fslen, fs) = let (n', _, ds) = spanLen isSpace xs; (n'', ts) = takeWhileLen (/=')') ds in (succ $ n' + n'', tail ts)
-        
--- | Core function of `tokenize`
-tokenize' :: forall i a. (Integral i, Read a) => E.ErrTracker i -> String -> Either (E.ErrTracker i) [Token a]
-tokenize' _ [] = Right []
-tokenize' n xxs@(x:xs)
-    | isDigit x = let (n', ts, ds) = spanLen isDigit xs in (TKNum (read (x:ts)) :) <$> tokenize' (E.advance (succ n') n) ds
-    | isSpace x = tokenize' (succ n) xs
-    | not (null xs) && [x, head xs] `elem` strOps = (TKReserved [x, head xs]:) <$> tokenize' (E.advance (2 :: i) n) (tail xs)
-    | x `elem` charOps = (TKReserved [x]:) <$> tokenize' (succ n) xs
-    | otherwise = let (len, tk, ds) = spanLen CRC.isValidChar xxs in 
-        if null tk then Left (n { E.str = T.pack $ takeWhile (not . CRC.isValidChar) ds }) else let cn = callNext tk (E.advance len n) ds in case tk of
-            "return" -> cn TKReturn
-            "while" -> cn TKWhile 
-            "if" -> cn TKIf
-            "else" -> (if not (null ds) && isSpace (head ds) then (TKElse:) else (TKIdent tk:)) <$> tokenize' (E.advance len n) ds
-            "for" -> forSt (E.advance len n) ds
-            _ -> (TKIdent tk:) <$> tokenize' (E.advance (succ len) n) ds
-        where
-            -- | Partial function for reading the next token (@while@, @if@, @return@).
-            callNext tk nlen ds itk = (if not (null ds) && (isSpace (head ds) || '(' == head ds) then (itk:) else (TKIdent tk:)) <$> tokenize' (succ nlen) ds
+        f _ (_, []) = Right []
+        f n' (rssize, xxs@(x:xs'))
+            | isDigit x = let (n'', ts, ds) = first3 fromIntegral $ spanLen isDigit xs'; cur = rssize + n'; next = succ cur + n''; num = x:ts in 
+                ((cur, TKNum $ read num):) <$> tokenize' next ds
+            | not (null xs') && [x, head xs'] `elem` CR.strOps = let cur = rssize + n'; next = cur + 2; op = [x, head xs'] in
+                ((cur, TKReserved op):) <$> tokenize' next (tail xs')
+            | x `elem` CR.charOps = let cur = rssize + n'; next = succ cur in ((cur, TKReserved [x]):) <$> tokenize' next xs'
+            | otherwise = let (len, tk, ds) = spanLen CR.isValidChar xxs; cur = n' + rssize in 
+                if len == 0 then Left (cur, T.pack $ takeWhile (not . CR.isValidChar) ds) else let next = cur + fromIntegral len in 
+                    maybe (((cur, TKIdent tk):) <$> tokenize' next ds) (\tkn -> ((cur, tkn):) <$> tokenize' next ds) $ lookupKeyword tk
 
--- | Tokenize from `String`. If it fails, the Left that wraps the value representing that point is returned.
-tokenize :: (Integral i, Read a) => String -> Either (E.ErrTracker i) [Token a]
-tokenize = tokenize' E.init
+-- | Tokenize the `String`. If an invalid chraracter matches as C language, the part and the character are returned.
+-- Otherwise, `[TokenIdx]` is returned.
+tokenize :: (Integral i, Read i, Show i) => String -> Either (i, T.Text) [TokenIdx i]
+tokenize = tokenize' 1
+
+-- | Extract the partial token enclosed in parentheses from the token sequence. If it is invalid, `takeBrace` returns @(i, Text)@ indicating the error location.
+-- Otherwise, `takeBrace` returns a partial token enclosed in parentheses and subsequent tokens.
+takeBrace :: forall i. (Integral i, Read i, Show i) => String -> String -> [TokenIdx i] -> Maybe (Either (TokenIdx i) ([TokenIdx i], [TokenIdx i]))
+takeBrace leftb rightb xxs@((_, TKReserved y):_) 
+    | y == leftb = Just $ f 0 0 xxs
+    | otherwise = Nothing
+    where
+        f :: Int -> Int -> [TokenIdx i] -> Either {- (i, T.Text) -} (TokenIdx i) ([TokenIdx i], [TokenIdx i])
+        f l r []
+            | l /= r = Left $ head xxs -- (second tshow $ head xxs)
+            | otherwise = Right ([], [])
+        f l r (c@(p, TKReserved x):xs') 
+            | x == rightb = if l == succ r then Right ([c], xs') else g l (succ r) xs'
+            | x == leftb = if succ l == r then Right ([c], xs') else g (succ l) r xs'
+            | otherwise = g l r xs'
+            where
+                g = (.) (fmap (first ((p, TKReserved x):)) .) . f
+        f l r ((p, x):xs') = first ((:) (p, x)) <$> f l r xs'
+takeBrace _ _ _ = Nothing

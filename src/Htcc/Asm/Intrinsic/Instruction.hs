@@ -40,7 +40,7 @@ intelSyntaxUnaryInst = flip (.) (T.append " " . flip T.append "\n" . tshow) . (.
 
 {-# INLINE intelSyntaxBinaryInst #-}
 intelSyntaxBinaryInst :: (Show a, Show b) => T.Text -> a -> b -> T.Text
-intelSyntaxBinaryInst = (.) (flip (.) (T.append ", " . flip T.append "\n" . tshow) . (.) (T.append "\t")) . (flip (.) ((.) (T.append " ") . (T.append . tshow)) . (.) . T.append)
+intelSyntaxBinaryInst = (.) (flip (.) (T.append ", " . flip T.append "\n" . tshow) . (.) (T.append "\t")) . flip (.) ((.) (T.append " ") . T.append . tshow) . (.) . T.append
 
 -- | A class of x86_64 instructions with unary arguments.
 class Show a => UnaryInstruction a where

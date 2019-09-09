@@ -48,7 +48,9 @@ main = runTestsEx [
     (StatementEqual.test "a = 1; while (a < 10) a = a + 1; return a;", 10),
     (StatementEqual.test "a = 1; while (a < 10) a = a + 1; b = 1; while (b < 20) b = b + 2; return a + b;", 31),
     (StatementEqual.test "a = 0; while (a); return 0;", 0),
+    
     (StatementEqual.test "a = 0; for (i = 1; i <= 10; i = i + 1) a = a + i * 2; return a;", 110),
+    
     (StatementEqual.test "i = 0; for (; i <= 10;) i = i + 2; return i;", 12),
     (StatementEqual.test "i = 0; for (; i <= 10; i = i + 2);  return i;", 12),
     (StatementEqual.test "a = 0; for (i = 0; i < 10; i = i + 1) if (a) a = 0; else a = 1; return a;", 0),

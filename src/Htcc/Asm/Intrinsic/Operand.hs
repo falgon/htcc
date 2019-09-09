@@ -35,9 +35,6 @@ class Show a => IsOperand a where
     -- | The operation of mul.
     omul :: IsOperand b => a -> b -> Operand
     omul x y = Operand $ show x ++ "*" ++ show y
-    -- | The operation of div.
-    odiv :: IsOperand b => a -> b -> Operand
-    odiv x y = Operand $ show x ++ "/" ++ show y
 
 instance IsOperand Operand
 instance IsOperand Int
