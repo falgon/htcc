@@ -42,7 +42,7 @@ data Token i = TKReserved String -- ^ The reserved token
     | TKElse -- ^ The else keyword
     | TKWhile -- ^ The while keyword
     | TKFor -- ^ The for keyword
-    | TKEmpty -- ^ The empty token (This is not used by tokenize, but when errors are detected during parsing, the token at error locations cannot be specified)
+    | TKEmpty -- ^ The empty token (This is not used by `tokenize`, but when errors are detected during parsing, the token at error locations cannot be specified)
     deriving Eq
 
 instance Show i => Show (Token i) where

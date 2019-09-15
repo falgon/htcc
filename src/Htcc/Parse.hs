@@ -71,12 +71,12 @@ lookupLVar :: Num i => HT.Token i -> [LVar i] -> Maybe (LVar i)
 lookupLVar (HT.TKIdent s) lvs = find (\(LVar ss _) -> ss == s) lvs
 lookupLVar _ _ = Nothing
 
--- | Specially for syntax tree type
-data ATKindFor a = ATForkw -- ^ The for keyword
-    | ATForInit (ATree a) -- ^ The initial section of for statement
-    | ATForCond (ATree a) -- ^ The conditional section of for statement
-    | ATForIncr (ATree a) -- ^ The incremental section of for statement
-    | ATForStmt (ATree a) -- ^ The statement section of for statement
+-- | Specially @for@ syntax tree type
+data ATKindFor a = ATForkw -- ^ The @for@ keyword
+    | ATForInit (ATree a) -- ^ The initial section of @for@ statement
+    | ATForCond (ATree a) -- ^ The conditional section of @for@ statement
+    | ATForIncr (ATree a) -- ^ The incremental section of @for@ statement
+    | ATForStmt (ATree a) -- ^ The statement section of @for@ statement
     deriving Show
 
 {-# INLINE isATForInit #-}
@@ -132,16 +132,18 @@ data ATKind a = ATAdd -- ^ \(+\)
     | ATNEQ -- ^ \(\not=\)
     | ATNum a -- ^ The number
     | ATAssign -- ^ The assign operator
-    | ATReturn -- ^ The return keyword
-    | ATIf -- ^ The if keyword
-    | ATElse -- ^ The else keyword
-    | ATWhile -- ^ The while keyword
-    | ATFor [ATKindFor a] -- ^ The for keyword
+    | ATReturn -- ^ The @return@ keyword
+    | ATIf -- ^ The @if@ keyword
+    | ATElse -- ^ The @else@ keyword
+    | ATWhile -- ^ The @while@ keyword
+    | ATFor [ATKindFor a] -- ^ The @for@ keyword
     | ATBlock [ATree a] -- ^ The block
     | ATLVar a -- ^ The local variable. It has a offset value
-    | ATDefFunc T.Text (Maybe [ATree a])
-    | ATCallFunc T.Text (Maybe [ATree a]) -- ^ The function. It has a offset value and arguments (`Maybe`)
+    | ATDefFunc T.Text (Maybe [ATree a]) -- ^ The function definition
+    | ATCallFunc T.Text (Maybe [ATree a]) -- ^ The function call. It has a offset value and arguments (`Maybe`)
     | ATExprStmt -- The expression of a statement
+    | ATAddr -- The addressing operator @&@
+    | ATDeref -- The dereferencing operator @*@
     deriving Show
 
 -- | The data structure of abstract syntax tree
@@ -173,7 +175,7 @@ funcDef tk@(cur@(_, HT.TKIdent fname):(_, HT.TKReserved "("):_) atn vars = flip 
             mk <- forM args $ \arg -> readSTRef v >>= either (return . Left) (\(_, y, z) -> Right y <$ writeSTRef v (y, z)) . uncurry (factor arg)
             if any isLeft mk then return $ Left $ head $ lefts mk else do
                 (erat, ervar) <- readSTRef v
-                return $ second3 (ATNode (ATDefFunc (T.pack fname) $ if null mk then Nothing else Just $ rights mk) ATEmpty) <$> stmt st erat ervar
+                return $ second3 (flip (ATNode (ATDefFunc (T.pack fname) $ if null mk then Nothing else Just $ rights mk)) ATEmpty) <$> stmt st erat ervar
         _ -> stmt tk atn vars
 funcDef tk _ _ = Left ("Invalid function definition syntax", if null tk then (0, HT.TKEmpty) else head tk)
 
@@ -216,7 +218,7 @@ stmt xxs@(cur@(_, HT.TKReserved "{"):_) _ vars = flip (maybe $ Left (internalCE,
         return $ if any isLeft mk then Left $ head $ lefts mk else Right (ds, ATNode (ATBlock (rights mk)) ATEmpty ATEmpty, nvars)
 stmt ((_, HT.TKReserved ";"):xs) atn vars = Right (xs, atn, vars) -- for only @;@
 stmt xs atn vars = flip (either Left) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for stmt;
-    (_, HT.TKReserved ";"):ys -> Right (ys, ATNode ATExprStmt ATEmpty erat, ervars)
+    (_, HT.TKReserved ";"):ys -> Right (ys, ATNode ATExprStmt erat ATEmpty, ervars)
     ert' -> Left $ expectedMessage ";" (0, HT.TKEmpty) ert'
 
 {-# INLINE expr #-}
@@ -253,7 +255,7 @@ assign xs atn vars = flip (either Left) (bitwiseOr xs atn vars) $ \(ert, erat, e
 -- {\rm shift} &=& {\rm add}\ \left("\lt\lt"\ {\rm add}\mid\ "\gt\gt"\ {\rm add}\right)^\ast\label{eq:thirteenth}\tag{9}\\
 -- {\rm add} &=& {\rm term}\ \left("+"\ {\rm term}\ \mid\ "-"\ {\rm term}\right)^\ast\label{eq:first}\tag{10} \\
 -- {\rm term} &=& {\rm factor}\ \left("\ast"\ {\rm factor}\ \mid\ "/"\ {\rm factor}\right)^\ast\label{eq:second}\tag{11} \\
--- {\rm unary} &=& \left("+"\ \mid\ "-"\right)?\ {\rm factor}\mid\ \left("!"\ \mid\ "\sim"\ \right)?\ {\rm unary}\label{eq:fourth}\tag{12} \\
+-- {\rm unary} &=& \left("+"\ \mid\ "-"\right)?\ {\rm factor}\mid\ \left("!"\ \mid\ "\sim"\ \mid\ "\&"\ \mid\ "\ast"\right)?\ {\rm unary}\label{eq:fourth}\tag{12} \\
 -- {\rm factor} &=& {\rm num} \mid\ {\rm ident}\ \left({\rm "(" \left(expr\ \left(\left(","\ expr\right)^\ast\right)?\right)? ")"}\right)?\ \mid\ "(" {\rm expr} ")"\label{eq:third}\tag{13}
 -- \end{eqnarray}
 -- \]
@@ -312,6 +314,8 @@ unary ((_, HT.TKReserved "+"):xs) at vars = factor xs at vars
 unary ((_, HT.TKReserved "-"):xs) at vars = second3 (ATNode ATSub (ATNode (ATNum 0) ATEmpty ATEmpty)) <$> factor xs at vars
 unary ((_, HT.TKReserved "!"):xs) at vars = second3 (\x -> ATNode ATElse (ATNode ATIf (ATNode ATEQ x (ATNode (ATNum 0) ATEmpty ATEmpty)) (ATNode ATReturn (ATNode (ATNum 1) ATEmpty ATEmpty) ATEmpty)) (ATNode ATReturn (ATNode (ATNum 0) ATEmpty ATEmpty) ATEmpty)) <$> unary xs at vars
 unary ((_, HT.TKReserved "~"):xs) at vars = second3 (flip (ATNode ATNot) ATEmpty) <$> unary xs at vars
+unary ((_, HT.TKReserved "&"):xs) at vars = second3 (flip (ATNode ATAddr) ATEmpty) <$> unary xs at vars
+unary ((_, HT.TKReserved "*"):xs) at vars = second3 (flip (ATNode ATDeref) ATEmpty) <$> unary xs at vars
 unary xs at vars = factor xs at vars
 
 -- | `factor` indicates \(\eqref{eq:third}\) amount the comments of `inners`.
@@ -322,15 +326,6 @@ factor (cur@(_, HT.TKReserved "("):xs) atn vars = flip (either Left) (expr xs at
     ert' -> Left $ expectedMessage ")" cur ert'
 factor ((_, HT.TKNum n):xs) _ vars = Right (xs, ATNode (ATNum n) ATEmpty ATEmpty, vars) -- for numbers
 factor ((_, HT.TKIdent v):(_, HT.TKReserved "("):(_, HT.TKReserved ")"):xs) _ vars = Right (xs, ATNode (ATCallFunc (T.pack v) Nothing) ATEmpty ATEmpty, vars) -- for no arguments function call
-{-
-factor (cur@(i, HT.TKIdent v):(j, HT.TKReserved "("):xs) _ vars = let fsec = takeWhile ((/=HT.TKReserved ";") . snd) xs in -- for function call with some arguments
-    flip (maybe (Left ("invalid function call syntax", cur))) (HT.takeExps $ [(i, HT.TKIdent v), (j, HT.TKReserved "(")] ++ fsec ++ [fsec !! length fsec]) $ \exps -> 
-        if sum (map length exps) + pred (length exps) /= pred (length fsec) then Left ("invalid function call syntax", cur) else runST $ do
-            mk <- newSTRef vars
-            expl <- forM exps $ \etk -> readSTRef mk >>= either (return . Left) (\(_, erat, ervar) -> Right erat <$ writeSTRef mk ervar) . expr etk ATEmpty
-            if any isLeft expl then return $ Left $ head $ lefts expl else 
-                return $ Right (drop (length fsec) xs, ATNode (ATCallFunc (T.pack v) (Just $ rights expl)) ATEmpty ATEmpty, vars)
--}
 factor (cur1@(_, HT.TKIdent v):cur2@(_, HT.TKReserved "("):xs) _ vars = flip (maybe $ Left (internalCE, cur1)) (HT.takeBrace "(" ")" (cur2:xs)) $
     either (Left . ("invalid function call",)) $ \(fsec, ds) -> flip (maybe $ Left ("invalid function call", cur1)) (HT.takeExps (cur1:fsec)) $ \exps -> runST $ do
         mk <- newSTRef vars
@@ -353,7 +348,7 @@ parse = flip program []
 
 -- | `varNum` returns the number of variables per function.
 varNum :: (Show i, Ord i) => ATree i -> Int
-varNum (ATNode (ATDefFunc _ args) _ body) = S.size $ f body $ maybe S.empty (foldr (\(ATNode (ATLVar x) _ _) acc -> S.insert x acc) S.empty) args
+varNum (ATNode (ATDefFunc _ args) body _) = S.size $ f body $ maybe S.empty (foldr (\(ATNode (ATLVar x) _ _) acc -> S.insert x acc) S.empty) args
     where
         f ATEmpty s = s
         f (ATNode (ATLVar x) l r) s = f l (S.insert x s) `S.union` f r (S.insert x s)

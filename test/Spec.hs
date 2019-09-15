@@ -82,7 +82,11 @@ main = runTestsEx [
     (StatementEqual.test "get1() { return 1; } get2() { return 2; } main() { a = get1(); return a + get2(); }", 3),
     (StatementEqual.test "add(a, b) { return a + b; } main() { return add(1, 2); }", 3),
     (StatementEqual.test "rec(a) { if (a == 0) return 42; return rec(a - 1); } main() { b = rec(2); return 1 + 2; }", 3),
-    (StatementEqual.test "fib(n) { if (n == 0) return 1; else if (n == 1) return 1; else if (n >= 2) return fib(n-1) + fib(n-2); else return 0; } main() { return fib(5); }", 8) -- fibonacci number
+    (StatementEqual.test "fib(n) { if (n == 0) return 1; else if (n == 1) return 1; else if (n >= 2) return fib(n-1) + fib(n-2); else return 0; } main() { return fib(5); }", 8), -- fibonacci number
+    (StatementEqual.test "main() { a = 42; b = &a; return *b; }", 42),
+    (StatementEqual.test "main() { a = 42; return *&a; }", 42),
+    (StatementEqual.test "main() { a = 42; b = &a; c = &b; return **c; }", 42),
+    (StatementEqual.test "main() { a = 42; b = &a; *b = a * 2; return a; }", 84)
     ] >> runTestsEx [
     (LinkFuncStdOut.test "main() { return test_func1(); }" ["test_func1"], Right "test/Tests/csrc/test_func1.c::test_func1(): [OK]"),
     (LinkFuncStdOut.test "main() { return test_func2(40); }" ["test_func2"], Right "test/Tests/csrc/test_func2.c::test_func2(40) outputs: \"2 3 5 7 11 13 17 19 23 29 31 37 \": [OK]") --,

@@ -46,46 +46,46 @@ intelSyntaxBinaryInst = (.) (flip (.) (T.append ", " . flip T.append "\n" . tsho
 
 -- | A class of x86_64 instructions with unary arguments.
 class Show a => UnaryInstruction a where
-    -- | THe push instruction.
+    -- | The @push@ instruction.
     push :: a -> T.Text
     push = intelSyntaxUnaryInst "push"
-    -- | The pop instruction.
+    -- | The @pop@ instruction.
     pop :: a -> T.Text
     pop = intelSyntaxUnaryInst "pop"
-    -- | The pushl instruction.
+    -- | The @pushl@ instruction.
     pushl :: a -> T.Text
     pushl = intelSyntaxUnaryInst "pushl"
-    -- | The popl instruction.
+    -- | The @popl@ instruction.
     popl :: a -> T.Text
     popl = intelSyntaxUnaryInst "popl"
-    -- | The idiv instruction.
+    -- | The @idiv@ instruction.
     idiv :: a -> T.Text
     idiv = intelSyntaxUnaryInst "idiv"
-    -- | The not instructions.
+    -- | The @not@ instructions.
     not :: a -> T.Text
     not = intelSyntaxUnaryInst "not"
 
--- | The sete instruction.
+-- | The @sete@ instruction.
 sete :: Register -> T.Text
 sete = intelSyntaxUnaryInst "sete"
 
--- | The setne instruction.
+-- | The @setne@ instruction.
 setne :: Register -> T.Text
 setne = intelSyntaxUnaryInst "setne"
 
--- | The setl instruction.
+-- | The @setl@ instruction.
 setl :: Register -> T.Text
 setl = intelSyntaxUnaryInst "setl"
 
--- | The setle instruction.
+-- | The @setle@ instruction.
 setle :: Register -> T.Text
 setle = intelSyntaxUnaryInst "setle"
 
--- | The setg instruction.
+-- | The @setg@ instruction.
 setg :: Register -> T.Text
 setg = intelSyntaxUnaryInst "setg"
 
--- | The setge instruction.
+-- | The @setge@ instruction.
 setge :: Register -> T.Text
 setge = intelSyntaxUnaryInst "setge"
 
@@ -95,43 +95,43 @@ instance UnaryInstruction Register
 
 -- | A class of x86_64 instructions with binary arguments.
 class Show a => BinaryInstruction a where
-    -- | The mov instruction.
+    -- | The @mov@ instruction.
     mov :: BinaryInstruction b => a -> b -> T.Text
     mov = intelSyntaxBinaryInst "mov"
-    -- | The movl instruction.
+    -- | The @movl@ instruction.
     movl :: BinaryInstruction b => a -> b -> T.Text
     movl = intelSyntaxBinaryInst "movl"
-    -- | The cmp instruction.
+    -- | The @cmp@ instruction.
     cmp :: BinaryInstruction b => a -> b -> T.Text
     cmp = intelSyntaxBinaryInst "cmp"
-    -- | The add instruction.
+    -- | The @add@ instruction.
     add :: BinaryInstruction b => a -> b -> T.Text
     add = intelSyntaxBinaryInst "add"
-    -- | The sub instruction.
+    -- | The @sub@ instruction.
     sub :: BinaryInstruction b => a -> b -> T.Text
     sub = intelSyntaxBinaryInst "sub"
-    -- | The imul instruction.
+    -- | The @imul@ instruction.
     imul :: BinaryInstruction b => a -> b -> T.Text
     imul = intelSyntaxBinaryInst "imul"
-    -- | The and instruction.
+    -- | The @and@ instruction.
     and :: BinaryInstruction b => a -> b -> T.Text
     and = intelSyntaxBinaryInst "and"
-    -- | The or instruction.
+    -- | The @or@ instruction.
     or :: BinaryInstruction b => a -> b -> T.Text
     or = intelSyntaxBinaryInst "or"
-    -- | The xor instruction.
+    -- | The @xor@ instruction.
     xor :: BinaryInstruction b => a -> b -> T.Text
     xor = intelSyntaxBinaryInst "xor"
-    -- | The shl instruction.
+    -- | The @shl@ instruction.
     shl :: BinaryInstruction b => a -> b -> T.Text
     shl = intelSyntaxBinaryInst "shl"
-    -- | The sar instruction.
+    -- | The @sar@ instruction.
     sar :: BinaryInstruction b => a -> b -> T.Text
     sar = intelSyntaxBinaryInst "sar"
-    -- | The movzb instruction.
+    -- | The @movzb@ instruction.
     movzb :: a -> Register -> T.Text
     movzb = intelSyntaxBinaryInst "movzb"
-    -- | The lea instruction.
+    -- | The @lea@ instruction.
     lea :: BinaryInstruction b => a -> b -> T.Text
     lea = intelSyntaxBinaryInst "lea"
 
@@ -140,31 +140,31 @@ instance BinaryInstruction Int
 instance BinaryInstruction Register
 instance IsOperand a => BinaryInstruction (Ref a)
 
--- | The cqo instruction.
+-- | The @cqo@ instruction.
 cqo :: T.Text
 cqo = "\tcqo\n"
 
--- | The ret instruction.
+-- | The @ret@ instruction.
 ret :: T.Text
 ret = "\tret\n"
 
--- | The leave instruction. This instruction is equivalent to @mov rsp, rbp@ followed by @pop rbp@.
+-- | The @leave@ instruction. This instruction is equivalent to @mov rsp, rbp@ followed by @pop rbp@.
 leave :: T.Text
 leave = "\tleave\n"
 
--- | The jmp instruction.
+-- | The @jmp@ instruction.
 jmp :: T.Text -> T.Text
 jmp = flip T.append "\n" . T.append "\tjmp "
 
--- | The je instruction.
+-- | The @je@ instruction.
 je :: T.Text -> T.Text
 je = flip T.append "\n" . T.append "\tje "
 
--- | The jnz instruction.
+-- | The @jnz@ instruction.
 jnz :: T.Text -> T.Text
 jnz = flip T.append "\n" . T.append "\tjnz "
 
--- | The call instruction.
+-- | The @call@ instruction.
 call :: T.Text -> T.Text
 call = flip T.append "\n" . T.append "\tcall "
 
