@@ -435,9 +435,6 @@ strOps :: [String]
 -- | General-purpose utilities
 module Htcc.Utils
 
--- | The exception free implementation of <a>head</a>.
-safeHead :: [a] -> Maybe a
-
 -- | <a>takeWhileLen</a>, applied to a predicate <tt>f</tt> and a list
 --   <tt>xs</tt>, returns the longest prefix (possibly empty) of
 --   <tt>xs</tt> of elements that satisfy <tt>f</tt> and the length of the
@@ -448,6 +445,11 @@ takeWhileLen :: (a -> Bool) -> [a] -> (Int, [a])
 -- | Almost the same as <a>span</a>, but returns the number of elements in
 --   the list that satisfy <tt>f</tt> at the same time.
 spanLen :: (a -> Bool) -> [a] -> (Int, [a], [a])
+
+-- | <a>lastInit</a> returns <tt>Just (init xxs)</tt> when <tt>f (last x)
+--   == True</tt> for then given list <tt>xxs</tt>. Otherwise, returns
+--   <a>Nothing</a>
+lastInit :: (a -> Bool) -> [a] -> Maybe [a]
 
 -- | Convert <a>Show</a> class instance to <a>Text</a>.
 tshow :: Show a => a -> Text
@@ -585,14 +587,19 @@ type TokenIdx i = (i, Token i)
 
 -- | Tokenize the <a>String</a>. If an invalid chraracter matches as C
 --   language, the part and the character are returned. Otherwise,
---   `[TokenIdx]` is returned.
+--   <tt>[TokenIdx i]</tt> is returned.
 tokenize :: (Integral i, Read i, Show i) => String -> Either (i, Text) [TokenIdx i]
 
 -- | Extract the partial token enclosed in parentheses from the token
 --   sequence. If it is invalid, <a>takeBrace</a> returns <tt>(i,
 --   Text)</tt> indicating the error location. Otherwise, <a>takeBrace</a>
 --   returns a partial token enclosed in parentheses and subsequent tokens.
-takeBrace :: forall i. (Integral i, Read i, Show i) => [TokenIdx i] -> Maybe (Either (TokenIdx i) ([TokenIdx i], [TokenIdx i]))
+takeBrace :: forall i. (Integral i, Read i, Show i) => String -> String -> [TokenIdx i] -> Maybe (Either (TokenIdx i) ([TokenIdx i], [TokenIdx i]))
+
+-- | Get arguments from list of <a>Token</a> (e.g. Given the token of
+--   "f(f(g(a, b)), 42);", return expressions that are the token of "f(g(a,
+--   b))" and the token of "42".
+takeExps :: Eq i => [TokenIdx i] -> Maybe [[TokenIdx i]]
 
 -- | Utility for <a>TKIdent</a>. When the argument is <a>TKIdent</a>, it
 --   returns <a>True</a>, otherwise <a>False</a>.
@@ -724,8 +731,9 @@ ATBlock :: [ATree a] -> ATKind a
 ATLVar :: a -> ATKind a
 ATDefFunc :: Text -> Maybe [ATree a] -> ATKind a
 
--- | The function. It has a offset value and arguments (<a>Maybe</a>).
+-- | The function. It has a offset value and arguments (<a>Maybe</a>)
 ATCallFunc :: Text -> Maybe [ATree a] -> ATKind a
+ATExprStmt :: ATKind a
 
 -- | The data structure of abstract syntax tree
 data ATree a
@@ -758,7 +766,10 @@ fromATKindFor :: ATKindFor a -> ATree a
 
 -- | <a>program</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-program :: (Show i, Eq i, Num i, Integral i, Read i) => [TokenIdx i] -> [LVar i] -> Either (Text, TokenIdx i) [(ATree i, [LVar i])]
+program :: (Show i, Eq i, Read i, Integral i) => [TokenIdx i] -> [LVar i] -> Either (Text, TokenIdx i) [ATree i]
+
+-- | <a>funcDef</a> indicates X among the comments of <a>inners</a>.
+funcDef :: (Show i, Eq i, Num i, Integral i, Read i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>stmt</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
@@ -773,34 +784,38 @@ inners :: ([TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([To
 
 -- | <a>bitwiseOr</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-bitwiseOr :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
+bitwiseOr :: (Show i, Eq i, Read i, Integral i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>bitwiseXor</a> indicates &lt;math&gt; amont the comments of
 --   <a>inners</a>.
-bitwiseXor :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
+bitwiseXor :: (Show i, Eq i, Read i, Integral i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>bitwiseAnd</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-bitwiseAnd :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
+bitwiseAnd :: (Show i, Eq i, Read i, Integral i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
+
+-- | <a>shift</a> indicates (eqref{eq:thirteenth}\) among the comments of
+--   <a>inners</a>.
+shift :: (Show i, Eq i, Read i, Integral i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>add</a> indicates &lt;math&gt; among the comments of <a>inners</a>.
-add :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
+add :: (Show i, Eq i, Read i, Integral i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>term</a> indicates &lt;math&gt; amont the comments of
 --   <a>inners</a>.
-term :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
+term :: (Show i, Eq i, Read i, Integral i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>unary</a> indicates &lt;math&gt; amount the comments of
 --   <a>inners</a>.
-unary :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
+unary :: (Show i, Eq i, Read i, Integral i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>factor</a> indicates &lt;math&gt; amount the comments of
 --   <a>inners</a>.
-factor :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
+factor :: (Show i, Eq i, Read i, Integral i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>relational</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-relational :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
+relational :: (Show i, Eq i, Read i, Integral i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>equality</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>. This is equivalent to the following code:
@@ -813,18 +828,18 @@ relational :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Ei
 --           equality' ((_, HT.TKReserved "-"):ys) era ars = either Left (uncurry id . first3 equality' . second3 (ATNode ATNEQ era)) $ relational ys era ars
 --           equality' ert era ars = Right (ert, era, ars)
 --   </pre>
-equality :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
+equality :: (Show i, Eq i, Read i, Integral i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>assign</a> indicates &lt;math&gt; among the comments of
 --   <a>inners</a>.
-assign :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
+assign :: (Show i, Eq i, Read i, Integral i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | <a>expr</a> is equivalent to <a>equality</a>.
-expr :: (Show i, Eq i, Num i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
+expr :: (Show i, Eq i, Read i, Integral i) => [TokenIdx i] -> ATree i -> [LVar i] -> Either (Text, TokenIdx i) ([TokenIdx i], ATree i, [LVar i])
 
 -- | Constructs the abstract syntax tree based on the list of token
 --   strings. if construction fails, <a>Nothing</a> is returned.
-parse :: (Show i, Num i, Eq i, Integral i, Read i) => [TokenIdx i] -> Either (Text, TokenIdx i) ([ATree i], Int)
+parse :: (Show i, Num i, Eq i, Integral i, Read i) => [TokenIdx i] -> Either (Text, TokenIdx i) [ATree i]
 
 -- | <a>varNum</a> returns the number of variables per function.
 varNum :: (Show i, Ord i) => ATree i -> Int
@@ -926,6 +941,9 @@ sar :: (BinaryInstruction a, BinaryInstruction b) => a -> b -> Text
 -- | The movzb instruction.
 movzb :: BinaryInstruction a => a -> Register -> Text
 
+-- | The lea instruction.
+lea :: (BinaryInstruction a, BinaryInstruction b) => a -> b -> Text
+
 -- | The sete instruction.
 sete :: Register -> Text
 
@@ -950,11 +968,18 @@ cqo :: Text
 -- | The ret instruction.
 ret :: Text
 
+-- | The leave instruction. This instruction is equivalent to <tt>mov rsp,
+--   rbp</tt> followed by <tt>pop rbp</tt>.
+leave :: Text
+
 -- | The jmp instruction.
 jmp :: Text -> Text
 
 -- | The je instruction.
 je :: Text -> Text
+
+-- | The jnz instruction.
+jnz :: Text -> Text
 
 -- | The call instruction.
 call :: Text -> Text

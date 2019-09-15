@@ -18,6 +18,7 @@ module Htcc.Token (
     tokenize,
     -- * Helper functions
     takeBrace,
+    takeExps,
     isTKIdent,
     isTKNum,
     isTKReserved
@@ -26,10 +27,11 @@ module Htcc.Token (
 import Data.Char (isDigit, isSpace)
 import qualified Data.Text as T
 import Data.Tuple.Extra (first)
-import Data.List (find)
+import Data.List (find, unfoldr)
+import Data.Maybe (isNothing, fromJust)
 
 import qualified Htcc.CRules as CR
-import Htcc.Utils (spanLen, dropSnd, first3)
+import Htcc.Utils (lastInit, spanLen, dropSnd, first3)
 
 -- | Token type
 data Token i = TKReserved String -- ^ The reserved token
@@ -95,7 +97,7 @@ tokenize' n xs = f n $ first fromIntegral $ dropSnd $ spanLen isSpace xs
                     maybe (((cur, TKIdent tk):) <$> tokenize' next ds) (\tkn -> ((cur, tkn):) <$> tokenize' next ds) $ lookupKeyword tk
 
 -- | Tokenize the `String`. If an invalid chraracter matches as C language, the part and the character are returned.
--- Otherwise, `[TokenIdx]` is returned.
+-- Otherwise, @[TokenIdx i]@ is returned.
 tokenize :: (Integral i, Read i, Show i) => String -> Either (i, T.Text) [TokenIdx i]
 tokenize = tokenize' 1
 
@@ -106,9 +108,9 @@ takeBrace leftb rightb xxs@((_, TKReserved y):_)
     | y == leftb = Just $ f 0 0 xxs
     | otherwise = Nothing
     where
-        f :: Int -> Int -> [TokenIdx i] -> Either {- (i, T.Text) -} (TokenIdx i) ([TokenIdx i], [TokenIdx i])
+        f :: Int -> Int -> [TokenIdx i] -> Either (TokenIdx i) ([TokenIdx i], [TokenIdx i])
         f l r []
-            | l /= r = Left $ head xxs -- (second tshow $ head xxs)
+            | l /= r = Left $ head xxs 
             | otherwise = Right ([], [])
         f l r (c@(p, TKReserved x):xs') 
             | x == rightb = if l == succ r then Right ([c], xs') else g l (succ r) xs'
@@ -118,3 +120,27 @@ takeBrace leftb rightb xxs@((_, TKReserved y):_)
                 g = (.) (fmap (first ((p, TKReserved x):)) .) . f
         f l r ((p, x):xs') = first ((:) (p, x)) <$> f l r xs'
 takeBrace _ _ _ = Nothing
+
+-- | Get an argument from list of `Token` (e.g. Given the token of "f(g(a, b)), 42", return the token of "f(g(a, b))").
+readFn :: Eq i => [TokenIdx i] -> Maybe ([TokenIdx i], [TokenIdx i])
+readFn = readFn' 0 (0 :: Int)
+    where
+        readFn' li ri (cur@(_, TKReserved ","):xs)
+            | li == ri = Just ([], xs)
+            | otherwise = first (cur:) <$> readFn' li ri xs
+        readFn' li ri (cur@(_, TKReserved ")"):xs)
+            | li == ri = Just ([], xs)
+            | otherwise = first (cur:) <$> readFn' li (succ ri) xs
+        readFn' li ri (cur@(_, TKReserved "("):xs) = first (cur:) <$> readFn' (succ li) ri xs
+        readFn' li ri []
+            | li == ri = Just ([], [])
+            | otherwise = Nothing
+        readFn' li ri (x:xs) = first (x:) <$> readFn' li ri xs
+
+-- | Get arguments from list of `Token` (e.g. Given the token of "f(f(g(a, b)), 42);", return expressions that are the token of "f(g(a, b))" and the token of "42".
+takeExps :: Eq i => [TokenIdx i] -> Maybe [[TokenIdx i]]
+takeExps ((_, TKIdent _):(_, TKReserved "("):xs) = flip (maybe Nothing) (lastInit ((==TKReserved ")") . snd) xs) $ fmap (filter (not . null)) . f
+    where
+        f [] = Just []
+        f args = maybe Nothing (\(ex, ds) -> (ex:) <$> f ds) $ readFn args
+takeExps _ = Nothing

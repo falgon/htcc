@@ -44,22 +44,22 @@ defGLbl = uncurry T.append . first (flip T.append "\n" . T.append ".global ") . 
 -- | Define the .Lbeginx local label
 {-# INLINE defBegin #-}
 defBegin :: (Show i, Integral i) => i -> T.Text
-defBegin = defLLbl "begin"
+defBegin = defLLbl ".begin."
 
 -- | Define the .Lendx local label
 {-# INLINE defEnd #-}
 defEnd :: (Show i, Integral i) => i -> T.Text
-defEnd = defLLbl "end"
+defEnd = defLLbl ".end."
 
 -- | Refer the .Lbeginx label
 {-# INLINE refBegin #-}
 refBegin :: (Show i, Integral i) => i -> T.Text
-refBegin = refLLbl "begin"
+refBegin = refLLbl ".begin."
 
 -- | Refer the .Lendx label
 {-# INLINE refEnd #-}
 refEnd :: (Show i, Integral i) => i -> T.Text
-refEnd = refLLbl "end"
+refEnd = refLLbl ".end."
 
 -- | Declare intel syntax
 {-# INLINE declIS #-}

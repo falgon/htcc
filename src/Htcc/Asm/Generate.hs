@@ -44,32 +44,40 @@ declMain = I.declIS <> I.defGLbl "main"
 
 {-# INLINE prologue #-}
 prologue :: (Num i, Show i, I.BinaryInstruction i) => i -> T.Text
-prologue = (T.append (I.push rbp <> I.mov rbp rsp) . I.sub rsp) . (*8)
+prologue = T.append (I.push rbp <> I.mov rbp rsp) . I.sub rsp . (*8)
 
 {-# INLINE epilogue #-}
 epilogue :: T.Text
-epilogue = I.mov rsp rbp <> I.pop rbp <> I.ret
+epilogue = I.leave <> I.ret
 
-genLVal :: (Show i, I.BinaryInstruction i) => ATree i -> IO ()
-genLVal (ATNode (ATLVar v) _ _) = T.putStr $ I.mov rax rbp <> I.sub rax v <> I.push rax
+genLVal :: (Show i, IsOperand i, I.BinaryInstruction i) => ATree i -> IO ()
+genLVal (ATNode (ATLVar v) _ _) = T.putStr $ I.lea rax (Ref $ rbp `osub` v) <> I.push rax
 genLVal _ = err "lvalue required as left operand of assignment"
 
 -- | Simulate the stack machine by traversing an abstract syntax tree and output assembly codes.
 genStmt :: (Show i, Ord i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => IO Int -> ATree i -> IO ()
-genStmt c lc@(ATNode (ATDefFunc x Nothing) _ st) = T.putStr (I.defGLbl x <> prologue (varNum lc)) >> genStmt c st >> T.putStr epilogue
-genStmt c lc@(ATNode (ATDefFunc x (Just args)) _ st) = do
+
+genStmt c lc@(ATNode (ATDefFunc x Nothing) _ st) = T.putStr (I.defGLbl x <> prologue (varNum lc)) >> genStmt c st
+genStmt c lc@(ATNode (ATDefFunc x (Just args)) _ st) = do -- TODO: supports more than 7 arguments
     T.putStr $ I.defGLbl x <> prologue (varNum lc)
-    zipWithM_ (\(ATNode (ATLVar o) _ _) reg -> T.putStr $ I.mov (Ref $ rax `osub` o) reg) args [rdi, rsi, rdx, rcx, rn 8, rn 9]
-    -- zipWithM_ (\(ATNode (ATLVar o) _ _) reg -> T.putStrLn $ "\tmov [rbp-" <> tshow o <> "], " <> tshow reg) args [rdi, rsi, rdx, rcx, rn 8, rn 9]
+    zipWithM_ (\(ATNode (ATLVar o) _ _) reg -> T.putStr $ I.mov (Ref $ rbp `osub` o) reg) args [rdi, rsi, rdx, rcx, rn 8, rn 9]
     genStmt c st
-    T.putStr epilogue
-genStmt _ (ATNode (ATCallFunc x Nothing) _ _) = T.putStr $ I.mov rbx rsp <> I.and rsp (complement 0x0f :: Int) <> I.call x <> I.mov rsp rbx <> I.push rax
-genStmt c (ATNode (ATCallFunc x (Just args)) _ _) = let toReg = take 6 args; toStack = drop 6 args in do
+
+genStmt _ (ATNode (ATCallFunc x Nothing) _ _) = T.putStr $ I.call x <> I.push rax
+genStmt c (ATNode (ATCallFunc x (Just args)) _ _) = let (toReg, _) = splitAt 6 args in do -- TODO: supports more than 7 arguments
     zipWithM_ (\t reg -> genStmt c t >> T.putStr (I.pop reg)) toReg [rdi, rsi, rdx, rcx, rn 8, rn 9]
-    T.putStr (I.mov rbx rsp <> I.and rsp (complement 0x0f :: Int))
-    unless (null toStack) (forM_ (reverse toStack) $ genStmt c) -- FIXME: RSP should be 16 multiple. 
-    T.putStr (I.call x <> I.mov rsp rbx <> I.push rax)
-genStmt c (ATNode (ATBlock stmts) _ _) = mapM_ (genStmt c >=> const (T.putStr $ I.pop rax)) stmts
+    -- unless (null toStack) $ forM_ (reverse toStack) $ genStmt c
+    n <- c
+    T.putStr $ I.mov rax rsp <> I.and rax (0x0f :: Int)
+    T.putStr $ I.jnz $ I.refLLbl ".call." n
+    T.putStr $ I.mov rax (0 :: Int) <> I.call x
+    T.putStr $ I.jmp $ I.refLLbl ".end." n
+    T.putStr $ I.defLLbl ".call." n
+    T.putStr $ I.sub rsp (8 :: Int) <> I.mov rax (0 :: Int) <> I.call x <> I.add rsp (8 :: Int)
+    T.putStr $ I.defLLbl ".end." n
+    T.putStr $ I.push rax
+
+genStmt c (ATNode (ATBlock stmts) _ _) = mapM_ (genStmt c) stmts
 genStmt c (ATNode (ATFor exps) _ _) = do
     n <- c
     maybe (return ()) (genStmt c . fromATKindFor) $ find isATForInit exps
@@ -97,14 +105,15 @@ genStmt c (ATNode ATIf lhs rhs) = do
 genStmt c (ATNode ATElse (ATNode ATIf llhs rrhs) rhs) = do
     genStmt c llhs
     n <- c
-    T.putStr $ I.pop rax <> I.cmp rax (0 :: Int) <> I.je (I.refLLbl "else" n)
+    T.putStr $ I.pop rax <> I.cmp rax (0 :: Int) <> I.je (I.refLLbl ".else." n)
     genStmt c rrhs
     T.putStr $ I.jmp (I.refEnd n)
-    T.putStr $ I.defLLbl "else" n
+    T.putStr $ I.defLLbl ".else." n
     genStmt c rhs
     T.putStr $ I.defEnd n
 genStmt _ (ATNode ATElse _ _) = error "Asm code generator shold not reached here. Maybe abstract tree is broken it cause (bug)."
-genStmt c (ATNode ATReturn lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.mov rsp rbp <> I.pop rbp <> I.ret)
+genStmt c (ATNode ATReturn lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> epilogue) 
+genStmt c (ATNode ATExprStmt _ rhs) = genStmt c rhs >> T.putStr (I.add rsp (8 :: Int))
 genStmt c (ATNode ATNot lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.not rax <> I.push rax)
 genStmt _ (ATNode (ATNum x) _ _) = T.putStr $ I.push x
 genStmt _ n@(ATNode (ATLVar _) _ _) = genLVal n >> T.putStr (I.pop rax <> I.mov rax (Ref rax) <> I.push rax) 
@@ -151,9 +160,9 @@ parseErrExit xs (s, (i, _)) = do
 -- | Generate full assembly code from C language program
 casm :: String -> IO ()
 casm xs = let sline = T.pack xs in flip (either (tokenizeErrExit sline)) (f xs) $ \x -> 
-    flip (either $ parseErrExit sline) (parse x) $ \ys -> do
+    flip (either $ parseErrExit sline) (parse x) $ \tk -> do
         inc <- counter 0
-        -- T.putStr I.declIS >> mapM_ (genStmt inc) ys
-        T.putStr declMain >> T.putStr (prologue $ snd ys) >> mapM_ (genStmt inc) (fst ys) >> T.putStr (I.pop rax) >> T.putStr epilogue
+        T.putStr I.declIS >> mapM_ (genStmt inc) tk 
+        --T.putStr declMain >> T.putStr (prologue $ snd ys) >> mapM_ (genStmt inc) (fst ys) >> T.putStr (I.pop rax) >> T.putStr epilogue
         where
             f = tokenize :: String -> Either (Int, T.Text) [TokenIdx Int]

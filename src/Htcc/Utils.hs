@@ -11,9 +11,9 @@ General-purpose utilities
 -}
 module Htcc.Utils (
     -- * Extra functions for lists
-    safeHead,
     takeWhileLen,
     spanLen,
+    lastInit,
     -- * For Data.Text
     tshow,
     -- * For IO shortcuts
@@ -45,11 +45,14 @@ import Data.IORef (newIORef, readIORef, writeIORef)
 import System.IO (stderr)
 import System.Exit (exitFailure)
 
--- | The exception free implementation of `head`.
-{-# INLINE safeHead #-}
-safeHead :: [a] -> Maybe a
-safeHead [] = Nothing
-safeHead (x:_) = Just x
+-- | `lastInit` returns @Just (init xxs)@ when @f (last x) == True@ for then given list @xxs@.
+-- Otherwise, returns `Nothing`
+lastInit :: (a -> Bool) -> [a] -> Maybe [a]
+lastInit _ [] = Nothing
+lastInit f [x] 
+    | f x = Just [] 
+    | otherwise = Nothing
+lastInit y (x:xs) = (x:) <$> lastInit y xs
 
 -- | `takeWhileLen`, applied to a predicate @f@ and a list @xs@, returns the
 -- longest prefix (possibly empty) of @xs@ of elements that satisfy @f@ and

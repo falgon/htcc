@@ -23,8 +23,10 @@ module Htcc.Asm.Intrinsic.Instruction (
     setge,
     cqo,
     ret,
+    leave,
     jmp,
     je,
+    jnz,
     call
 ) where
 
@@ -129,6 +131,9 @@ class Show a => BinaryInstruction a where
     -- | The movzb instruction.
     movzb :: a -> Register -> T.Text
     movzb = intelSyntaxBinaryInst "movzb"
+    -- | The lea instruction.
+    lea :: BinaryInstruction b => a -> b -> T.Text
+    lea = intelSyntaxBinaryInst "lea"
 
 instance BinaryInstruction Integer
 instance BinaryInstruction Int
@@ -143,6 +148,10 @@ cqo = "\tcqo\n"
 ret :: T.Text
 ret = "\tret\n"
 
+-- | The leave instruction. This instruction is equivalent to @mov rsp, rbp@ followed by @pop rbp@.
+leave :: T.Text
+leave = "\tleave\n"
+
 -- | The jmp instruction.
 jmp :: T.Text -> T.Text
 jmp = flip T.append "\n" . T.append "\tjmp "
@@ -150,6 +159,10 @@ jmp = flip T.append "\n" . T.append "\tjmp "
 -- | The je instruction.
 je :: T.Text -> T.Text
 je = flip T.append "\n" . T.append "\tje "
+
+-- | The jnz instruction.
+jnz :: T.Text -> T.Text
+jnz = flip T.append "\n" . T.append "\tjnz "
 
 -- | The call instruction.
 call :: T.Text -> T.Text
