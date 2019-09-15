@@ -11,8 +11,10 @@ The modules of C Rules
 -}
 module Htcc.CRules (
     module Htcc.CRules.Char,
-    module Htcc.CRules.LexicalElements
+    module Htcc.CRules.LexicalElements,
+    module Htcc.CRules.Types
 ) where
 
 import Htcc.CRules.Char
 import Htcc.CRules.LexicalElements
+import Htcc.CRules.Types

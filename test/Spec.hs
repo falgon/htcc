@@ -86,7 +86,10 @@ main = runTestsEx [
     (StatementEqual.test "main() { a = 42; b = &a; return *b; }", 42),
     (StatementEqual.test "main() { a = 42; return *&a; }", 42),
     (StatementEqual.test "main() { a = 42; b = &a; c = &b; return **c; }", 42),
-    (StatementEqual.test "main() { a = 42; b = &a; *b = a * 2; return a; }", 84)
+    (StatementEqual.test "main() { a = 42; b = &a; *b = a * 2; return a; }", 84),
+    (StatementEqual.test "main() { a = 42; b = 5; return *(&b+1); }", 42),
+    (StatementEqual.test "main() { a = 42; b = 5; *(&a-1) = 53; return b; }", 53),
+    (StatementEqual.test "main() { a = 42; b = 5; *(&b+1) = 53; return a; }", 53)
     ] >> runTestsEx [
     (LinkFuncStdOut.test "main() { return test_func1(); }" ["test_func1"], Right "test/Tests/csrc/test_func1.c::test_func1(): [OK]"),
     (LinkFuncStdOut.test "main() { return test_func2(40); }" ["test_func2"], Right "test/Tests/csrc/test_func2.c::test_func2(40) outputs: \"2 3 5 7 11 13 17 19 23 29 31 37 \": [OK]") --,

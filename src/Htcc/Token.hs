@@ -37,11 +37,12 @@ import Htcc.Utils (lastInit, spanLen, dropSnd, first3)
 data Token i = TKReserved String -- ^ The reserved token
     | TKNum i -- ^ The number data
     | TKIdent String -- ^ The identifier
-    | TKReturn -- ^ The return keyword
-    | TKIf -- ^ The if keyword
-    | TKElse -- ^ The else keyword
-    | TKWhile -- ^ The while keyword
-    | TKFor -- ^ The for keyword
+    | TKReturn -- ^ The @return@ keyword
+    | TKIf -- ^ The @if@ keyword
+    | TKElse -- ^ The @else@ keyword
+    | TKWhile -- ^ The @while@ keyword
+    | TKFor -- ^ The @for@ keyword
+    | TKInt -- ^ The @int@ keyword
     | TKEmpty -- ^ The empty token (This is not used by `tokenize`, but when errors are detected during parsing, the token at error locations cannot be specified)
     deriving Eq
 
@@ -54,11 +55,12 @@ instance Show i => Show (Token i) where
     show TKElse = "else"
     show TKWhile = "while"
     show TKFor = "for"
+    show TKInt = show CR.CTInt
     show TKEmpty = ""
 
 -- | Lookup keyword from `String`. If the specified `String` is not keyword as C language, `lookupKeyword` returns `Nothing`.
 lookupKeyword :: Show i => String -> Maybe (Token i)
-lookupKeyword s = find ((==) s . show) [TKReturn, TKWhile, TKIf, TKElse, TKFor]
+lookupKeyword s = find ((==) s . show) [TKReturn, TKWhile, TKIf, TKElse, TKFor, TKInt]
 
 -- | `Token` and its index.
 type TokenIdx i = (i, Token i)

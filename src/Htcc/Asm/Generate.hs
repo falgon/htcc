@@ -18,9 +18,8 @@ module Htcc.Asm.Generate (
 
 -- Imports universal modules
 import Control.Exception (finally)
-import Control.Monad ((>=>), zipWithM_, forM_, unless)
+import Control.Monad (zipWithM_, unless)
 import Control.Monad.Fix (fix)
-import Data.Bits (complement)
 import Data.List (find)
 import Data.Either (either)
 import qualified Data.Text as T
@@ -38,10 +37,6 @@ import Htcc.Asm.Intrinsic.Operand
 import qualified Htcc.Asm.Intrinsic.Instruction as I
 import qualified Htcc.Asm.Intrinsic.Utils as I
 
-{-# INLINE declMain #-}
-declMain :: T.Text
-declMain = I.declIS <> I.defGLbl "main"
-
 {-# INLINE prologue #-}
 prologue :: (Num i, Show i, I.BinaryInstruction i) => i -> T.Text
 prologue = T.append (I.push rbp <> I.mov rbp rsp) . I.sub rsp . (*8)
@@ -50,22 +45,30 @@ prologue = T.append (I.push rbp <> I.mov rbp rsp) . I.sub rsp . (*8)
 epilogue :: T.Text
 epilogue = I.leave <> I.ret
 
+{-# INLINE load #-}
+load :: T.Text
+load = I.pop rax <> I.mov rax (Ref rax) <> I.push rax
+
+{-# INLINE store #-}
+store :: T.Text
+store = I.pop rdi <> I.pop rax <> I.mov (Ref rax) rdi <> I.push rdi
+
 genLVal :: (Show i, Ord i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => IO Int -> ATree i -> IO ()
-genLVal _ (ATNode (ATLVar v) _ _) = T.putStr $ I.lea rax (Ref $ rbp `osub` v) <> I.push rax
-genLVal c (ATNode ATDeref lhs _) = genStmt c lhs
+genLVal _ (ATNode (ATLVar _ v) _ _ _) = T.putStr $ I.lea rax (Ref $ rbp `osub` v) <> I.push rax
+genLVal c (ATNode ATDeref _ lhs _) = genStmt c lhs
 genLVal _ _ = err "lvalue required as left operand of assignment"
 
 -- | Simulate the stack machine by traversing an abstract syntax tree and output assembly codes.
 genStmt :: (Show i, Ord i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => IO Int -> ATree i -> IO ()
 
-genStmt c lc@(ATNode (ATDefFunc x Nothing) st _) = T.putStr (I.defGLbl x <> prologue (varNum lc)) >> genStmt c st
-genStmt c lc@(ATNode (ATDefFunc x (Just args)) st _) = do -- TODO: supports more than 7 arguments
+genStmt c lc@(ATNode (ATDefFunc x Nothing) _ st _) = T.putStr (I.defGLbl x <> prologue (varNum lc)) >> genStmt c st
+genStmt c lc@(ATNode (ATDefFunc x (Just args)) _ st _) = do -- TODO: supports more than 7 arguments
     T.putStr $ I.defGLbl x <> prologue (varNum lc)
-    zipWithM_ (\(ATNode (ATLVar o) _ _) reg -> T.putStr $ I.mov (Ref $ rbp `osub` o) reg) args [rdi, rsi, rdx, rcx, rn 8, rn 9]
+    zipWithM_ (\(ATNode (ATLVar _ o) _ _ _) reg -> T.putStr $ I.mov (Ref $ rbp `osub` o) reg) args [rdi, rsi, rdx, rcx, rn 8, rn 9]
     genStmt c st
 
-genStmt _ (ATNode (ATCallFunc x Nothing) _ _) = T.putStr $ I.call x <> I.push rax
-genStmt c (ATNode (ATCallFunc x (Just args)) _ _) = let (toReg, _) = splitAt 6 args in do -- TODO: supports more than 7 arguments
+genStmt _ (ATNode (ATCallFunc x Nothing) _ _ _) = T.putStr $ I.call x <> I.push rax
+genStmt c (ATNode (ATCallFunc x (Just args)) _ _ _) = let (toReg, _) = splitAt 6 args in do -- TODO: supports more than 7 arguments
     zipWithM_ (\t reg -> genStmt c t >> T.putStr (I.pop reg)) toReg [rdi, rsi, rdx, rcx, rn 8, rn 9]
     -- unless (null toStack) $ forM_ (reverse toStack) $ genStmt c
     n <- c
@@ -78,8 +81,8 @@ genStmt c (ATNode (ATCallFunc x (Just args)) _ _) = let (toReg, _) = splitAt 6 a
     T.putStr $ I.defLLbl ".end." n
     T.putStr $ I.push rax
 
-genStmt c (ATNode (ATBlock stmts) _ _) = mapM_ (genStmt c) stmts
-genStmt c (ATNode (ATFor exps) _ _) = do
+genStmt c (ATNode (ATBlock stmts) _ _ _) = mapM_ (genStmt c) stmts
+genStmt c (ATNode (ATFor exps) _ _ _) = do
     n <- c
     maybe (return ()) (genStmt c . fromATKindFor) $ find isATForInit exps
     T.putStr $ I.defBegin n
@@ -89,7 +92,7 @@ genStmt c (ATNode (ATFor exps) _ _) = do
     maybe (return ()) (genStmt c . fromATKindFor) $ find isATForIncr exps
     T.putStr $ I.jmp $ I.refBegin n
     T.putStr $ I.defEnd n 
-genStmt c (ATNode ATWhile lhs rhs) = do
+genStmt c (ATNode ATWhile _ lhs rhs) = do
     n <- c
     T.putStr $ I.defBegin n
     genStmt c lhs
@@ -97,13 +100,13 @@ genStmt c (ATNode ATWhile lhs rhs) = do
     genStmt c rhs
     T.putStr $ I.jmp $ I.refBegin n
     T.putStr $ I.defEnd n
-genStmt c (ATNode ATIf lhs rhs) = do
+genStmt c (ATNode ATIf _ lhs rhs) = do
     genStmt c lhs
     n <- c
     T.putStr $ I.pop rax <> I.cmp rax (0 :: Int) <> I.je (I.refEnd n)
     genStmt c rhs
     T.putStr $ I.defEnd n
-genStmt c (ATNode ATElse (ATNode ATIf llhs rrhs) rhs) = do
+genStmt c (ATNode ATElse _ (ATNode ATIf _ llhs rrhs) rhs) = do
     genStmt c llhs
     n <- c
     T.putStr $ I.pop rax <> I.cmp rax (0 :: Int) <> I.je (I.refLLbl ".else." n)
@@ -112,18 +115,21 @@ genStmt c (ATNode ATElse (ATNode ATIf llhs rrhs) rhs) = do
     T.putStr $ I.defLLbl ".else." n
     genStmt c rhs
     T.putStr $ I.defEnd n
-genStmt _ (ATNode ATElse _ _) = error "Asm code generator shold not reached here. Maybe abstract tree is broken it cause (bug)."
-genStmt c (ATNode ATReturn lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> epilogue) 
-genStmt c (ATNode ATExprStmt lhs _) = genStmt c lhs >> T.putStr (I.add rsp (8 :: Int))
-genStmt c (ATNode ATNot lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.not rax <> I.push rax)
-genStmt c (ATNode ATAddr lhs _) = genLVal c lhs
-genStmt c (ATNode ATDeref lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.mov rax (Ref rax) <> I.push rax)
-genStmt _ (ATNode (ATNum x) _ _) = T.putStr $ I.push x
-genStmt c n@(ATNode (ATLVar _) _ _) = genLVal c n >> T.putStr (I.pop rax <> I.mov rax (Ref rax) <> I.push rax) 
-genStmt c (ATNode ATAssign lhs rhs) = genLVal c lhs >> genStmt c rhs >> T.putStr (I.pop rdi <> I.pop rax <> I.mov (Ref rax) rdi <> I.push rdi)
-genStmt c (ATNode k lhs rhs) = flip finally (T.putStr $ I.push rax) $ genStmt c lhs *> genStmt c rhs *> T.putStr (I.pop rdi) *> T.putStr (I.pop rax) *> case k of
+genStmt _ (ATNode ATElse _ _ _) = error "Asm code generator shold not reached here. Maybe abstract tree is broken it cause (bug)."
+genStmt c (ATNode ATReturn _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> epilogue) 
+genStmt c (ATNode ATExprStmt _ lhs _) = genStmt c lhs >> T.putStr (I.add rsp (8 :: Int))
+genStmt c (ATNode ATNot _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.not rax <> I.push rax)
+genStmt c (ATNode ATAddr _ lhs _) = genLVal c lhs
+genStmt c (ATNode ATDeref _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.mov rax (Ref rax) <> I.push rax)
+genStmt _ (ATNode (ATNum x) _ _ _) = T.putStr $ I.push x
+genStmt c n@(ATNode (ATLVar _ _) _ _ _) = genLVal c n >> T.putStr load
+genStmt c (ATNode ATAssign _ lhs rhs) = genLVal c lhs >> genStmt c rhs >> T.putStr store
+genStmt c (ATNode k _ lhs rhs) = flip finally (T.putStr $ I.push rax) $ genStmt c lhs *> genStmt c rhs *> T.putStr (I.pop rdi) *> T.putStr (I.pop rax) *> case k of
     ATAdd -> T.putStr $ I.add rax rdi 
+    ATAddPtr -> T.putStr $ I.imul rdi (8 :: Int) <> I.add rax rdi
     ATSub -> T.putStr $ I.sub rax rdi 
+    ATSubPtr -> T.putStr $ I.imul rdi (8 :: Int) <> I.sub rax rdi
+    ATPtrDis -> T.putStr $ I.sub rax rdi <> I.cqo <> I.mov rdi (8 :: Int) <> I.idiv rdi
     ATMul -> T.putStr $ I.imul rax rdi 
     ATDiv -> T.putStr $ I.cqo <> I.idiv rdi
     ATMod -> T.putStr $ I.cqo <> I.idiv rdi <> I.mov rax rdx
