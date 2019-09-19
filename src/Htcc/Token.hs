@@ -21,14 +21,15 @@ module Htcc.Token (
     takeExps,
     isTKIdent,
     isTKNum,
-    isTKReserved
+    isTKReserved,
+    isTKType,
+    makeTypes
 ) where
 
 import Data.Char (isDigit, isSpace)
 import qualified Data.Text as T
 import Data.Tuple.Extra (first)
-import Data.List (find, unfoldr)
-import Data.Maybe (isNothing, fromJust)
+import Data.List (find)
 
 import qualified Htcc.CRules as CR
 import Htcc.Utils (lastInit, spanLen, dropSnd, first3)
@@ -42,7 +43,7 @@ data Token i = TKReserved String -- ^ The reserved token
     | TKElse -- ^ The @else@ keyword
     | TKWhile -- ^ The @while@ keyword
     | TKFor -- ^ The @for@ keyword
-    | TKInt -- ^ The @int@ keyword
+    | TKType CR.TypeKind -- ^ Types
     | TKEmpty -- ^ The empty token (This is not used by `tokenize`, but when errors are detected during parsing, the token at error locations cannot be specified)
     deriving Eq
 
@@ -55,12 +56,12 @@ instance Show i => Show (Token i) where
     show TKElse = "else"
     show TKWhile = "while"
     show TKFor = "for"
-    show TKInt = show CR.CTInt
+    show (TKType x) = show x
     show TKEmpty = ""
 
 -- | Lookup keyword from `String`. If the specified `String` is not keyword as C language, `lookupKeyword` returns `Nothing`.
 lookupKeyword :: Show i => String -> Maybe (Token i)
-lookupKeyword s = find ((==) s . show) [TKReturn, TKWhile, TKIf, TKElse, TKFor, TKInt]
+lookupKeyword s = find ((==) s . show) [TKReturn, TKWhile, TKIf, TKElse, TKFor, TKType CR.CTInt]
 
 -- | `Token` and its index.
 type TokenIdx i = (i, Token i)
@@ -82,6 +83,12 @@ isTKNum _ = False
 isTKReserved :: Token i -> Bool
 isTKReserved (TKReserved _) = True
 isTKReserved _ = False
+
+{-# INLINE isTKType #-}
+-- | Utility for `TKType`. When the argument is `TKType`, it returns `True`, otherwise `False`.
+isTKType :: Token i -> Bool
+isTKType (TKType _) = True
+isTKType _ = False
 
 -- | The core function of `tokenize`
 tokenize' :: (Integral i, Read i, Show i) => i -> String -> Either (i, T.Text) [TokenIdx i]
@@ -146,3 +153,9 @@ takeExps ((_, TKIdent _):(_, TKReserved "("):xs) = flip (maybe Nothing) (lastIni
         f [] = Just []
         f args = maybe Nothing (\(ex, ds) -> (ex:) <$> f ds) $ readFn args
 takeExps _ = Nothing
+
+-- | `makeTypes` returns a pair of type (including pointer type) and the remaining tokens wrapped in `Just` only if the token starts with `TKType`.
+-- Otherwise `Nothing` is returned.
+makeTypes :: Eq i => [TokenIdx i] -> Maybe (CR.TypeKind, [TokenIdx i])
+makeTypes ((_, TKType tktype):xs) = let (n, _, ds) = spanLen ((==TKReserved "*") . snd) xs in Just (foldr id tktype $ replicate n CR.CTPtr, ds)
+makeTypes _ = Nothing

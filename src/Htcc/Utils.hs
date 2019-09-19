@@ -16,6 +16,8 @@ module Htcc.Utils (
     lastInit,
     -- * For Data.Text
     tshow,
+    -- * For Data.Maybe
+    fstNothingIdx,
     -- * For IO shortcuts
     putStrErr,
     putStrLnErr,
@@ -80,6 +82,13 @@ spanLen = spanLen' 0
 -- | Convert `Show` class instance to `Data.Text`.
 tshow :: Show a => a -> T.Text
 tshow = T.pack . show
+
+-- | `fstNothingIdx` search first founded Nothing location. If it founded, returns index with wrapped `Just`. 
+-- Otherwise, returns `Nothing`.
+fstNothingIdx :: [Maybe a] -> Maybe Int
+fstNothingIdx [] = Nothing
+fstNothingIdx (Just _:xs) = (1+) <$> fstNothingIdx xs
+fstNothingIdx (Nothing:_) = Just 0
 
 -- | Standard error output shortcut (with new line).
 putStrLnErr :: T.Text -> IO ()

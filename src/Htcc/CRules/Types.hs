@@ -18,7 +18,7 @@ module Htcc.CRules.Types (
 import Numeric.Natural
 
 -- | The kinds of types in C language.
-data TypeKind = CTInt -- ^ @int@
+data TypeKind = CTInt -- ^ The type @int@ as C language
     | CTPtr TypeKind -- ^ The pointer type of `TypeKind`
     | CTUndef -- ^ Undefined type
     deriving Eq
@@ -41,3 +41,4 @@ sizeof CTUndef = 0
 derefMaybe :: TypeKind -> Maybe TypeKind
 derefMaybe (CTPtr x) = Just x
 derefMaybe _ = Nothing
+

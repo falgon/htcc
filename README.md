@@ -18,7 +18,7 @@ A tiny C language compiler (x86-64).
 - [x] function definition (up to 6 parameters)
 - [ ] types
     - [x] `int`
-    - [ ] `pointer`
+    - [x] pointer
     - [ ] `char`
     - [ ] `float`
 

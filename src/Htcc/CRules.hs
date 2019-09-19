@@ -10,6 +10,7 @@ Portability : POSIX
 The modules of C Rules
 -}
 module Htcc.CRules (
+    -- * Export modules
     module Htcc.CRules.Char,
     module Htcc.CRules.LexicalElements,
     module Htcc.CRules.Types
