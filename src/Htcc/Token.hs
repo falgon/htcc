@@ -9,7 +9,7 @@ Portability : POSIX
 
 The tokenizer
 -}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, OverloadedStrings #-}
 module Htcc.Token (
     -- * Token data types
     Token (..),
@@ -23,7 +23,8 @@ module Htcc.Token (
     isTKNum,
     isTKReserved,
     isTKType,
-    makeTypes
+    makeTypes,
+    arraySuffix
 ) where
 
 import Data.Char (isDigit, isSpace)
@@ -32,7 +33,9 @@ import Data.Tuple.Extra (first)
 import Data.List (find)
 
 import qualified Htcc.CRules as CR
-import Htcc.Utils (lastInit, spanLen, dropSnd, first3)
+import Htcc.Utils (lastInit, spanLen, dropSnd, first3, tshow, toNatural)
+
+import Data.Maybe (fromJust)
 
 -- | Token type
 data Token i = TKReserved String -- ^ The reserved token
@@ -157,5 +160,18 @@ takeExps _ = Nothing
 -- | `makeTypes` returns a pair of type (including pointer type) and the remaining tokens wrapped in `Just` only if the token starts with `TKType`.
 -- Otherwise `Nothing` is returned.
 makeTypes :: Eq i => [TokenIdx i] -> Maybe (CR.TypeKind, [TokenIdx i])
-makeTypes ((_, TKType tktype):xs) = let (n, _, ds) = spanLen ((==TKReserved "*") . snd) xs in Just (foldr id tktype $ replicate n CR.CTPtr, ds)
+makeTypes ((_, TKType tktype):xs) = Just $ first (flip CR.makePtr tktype . toNatural) $ dropSnd $ spanLen ((==TKReserved "*") . snd) xs
 makeTypes _ = Nothing
+
+-- | For a number \(n\in\mathbb{R}\), let \(k\) be the number of consecutive occurrences of @TKReserved "[", n, TKReserved "]"@ from the beginning of the token sequence.
+-- `arraySuffix` constructs an array type of the given type @t@ based on the token sequence if \(k\leq 1\), wraps it in `Right` and `Just` and returns it with the rest of the token sequence.
+-- If the token @TKReserved "["@ exists at the beginning of the token sequence, but the subsequent token sequence is invalid as an array declaration in C programming language,
+-- an error mesage and the token at the error location are returned wrapped in `Left` and `Just`. When \(k=0\), `Nothing` is returned.
+arraySuffix :: forall i. (Integral i, Show i) => CR.TypeKind -> [TokenIdx i] -> Maybe (Either (T.Text, TokenIdx i) (CR.TypeKind, [TokenIdx i]))
+arraySuffix t ((_, TKReserved "["):(_, TKNum n):(_, TKReserved "]"):xs) = flip (maybe (Just $ Right (CR.CTArray (toNatural n) t, xs))) (arraySuffix t xs) $
+    Just . fmap (first $ fromJust . CR.concatCTArray (CR.CTArray (toNatural n) t))
+arraySuffix _ ((_, TKReserved "["):cur@(_, TKNum n):xs) = let mes = "expected ']' " in 
+    Just $ Left $ if null xs then (mes <> "after '" <> tshow n <> "' token", cur) else (mes <> "before '" <> tshow (head xs) <> "' token", head xs)
+arraySuffix _ (cur@(_, TKReserved "["):_) = Just $ Left ("expected storage size after '[' token", cur)
+arraySuffix _ _ = Nothing
+

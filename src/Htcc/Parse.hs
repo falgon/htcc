@@ -40,22 +40,24 @@ module Htcc.Parse (
     expr,
     -- * Parser
     parse,
-    varNum
+    -- * Utilities
+    stackSize
 ) where
 
 import Data.Tuple.Extra (second, uncurry3, snd3)
 import Data.List (find)
 import Data.List.Split (linesBy)
 import Data.Either (isLeft, lefts, rights)
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, fromJust)
 import Data.STRef (newSTRef, readSTRef, writeSTRef)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import Control.Monad (forM, zipWithM)
 import Control.Monad.ST (runST)
 import Control.Monad.Loops (unfoldrM)
+import Numeric.Natural
 
-import Htcc.Utils (first3, second3, tshow, fstNothingIdx)
+import Htcc.Utils (first3, second3, tshow, fstNothingIdx, toNatural)
 import qualified Htcc.Token as HT
 import Htcc.CRules.Types as CT
 
@@ -150,6 +152,7 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATDefFunc T.Text (Maybe [ATree a]) -- ^ The function definition
     | ATCallFunc T.Text (Maybe [ATree a]) -- ^ The function call. It has a offset value and arguments (`Maybe`)
     | ATExprStmt -- ^ The expression of a statement
+    | ATNull (ATree a) -- ^ Indicates nothing to do
     deriving Show
 
 -- | The data structure of abstract syntax tree
@@ -161,6 +164,10 @@ data ATree a = ATEmpty -- ^ The empty node
     atR :: ATree a -- ^ The right hand side abstract tree
     } -- ^ `ATKind` representing the kind of node and the two branches `ATree` it has
     deriving Show
+
+isEmptyExprStmt :: ATree a -> Bool
+isEmptyExprStmt (ATNode ATExprStmt _ ATEmpty ATEmpty) = True
+isEmptyExprStmt _ = False
 
 -- | "expected" error message
 expectedMessage :: Show i => T.Text -> HT.TokenIdx i -> [HT.TokenIdx i] -> (T.Text, HT.TokenIdx i)
@@ -179,14 +186,14 @@ internalCE = "internal compiler error: Please submit a bug report,\nwith preproc
 -- Otherwise, `Nothing` returned.
 addLVar :: Num i => (CT.TypeKind, HT.TokenIdx i) -> [LVar i] -> Maybe (ATree i, [LVar i])
 addLVar (t, (_, HT.TKIdent ident)) vars = flip (`maybe` (\(LVar _ t' o) -> Just (ATNode (ATLVar t' o) t' ATEmpty ATEmpty, vars))) (lookupLVar (HT.TKIdent ident) vars) $
-    let lvars = LVar ident t (if null vars then 8 else offset (head vars) + 8):vars in 
+    let lvars = LVar ident t (if null vars then fromIntegral (sizeof t) else offset (head vars) + fromIntegral (sizeof t)):vars in 
         Just (ATNode (ATLVar (vtype $ head lvars) (offset $ head lvars)) t ATEmpty ATEmpty, lvars)
 addLVar _  _ = Nothing
 
 -- | `program` indicates \(\eqref{eq:eigth}\) among the comments of `inners`.
 program :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> [LVar i] -> Either (T.Text, HT.TokenIdx i) [ATree i]
 program [] _ = Right []
-program xs vars = either Left (\(ys, btn, ars) -> (btn:) <$> program ys ars) $ funcDef xs ATEmpty vars
+program xs _ = either Left (\(ys, btn, _) -> (btn:) <$> program ys []) $ funcDef xs ATEmpty [] -- TODO: support global variables
 
 -- | `funcDef` parses function definitions.
 funcDef :: (Show i, Eq i, Num i, Integral i, Read i) => [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])
@@ -204,9 +211,9 @@ funcDef tks@((_, HT.TKType _):_) at va = flip (maybe $ Left ("ISO C forbids decl
                     mk <- flip unfoldrM args $ \args' -> if null args' then return Nothing else let (Just arg) = head args' in do
                         m <- addLVar (second head arg) <$> readSTRef v
                         flip (maybe (Nothing <$ writeSTRef eri (Just $ if null (snd arg) then ("invalid argument", head tks) else ("invalid argument", head $ snd arg)))) m $ \(vat, vars') ->
-                            Just (Right vat, tail args') <$ writeSTRef v vars'
+                            Just (vat, tail args') <$ writeSTRef v vars'
                     (>>=) (readSTRef eri) $ flip maybe (return . Left) $ 
-                        fmap (second3 (flip (ATNode (ATDefFunc (T.pack fname) $ if null mk then Nothing else Just $ rights mk) CT.CTUndef) ATEmpty)) . stmt st atn <$> readSTRef v
+                        fmap (second3 (flip (ATNode (ATDefFunc (T.pack fname) $ if null mk then Nothing else Just mk) CT.CTUndef) ATEmpty)) . stmt st atn <$> readSTRef v
                 _ -> stmt tk atn vars
         funcDef' tk _ _ = Left ("invalid function definition syntax", if null tk then (0, HT.TKEmpty) else head tk)
 funcDef tk _ _ = Left ("invalid function definition syntax", if null tk then (0, HT.TKEmpty) else head tk)
@@ -235,9 +242,12 @@ stmt xxs@(cur@(_, HT.TKFor):(_, HT.TKReserved "("):_) atn vars = flip (maybe $ L
                         either (return . Left) (\(_, ert, ervars) -> Right (at ert) <$ writeSTRef v (ert, ervars)) $ 
                             -- call `stmt` to register a variable only if it matches with declaration expression_opt
                             if isATForInit (at ATEmpty) && not (null fs) && HT.isTKType (snd $ head fs) then 
-                                uncurry (stmt $ fs ++ [(fst $ last fs, HT.TKReserved ";")]) aw else uncurry (expr fs) aw
-                    if any isLeft mk then return $ Left $ head $ lefts mk else do
-                        let jo = [m | (Right m) <- mk, case fromATKindFor m of ATEmpty -> False; _ -> True] 
+                                uncurry (stmt $ fs ++ [(fst $ last fs, HT.TKReserved ";")]) aw 
+                            else if isATForInit (at ATEmpty) || isATForIncr (at ATEmpty) then 
+                                uncurry ((.) (fmap (second3 (flip (ATNode ATExprStmt CT.CTUndef) ATEmpty))) . expr fs) aw 
+                            else uncurry (expr fs) aw
+                    if any isLeft mk then return $ Left $ head $ lefts mk else do -- TODO: more efficiency
+                        let jo = [m | (Right m) <- mk, case fromATKindFor m of ATEmpty -> False; x -> not $ isEmptyExprStmt x] 
                             mkk = maybe (ATForCond (ATNode (ATNum 1) CT.CTInt ATEmpty ATEmpty) : jo) (const jo) $ find isATForCond jo
                         (anr, vsr) <- readSTRef v
                         case ds of 
@@ -249,15 +259,19 @@ stmt xxs@(cur@(_, HT.TKReserved "{"):_) _ vars = flip (maybe $ Left (internalCE,
         v <- newSTRef vars
         mk <- flip unfoldrM (init $ tail scope) $ \ert -> if null ert then return Nothing else do
             ervars <- readSTRef v
-            either (\err -> Nothing <$ writeSTRef eri (Just err)) (\(ert', erat', ervars') -> Just (Right erat', ert') <$ writeSTRef v ervars') $ stmt ert ATEmpty ervars
-        (>>=) (readSTRef eri) $ flip maybe (return . Left) $ Right . (ds, ATNode (ATBlock (rights mk)) CT.CTUndef ATEmpty ATEmpty,) <$> readSTRef v
+            either (\err -> Nothing <$ writeSTRef eri (Just err)) (\(ert', erat', ervars') -> Just (erat', ert') <$ writeSTRef v ervars') $ stmt ert ATEmpty ervars
+        (>>=) (readSTRef eri) $ flip maybe (return . Left) $ Right . (ds, ATNode (ATBlock mk) CT.CTUndef ATEmpty ATEmpty,) <$> readSTRef v
 stmt tk@(cur1@(_, HT.TKType _):_) atn vars = flip (maybe (Left ("invalid type using", cur1))) (HT.makeTypes tk) $ \(t, ds) -> case ds of -- for a variable declaration
-    cur2@(_, HT.TKIdent _):(_, HT.TKReserved ";"):ds' -> flip (maybe (Left (internalCE, cur2))) (addLVar (t, cur2) vars) $ \(lat, vars') -> Right (ds', lat, vars')
-    cur2@(_, HT.TKIdent _):(_, HT.TKReserved "="):ds' -> flip (maybe (Left (internalCE, cur2))) (addLVar (t, cur2) vars) $ \(lat, vars') -> 
+    cur2@(_, HT.TKIdent _):(_, HT.TKReserved ";"):ds' -> flip (maybe $ Left (internalCE, cur2)) (addLVar (t, cur2) vars) $ \(lat, vars') -> Right (ds', ATNode (ATNull lat) CT.CTUndef ATEmpty ATEmpty, vars')
+    cur2@(_, HT.TKIdent _):(_, HT.TKReserved "="):ds' -> flip (maybe $ Left (internalCE, cur2)) (addLVar (t, cur2) vars) $ \(lat, vars') -> 
         flip (either Left) (expr ds' atn vars') $ \(ert, erat, ervar) -> case ert of
             (_, HT.TKReserved ";"):ds'' -> Right (ds'', ATNode ATExprStmt CT.CTUndef (ATNode ATAssign (atype lat) lat erat) ATEmpty, ervar)
             _ -> Left ("expected ';' token. The subject iteration statement start here:", cur1)
-    ds' -> Left $ if null ds' then ("expected unqualified-id", cur1) else ("expected unqualified-id before '" <> tshow (snd (head ds)) <> T.singleton '\'', head ds')
+    cur2@(_, HT.TKIdent _):ds' -> flip (maybe (err ds (cur2:ds'))) (HT.arraySuffix t ds') $ either Left $ \(t', ds'') -> 
+        flip (maybe $ Left (internalCE, cur2)) (addLVar (t', cur2) vars) $ \(lat, vars') -> Right (ds'', ATNode (ATNull lat) CT.CTUndef ATEmpty ATEmpty, vars')
+    ds' -> err ds ds'
+    where
+        err ds ds' = Left $ if null ds' then ("expected unqualified-id", cur1) else ("expected unqualified-id before '" <> tshow (snd (head ds)) <> T.singleton '\'', head ds')
 stmt ((_, HT.TKReserved ";"):xs) atn vars = Right (xs, atn, vars) -- for only @;@
 stmt xs atn vars = flip (either Left) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for stmt;
     (_, HT.TKReserved ";"):ys -> Right (ys, ATNode ATExprStmt CT.CTUndef erat ATEmpty, ervars)
@@ -372,7 +386,7 @@ unary ((_, HT.TKReserved "+"):xs) at vars = factor xs at vars
 unary ((_, HT.TKReserved "-"):xs) at vars = second3 (ATNode ATSub CT.CTInt (ATNode (ATNum 0) CT.CTInt ATEmpty ATEmpty)) <$> factor xs at vars
 unary ((_, HT.TKReserved "!"):xs) at vars = second3 (\x -> ATNode ATElse CT.CTUndef (ATNode ATIf CT.CTUndef (ATNode ATEQ CT.CTInt x (ATNode (ATNum 0) CT.CTInt ATEmpty ATEmpty)) (ATNode ATReturn CT.CTUndef (ATNode (ATNum 1) CT.CTInt ATEmpty ATEmpty) ATEmpty)) (ATNode ATReturn CT.CTUndef (ATNode (ATNum 0) CT.CTInt ATEmpty ATEmpty) ATEmpty)) <$> unary xs at vars
 unary ((_, HT.TKReserved "~"):xs) at vars = second3 (flip (ATNode ATNot CT.CTInt) ATEmpty) <$> unary xs at vars
-unary ((_, HT.TKReserved "&"):xs) at vars = second3 (flip (ATNode ATAddr (CT.CTPtr CT.CTInt)) ATEmpty) <$> unary xs at vars
+unary ((_, HT.TKReserved "&"):xs) at vars = second3 (\x -> (ATNode ATAddr $ CT.CTPtr $ if CT.isCTArray (atype x) then fromJust $ derefMaybe (atype x) else atype x) x ATEmpty) <$> unary xs at vars
 unary (cur@(_, HT.TKReserved "*"):xs) at vars = flip (either Left) (unary xs at vars) $ \(ert, erat, ervars) -> 
     flip (maybe $ Left ("invalid pointer dereference", cur)) (CT.derefMaybe $ atype erat) $ \t -> Right (ert, ATNode ATDeref t erat ATEmpty, ervars)
 unary xs at vars = factor xs at vars
@@ -403,13 +417,15 @@ factor ert _ _ = Left (if null ert then "unexpected token in program" else "unex
 parse :: (Show i, Num i, Eq i, Integral i, Read i) => [HT.TokenIdx i] -> Either (T.Text, HT.TokenIdx i) [ATree i]
 parse = flip program [] 
 
--- | `varNum` returns the number of variables per function.
-varNum :: (Show i, Ord i) => ATree i -> Int
-varNum (ATNode (ATDefFunc _ args) _ body _) = S.size $ f body $ maybe S.empty (foldr (\(ATNode (ATLVar _ x) _ _ _) acc -> S.insert x acc) S.empty) args
+-- | `stackSize` returns the stack size of variable per function.
+stackSize :: (Show i, Ord i) => ATree i -> Natural
+stackSize (ATNode (ATDefFunc _ args) _ body _) = toNatural $ sum $ map (CT.sizeof . fst) $ S.toList $ f body $
+    maybe S.empty (foldr (\(ATNode (ATLVar t x) _ _ _) acc -> S.insert (t, x) acc) S.empty) args 
     where
         f ATEmpty s = s
-        f (ATNode (ATLVar _ x) _ l r) s = f l (S.insert x s) `S.union` f r (S.insert x s)
-        f (ATNode (ATBlock xs) _ l r) s = let i =  foldr (S.union . (`f` s)) s xs in f l i `S.union` f r i
-        f (ATNode (ATFor xs) _ l r) s = let i =  foldr (S.union . flip f s . fromATKindFor) S.empty xs in f l i `S.union` f r i
+        f (ATNode (ATLVar t x) _ l r) s = let i = S.insert (t, x) s in f l i `S.union` f r i
+        f (ATNode (ATBlock xs) _ l r) s = let i = foldr (S.union . (`f` s)) s xs in f l i `S.union` f r i
+        f (ATNode (ATFor xs) _ l r) s = let i = foldr (S.union . flip f s . fromATKindFor) S.empty xs in f l i `S.union` f r i
+        f (ATNode (ATNull x) _ _ _) s = f x s
         f (ATNode _ _ l r) s = f l s `S.union` f r s
-varNum _ = 0
+stackSize _ = 0

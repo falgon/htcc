@@ -78,7 +78,7 @@ main = runTestsEx [
     -- (LinkFuncRet.test "int main() { return sum16(1,1,1,1,1,1,11,10,9,8,7,6,5,4,3,2); }" ["test_func3"], 11),
     (StatementEqual.test "int f() { return 42; } int main() { return f(); }", 42),
     (StatementEqual.test "int g() { return 42; } int f() { return g(); } int main() { return f(); }", 42),
-    (StatementEqual.test "int id(int a) { return a;} int main() { int a = 1; return id(a-1) + id(1); }", 1),
+    (StatementEqual.test "int id(int a) { return a; } int main() { int a = 1; return id(a-1) + id(1); }", 1),
     (StatementEqual.test "int get1() { return 1; } int get2() { return 2; } int main() { int a = get1(); return a + get2(); }", 3),
     (StatementEqual.test "int add(int a, int b) { return a + b; } int main() { return add(1, 2); }", 3),
     (StatementEqual.test "int rec(int a) { if (a == 0) return 42; return rec(a - 1); } int main() { int b = rec(2); return 1 + 2; }", 3),
@@ -90,7 +90,17 @@ main = runTestsEx [
     (StatementEqual.test "int main() { int a = 42; int b = 5; return *(&b+1); }", 42),
     (StatementEqual.test "int main() { int a = 42; int b = 5; *(&a-1) = 53; return b; }", 53),
     (StatementEqual.test "int main() { int a = 42; int b = 5; *(&b+1) = 53; return a; }", 53),
-    (StatementEqual.test "int main() { int sum = 0; for (int i = 1; i < 4; i = i + 1) sum = sum + i; return sum; }", 6)
+    (StatementEqual.test "int main() { int sum = 0; for (int i = 1; i < 4; i = i + 1) sum = sum + i; return sum; }", 6),
+    (StatementEqual.test "int main() { int ar[2]; int* p = ar; *p = 3; return *ar; }", 3),
+    (StatementEqual.test "int main() { int ar[2]; int* p = ar; *(p + 1) = 3; return *(ar + 1); }", 3),
+    (StatementEqual.test "int main() { int ar[2]; int* p = ar; *p = 2; *(p + 1) = 3; return *ar + *(ar + 1); }", 5),
+    (StatementEqual.test "int main() { int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; return *ar; }", 1),
+    (StatementEqual.test "int main() { int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; return *(ar + 1); }", 2),
+    (StatementEqual.test "int main() { int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; return *(ar + 2); }", 3),
+    (StatementEqual.test "int f(int* p) { *p = 42; return 0; } int main() { int a = 0; f(&a); return a; }", 42),
+    (StatementEqual.test "int main() { int ar[10]; for (int i = 0; i < 10; i = i + 1) { *(ar + i) = i; } int sum = 0; for (int i = 0; i < 10; i = i + 1) { sum = sum + *(ar + i); } return sum; }", 45),
+    (StatementEqual.test "int sum(int* p, int n) { int sum = 0; for (int i = 0; i < n; i = i + 1) sum = sum + *(p + i); return sum; } int main() { int ar[10]; for (int i = 0; i < 10; i = i + 1) *(ar + i) = i; return sum(ar, 10); }", 45),
+    (StatementEqual.test "int main() { int ar[2][3]; int sum = 0; for (int i = 0; i < 2; i = i + 1) { for (int j = 0; j < 3; j = j + 1) { *(*(ar + i) + j) = i + j; sum = sum + *(*(ar + i) + j); } } return sum; } ", 9)
     ] >> runTestsEx [
     (LinkFuncStdOut.test "int main() { return test_func1(); }" ["test_func1"], Right "test/Tests/csrc/test_func1.c::test_func1(): [OK]"),
     (LinkFuncStdOut.test "int main() { return test_func2(40); }" ["test_func2"], Right "test/Tests/csrc/test_func2.c::test_func2(40) outputs: \"2 3 5 7 11 13 17 19 23 29 31 37 \": [OK]") --,

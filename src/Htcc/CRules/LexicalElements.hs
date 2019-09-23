@@ -17,7 +17,7 @@ module Htcc.CRules.LexicalElements (
 {-# INLINE charOps #-}
 -- | Valid one characters as C language
 charOps :: String
-charOps = "+-*/()<>=;{},&|^%!~"
+charOps = "+-*/()<>=;{},&|^%!~[]"
 
 {-# INLINE strOps #-}
 -- | Valid two characters as C language

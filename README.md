@@ -14,8 +14,8 @@ A tiny C language compiler (x86-64).
     - [ ] `do` statement
     - [ ] `continue` statement
 - [x] block scope
-- [x] function call (up to 6 parameters)
-- [x] function definition (up to 6 parameters)
+- [x] array (multidimensional array)
+- [x] function call/definition (up to 6 parameters)
 - [ ] types
     - [x] `int`
     - [x] pointer

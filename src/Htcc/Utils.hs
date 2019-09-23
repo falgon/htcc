@@ -9,6 +9,7 @@ Portability : POSIX
 
 General-purpose utilities
 -}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Htcc.Utils (
     -- * Extra functions for lists
     takeWhileLen,
@@ -18,6 +19,8 @@ module Htcc.Utils (
     tshow,
     -- * For Data.Maybe
     fstNothingIdx,
+    -- * For Numeric.Natural
+    toNatural,
     -- * For IO shortcuts
     putStrErr,
     putStrLnErr,
@@ -44,6 +47,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Tuple.Extra (both)
 import Data.IORef (newIORef, readIORef, writeIORef)
+import Numeric.Natural
 import System.IO (stderr)
 import System.Exit (exitFailure)
 
@@ -83,12 +87,16 @@ spanLen = spanLen' 0
 tshow :: Show a => a -> T.Text
 tshow = T.pack . show
 
--- | `fstNothingIdx` search first founded Nothing location. If it founded, returns index with wrapped `Just`. 
--- Otherwise, returns `Nothing`.
+-- | `fstNothingIdx` returns the index of the first `Nothing`. If `Nothing` is not exist in given list, returns `Nothing`.
 fstNothingIdx :: [Maybe a] -> Maybe Int
 fstNothingIdx [] = Nothing
 fstNothingIdx (Just _:xs) = (1+) <$> fstNothingIdx xs
 fstNothingIdx (Nothing:_) = Just 0
+
+-- | `toNatural` is a shortcut for @fromIntegral :: Integral i => i -> Natural@
+{-# INLINE toNatural #-}
+toNatural :: forall i. Integral i => i -> Natural
+toNatural = fromIntegral :: i -> Natural
 
 -- | Standard error output shortcut (with new line).
 putStrLnErr :: T.Text -> IO ()
