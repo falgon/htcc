@@ -24,18 +24,17 @@ module Htcc.Token (
     isTKReserved,
     isTKType,
     makeTypes,
-    arraySuffix
+    arrayDeclSuffix
 ) where
 
 import Data.Char (isDigit, isSpace)
 import qualified Data.Text as T
 import Data.Tuple.Extra (first)
 import Data.List (find)
+import Data.Maybe (fromJust)
 
 import qualified Htcc.CRules as CR
 import Htcc.Utils (lastInit, spanLen, dropSnd, first3, tshow, toNatural)
-
-import Data.Maybe (fromJust)
 
 -- | Token type
 data Token i = TKReserved String -- ^ The reserved token
@@ -133,7 +132,7 @@ takeBrace leftb rightb xxs@((_, TKReserved y):_)
         f l r ((p, x):xs') = first ((:) (p, x)) <$> f l r xs'
 takeBrace _ _ _ = Nothing
 
--- | Get an argument from list of `Token` (e.g. Given the token of "f(g(a, b)), 42", return the token of "f(g(a, b))").
+-- | Get an argument from list of `Token` (e.g. Given the token of @f(g(a, b)), 42@, return the token of @f(g(a, b))@).
 readFn :: Eq i => [TokenIdx i] -> Maybe ([TokenIdx i], [TokenIdx i])
 readFn = readFn' 0 (0 :: Int)
     where
@@ -149,7 +148,8 @@ readFn = readFn' 0 (0 :: Int)
             | otherwise = Nothing
         readFn' li ri (x:xs) = first (x:) <$> readFn' li ri xs
 
--- | Get arguments from list of `Token` (e.g. Given the token of "f(f(g(a, b)), 42);", return expressions that are the token of "f(g(a, b))" and the token of "42".
+-- | Get arguments from list of `Token` (e.g. Given the token of @f(f(g(a, b)), 42);@, 
+-- return expressions that are the token of "f(g(a, b))" and the token of "42".
 takeExps :: Eq i => [TokenIdx i] -> Maybe [[TokenIdx i]]
 takeExps ((_, TKIdent _):(_, TKReserved "("):xs) = flip (maybe Nothing) (lastInit ((==TKReserved ")") . snd) xs) $ fmap (filter (not . null)) . f
     where
@@ -157,21 +157,26 @@ takeExps ((_, TKIdent _):(_, TKReserved "("):xs) = flip (maybe Nothing) (lastIni
         f args = maybe Nothing (\(ex, ds) -> (ex:) <$> f ds) $ readFn args
 takeExps _ = Nothing
 
--- | `makeTypes` returns a pair of type (including pointer type) and the remaining tokens wrapped in `Just` only if the token starts with `TKType`.
+-- | `makeTypes` returns a pair of type (including pointer type) and the remaining tokens wrapped in 
+-- `Just` only if the token starts with `TKType`.
 -- Otherwise `Nothing` is returned.
 makeTypes :: Eq i => [TokenIdx i] -> Maybe (CR.TypeKind, [TokenIdx i])
 makeTypes ((_, TKType tktype):xs) = Just $ first (flip CR.makePtr tktype . toNatural) $ dropSnd $ spanLen ((==TKReserved "*") . snd) xs
 makeTypes _ = Nothing
 
--- | For a number \(n\in\mathbb{R}\), let \(k\) be the number of consecutive occurrences of @TKReserved "[", n, TKReserved "]"@ from the beginning of the token sequence.
--- `arraySuffix` constructs an array type of the given type @t@ based on the token sequence if \(k\leq 1\), wraps it in `Right` and `Just` and returns it with the rest of the token sequence.
--- If the token @TKReserved "["@ exists at the beginning of the token sequence, but the subsequent token sequence is invalid as an array declaration in C programming language,
--- an error mesage and the token at the error location are returned wrapped in `Left` and `Just`. When \(k=0\), `Nothing` is returned.
-arraySuffix :: forall i. (Integral i, Show i) => CR.TypeKind -> [TokenIdx i] -> Maybe (Either (T.Text, TokenIdx i) (CR.TypeKind, [TokenIdx i]))
-arraySuffix t ((_, TKReserved "["):(_, TKNum n):(_, TKReserved "]"):xs) = flip (maybe (Just $ Right (CR.CTArray (toNatural n) t, xs))) (arraySuffix t xs) $
+-- | For a number \(n\in\mathbb{R}\), let \(k\) be the number of consecutive occurrences of
+-- @TKReserved "[", n, TKReserved "]"@ from the beginning of the token sequence.
+-- `arrayDeclSuffix` constructs an array type of the given type @t@ based on 
+-- the token sequence if \(k\leq 1\), wraps it in `Right` and `Just` and returns it with the rest of the token sequence.
+-- If the token @TKReserved "["@ exists at the beginning of the token sequence, 
+-- but the subsequent token sequence is invalid as an array declaration in C programming language,
+-- an error mesage and the token at the error location are returned wrapped in
+-- `Left` and `Just`. When \(k=0\), `Nothing` is returned.
+arrayDeclSuffix :: forall i. (Integral i, Show i) => CR.TypeKind -> [TokenIdx i] -> Maybe (Either (T.Text, TokenIdx i) (CR.TypeKind, [TokenIdx i]))
+arrayDeclSuffix t ((_, TKReserved "["):(_, TKNum n):(_, TKReserved "]"):xs) = flip (maybe (Just $ Right (CR.CTArray (toNatural n) t, xs))) (arrayDeclSuffix t xs) $
     Just . fmap (first $ fromJust . CR.concatCTArray (CR.CTArray (toNatural n) t))
-arraySuffix _ ((_, TKReserved "["):cur@(_, TKNum n):xs) = let mes = "expected ']' " in 
+arrayDeclSuffix _ ((_, TKReserved "["):cur@(_, TKNum n):xs) = let mes = "expected ']' " in 
     Just $ Left $ if null xs then (mes <> "after '" <> tshow n <> "' token", cur) else (mes <> "before '" <> tshow (head xs) <> "' token", head xs)
-arraySuffix _ (cur@(_, TKReserved "["):_) = Just $ Left ("expected storage size after '[' token", cur)
-arraySuffix _ _ = Nothing
+arrayDeclSuffix _ (cur@(_, TKReserved "["):_) = Just $ Left ("expected storage size after '[' token", cur)
+arrayDeclSuffix _ _ = Nothing
 

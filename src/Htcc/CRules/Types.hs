@@ -58,7 +58,11 @@ sizeof CTUndef = 0
 -- | `derefMaybe` returns @Just x@ for the underlying type @x@ only if `TypeKind` is `CTPtr` or `CTArray`. Otherwise returns `Nothing`. 
 derefMaybe :: TypeKind -> Maybe TypeKind
 derefMaybe (CTPtr x) = Just x
-derefMaybe (CTArray _ x) = Just x
+derefMaybe ct@(CTArray _ _) = Just $ f ct
+    where
+        f (CTArray n c@(CTArray _ _)) = CTArray n (f c)
+        f (CTArray _ t) = t
+        f t = t
 derefMaybe _ = Nothing
 
 -- | `makePtr` returns a pointer of @n@-dimensional type @t@. e.g:

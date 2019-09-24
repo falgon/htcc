@@ -61,8 +61,6 @@ import Htcc.Utils (first3, second3, tshow, fstNothingIdx, toNatural)
 import qualified Htcc.Token as HT
 import Htcc.CRules.Types as CT
 
--- import Debug.Trace (trace)
-
 -- | The local variable
 data LVar a = LVar -- ^ The constructor of local variable
     {
@@ -254,7 +252,7 @@ stmt xxs@(cur@(_, HT.TKFor):(_, HT.TKReserved "("):_) atn vars = flip (maybe $ L
                             ((_, HT.TKReserved ";"):ys) -> return $ Right (ys, ATNode (ATFor mkk) CT.CTUndef ATEmpty ATEmpty, vsr)
                             _ -> return $ second3 (flip (flip (flip ATNode CT.CTUndef) ATEmpty) ATEmpty . ATFor . (mkk ++) . (:[]) . ATForStmt) <$> stmt ds anr vsr
 stmt xxs@(cur@(_, HT.TKReserved "{"):_) _ vars = flip (maybe $ Left (internalCE, cur)) (HT.takeBrace "{" "}" xxs) $ -- for compound statement
-    either (Left . ("the statement is not closed",)) $ \(scope, ds) -> runST $ do
+    either (Left . ("the compound statement is not closed",)) $ \(scope, ds) -> runST $ do
         eri <- newSTRef Nothing
         v <- newSTRef vars
         mk <- flip unfoldrM (init $ tail scope) $ \ert -> if null ert then return Nothing else do
@@ -267,7 +265,7 @@ stmt tk@(cur1@(_, HT.TKType _):_) atn vars = flip (maybe (Left ("invalid type us
         flip (either Left) (expr ds' atn vars') $ \(ert, erat, ervar) -> case ert of
             (_, HT.TKReserved ";"):ds'' -> Right (ds'', ATNode ATExprStmt CT.CTUndef (ATNode ATAssign (atype lat) lat erat) ATEmpty, ervar)
             _ -> Left ("expected ';' token. The subject iteration statement start here:", cur1)
-    cur2@(_, HT.TKIdent _):ds' -> flip (maybe (err ds (cur2:ds'))) (HT.arraySuffix t ds') $ either Left $ \(t', ds'') -> 
+    cur2@(_, HT.TKIdent _):ds' -> flip (maybe (err ds (cur2:ds'))) (HT.arrayDeclSuffix t ds') $ either Left $ \(t', ds'') -> 
         flip (maybe $ Left (internalCE, cur2)) (addLVar (t', cur2) vars) $ \(lat, vars') -> Right (ds'', ATNode (ATNull lat) CT.CTUndef ATEmpty ATEmpty, vars')
     ds' -> err ds ds'
     where
@@ -355,25 +353,31 @@ relational = inners shift [("<", ATLT), ("<=", ATLEQ), (">", ATGT), (">=", ATGEQ
 -- | `shift` indicates \(\eqref{eq:thirteenth}\\) among the comments of `inners`.
 shift :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])
 shift = inners add [("<<", ATShl), (">>", ATShr)]
+        
+{-# INLINE addKind #-}
+addKind :: Show i => ATree i -> ATree i -> Maybe (ATKind i, CT.TypeKind)    
+addKind lhs rhs
+    | atype lhs == CT.CTInt && atype rhs == CT.CTInt = Just (ATAdd, CT.CTInt)
+    | isJust (derefMaybe $ atype lhs) && atype rhs == CT.CTInt = Just (ATAddPtr, atype lhs)
+    | atype lhs == CT.CTInt && isJust (derefMaybe $ atype rhs) = Just (ATAddPtr, atype rhs)
+    | otherwise = Nothing
+        
+{-# INLINE subKind #-}
+subKind :: ATree i -> ATree i -> Maybe (ATKind i, CT.TypeKind)
+subKind lhs rhs
+    | atype lhs == CT.CTInt && atype rhs == CT.CTInt = Just (ATSub, CT.CTInt)
+    | isJust (derefMaybe $ atype lhs) && atype rhs == CT.CTInt = Just (ATSubPtr, atype lhs)
+    | isJust (derefMaybe $ atype lhs) && isJust (derefMaybe $ atype rhs) = Just (ATPtrDis, atype lhs)
+    | otherwise = Nothing
 
 -- | `add` indicates \(\eqref{eq:first}\) among the comments of `inners`.
 add :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])
 add xs atn vars = flip (either Left) (term xs atn vars) $ uncurry3 add'
     where
-        addAlloc lhs rhs
-            | atype lhs == CT.CTInt && atype rhs == CT.CTInt = Just (ATAdd, CT.CTInt)
-            | isJust (derefMaybe $ atype lhs) && atype rhs == CT.CTInt = Just (ATAddPtr, atype lhs)
-            | atype lhs == CT.CTInt && isJust (derefMaybe $ atype rhs) = Just (ATAddPtr, atype rhs)
-            | otherwise = Nothing
-        subAlloc lhs rhs
-            | atype lhs == CT.CTInt && atype rhs == CT.CTInt = Just (ATSub, CT.CTInt)
-            | isJust (derefMaybe $ atype lhs) && atype rhs == CT.CTInt = Just (ATSubPtr, atype lhs)
-            | isJust (derefMaybe $ atype lhs) && isJust (derefMaybe $ atype rhs) = Just (ATPtrDis, atype lhs)
-            | otherwise = Nothing
         add' (cur@(_, HT.TKReserved "+"):ys) era ars = flip (either Left) (term ys era ars) $ \zz -> 
-            flip (maybe (Left ("Invalid operands", cur))) (addAlloc era $ snd3 zz) $ \(at, ctype) -> uncurry3 id $ first3 add' $ second3 (ATNode at ctype era) zz
+            flip (maybe (Left ("invalid operands", cur))) (addKind era $ snd3 zz) $ \(at, ctype) -> uncurry3 id $ first3 add' $ second3 (ATNode at ctype era) zz
         add' (cur@(_, HT.TKReserved "-"):ys) era ars = flip (either Left) (term ys era ars) $ \zz -> 
-            flip (maybe (Left ("Invalid operands", cur))) (subAlloc era $ snd3 zz) $ \(at, ctype) -> uncurry3 id $ first3 add' $ second3 (ATNode at ctype era) zz
+            flip (maybe (Left ("invalid operands", cur))) (subKind era $ snd3 zz) $ \(at, ctype) -> uncurry3 id $ first3 add' $ second3 (ATNode at ctype era) zz
         add' ert erat ars = Right (ert, erat, ars)
 
 -- | `term` indicates \(\eqref{eq:second}\) amont the comments of `inners`.
@@ -389,7 +393,14 @@ unary ((_, HT.TKReserved "~"):xs) at vars = second3 (flip (ATNode ATNot CT.CTInt
 unary ((_, HT.TKReserved "&"):xs) at vars = second3 (\x -> (ATNode ATAddr $ CT.CTPtr $ if CT.isCTArray (atype x) then fromJust $ derefMaybe (atype x) else atype x) x ATEmpty) <$> unary xs at vars
 unary (cur@(_, HT.TKReserved "*"):xs) at vars = flip (either Left) (unary xs at vars) $ \(ert, erat, ervars) -> 
     flip (maybe $ Left ("invalid pointer dereference", cur)) (CT.derefMaybe $ atype erat) $ \t -> Right (ert, ATNode ATDeref t erat ATEmpty, ervars)
-unary xs at vars = factor xs at vars
+unary xs at vars = either Left (uncurry3 f) $ factor xs at vars
+    where
+        f (cur@(_, HT.TKReserved "["):xs') node ervars = flip (either Left) (expr xs' node ervars) $ \(ert', exp', ervars') -> case ert' of
+            (_, HT.TKReserved "]"):xs'' -> flip (maybe $ Left ("invalid operands", cur)) (addKind node exp') $ \(atk', typek) -> let exp'' = ATNode atk' typek node exp' in
+                flip (maybe $ Left ("subscripted value is neither array nor pointer nor vector", if null xs then (0, HT.TKEmpty) else head xs)) 
+                    (CT.derefMaybe $ atype exp'') $ \t -> f xs'' (ATNode ATDeref t exp'' ATEmpty) ervars'
+            _ -> Left $ if null ert' then ("expected expression after '[' token", cur) else ("expected expression before '" <> tshow (snd (head ert')) <> "' token", head ert')
+        f ert node ervars = Right (ert, node, ervars)
 
 -- | `factor` indicates \(\eqref{eq:third}\) amount the comments of `inners`.
 factor :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])
@@ -429,3 +440,4 @@ stackSize (ATNode (ATDefFunc _ args) _ body _) = toNatural $ sum $ map (CT.sizeo
         f (ATNode (ATNull x) _ _ _) s = f x s
         f (ATNode _ _ l r) s = f l s `S.union` f r s
 stackSize _ = 0
+
