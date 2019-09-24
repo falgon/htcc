@@ -355,19 +355,19 @@ shift :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> ATree i -> [LV
 shift = inners add [("<<", ATShl), (">>", ATShr)]
         
 {-# INLINE addKind #-}
-addKind :: Show i => ATree i -> ATree i -> Maybe (ATKind i, CT.TypeKind)    
+addKind :: Show i => ATree i -> ATree i -> Maybe (ATree i)
 addKind lhs rhs
-    | atype lhs == CT.CTInt && atype rhs == CT.CTInt = Just (ATAdd, CT.CTInt)
-    | isJust (derefMaybe $ atype lhs) && atype rhs == CT.CTInt = Just (ATAddPtr, atype lhs)
-    | atype lhs == CT.CTInt && isJust (derefMaybe $ atype rhs) = Just (ATAddPtr, atype rhs)
+    | all (CT.isFundamental . atype) [lhs, rhs] = Just $ ATNode ATAdd (max (atype lhs) (atype rhs)) lhs rhs
+    | isJust (derefMaybe $ atype lhs) && CT.isFundamental (atype rhs) = Just $ ATNode ATAddPtr (atype lhs) lhs rhs
+    | CT.isFundamental (atype lhs) && isJust (derefMaybe $ atype rhs) = Just $ ATNode ATAddPtr (atype rhs) rhs lhs
     | otherwise = Nothing
-        
+
 {-# INLINE subKind #-}
-subKind :: ATree i -> ATree i -> Maybe (ATKind i, CT.TypeKind)
+subKind :: ATree i -> ATree i -> Maybe (ATree i)
 subKind lhs rhs
-    | atype lhs == CT.CTInt && atype rhs == CT.CTInt = Just (ATSub, CT.CTInt)
-    | isJust (derefMaybe $ atype lhs) && atype rhs == CT.CTInt = Just (ATSubPtr, atype lhs)
-    | isJust (derefMaybe $ atype lhs) && isJust (derefMaybe $ atype rhs) = Just (ATPtrDis, atype lhs)
+    | all (CT.isFundamental . atype) [lhs, rhs] = Just $ ATNode ATSub (max (atype lhs) (atype rhs)) lhs rhs
+    | isJust (derefMaybe $ atype lhs) && CT.isFundamental (atype rhs) = Just $ ATNode ATSubPtr (atype lhs) lhs rhs
+    | all (isJust . derefMaybe . atype) [lhs, rhs] = Just $ ATNode ATPtrDis (atype lhs) lhs rhs
     | otherwise = Nothing
 
 -- | `add` indicates \(\eqref{eq:first}\) among the comments of `inners`.
@@ -375,9 +375,9 @@ add :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> ATree i -> [LVar
 add xs atn vars = flip (either Left) (term xs atn vars) $ uncurry3 add'
     where
         add' (cur@(_, HT.TKReserved "+"):ys) era ars = flip (either Left) (term ys era ars) $ \zz -> 
-            flip (maybe (Left ("invalid operands", cur))) (addKind era $ snd3 zz) $ \(at, ctype) -> uncurry3 id $ first3 add' $ second3 (ATNode at ctype era) zz
+            flip (maybe (Left ("invalid operands", cur))) (addKind era $ snd3 zz) $ \nat -> uncurry3 id $ first3 add' $ second3 (const nat) zz
         add' (cur@(_, HT.TKReserved "-"):ys) era ars = flip (either Left) (term ys era ars) $ \zz -> 
-            flip (maybe (Left ("invalid operands", cur))) (subKind era $ snd3 zz) $ \(at, ctype) -> uncurry3 id $ first3 add' $ second3 (ATNode at ctype era) zz
+            flip (maybe (Left ("invalid operands", cur))) (subKind era $ snd3 zz) $ \nat -> uncurry3 id $ first3 add' $ second3 (const nat) zz
         add' ert erat ars = Right (ert, erat, ars)
 
 -- | `term` indicates \(\eqref{eq:second}\) amont the comments of `inners`.
@@ -395,12 +395,12 @@ unary (cur@(_, HT.TKReserved "*"):xs) at vars = flip (either Left) (unary xs at 
     flip (maybe $ Left ("invalid pointer dereference", cur)) (CT.derefMaybe $ atype erat) $ \t -> Right (ert, ATNode ATDeref t erat ATEmpty, ervars)
 unary xs at vars = either Left (uncurry3 f) $ factor xs at vars
     where
-        f (cur@(_, HT.TKReserved "["):xs') node ervars = flip (either Left) (expr xs' node ervars) $ \(ert', exp', ervars') -> case ert' of
-            (_, HT.TKReserved "]"):xs'' -> flip (maybe $ Left ("invalid operands", cur)) (addKind node exp') $ \(atk', typek) -> let exp'' = ATNode atk' typek node exp' in
+        f (cur@(_, HT.TKReserved "["):xs') erat ervars = flip (either Left) (expr xs' erat ervars) $ \(ert', erat', ervars') -> case ert' of
+            (_, HT.TKReserved "]"):xs'' -> flip (maybe $ Left ("invalid operands", cur)) (addKind erat erat') $ \erat'' -> -- = ATNode atk' typek erat erat' in
                 flip (maybe $ Left ("subscripted value is neither array nor pointer nor vector", if null xs then (0, HT.TKEmpty) else head xs)) 
-                    (CT.derefMaybe $ atype exp'') $ \t -> f xs'' (ATNode ATDeref t exp'' ATEmpty) ervars'
+                    (CT.derefMaybe $ atype erat'') $ \t -> f xs'' (ATNode ATDeref t erat'' ATEmpty) ervars'
             _ -> Left $ if null ert' then ("expected expression after '[' token", cur) else ("expected expression before '" <> tshow (snd (head ert')) <> "' token", head ert')
-        f ert node ervars = Right (ert, node, ervars)
+        f ert erat ervars = Right (ert, erat, ervars)
 
 -- | `factor` indicates \(\eqref{eq:third}\) amount the comments of `inners`.
 factor :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, [LVar i])

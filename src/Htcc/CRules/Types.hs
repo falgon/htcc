@@ -20,11 +20,16 @@ module Htcc.CRules.Types (
     concatCTArray,
     isCTArray,
     -- * Type traits
-    removeAllExtents
+    removeAllExtents,
+    isPtr,
+    isArray,
+    isFundamental
 ) where
 
 import Numeric.Natural
 import Data.List (foldl')
+
+import Htcc.Utils (lor)
 
 -- | The kinds of types in C language.
 data TypeKind = CTInt -- ^ The type @int@ as C language
@@ -101,10 +106,27 @@ concatCTArray l@(CTArray _ _) r@(CTArray n r')
         f l' _ = l'
 concatCTArray _ _ = Nothing
 
--- | `removeAllExtents` is the same as @std::remove_all_extent@ defined in C++11 @\<type_traits\>@ 
+-- | `removeAllExtents` is the same as @std::remove_all_extents@ defined in C++11 @\<type_traits\>@ 
 -- (See also: <http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2012/n3337.pdf N3337>/§ 20.9.7.4) header.
 -- If type @T@ is a multidimensional array of type @X@, type @X@ is returned.
 -- Otherwise, it returns type @T@.
 removeAllExtents :: TypeKind -> TypeKind
 removeAllExtents (CTArray _ t) = removeAllExtents t
 removeAllExtents x = x
+
+-- | `isPtr` returns `True` only if the type is `CTPtr`, otherwise returns `False`.
+{-# INLINE isPtr #-}
+isPtr :: TypeKind -> Bool
+isPtr (CTPtr _) = True
+isPtr _ = False
+
+-- | `isArray` returns `True only if the type is `CTArray`, otherwise returns `False`.
+{-# INLINE isArray #-}
+isArray :: TypeKind -> Bool
+isArray (CTArray _ _) = True
+isArray _ = False
+
+-- | `isFundamental` returns `True` only if the type is fundamental type (See also: § 3.9.1), otherwise returns `False`.
+{-# INLINE isFundamental #-}
+isFundamental :: TypeKind -> Bool
+isFundamental = not . lor [isPtr, isArray]

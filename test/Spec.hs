@@ -129,7 +129,8 @@ main = runTestsEx [
     (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar; }", fromIntegral $ CT.sizeof CT.CTInt),
     (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar) + 1; }", succ $ fromIntegral $ CT.sizeof CT.CTInt),
     (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar + 1; }", succ $ fromIntegral $ CT.sizeof CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar + 1); }", fromIntegral $ CT.sizeof CT.CTInt)
+    (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar + 1); }", fromIntegral $ CT.sizeof CT.CTInt),
+    (StatementEqual.test "int main() { int ar[2]; 2[ar] = 42; return ar[2]; }", 42)
     ] >> runTestsEx [
     (LinkFuncStdOut.test "int main() { return test_func1(); }" ["test_func1"], Right "test/Tests/csrc/test_func1.c::test_func1(): [OK]"),
     (LinkFuncStdOut.test "int main() { return test_func2(40); }" ["test_func2"], Right "test/Tests/csrc/test_func2.c::test_func2(40) outputs: \"2 3 5 7 11 13 17 19 23 29 31 37 \": [OK]") --,
