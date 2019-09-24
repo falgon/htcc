@@ -66,6 +66,7 @@ derefMaybe ct@(CTArray _ _) = Just $ f ct
 derefMaybe _ = Nothing
 
 -- | `makePtr` returns a pointer of @n@-dimensional type @t@. e.g:
+-- 
 -- >>> makePtr 2 CTInt
 -- int**
 -- >>> makePtr 2 (CTPtr CTInt)
@@ -76,6 +77,7 @@ makePtr :: Natural -> TypeKind -> TypeKind
 makePtr n t = foldr id t $ replicate (fromIntegral n) CTPtr
 
 -- | `makeArray` returns a multidimensional arary based on the arguments (list of each dimension). e.g:
+--
 -- >>> makeArray [1,2] CTInt
 -- int[1][2]
 -- >>> makeArray [1,2] (CTArray 2 CTInt)
@@ -85,6 +87,7 @@ makeArray ns t = foldl' (flip CTArray) t ns
 
 -- | Only if both arguments is CTArray, `concatCTArray` returns a new multidimensional arary by combining the types of multidimensional arrays as follows.
 -- Otherwise, `Nothing` is returned:
+--
 -- >>> makeArray [1,2] CTInt `concatCTArray` makeArray [3,4] CTInt -- Combine 2D array of 1D array and 4D array of 3D array to make 4D array of 3D array of 2D array of 1D array 
 -- Just int[1][2][3][4]
 -- >>> CTInt `concatCTArray` CTArray 2 CTInt
@@ -98,7 +101,7 @@ concatCTArray l@(CTArray _ _) r@(CTArray n r')
         f l' _ = l'
 concatCTArray _ _ = Nothing
 
--- | `removeAllExtents` is the same as @std::remove_all_extent@ defined in C++11 @<type_traits>@ 
+-- | `removeAllExtents` is the same as @std::remove_all_extent@ defined in C++11 @\<type_traits\>@ 
 -- (See also: <http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2012/n3337.pdf N3337>/§ 20.9.7.4) header.
 -- If type @T@ is a multidimensional array of type @X@, type @X@ is returned.
 -- Otherwise, it returns type @T@.

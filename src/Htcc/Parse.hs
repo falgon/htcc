@@ -417,6 +417,7 @@ factor (cur1@(_, HT.TKIdent v):cur2@(_, HT.TKReserved "("):xs) _ vars = flip (ma
         if any isLeft expl then return $ Left $ head $ lefts expl else do
             vars' <- readSTRef mk
             return $ Right (ds, ATNode (ATCallFunc (T.pack v) (Just $ rights expl)) CT.CTInt ATEmpty ATEmpty, vars')
+factor ((_, HT.TKSizeof):xs) atn vars = fmap (second3 (\x -> ATNode (ATNum (fromIntegral $ CT.sizeof $ atype x)) CT.CTInt ATEmpty ATEmpty)) $ unary xs atn vars -- for `sizeof` -- TODO: the type of sizeof must be @size_t@
 factor (cur@(_, HT.TKIdent v):xs) _ vars = maybe (Left ("undefined variable", cur)) (\(LVar _ t o) -> Right (xs, ATNode (ATLVar t o) t ATEmpty ATEmpty, vars)) $ -- for declared variables
     lookupLVar (HT.TKIdent v) vars -- if the variable is not declared, it returns error wrapped with `Left`
 factor ert _ _ = Left (if null ert then "unexpected token in program" else "unexpected token '" <> tshow (snd (head ert)) <> "' in program", 

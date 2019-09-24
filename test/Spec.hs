@@ -6,6 +6,8 @@ import qualified Tests.Test1 as StatementEqual
 import qualified Tests.Test2 as LinkFuncRet
 import qualified Tests.Test3 as LinkFuncStdOut
 
+import qualified Htcc.CRules.Types as CT
+
 main :: IO ()
 main = runTestsEx [
     (StatementEqual.test "int main() { return 42; }", 42),
@@ -117,7 +119,17 @@ main = runTestsEx [
     (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[3] = 42; return ar[1][0]; }", 42),
     (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[4] = 42; return ar[1][1]; }", 42),
     (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[5] = 42; return ar[1][2]; }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[6] = 42; return ar[2][0]; }", 42)
+    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[6] = 42; return ar[2][0]; }", 42),
+    (StatementEqual.test "int main() { int a; return sizeof(a); }", fromIntegral $ CT.sizeof CT.CTInt),
+    (StatementEqual.test "int main() { int a; return sizeof a; }", fromIntegral $ CT.sizeof CT.CTInt),
+    (StatementEqual.test "int main() { int* p; return sizeof p; }", fromIntegral $ CT.sizeof $ CT.CTPtr CT.CTInt),
+    (StatementEqual.test "int main() { int ar[3]; return sizeof ar; }", fromIntegral $ CT.sizeof $ CT.CTArray 3 CT.CTInt),
+    (StatementEqual.test "int main() { int ar[3][5]; return sizeof ar; }", fromIntegral $ CT.sizeof $ CT.CTArray 5 $ CT.CTArray 3 CT.CTInt),
+    (StatementEqual.test "int main() { int ar[3][5]; return sizeof *ar; }", fromIntegral $ CT.sizeof $ CT.CTArray 5 CT.CTInt),
+    (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar; }", fromIntegral $ CT.sizeof CT.CTInt),
+    (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar) + 1; }", succ $ fromIntegral $ CT.sizeof CT.CTInt),
+    (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar + 1; }", succ $ fromIntegral $ CT.sizeof CT.CTInt),
+    (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar + 1); }", fromIntegral $ CT.sizeof CT.CTInt)
     ] >> runTestsEx [
     (LinkFuncStdOut.test "int main() { return test_func1(); }" ["test_func1"], Right "test/Tests/csrc/test_func1.c::test_func1(): [OK]"),
     (LinkFuncStdOut.test "int main() { return test_func2(40); }" ["test_func2"], Right "test/Tests/csrc/test_func2.c::test_func2(40) outputs: \"2 3 5 7 11 13 17 19 23 29 31 37 \": [OK]") --,

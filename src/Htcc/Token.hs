@@ -45,6 +45,7 @@ data Token i = TKReserved String -- ^ The reserved token
     | TKElse -- ^ The @else@ keyword
     | TKWhile -- ^ The @while@ keyword
     | TKFor -- ^ The @for@ keyword
+    | TKSizeof -- ^ The @sizeof@ keyword
     | TKType CR.TypeKind -- ^ Types
     | TKEmpty -- ^ The empty token (This is not used by `tokenize`, but when errors are detected during parsing, the token at error locations cannot be specified)
     deriving Eq
@@ -58,12 +59,13 @@ instance Show i => Show (Token i) where
     show TKElse = "else"
     show TKWhile = "while"
     show TKFor = "for"
+    show TKSizeof = "sizeof"
     show (TKType x) = show x
     show TKEmpty = ""
 
 -- | Lookup keyword from `String`. If the specified `String` is not keyword as C language, `lookupKeyword` returns `Nothing`.
 lookupKeyword :: Show i => String -> Maybe (Token i)
-lookupKeyword s = find ((==) s . show) [TKReturn, TKWhile, TKIf, TKElse, TKFor, TKType CR.CTInt]
+lookupKeyword s = find ((==) s . show) [TKReturn, TKWhile, TKIf, TKElse, TKFor, TKSizeof, TKType CR.CTInt]
 
 -- | `Token` and its index.
 type TokenIdx i = (i, Token i)
@@ -132,7 +134,7 @@ takeBrace leftb rightb xxs@((_, TKReserved y):_)
         f l r ((p, x):xs') = first ((:) (p, x)) <$> f l r xs'
 takeBrace _ _ _ = Nothing
 
--- | Get an argument from list of `Token` (e.g. Given the token of @f(g(a, b)), 42@, return the token of @f(g(a, b))@).
+-- | Get an argument from list of `Token` (e.g: Given the token of @f(g(a, b)), 42@, return the token of @f(g(a, b))@).
 readFn :: Eq i => [TokenIdx i] -> Maybe ([TokenIdx i], [TokenIdx i])
 readFn = readFn' 0 (0 :: Int)
     where
@@ -148,7 +150,7 @@ readFn = readFn' 0 (0 :: Int)
             | otherwise = Nothing
         readFn' li ri (x:xs) = first (x:) <$> readFn' li ri xs
 
--- | Get arguments from list of `Token` (e.g. Given the token of @f(f(g(a, b)), 42);@, 
+-- | Get arguments from list of `Token` (e.g: Given the token of @f(f(g(a, b)), 42);@, 
 -- return expressions that are the token of "f(g(a, b))" and the token of "42".
 takeExps :: Eq i => [TokenIdx i] -> Maybe [[TokenIdx i]]
 takeExps ((_, TKIdent _):(_, TKReserved "("):xs) = flip (maybe Nothing) (lastInit ((==TKReserved ")") . snd) xs) $ fmap (filter (not . null)) . f
