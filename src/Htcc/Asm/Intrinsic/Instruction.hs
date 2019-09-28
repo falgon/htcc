@@ -13,6 +13,7 @@ Portability : POSIX
 
 module Htcc.Asm.Intrinsic.Instruction (
     -- * Instructions
+    IntermediateInstruction (..),
     UnaryInstruction (..),
     BinaryInstruction (..),
     sete,
@@ -43,6 +44,12 @@ intelSyntaxUnaryInst = flip (.) (T.append " " . flip T.append "\n" . tshow) . (.
 {-# INLINE intelSyntaxBinaryInst #-}
 intelSyntaxBinaryInst :: (Show a, Show b) => T.Text -> a -> b -> T.Text
 intelSyntaxBinaryInst = (.) (flip (.) (T.append ", " . flip T.append "\n" . tshow) . (.) (T.append "\t")) . flip (.) ((.) (T.append " ") . T.append . tshow) . (.) . T.append
+
+-- | A data type `IntermediateInstruction` represents the intermediate part of the instruction.
+data IntermediateInstruction = Offset T.Text -- ^ The @offset@ instruction
+
+instance Show IntermediateInstruction where
+    show (Offset s) = "offset " ++ T.unpack s
 
 -- | A class of x86_64 instructions with unary arguments.
 class Show a => UnaryInstruction a where
@@ -92,6 +99,7 @@ setge = intelSyntaxUnaryInst "setge"
 instance UnaryInstruction Integer
 instance UnaryInstruction Int
 instance UnaryInstruction Register
+instance UnaryInstruction IntermediateInstruction
 
 -- | A class of x86_64 instructions with binary arguments.
 class Show a => BinaryInstruction a where

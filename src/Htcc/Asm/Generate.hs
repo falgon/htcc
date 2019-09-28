@@ -22,6 +22,7 @@ import Control.Monad (zipWithM_, unless)
 import Control.Monad.Fix (fix)
 import Data.List (find)
 import Data.Either (either)
+import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import System.Exit (exitFailure)
@@ -29,7 +30,7 @@ import System.Exit (exitFailure)
 -- Imports Tokenizer and parser
 import Htcc.Utils (err, putStrLnErr, putStrErr, counter, tshow, toInts)
 import Htcc.Token (TokenIdx, tokenize)
-import Htcc.Parse (ATKind (..), ATree (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, parse, stackSize)
+import Htcc.Parse (ATKind (..), ATree (..), GVar (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, parse, stackSize)
 
 -- Imports about assembly
 import Htcc.Asm.Intrinsic.Register
@@ -56,6 +57,7 @@ store = I.pop rdi <> I.pop rax <> I.mov (Ref rax) rdi <> I.push rdi
 
 genAddr :: (Show i, Ord i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => IO Int -> ATree i -> IO ()
 genAddr _ (ATNode (ATLVar _ v) _ _ _) = T.putStr $ I.lea rax (Ref $ rbp `osub` v) <> I.push rax
+genAddr _ (ATNode (ATGVar _ n) _ _ _) = T.putStr $ I.push (I.Offset n)
 genAddr c (ATNode ATDeref _ lhs _) = genStmt c lhs
 genAddr _ _ = err "lvalue required as left operand of assignment"
 
@@ -127,6 +129,7 @@ genStmt c (ATNode ATAddr _ lhs _) = genAddr c lhs
 genStmt c (ATNode ATDeref t lhs _) = genStmt c lhs >> unless (CR.isCTArray t) (T.putStr load) 
 genStmt _ (ATNode (ATNum x) _ _ _) = T.putStr $ I.push x
 genStmt c n@(ATNode (ATLVar _ _) t _ _) = genAddr c n >> unless (CR.isCTArray t) (T.putStr load)
+genStmt c n@(ATNode (ATGVar _ _) t _ _) = genAddr c n >> unless (CR.isCTArray t) (T.putStr load)
 genStmt c (ATNode ATAssign _ lhs rhs) = genLval c lhs >> genStmt c rhs >> T.putStr store
 genStmt _ (ATNode (ATNull _) _ _ _) = return ()
 genStmt c (ATNode k t lhs rhs) = flip finally (T.putStr $ I.push rax) $ genStmt c lhs *> genStmt c rhs *> T.putStr (I.pop rdi) *> T.putStr (I.pop rax) *> case k of
@@ -174,8 +177,11 @@ parseErrExit xs (s, (i, _)) = do
 -- | Generate full assembly code from C language program
 casm :: String -> IO ()
 casm xs = let sline = T.pack xs in flip (either (tokenizeErrExit sline)) (f xs) $ \x -> 
-    flip (either $ parseErrExit sline) (parse x) $ \tk -> do
+    flip (either $ parseErrExit sline) (parse x) $ \(tk, gvars) -> do
         inc <- counter 0
-        T.putStr I.declIS >> mapM_ (genStmt inc) tk 
+        T.putStr I.declIS
+        T.putStrLn ".data"
+        mapM_ (\(n, GVar t) -> T.putStrLn (n <> T.singleton ':') >> T.putStrLn ("\t.zero " <> tshow (CR.sizeof t))) $ M.toList gvars
+        T.putStrLn ".text" >> mapM_ (genStmt inc) tk 
         where
             f = tokenize :: String -> Either (Int, T.Text) [TokenIdx Int]

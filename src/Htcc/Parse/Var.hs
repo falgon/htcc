@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, TupleSections #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-|
 Module      : Htcc.Parse.Var
 Description : The Data type of variables and its utilities used in parsing
@@ -12,84 +12,91 @@ The Data type of variables and its utilities used in parsing
 -}
 module Htcc.Parse.Var (
     -- * The data type
-    Var (..),
+    GVar (..),
+    LVar (..),
+    Vars (..),
     -- * Functions for adding and searching for variables
     lookupLVar,
     lookupGVar,
     lookupVar,
     addLVar,
     addGVar,
-    -- * Helper functions
-    isGVar,
-    isLVar
+    resetLocal
 ) where
 
 import Control.Applicative ((<|>))
 import qualified Data.Text as T
 import Data.List (find)
+import qualified Data.Map.Strict as M
 
 import qualified Htcc.Token as HT
 import qualified Htcc.CRules.Types as CT
 import Htcc.Parse.AST (ATree (..), ATKind (..))
+import Htcc.Parse.Utils (internalCE)
+import Htcc.Utils (tshow)
 
--- | The data type of variable
-data Var a = GVar -- ^ The constructor of global variable
-    { 
-        gname :: String, -- ^ The name of global variable
-        gvtype :: CT.TypeKind -- ^ The type of global variable
-    } -- ^ The data type of global variable
-    | LVar -- ^ The constructor of local variable
+
+-- | The data type of global variable
+newtype GVar = GVar -- ^ The constructor of global variable
     {
-        lname :: String, -- ^ The name of local variable
+        gvtype :: CT.TypeKind -- ^ The type of global variable
+    } deriving (Eq, Ord, Show)
+
+-- | The data type of local variable
+data LVar a = LVar -- ^ The constructor of local variable
+    {
         lvtype :: CT.TypeKind, -- ^ The type of local variable
-        offset :: a -- ^ The offset from RBP
-    } -- ^ The data type of local variable
-    deriving (Show, Eq)
+        rbpOffset :: a -- ^ The offset value from RBP
+    } deriving (Eq, Ord, Show)
 
-{-# INLINE isGVar #-}
--- | `isGVar` returns `True` if `Var` is a `GVar`. Otherwise returns `False`.
-isGVar :: Var a -> Bool
-isGVar (GVar _ _) = True
-isGVar _ = False
+-- | The data type of local variables
+data Vars a = Vars -- ^ The constructor of variables
+    { 
+        globals :: M.Map T.Text GVar, -- ^ The global variables
+        locals :: M.Map T.Text (LVar a) -- ^ The local variables
+    } deriving Show
 
-{-# INLINE isLVar #-}
--- | `isLVar` returns `True` if `Var` is a `LVar`. Otherwise returns `False`.
-isLVar :: Var a -> Bool
-isLVar = not . isGVar
+{-# INLINE resetLocal #-}
+-- | `resetLocal` initialize the local variable list for `Vars`
+resetLocal :: Vars a -> Vars a
+resetLocal = flip Vars M.empty . globals
+
+{-# INLINE lookupGVar #-}
+-- | Search for a global variable with a given name
+lookupGVar :: T.Text -> Vars a -> Maybe GVar
+lookupGVar s vars =  M.lookup s $ globals vars
+
+{-# INLINE lookupLVar #-}
+-- | Search for a local variable with a given name
+lookupLVar :: T.Text -> Vars a -> Maybe (LVar a)
+lookupLVar s vars = M.lookup s $ locals vars
 
 {-# INLINE lookupVar #-}
-lookupVar' :: Num i => (Var i -> String) -> (Var i -> Bool) -> String -> [Var i] -> Maybe (Var i)
-lookupVar' f bf s = find ((==s) . f) . filter bf
+-- | First, search for local variables, and if not found, search for global variables. If nothing is found, Nothing is returned
+lookupVar :: T.Text -> Vars a -> Maybe (Either GVar (LVar a))
+lookupVar s vars = maybe (Left <$> lookupGVar s vars) (Just . Right) $ lookupLVar s vars
 
--- | `lookupLVar` searches for a local variable that matches a specified token from a list of variables.
--- If it exists, it is wrapped in `Just` and returned. Otherwise, `Nothing` is returned.
-lookupLVar :: Num i => HT.Token i -> [Var i] -> Maybe (Var i)
-lookupLVar (HT.TKIdent s) vs = lookupVar' lname isLVar s vs
-lookupLVar _ _ = Nothing
-
--- | `lookupGVar` searches for a global variable that matches a specified token from a list of variables.
--- If it exists, it is wrapped in `Just` and returned. Otherwise, `Nothing` is returned.
-lookupGVar :: Num i => HT.Token i -> [Var i] -> Maybe (Var i)
-lookupGVar (HT.TKIdent s) vs = lookupVar' gname isGVar s vs
-lookupGVar _ _ = Nothing
-
--- | `lookupVar` first searches for local variables, and if it exists, wraps it in `Just` and returns that `Var`.
--- Otherwise, it searches for a global variable, and it it exists, wraps it in `Just` and returns it. Otherwise, `Nothing` is returned.
-lookupVar :: Num i => HT.Token i -> [Var i] -> Maybe (Var i)
-lookupVar s@(HT.TKIdent _) vs = lookupLVar s vs <|> lookupGVar s vs
-lookupVar _ _ = Nothing
+{-# INLINE maximumOffset #-}
+maximumOffset :: (Num a, Ord a) => M.Map T.Text (LVar a) -> a
+maximumOffset m 
+    | M.null m = 0
+    | otherwise = maximum $ map rbpOffset $ M.elems m
 
 -- | If the specified token is `HT.TKIdent` and the local variable does not exist in the list, `addLVar` adds a new local variable to the list,
--- constructs a pair with the node representing the variable, wraps it in `Just` and return it. Otherwise, `Nothing` is returned.
-addLVar :: Num i => (CT.TypeKind, HT.TokenIdx i) -> [Var i] -> Maybe (ATree i, [Var i])
-addLVar (t, (_, HT.TKIdent ident)) vars = flip (`maybe` const Nothing) (lookupLVar (HT.TKIdent ident) vars) $ -- ODR rule
-    let lvars = LVar ident t (if null vars then fromIntegral (CT.sizeof t) else offset (head vars) + fromIntegral (CT.sizeof t)):vars in
-        Just (ATNode (ATLVar (lvtype $ head lvars) (offset $ head lvars)) t ATEmpty ATEmpty, lvars)
-addLVar _ _ = Nothing
+-- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
+addLVar :: (Num i, Ord i) => CT.TypeKind -> HT.TokenIdx i -> Vars i -> Either (T.Text, HT.TokenIdx i) (ATree i, Vars i)
+addLVar t cur@(_, HT.TKIdent ident) vars = flip (flip maybe $ const $ Left ("redeclaration of '" <> T.pack ident <> "' with no linkage", cur)) (lookupLVar (T.pack ident) vars) $ -- ODR rule
+    let lvar = LVar t ((+) (fromIntegral (CT.sizeof t)) $ maximumOffset $ locals vars)
+        nat = ATNode (ATLVar (lvtype lvar) (rbpOffset lvar)) t ATEmpty ATEmpty in
+            Right (nat, vars { locals = M.insert (T.pack ident) lvar $ locals vars })
+addLVar _ _ _ = Left (internalCE, (0, HT.TKEmpty))
+
 
 -- | If the specified token is `HT.TKIdent` and the global variable does not exist in the list, `addLVar` adds a new global variable to the list,
--- constructs a pair with the node representing the variable, wraps it in `Just` and return it. Otherwise, `Nothing` is returned.
-addGVar :: Num i => (CT.TypeKind, HT.TokenIdx i) -> [Var i] -> Maybe (ATree i, [Var i])
-addGVar (t, (_, HT.TKIdent ident)) vars = flip (`maybe` const Nothing) (lookupGVar (HT.TKIdent ident) vars) $ -- ODR rule
-    let gvars = GVar ident t:vars in Just (ATNode (ATGVar (gvtype $ head gvars) $ T.pack $ gname $ head gvars) t ATEmpty ATEmpty, gvars)
-addGVar _ _ = Nothing
+-- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
+addGVar :: Num i => (CT.TypeKind, HT.TokenIdx i) -> Vars i -> Either (T.Text, HT.TokenIdx i) (ATree i, Vars i)
+addGVar (t, cur@(_, HT.TKIdent ident)) vars = flip (flip maybe $ const $ Left ("redeclaration of '" <> tshow ident <> "' with no linkage", cur)) (lookupGVar (T.pack ident) vars) $ -- ODR rule
+    let gvar = GVar t
+        nat = ATNode (ATGVar (gvtype gvar) $ T.pack ident) t ATEmpty ATEmpty in
+            Right (nat, vars { globals = M.insert (T.pack ident) gvar $ globals vars })
+addGVar _ _ = Left (internalCE, (0, HT.TKEmpty))
