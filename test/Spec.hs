@@ -135,7 +135,14 @@ main = runTestsEx [
     (StatementEqual.test "int g; int main() { g = 42; return g; }", 42),
     (StatementEqual.test "int gr[3]; int main() { int i = 0; for (; i < sizeof gr; i = i + 1) gr[i] = i + 1; return gr[0]; }", 1),
     (StatementEqual.test "int gr[3]; int main() { int i = 0; for (; i < sizeof gr; i = i + 1) gr[i] = i + 1; return gr[1]; }", 2),
-    (StatementEqual.test "int gr[3]; int main() { int i = 0; for (; i < sizeof gr; i = i + 1) gr[i] = i + 1; return gr[2]; }", 3)
+    (StatementEqual.test "int gr[3]; int main() { int i = 0; for (; i < sizeof gr; i = i + 1) gr[i] = i + 1; return gr[2]; }", 3),
+    (StatementEqual.test "int main() { char c = 1; return c; }", 1),
+    (StatementEqual.test "int main() { char c1 = 1; char c2 = 2; return c1; }", 1),
+    (StatementEqual.test "int main() { char c1 = 1; char c2 = 2; return c2; }", 2),
+    (StatementEqual.test "int main() { char x; return sizeof x; }", 1),
+    (StatementEqual.test "int main() { char ar[10]; return sizeof ar; }", fromIntegral $ CT.sizeof $ CT.CTArray 10 CT.CTChar),
+    (StatementEqual.test "int f(char a, char b, char c) { return a - b - c; } int main() { return f(7, 3, 3); }", 1),
+    (StatementEqual.test "int f(char a, int b, char c) { return a - b - c; } int main() { return f(7, 3, 3); }", 1) 
     ] >> runTestsEx [
     (LinkFuncStdOut.test "int main() { return test_func1(); }" ["test_func1"], Right "test/Tests/csrc/test_func1.c::test_func1(): [OK]"),
     (LinkFuncStdOut.test "int main() { return test_func2(40); }" ["test_func2"], Right "test/Tests/csrc/test_func2.c::test_func2(40) outputs: \"2 3 5 7 11 13 17 19 23 29 31 37 \": [OK]") --,

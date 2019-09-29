@@ -65,7 +65,7 @@ instance Show i => Show (Token i) where
 
 -- | Lookup keyword from `String`. If the specified `String` is not keyword as C language, `lookupKeyword` returns `Nothing`.
 lookupKeyword :: Show i => String -> Maybe (Token i)
-lookupKeyword s = find ((==) s . show) [TKReturn, TKWhile, TKIf, TKElse, TKFor, TKSizeof, TKType CR.CTInt]
+lookupKeyword s = find ((==) s . show) [TKReturn, TKWhile, TKIf, TKElse, TKFor, TKSizeof, TKType CR.CTInt, TKType CR.CTChar]
 
 -- | `Token` and its index.
 type TokenIdx i = (i, Token i)

@@ -34,13 +34,13 @@ module Htcc.Parse.Core (
     stackSize
 ) where
 
-import Data.Tuple.Extra (second, uncurry3, snd3)
+import Data.Bits ((.&.), complement)
+import Data.Tuple.Extra (first, second, uncurry3, snd3)
 import Data.List (find)
 import Data.List.Split (linesBy)
 import Data.Either (isLeft, lefts, rights)
 import Data.Maybe (isJust, fromJust)
 import Data.STRef (newSTRef, readSTRef, writeSTRef)
-import Data.Tuple.Extra (first)
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import qualified Data.Text as T
@@ -51,7 +51,7 @@ import Numeric.Natural
 
 import Htcc.Utils (first3, second3, tshow, fstNothingIdx, toNatural)
 import qualified Htcc.Token as HT
-import Htcc.CRules.Types as CT
+import qualified Htcc.CRules.Types as CT
 import Htcc.Parse.AST
 import Htcc.Parse.Var
 import Htcc.Parse.Utils
@@ -233,16 +233,16 @@ shift = inners add [("<<", ATShl), (">>", ATShr)]
 addKind :: Show i => ATree i -> ATree i -> Maybe (ATree i)
 addKind lhs rhs
     | all (CT.isFundamental . atype) [lhs, rhs] = Just $ ATNode ATAdd (max (atype lhs) (atype rhs)) lhs rhs
-    | isJust (derefMaybe $ atype lhs) && CT.isFundamental (atype rhs) = Just $ ATNode ATAddPtr (atype lhs) lhs rhs
-    | CT.isFundamental (atype lhs) && isJust (derefMaybe $ atype rhs) = Just $ ATNode ATAddPtr (atype rhs) rhs lhs
+    | isJust (CT.derefMaybe $ atype lhs) && CT.isFundamental (atype rhs) = Just $ ATNode ATAddPtr (atype lhs) lhs rhs
+    | CT.isFundamental (atype lhs) && isJust (CT.derefMaybe $ atype rhs) = Just $ ATNode ATAddPtr (atype rhs) rhs lhs
     | otherwise = Nothing
 
 {-# INLINE subKind #-}
 subKind :: ATree i -> ATree i -> Maybe (ATree i)
 subKind lhs rhs
     | all (CT.isFundamental . atype) [lhs, rhs] = Just $ ATNode ATSub (max (atype lhs) (atype rhs)) lhs rhs
-    | isJust (derefMaybe $ atype lhs) && CT.isFundamental (atype rhs) = Just $ ATNode ATSubPtr (atype lhs) lhs rhs
-    | all (isJust . derefMaybe . atype) [lhs, rhs] = Just $ ATNode ATPtrDis (atype lhs) lhs rhs
+    | isJust (CT.derefMaybe $ atype lhs) && CT.isFundamental (atype rhs) = Just $ ATNode ATSubPtr (atype lhs) lhs rhs
+    | all (isJust . CT.derefMaybe . atype) [lhs, rhs] = Just $ ATNode ATPtrDis (atype lhs) lhs rhs
     | otherwise = Nothing
 
 -- | `add` indicates \(\eqref{eq:first}\) among the comments of `inners`.
@@ -265,7 +265,7 @@ unary ((_, HT.TKReserved "+"):xs) at vars = factor xs at vars
 unary ((_, HT.TKReserved "-"):xs) at vars = second3 (ATNode ATSub CT.CTInt (ATNode (ATNum 0) CT.CTInt ATEmpty ATEmpty)) <$> factor xs at vars
 unary ((_, HT.TKReserved "!"):xs) at vars = second3 (\x -> ATNode ATElse CT.CTUndef (ATNode ATIf CT.CTUndef (ATNode ATEQ CT.CTInt x (ATNode (ATNum 0) CT.CTInt ATEmpty ATEmpty)) (ATNode ATReturn CT.CTUndef (ATNode (ATNum 1) CT.CTInt ATEmpty ATEmpty) ATEmpty)) (ATNode ATReturn CT.CTUndef (ATNode (ATNum 0) CT.CTInt ATEmpty ATEmpty) ATEmpty)) <$> unary xs at vars
 unary ((_, HT.TKReserved "~"):xs) at vars = second3 (flip (ATNode ATNot CT.CTInt) ATEmpty) <$> unary xs at vars
-unary ((_, HT.TKReserved "&"):xs) at vars = second3 (\x -> (ATNode ATAddr $ CT.CTPtr $ if CT.isCTArray (atype x) then fromJust $ derefMaybe (atype x) else atype x) x ATEmpty) <$> unary xs at vars
+unary ((_, HT.TKReserved "&"):xs) at vars = second3 (\x -> (ATNode ATAddr $ CT.CTPtr $ if CT.isCTArray (atype x) then fromJust $ CT.derefMaybe (atype x) else atype x) x ATEmpty) <$> unary xs at vars
 unary (cur@(_, HT.TKReserved "*"):xs) at vars = flip (either Left) (unary xs at vars) $ \(ert, erat, ervars) -> 
     flip (maybe $ Left ("invalid pointer dereference", cur)) (CT.derefMaybe $ atype erat) $ \t -> Right (ert, ATNode ATDeref t erat ATEmpty, ervars)
 unary xs at vars = either Left (uncurry3 f) $ factor xs at vars
@@ -308,7 +308,7 @@ parse =  fmap (second globals) . flip program (Vars M.empty M.empty)
 
 -- | `stackSize` returns the stack size of variable per function.
 stackSize :: (Show i, Ord i) => ATree i -> Natural
-stackSize (ATNode (ATDefFunc _ args) _ body _) = toNatural $ sum $ map (CT.sizeof . fst) $ S.toList $ f body $
+stackSize (ATNode (ATDefFunc _ args) _ body _) = toNatural $ alignas 8 $ sum $ map ((fromIntegral :: Natural -> Integer) . CT.sizeof . fst) $ S.toList $ f body $
     maybe S.empty (foldr (\(ATNode (ATLVar t x) _ _ _) acc -> S.insert (t, x) acc) S.empty) args 
     where
         f ATEmpty s = s
@@ -317,5 +317,6 @@ stackSize (ATNode (ATDefFunc _ args) _ body _) = toNatural $ sum $ map (CT.sizeo
         f (ATNode (ATFor xs) _ l r) s = let i = foldr (S.union . flip f s . fromATKindFor) S.empty xs in f l i `S.union` f r i
         f (ATNode (ATNull x) _ _ _) s = f x s
         f (ATNode _ _ l r) s = f l s `S.union` f r s
+        alignas aval n = pred (n + aval) .&. complement (pred aval)
 stackSize _ = 0
 

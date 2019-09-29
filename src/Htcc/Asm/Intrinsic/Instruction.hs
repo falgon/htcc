@@ -13,7 +13,12 @@ Portability : POSIX
 
 module Htcc.Asm.Intrinsic.Instruction (
     -- * Instructions
-    IntermediateInstruction (..),
+    SizeUnit (..),
+    Offset (..),
+    Ptr (..),
+    byte,
+    word,
+    dword,
     UnaryInstruction (..),
     BinaryInstruction (..),
     sete,
@@ -45,11 +50,43 @@ intelSyntaxUnaryInst = flip (.) (T.append " " . flip T.append "\n" . tshow) . (.
 intelSyntaxBinaryInst :: (Show a, Show b) => T.Text -> a -> b -> T.Text
 intelSyntaxBinaryInst = (.) (flip (.) (T.append ", " . flip T.append "\n" . tshow) . (.) (T.append "\t")) . flip (.) ((.) (T.append " ") . T.append . tshow) . (.) . T.append
 
--- | A data type `IntermediateInstruction` represents the intermediate part of the instruction.
-data IntermediateInstruction = Offset T.Text -- ^ The @offset@ instruction
+-- | Unit of size of data to be loaded
+data SizeUnit = Byte -- ^ 8 bits
+    | Word -- ^ 16 bits
+    | DWord -- ^ 32 bits
+    deriving Eq
 
-instance Show IntermediateInstruction where
+instance Show SizeUnit where
+    show Byte = "byte"
+    show Word = "word"
+    show DWord = "dword"
+
+-- | The @offset@ instruction
+newtype Offset = Offset T.Text -- ^ The constructor of @offset@ instruction
+
+instance Show Offset where
     show (Offset s) = "offset " ++ T.unpack s
+
+-- | The @ptr@ instruction
+data Ptr a = Ptr SizeUnit (Ref a) -- ^ The constructor of @ptr@ instruction
+
+instance IsOperand a => Show (Ptr a) where
+    show (Ptr u s) = show u ++ " ptr " ++ show s
+
+{-# INLINE byte #-}
+-- | @byte@ is a helper functoin for intuitively writing @byte@ instructions.
+byte :: IsOperand a => (SizeUnit -> Ref a -> Ptr a) -> Ref a -> Ptr a
+byte = flip id Byte
+
+{-# INLINE word #-}
+-- | @word@ is a helper functoin for intuitively writing @word@ instructions.
+word :: IsOperand a => (SizeUnit -> Ref a -> Ptr a) -> Ref a -> Ptr a
+word = flip id Word
+
+{-# INLINE dword #-}
+-- | @dword@ is a helper functoin for intuitively writing @dword@ instructions.
+dword :: IsOperand a => (SizeUnit -> Ref a -> Ptr a) -> Ref a -> Ptr a
+dword = flip id DWord
 
 -- | A class of x86_64 instructions with unary arguments.
 class Show a => UnaryInstruction a where
@@ -99,7 +136,7 @@ setge = intelSyntaxUnaryInst "setge"
 instance UnaryInstruction Integer
 instance UnaryInstruction Int
 instance UnaryInstruction Register
-instance UnaryInstruction IntermediateInstruction
+instance UnaryInstruction Offset
 
 -- | A class of x86_64 instructions with binary arguments.
 class Show a => BinaryInstruction a where
@@ -109,6 +146,9 @@ class Show a => BinaryInstruction a where
     -- | The @movl@ instruction.
     movl :: BinaryInstruction b => a -> b -> T.Text
     movl = intelSyntaxBinaryInst "movl"
+    -- | THe @movsx@ instruction.
+    movsx :: IsOperand b => a -> Ptr b -> T.Text
+    movsx = intelSyntaxBinaryInst "movsx"
     -- | The @cmp@ instruction.
     cmp :: BinaryInstruction b => a -> b -> T.Text
     cmp = intelSyntaxBinaryInst "cmp"

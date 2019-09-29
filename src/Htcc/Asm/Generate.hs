@@ -48,12 +48,16 @@ epilogue :: T.Text
 epilogue = I.leave <> I.ret
 
 {-# INLINE load #-}
-load :: T.Text
-load = I.pop rax <> I.mov rax (Ref rax) <> I.push rax
+load :: CR.TypeKind -> T.Text
+load t 
+    | CR.sizeof t == 1 = I.pop rax <> I.movsx rax (I.byte I.Ptr (Ref rax)) <> I.push rax
+    | otherwise = I.pop rax <> I.mov rax (Ref rax) <> I.push rax
 
 {-# INLINE store #-}
-store :: T.Text
-store = I.pop rdi <> I.pop rax <> I.mov (Ref rax) rdi <> I.push rdi
+store :: CR.TypeKind -> T.Text
+store t
+    | CR.sizeof t == 1 = I.pop rdi <> I.pop rax <> I.mov (Ref rax) dil <> I.push rdi
+    | otherwise = I.pop rdi <> I.pop rax <> I.mov (Ref rax) rdi <> I.push rdi
 
 genAddr :: (Show i, Ord i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => IO Int -> ATree i -> IO ()
 genAddr _ (ATNode (ATLVar _ v) _ _ _) = T.putStr $ I.lea rax (Ref $ rbp `osub` v) <> I.push rax
@@ -72,7 +76,8 @@ genStmt :: (Show i, Ord i, IsOperand i, I.UnaryInstruction i, I.BinaryInstructio
 genStmt c lc@(ATNode (ATDefFunc x Nothing) _ st _) = T.putStr (I.defGLbl x <> prologue (stackSize lc)) >> genStmt c st
 genStmt c lc@(ATNode (ATDefFunc x (Just args)) _ st _) = do -- TODO: supports more than 7 arguments
     T.putStr $ I.defGLbl x <> prologue (stackSize lc)
-    zipWithM_ (\(ATNode (ATLVar _ o) _ _ _) reg -> T.putStr $ I.mov (Ref $ rbp `osub` o) reg) args [rdi, rsi, rdx, rcx, rn 8, rn 9]
+    flip (`zipWithM_` args) argRegs $ \(ATNode (ATLVar t o) _ _ _) reg -> 
+        maybe (err "internal compiler error: there is no register that fits the specified size") (T.putStr . I.mov (Ref $ rbp `osub` o)) $ find ((== CR.sizeof t) . byteWidth) reg
     genStmt c st
 genStmt _ (ATNode (ATCallFunc x Nothing) _ _ _) = T.putStr $ I.call x <> I.push rax
 genStmt c (ATNode (ATCallFunc x (Just args)) _ _ _) = let (toReg, _) = splitAt 6 args in do -- TODO: supports more than 7 arguments
@@ -126,11 +131,11 @@ genStmt c (ATNode ATReturn _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> ep
 genStmt c (ATNode ATExprStmt _ lhs _) = genStmt c lhs >> T.putStr (I.add rsp (8 :: Int))
 genStmt c (ATNode ATNot _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.not rax <> I.push rax)
 genStmt c (ATNode ATAddr _ lhs _) = genAddr c lhs
-genStmt c (ATNode ATDeref t lhs _) = genStmt c lhs >> unless (CR.isCTArray t) (T.putStr load) 
+genStmt c (ATNode ATDeref t lhs _) = genStmt c lhs >> unless (CR.isCTArray t) (T.putStr $ load t) 
 genStmt _ (ATNode (ATNum x) _ _ _) = T.putStr $ I.push x
-genStmt c n@(ATNode (ATLVar _ _) t _ _) = genAddr c n >> unless (CR.isCTArray t) (T.putStr load)
-genStmt c n@(ATNode (ATGVar _ _) t _ _) = genAddr c n >> unless (CR.isCTArray t) (T.putStr load)
-genStmt c (ATNode ATAssign _ lhs rhs) = genLval c lhs >> genStmt c rhs >> T.putStr store
+genStmt c n@(ATNode (ATLVar _ _) t _ _) = genAddr c n >> unless (CR.isCTArray t) (T.putStr $ load t)
+genStmt c n@(ATNode (ATGVar _ _) t _ _) = genAddr c n >> unless (CR.isCTArray t) (T.putStr $ load t)
+genStmt c (ATNode ATAssign t lhs rhs) = genLval c lhs >> genStmt c rhs >> T.putStr (store t)
 genStmt _ (ATNode (ATNull _) _ _ _) = return ()
 genStmt c (ATNode k t lhs rhs) = flip finally (T.putStr $ I.push rax) $ genStmt c lhs *> genStmt c rhs *> T.putStr (I.pop rdi) *> T.putStr (I.pop rax) *> case k of
     ATAdd -> T.putStr $ I.add rax rdi 
@@ -174,14 +179,19 @@ parseErrExit xs (s, (i, _)) = do
     repSpace i
     exitFailure
 
+dataSection :: M.Map T.Text GVar -> IO ()
+dataSection gvars = do
+    T.putStrLn ".data"
+    mapM_ (\(n, GVar t) -> T.putStrLn (n <> T.singleton ':') >> T.putStrLn ("\t.zero " <> tshow (CR.sizeof t))) $ M.toList gvars
+
+textSection :: (Show i, Ord i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => [ATree i] -> IO ()
+textSection tk = do
+    inc <- counter 0
+    T.putStrLn ".text" >> mapM_ (genStmt inc) tk
+
 -- | Generate full assembly code from C language program
 casm :: String -> IO ()
 casm xs = let sline = T.pack xs in flip (either (tokenizeErrExit sline)) (f xs) $ \x -> 
-    flip (either $ parseErrExit sline) (parse x) $ \(tk, gvars) -> do
-        inc <- counter 0
-        T.putStr I.declIS
-        T.putStrLn ".data"
-        mapM_ (\(n, GVar t) -> T.putStrLn (n <> T.singleton ':') >> T.putStrLn ("\t.zero " <> tshow (CR.sizeof t))) $ M.toList gvars
-        T.putStrLn ".text" >> mapM_ (genStmt inc) tk 
+    flip (either $ parseErrExit sline) (parse x) $ \(tk, gvars) -> T.putStr I.declIS >> dataSection gvars >> textSection tk
         where
             f = tokenize :: String -> Either (Int, T.Text) [TokenIdx Int]

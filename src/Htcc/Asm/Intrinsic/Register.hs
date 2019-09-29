@@ -32,13 +32,17 @@ module Htcc.Asm.Intrinsic.Register (
     rdi, edi, di, dil,
     rbp, ebp, bp, bpl,
     rsp, esp, sp, spl,
-    rn, rnd, rnw, rnb
+    rn, rnd, rnw, rnb,
+    -- * List of defined registers
+    argRegs
 ) where
+
+import Numeric.Natural
 
 -- | The register type class
 class Show a => IsRegister a where
     -- | The byte width of the register.
-    byteWidth :: a -> Int
+    byteWidth :: a -> Natural
 
 -- | The accumulator register.
 data AccumulatorReg = RAX -- ^ Full 64 bits of register
@@ -518,3 +522,9 @@ rnw = Extended . RnW
 -- | The rnb register (r8b-r15b). Lower 8 bits of `rn`.
 rnb :: Int -> Register
 rnb = Extended . RnB
+
+{-# INLINE argRegs #-}
+-- | `argRegs` is a list of each @Register@ used in the function call.
+-- In the list, the registers used for the first to sixth arguments are arranged in ascending order.
+argRegs :: [[Register]]
+argRegs = [[dil, rdi], [sil, rsi], [dl, rdx], [cl, rcx], [rnb 8, rn 8], [rnb 9, rn 9]]

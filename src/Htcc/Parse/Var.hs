@@ -24,9 +24,7 @@ module Htcc.Parse.Var (
     resetLocal
 ) where
 
-import Control.Applicative ((<|>))
 import qualified Data.Text as T
-import Data.List (find)
 import qualified Data.Map.Strict as M
 
 import qualified Htcc.Token as HT

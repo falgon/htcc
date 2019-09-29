@@ -33,6 +33,7 @@ import Htcc.Utils (lor)
 
 -- | The kinds of types in C language.
 data TypeKind = CTInt -- ^ The type @int@ as C language
+    | CTChar -- ^ The type @char@ as C language
     | CTPtr TypeKind -- ^ The pointer type of `TypeKind`
     | CTArray Natural TypeKind -- ^ The array type
     | CTUndef -- ^ Undefined type
@@ -40,6 +41,7 @@ data TypeKind = CTInt -- ^ The type @int@ as C language
 
 instance Show TypeKind where
     show CTInt = "int"
+    show CTChar = "char"
     show (CTPtr x) = show x ++ "*"
     show (CTArray v t) = show t ++ "[" ++ show v ++ "]"
     show CTUndef = "undefined"
@@ -56,6 +58,7 @@ isCTArray _ = False
 -- | `sizeof` returns the byte size of the type defined by C language.
 sizeof :: TypeKind -> Natural
 sizeof CTInt = 8 -- TODO: 8 is workaround. it should be 4 byte.
+sizeof CTChar = 1
 sizeof (CTPtr _) = 8
 sizeof (CTArray v t) = v * sizeof t
 sizeof CTUndef = 0
