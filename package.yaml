@@ -32,6 +32,7 @@ dependencies:
 - split
 - monad-loops
 - containers
+- bytestring
 
 library:
   source-dirs: src

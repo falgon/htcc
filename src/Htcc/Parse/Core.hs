@@ -35,6 +35,7 @@ module Htcc.Parse.Core (
 ) where
 
 import Data.Bits ((.&.), complement)
+import qualified Data.ByteString as B
 import Data.Tuple.Extra (first, second, uncurry3, snd3)
 import Data.List (find)
 import Data.List.Split (linesBy)
@@ -293,8 +294,8 @@ factor (cur1@(_, HT.TKIdent v):cur2@(_, HT.TKReserved "("):xs) _ vars = flip (ma
             vars' <- readSTRef mk
             return $ Right (ds, ATNode (ATCallFunc (T.pack v) (Just $ rights expl)) CT.CTInt ATEmpty ATEmpty, vars')
 factor ((_, HT.TKSizeof):xs) atn vars = second3 (\x -> ATNode (ATNum (fromIntegral $ CT.sizeof $ atype x)) CT.CTInt ATEmpty ATEmpty) <$> unary xs atn vars -- for `sizeof` -- TODO: the type of sizeof must be @size_t@
--- if the variable is not declared, it returns error wrapped with `Left`
-factor (cur@(_, HT.TKIdent ident):xs) _ vars = flip (maybe (Left ("undefined variable", cur))) (lookupVar (T.pack ident) vars) $ \case
+factor (cur@(_, HT.TKString slit):xs) _ vars = uncurry (xs,,) <$> addLiteral (CT.CTArray (fromIntegral $ B.length slit) CT.CTChar, cur) vars -- for literals
+factor (cur@(_, HT.TKIdent ident):xs) _ vars = flip (maybe (Left ("undefined variable", cur))) (lookupVar (T.pack ident) vars) $ \case -- if the variable is not declared, it returns error wrapped with `Left`
     Right (LVar t o) -> Right (xs, ATNode (ATLVar t o) t ATEmpty ATEmpty, vars) -- for declared local variable
     Left (GVar t) -> Right (xs, ATNode (ATGVar t $ T.pack ident) t ATEmpty ATEmpty, vars) -- for declared global variable
 factor ert _ _ = Left (if null ert then "unexpected token in program" else "unexpected token '" <> tshow (snd (head ert)) <> "' in program", 
@@ -303,8 +304,8 @@ factor ert _ _ = Left (if null ert then "unexpected token in program" else "unex
 {-# INLINE parse #-}
 -- | Constructs the abstract syntax tree based on the list of token strings.
 -- if construction fails, `Nothing` is returned.
-parse :: (Show i, Num i, Eq i, Integral i, Read i) => [HT.TokenIdx i] -> Either (T.Text, HT.TokenIdx i) ([ATree i], M.Map T.Text GVar)
-parse =  fmap (second globals) . flip program (Vars M.empty M.empty)
+parse :: (Show i, Num i, Eq i, Integral i, Read i) => [HT.TokenIdx i] -> Either (T.Text, HT.TokenIdx i) ([ATree i], M.Map T.Text GVar, [Literal])
+parse = fmap (\(ast, vars) -> (ast, globals vars, literals vars)) . flip program initVars
 
 -- | `stackSize` returns the stack size of variable per function.
 stackSize :: (Show i, Ord i) => ATree i -> Natural

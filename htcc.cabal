@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4d5361ef1b8e777f65ad20060fbb0f1b1d3a0b97d7f12dfa8dc1eb942d2f3fc9
+-- hash: abeda3bb97480b52d1bd124b4738ac3c070db2aac38a5d423d0a7b12620767a8
 
 name:           htcc
 version:        0.0.0.1
@@ -63,6 +63,7 @@ library
       src
   build-depends:
       base >=4.7 && <5
+    , bytestring
     , containers
     , extra
     , monad-loops
@@ -79,6 +80,7 @@ executable htcc
   ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall -Werror
   build-depends:
       base >=4.7 && <5
+    , bytestring
     , containers
     , extra
     , htcc
@@ -102,6 +104,7 @@ test-suite htcc-test
   build-depends:
       HUnit
     , base >=4.7 && <5
+    , bytestring
     , containers
     , directory
     , extra

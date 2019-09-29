@@ -20,6 +20,7 @@ module Htcc.Asm.Generate (
 import Control.Exception (finally)
 import Control.Monad (zipWithM_, unless)
 import Control.Monad.Fix (fix)
+import qualified Data.ByteString as B
 import Data.List (find)
 import Data.Either (either)
 import qualified Data.Map as M
@@ -30,7 +31,7 @@ import System.Exit (exitFailure)
 -- Imports Tokenizer and parser
 import Htcc.Utils (err, putStrLnErr, putStrErr, counter, tshow, toInts)
 import Htcc.Token (TokenIdx, tokenize)
-import Htcc.Parse (ATKind (..), ATree (..), GVar (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, parse, stackSize)
+import Htcc.Parse (ATKind (..), ATree (..), GVar (..), Literal (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, parse, stackSize)
 
 -- Imports about assembly
 import Htcc.Asm.Intrinsic.Register
@@ -179,10 +180,11 @@ parseErrExit xs (s, (i, _)) = do
     repSpace i
     exitFailure
 
-dataSection :: M.Map T.Text GVar -> IO ()
-dataSection gvars = do
+dataSection :: M.Map T.Text GVar -> [Literal] -> IO ()
+dataSection gvars lits = do
     T.putStrLn ".data"
     mapM_ (\(n, GVar t) -> T.putStrLn (n <> T.singleton ':') >> T.putStrLn ("\t.zero " <> tshow (CR.sizeof t))) $ M.toList gvars
+    mapM_ (\(Literal _ n cnt) -> T.putStrLn (".L.data." <> tshow n <> ":") >> mapM_ (T.putStrLn . T.append "\t.byte " . tshow) (B.unpack cnt)) lits
 
 textSection :: (Show i, Ord i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => [ATree i] -> IO ()
 textSection tk = do
@@ -192,6 +194,6 @@ textSection tk = do
 -- | Generate full assembly code from C language program
 casm :: String -> IO ()
 casm xs = let sline = T.pack xs in flip (either (tokenizeErrExit sline)) (f xs) $ \x -> 
-    flip (either $ parseErrExit sline) (parse x) $ \(tk, gvars) -> T.putStr I.declIS >> dataSection gvars >> textSection tk
+    flip (either $ parseErrExit sline) (parse x) $ \(tk, gvars, lits) -> T.putStr I.declIS >> dataSection gvars lits >> textSection tk
         where
             f = tokenize :: String -> Either (Int, T.Text) [TokenIdx Int]

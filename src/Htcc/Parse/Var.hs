@@ -14,18 +14,25 @@ module Htcc.Parse.Var (
     -- * The data type
     GVar (..),
     LVar (..),
+    Literal (..),
     Vars (..),
-    -- * Functions for adding and searching for variables
+    -- * Functions for adding and searching for variables and literals
     lookupLVar,
     lookupGVar,
     lookupVar,
     addLVar,
     addGVar,
+    addLiteral,
+    -- * Utilities
+    initVars,
     resetLocal
 ) where
 
+import qualified Data.ByteString as B
 import qualified Data.Text as T
 import qualified Data.Map.Strict as M
+import Data.Tuple.Extra (first, second, dupe)
+import Numeric.Natural
 
 import qualified Htcc.Token as HT
 import qualified Htcc.CRules.Types as CT
@@ -37,27 +44,41 @@ import Htcc.Utils (tshow)
 -- | The data type of global variable
 newtype GVar = GVar -- ^ The constructor of global variable
     {
-        gvtype :: CT.TypeKind -- ^ The type of global variable
+        gvtype :: CT.TypeKind -- ^ The type of the global variable
     } deriving (Eq, Ord, Show)
 
 -- | The data type of local variable
 data LVar a = LVar -- ^ The constructor of local variable
     {
-        lvtype :: CT.TypeKind, -- ^ The type of local variable
+        lvtype :: CT.TypeKind, -- ^ The type of the local variable
         rbpOffset :: a -- ^ The offset value from RBP
     } deriving (Eq, Ord, Show)
+
+-- | The literal
+data Literal = Literal -- ^ The literal constructor
+    {
+        litype :: CT.TypeKind, -- ^ The single literal type
+        ln :: Natural, -- ^ The number of labels placed in the @.data@ section
+        lcts :: B.ByteString -- ^ The content
+    } deriving (Eq, Show)
 
 -- | The data type of local variables
 data Vars a = Vars -- ^ The constructor of variables
     { 
         globals :: M.Map T.Text GVar, -- ^ The global variables
-        locals :: M.Map T.Text (LVar a) -- ^ The local variables
+        locals :: M.Map T.Text (LVar a), -- ^ The local variables
+        literals :: [Literal] -- ^ Literals
     } deriving Show
+
+{-# INLINE initVars #-}
+-- | Helper function representing an empty variables
+initVars :: Vars a
+initVars = Vars M.empty M.empty []
 
 {-# INLINE resetLocal #-}
 -- | `resetLocal` initialize the local variable list for `Vars`
 resetLocal :: Vars a -> Vars a
-resetLocal = flip Vars M.empty . globals
+resetLocal = uncurry (flip Vars M.empty) . first globals . second literals . dupe
 
 {-# INLINE lookupGVar #-}
 -- | Search for a global variable with a given name
@@ -84,8 +105,7 @@ maximumOffset m
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
 addLVar :: (Num i, Ord i) => CT.TypeKind -> HT.TokenIdx i -> Vars i -> Either (T.Text, HT.TokenIdx i) (ATree i, Vars i)
 addLVar t cur@(_, HT.TKIdent ident) vars = flip (flip maybe $ const $ Left ("redeclaration of '" <> T.pack ident <> "' with no linkage", cur)) (lookupLVar (T.pack ident) vars) $ -- ODR rule
-    let lvar = LVar t ((+) (fromIntegral (CT.sizeof t)) $ maximumOffset $ locals vars)
-        nat = ATNode (ATLVar (lvtype lvar) (rbpOffset lvar)) t ATEmpty ATEmpty in
+    let lvar = LVar t ((+) (fromIntegral (CT.sizeof t)) $ maximumOffset $ locals vars); nat = ATNode (ATLVar (lvtype lvar) (rbpOffset lvar)) t ATEmpty ATEmpty in
             Right (nat, vars { locals = M.insert (T.pack ident) lvar $ locals vars })
 addLVar _ _ _ = Left (internalCE, (0, HT.TKEmpty))
 
@@ -94,7 +114,16 @@ addLVar _ _ _ = Left (internalCE, (0, HT.TKEmpty))
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
 addGVar :: Num i => (CT.TypeKind, HT.TokenIdx i) -> Vars i -> Either (T.Text, HT.TokenIdx i) (ATree i, Vars i)
 addGVar (t, cur@(_, HT.TKIdent ident)) vars = flip (flip maybe $ const $ Left ("redeclaration of '" <> tshow ident <> "' with no linkage", cur)) (lookupGVar (T.pack ident) vars) $ -- ODR rule
-    let gvar = GVar t
-        nat = ATNode (ATGVar (gvtype gvar) $ T.pack ident) t ATEmpty ATEmpty in
+    let gvar = GVar t; nat = ATNode (ATGVar (gvtype gvar) $ T.pack ident) t ATEmpty ATEmpty in
             Right (nat, vars { globals = M.insert (T.pack ident) gvar $ globals vars })
 addGVar _ _ = Left (internalCE, (0, HT.TKEmpty))
+
+-- | If the specified token is `HT.TKString`, `addLiteral` adds a new literal to the list,
+-- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
+addLiteral :: Num i => (CT.TypeKind, HT.TokenIdx i) -> Vars i -> Either (T.Text, HT.TokenIdx i) (ATree i, Vars i)
+addLiteral (t, (_, HT.TKString cont)) vars 
+    | null (literals vars) = let lit = Literal (CT.removeAllExtents t) 0 cont; nat = ATNode (ATGVar t ".L.data.0") t ATEmpty ATEmpty in
+        Right (nat, vars { literals = lit : literals vars })
+    | otherwise = let ln' = succ $ ln $ head $ literals vars; lit = Literal (CT.removeAllExtents t) ln' cont; nat = ATNode (ATGVar t (".L.data." <> tshow ln')) t ATEmpty ATEmpty in
+        Right (nat, vars { literals = lit : literals vars })
+addLiteral _ _ = Left (internalCE, (0, HT.TKEmpty))

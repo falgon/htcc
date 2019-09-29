@@ -27,10 +27,12 @@ module Htcc.Token (
     arrayDeclSuffix
 ) where
 
+import qualified Data.ByteString as B
 import Data.Char (isDigit, isSpace)
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import Data.Tuple.Extra (first)
-import Data.List (find)
+import Data.List (find, elemIndex, splitAt)
 import Data.Maybe (fromJust)
 
 import qualified Htcc.CRules as CR
@@ -47,6 +49,7 @@ data Token i = TKReserved String -- ^ The reserved token
     | TKFor -- ^ The @for@ keyword
     | TKSizeof -- ^ The @sizeof@ keyword
     | TKType CR.TypeKind -- ^ Types
+    | TKString B.ByteString -- ^ The string literal
     | TKEmpty -- ^ The empty token (This is not used by `tokenize`, but when errors are detected during parsing, the token at error locations cannot be specified)
     deriving Eq
 
@@ -61,6 +64,7 @@ instance Show i => Show (Token i) where
     show TKFor = "for"
     show TKSizeof = "sizeof"
     show (TKType x) = show x
+    show (TKString s) = "\"" ++ T.unpack (T.decodeUtf8 s) ++ "\""
     show TKEmpty = ""
 
 -- | Lookup keyword from `String`. If the specified `String` is not keyword as C language, `lookupKeyword` returns `Nothing`.
@@ -102,6 +106,8 @@ tokenize' n xs = f n $ first fromIntegral $ dropSnd $ spanLen isSpace xs
         f n' (rssize, xxs@(x:xs'))
             | isDigit x = let (n'', ts, ds) = first3 fromIntegral $ spanLen isDigit xs'; cur = rssize + n'; next = succ cur + n''; num = x:ts in 
                 ((cur, TKNum $ read num):) <$> tokenize' next ds
+            | x == '"' = let cur = rssize + n' in flip (maybe (Left (cur, "\""))) (elemIndex '"' xs') $ \ind -> let (ts, ds) = splitAt ind xs'; next = 2 + cur + fromIntegral ind in
+                ((cur, TKString (T.encodeUtf8 $ T.pack (ts ++ "\0"))):) <$> tokenize' next (tail ds)
             | not (null xs') && [x, head xs'] `elem` CR.strOps = let cur = rssize + n'; next = cur + 2; op = [x, head xs'] in
                 ((cur, TKReserved op):) <$> tokenize' next (tail xs')
             | x `elem` CR.charOps = let cur = rssize + n'; next = succ cur in ((cur, TKReserved [x]):) <$> tokenize' next xs'

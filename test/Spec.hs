@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
+import Data.Char (ord)
+
 import Tests.Utils
 import qualified Tests.Test1 as StatementEqual
 import qualified Tests.Test2 as LinkFuncRet
@@ -142,7 +144,13 @@ main = runTestsEx [
     (StatementEqual.test "int main() { char x; return sizeof x; }", 1),
     (StatementEqual.test "int main() { char ar[10]; return sizeof ar; }", fromIntegral $ CT.sizeof $ CT.CTArray 10 CT.CTChar),
     (StatementEqual.test "int f(char a, char b, char c) { return a - b - c; } int main() { return f(7, 3, 3); }", 1),
-    (StatementEqual.test "int f(char a, int b, char c) { return a - b - c; } int main() { return f(7, 3, 3); }", 1) 
+    (StatementEqual.test "int f(char a, int b, char c) { return a - b - c; } int main() { return f(7, 3, 3); }", 1),
+    (StatementEqual.test "int main() { return \\\"abc\\\"[0]; }", ord 'a'),
+    (StatementEqual.test "int main() { return \\\"abc\\\"[1]; }", ord 'b'),
+    (StatementEqual.test "int main() { return \\\"abc\\\"[2]; }", ord 'c'),
+    (StatementEqual.test "int main() { return \\\"abc\\\"[3]; }", 0),
+    (StatementEqual.test "int main() { char* p = \\\"abc\\\"; return p[2]; }", ord 'c'),
+    (StatementEqual.test "int main() { return sizeof \\\"abc\\\"; }", 4)
     ] >> runTestsEx [
     (LinkFuncStdOut.test "int main() { return test_func1(); }" ["test_func1"], Right "test/Tests/csrc/test_func1.c::test_func1(): [OK]"),
     (LinkFuncStdOut.test "int main() { return test_func2(40); }" ["test_func2"], Right "test/Tests/csrc/test_func2.c::test_func2(40) outputs: \"2 3 5 7 11 13 17 19 23 29 31 37 \": [OK]") --,
