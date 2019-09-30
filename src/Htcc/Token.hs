@@ -24,13 +24,15 @@ module Htcc.Token (
     isTKReserved,
     isTKType,
     makeTypes,
-    arrayDeclSuffix
+    arrayDeclSuffix,
+    escapeChar
 ) where
 
 import qualified Data.ByteString as B
-import Data.Char (isDigit, isSpace)
+import Data.Char (isDigit, isSpace, chr)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import qualified Data.Map as M
 import Data.Tuple.Extra (first)
 import Data.List (find, elemIndex, splitAt)
 import Data.Maybe (fromJust)
@@ -98,6 +100,15 @@ isTKType :: Token i -> Bool
 isTKType (TKType _) = True
 isTKType _ = False
 
+-- | `escapeChar` converts escape characters in the input `String` to correct escape characters
+escapeChar :: String -> String
+escapeChar [] = []
+escapeChar (x:xs) 
+    | x == '\\' && not (null xs) = maybe (escapeChar xs) (flip (:) (escapeChar (tail xs))) (M.lookup (head xs) mp)
+    | otherwise = x : escapeChar xs
+    where
+        mp = M.fromList [('\\', '\\'), ('a', '\a'), ('b', '\b'), ('t', '\t'), ('n', '\n'), ('v', '\v'), ('f', '\f'), ('r', '\r'), ('e', chr 27), ('0', '\0')]
+
 -- | The core function of `tokenize`
 tokenize' :: (Integral i, Read i, Show i) => i -> String -> Either (i, T.Text) [TokenIdx i]
 tokenize' n xs = f n $ first fromIntegral $ dropSnd $ spanLen isSpace xs
@@ -107,7 +118,7 @@ tokenize' n xs = f n $ first fromIntegral $ dropSnd $ spanLen isSpace xs
             | isDigit x = let (n'', ts, ds) = first3 fromIntegral $ spanLen isDigit xs'; cur = rssize + n'; next = succ cur + n''; num = x:ts in 
                 ((cur, TKNum $ read num):) <$> tokenize' next ds
             | x == '"' = let cur = rssize + n' in flip (maybe (Left (cur, "\""))) (elemIndex '"' xs') $ \ind -> let (ts, ds) = splitAt ind xs'; next = 2 + cur + fromIntegral ind in
-                ((cur, TKString (T.encodeUtf8 $ T.pack (ts ++ "\0"))):) <$> tokenize' next (tail ds)
+                ((cur, TKString (T.encodeUtf8 $ T.pack (escapeChar ts ++ "\0"))):) <$> tokenize' next (tail ds)
             | not (null xs') && [x, head xs'] `elem` CR.strOps = let cur = rssize + n'; next = cur + 2; op = [x, head xs'] in
                 ((cur, TKReserved op):) <$> tokenize' next (tail xs')
             | x `elem` CR.charOps = let cur = rssize + n'; next = succ cur in ((cur, TKReserved [x]):) <$> tokenize' next xs'

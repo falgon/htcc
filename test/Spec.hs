@@ -150,7 +150,19 @@ main = runTestsEx [
     (StatementEqual.test "int main() { return \\\"abc\\\"[2]; }", ord 'c'),
     (StatementEqual.test "int main() { return \\\"abc\\\"[3]; }", 0),
     (StatementEqual.test "int main() { char* p = \\\"abc\\\"; return p[2]; }", ord 'c'),
-    (StatementEqual.test "int main() { return sizeof \\\"abc\\\"; }", 4)
+    (StatementEqual.test "int main() { return sizeof \\\"abc\\\"; }", 4),
+    (StatementEqual.test "int main() { return \\\"\\a\\\"[0]; }", ord '\a'),
+    (StatementEqual.test "int main() { return \\\"\\b\\\"[0]; }", ord '\b'),
+    (StatementEqual.test "int main() { return \\\"\\t\\\"[0]; }", ord '\t'),
+    (StatementEqual.test "int main() { return \\\"\\n\\\"[0]; }", ord '\n'),
+    (StatementEqual.test "int main() { return \\\"\\v\\\"[0]; }", ord '\v'),
+    (StatementEqual.test "int main() { return \\\"\\f\\\"[0]; }", ord '\f'),
+    (StatementEqual.test "int main() { return \\\"\\r\\\"[0]; }", ord '\r'),
+    (StatementEqual.test "int main() { return \\\"\\e\\\"[0]; }", ord '\ESC'),
+    (StatementEqual.test "int main() { return \\\"\\0\\\"[0]; }", ord '\0'),
+    (StatementEqual.test "int main() { return \\\"\\j\\\"[0]; }", ord 'j'),
+    (StatementEqual.test "int main() { return \\\"\\k\\\"[0]; }", ord 'k'),
+    (StatementEqual.test "int main() { return \\\"\\l\\\"[0]; }", ord 'l')
     ] >> runTestsEx [
     (LinkFuncStdOut.test "int main() { return test_func1(); }" ["test_func1"], Right "test/Tests/csrc/test_func1.c::test_func1(): [OK]"),
     (LinkFuncStdOut.test "int main() { return test_func2(40); }" ["test_func2"], Right "test/Tests/csrc/test_func2.c::test_func2(40) outputs: \"2 3 5 7 11 13 17 19 23 29 31 37 \": [OK]") --,
