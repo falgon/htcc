@@ -17,6 +17,7 @@ module Htcc.Utils (
     lastInit,
     -- * For Data.Text
     tshow,
+    spanLenT,
     -- * For Data.Maybe
     fstNothingIdx,
     -- * For Numeric.Natural
@@ -86,6 +87,16 @@ spanLen = spanLen' 0
 -- | Convert `Show` class instance to `Data.Text`.
 tshow :: Show a => a -> T.Text
 tshow = T.pack . show
+
+-- | `T.Text` version of the `spanLen`.
+spanLenT :: (Char -> Bool) -> T.Text -> (Int, T.Text, T.Text)
+spanLenT = spanLenT' 0
+    where
+        spanLenT' n f xs = case T.uncons xs of
+            Just (x, xs') 
+                | f x -> let (n', ys, zs) = spanLenT' (succ n) f xs' in (n', T.cons x ys, zs)
+                | otherwise -> (n, T.empty, xs)
+            Nothing -> (n, T.empty, T.empty)
 
 -- | `fstNothingIdx` returns the index of the first `Nothing`. If `Nothing` is not exist in given list, returns `Nothing`.
 fstNothingIdx :: [Maybe a] -> Maybe Int

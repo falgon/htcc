@@ -104,6 +104,7 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATDefFunc T.Text (Maybe [ATree a]) -- ^ The function definition
     | ATCallFunc T.Text (Maybe [ATree a]) -- ^ The function call. It has a offset value and arguments (`Maybe`)
     | ATExprStmt -- ^ The expression of a statement
+    | ATStmtExpr [ATree a] -- ^ The statement of a expression (GNU extension)
     | ATNull (ATree a) -- ^ Indicates nothing to do
     deriving Show
 

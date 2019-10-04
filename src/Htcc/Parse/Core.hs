@@ -45,7 +45,7 @@ import Data.STRef (newSTRef, readSTRef, writeSTRef)
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import qualified Data.Text as T
-import Control.Monad (forM, zipWithM)
+import Control.Monad (forM, zipWithM, when)
 import Control.Monad.ST (runST)
 import Control.Monad.Loops (unfoldrM)
 import Numeric.Natural
@@ -56,6 +56,8 @@ import qualified Htcc.CRules.Types as CT
 import Htcc.Parse.AST
 import Htcc.Parse.Var
 import Htcc.Parse.Utils
+
+-- import Debug.Trace
 
 -- | `program` indicates \(\eqref{eq:eigth}\) among the comments of `inners`.
 program :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> Vars i -> Either (T.Text, HT.TokenIdx i) ([ATree i], Vars i)
@@ -80,7 +82,7 @@ globalDef tks@((_, HT.TKType _):_) at va = flip (maybe $ Left ("ISO C forbids de
                         flip (either ((<$) Nothing . writeSTRef eri . Just)) m $ \(vat, vars') ->
                             Just (vat, tail args') <$ writeSTRef v vars'
                     (>>=) (readSTRef eri) $ flip maybe (return . Left) $ 
-                        fmap (second3 (flip (ATNode (ATDefFunc (T.pack fname) $ if null mk then Nothing else Just mk) CT.CTUndef) ATEmpty)) . stmt st atn <$> readSTRef v
+                        fmap (second3 (flip (ATNode (ATDefFunc fname $ if null mk then Nothing else Just mk) CT.CTUndef) ATEmpty)) . stmt st atn <$> readSTRef v
                 _ -> stmt tk atn vars
         globalDef' ty' (cur@(_, HT.TKIdent _):xs) _ vars = case HT.arrayDeclSuffix ty' xs of -- TODO: support initialize by global variables
             Nothing -> case xs of 
@@ -189,7 +191,7 @@ assign xs atn vars = flip (either Left) (bitwiseOr xs atn vars) $ \(ert, erat, e
 -- {\rm factor} &=& {\rm num} \mid\ {\rm ident}\ \left({\rm "(" \left(expr\ \left(\left(","\ expr\right)^\ast\right)?\right)? ")"}\right)?\ \mid\ "(" {\rm expr} ")"\label{eq:third}\tag{13}
 -- \end{eqnarray}
 -- \]
-inners :: ([HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)) -> [(String, ATKind i)] -> [HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)
+inners :: ([HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)) -> [(T.Text, ATKind i)] -> [HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)
 inners _ _ [] atn vars = Right ([], atn, vars)
 inners f cs xs atn vars = either Left (uncurry3 (inners' f cs)) $ f xs atn vars
     where
@@ -281,23 +283,40 @@ unary xs at vars = either Left (uncurry3 f) $ factor xs at vars
 -- | `factor` indicates \(\eqref{eq:third}\) amount the comments of `inners`.
 factor :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)
 factor [] atn vars = Right ([], atn, vars)
+factor ((_, HT.TKReserved "("):xs@((_, HT.TKReserved "{"):_)) _ vars = flip (maybe $ Left (internalCE, head xs)) (HT.takeBrace "{" "}" xs) $ -- for statement expression (GNU extension: <https://gcc.gnu.org/onlinedocs/gcc/Statement-Exprs.html>)
+    either (Left . ("the statement expression is not closed",)) $ \(scope, ds) -> case ds of
+        ((_, HT.TKReserved ")"):ds') -> runST $ do
+            eri <- newSTRef Nothing
+            v <- newSTRef vars
+            lastA <- newSTRef ATEmpty 
+            mk <- flip unfoldrM (init $ tail scope) $ \ert -> if null ert then return Nothing else do
+                ervars <- readSTRef v
+                flip (either $ \err -> Nothing <$ writeSTRef eri (Just err)) (stmt ert ATEmpty ervars) $ \(ert', erat', ervars') -> 
+                    Just (erat', ert') <$ (writeSTRef v ervars' >> when (case erat' of ATEmpty -> False; _ -> True) (writeSTRef lastA erat'))
+            (>>=) (readSTRef eri) $ flip maybe (return . Left) $ do
+                v' <- readSTRef v
+                flip fmap (readSTRef lastA) $ \z -> case z of
+                        (ATNode ATExprStmt _ lhs _) -> Right (ds', ATNode (ATStmtExpr (init mk ++ [lhs])) (atype lhs) ATEmpty ATEmpty, v')
+                        _ -> Left ("void value not ignored as it ought to be. the statement expression starts here:", head xs)
+        _ -> Left $ if null scope then ("expected ')' token. the statement expression starts here: ", head xs) else
+            ("expected ')' token after '" <> tshow (snd $ last scope) <> "' token", last scope)
 factor (cur@(_, HT.TKReserved "("):xs) atn vars = flip (either Left) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for (expr)
     (_, HT.TKReserved ")"):ys -> Right (ys, erat, ervars)
     ert' -> Left $ expectedMessage ")" cur ert'
 factor ((_, HT.TKNum n):xs) _ vars = Right (xs, ATNode (ATNum n) CT.CTInt ATEmpty ATEmpty, vars) -- for numbers
-factor ((_, HT.TKIdent v):(_, HT.TKReserved "("):(_, HT.TKReserved ")"):xs) _ vars = Right (xs, ATNode (ATCallFunc (T.pack v) Nothing) CT.CTInt ATEmpty ATEmpty, vars) -- for no arguments function call
+factor ((_, HT.TKIdent v):(_, HT.TKReserved "("):(_, HT.TKReserved ")"):xs) _ vars = Right (xs, ATNode (ATCallFunc v Nothing) CT.CTInt ATEmpty ATEmpty, vars) -- for no arguments function call
 factor (cur1@(_, HT.TKIdent v):cur2@(_, HT.TKReserved "("):xs) _ vars = flip (maybe $ Left (internalCE, cur1)) (HT.takeBrace "(" ")" (cur2:xs)) $
     either (Left . ("invalid function call",)) $ \(fsec, ds) -> flip (maybe $ Left ("invalid function call", cur1)) (HT.takeExps (cur1:fsec)) $ \exps -> runST $ do
         mk <- newSTRef vars
         expl <- forM exps $ \etk -> readSTRef mk >>= either (return . Left) (\(_, erat, ervar) -> Right erat <$ writeSTRef mk ervar) . expr etk ATEmpty
         if any isLeft expl then return $ Left $ head $ lefts expl else do
             vars' <- readSTRef mk
-            return $ Right (ds, ATNode (ATCallFunc (T.pack v) (Just $ rights expl)) CT.CTInt ATEmpty ATEmpty, vars')
+            return $ Right (ds, ATNode (ATCallFunc v (Just $ rights expl)) CT.CTInt ATEmpty ATEmpty, vars')
 factor ((_, HT.TKSizeof):xs) atn vars = second3 (\x -> ATNode (ATNum (fromIntegral $ CT.sizeof $ atype x)) CT.CTInt ATEmpty ATEmpty) <$> unary xs atn vars -- for `sizeof` -- TODO: the type of sizeof must be @size_t@
 factor (cur@(_, HT.TKString slit):xs) _ vars = uncurry (xs,,) <$> addLiteral (CT.CTArray (fromIntegral $ B.length slit) CT.CTChar, cur) vars -- for literals
-factor (cur@(_, HT.TKIdent ident):xs) _ vars = flip (maybe (Left ("undefined variable", cur))) (lookupVar (T.pack ident) vars) $ \case -- if the variable is not declared, it returns error wrapped with `Left`
+factor (cur@(_, HT.TKIdent ident):xs) _ vars = flip (maybe (Left ("undefined variable", cur))) (lookupVar ident vars) $ \case -- if the variable is not declared, it returns error wrapped with `Left`
     Right (LVar t o) -> Right (xs, ATNode (ATLVar t o) t ATEmpty ATEmpty, vars) -- for declared local variable
-    Left (GVar t) -> Right (xs, ATNode (ATGVar t $ T.pack ident) t ATEmpty ATEmpty, vars) -- for declared global variable
+    Left (GVar t) -> Right (xs, ATNode (ATGVar t ident) t ATEmpty ATEmpty, vars) -- for declared global variable
 factor ert _ _ = Left (if null ert then "unexpected token in program" else "unexpected token '" <> tshow (snd (head ert)) <> "' in program", 
     if null ert then (0, HT.TKEmpty) else head ert)
 
@@ -315,6 +334,7 @@ stackSize (ATNode (ATDefFunc _ args) _ body _) = toNatural $ alignas 8 $ sum $ m
         f ATEmpty s = s
         f (ATNode (ATLVar t x) _ l r) s = let i = S.insert (t, x) s in f l i `S.union` f r i
         f (ATNode (ATBlock xs) _ l r) s = let i = foldr (S.union . (`f` s)) s xs in f l i `S.union` f r i
+        f (ATNode (ATStmtExpr xs) t l r) s = f (ATNode (ATBlock xs) t l r) s 
         f (ATNode (ATFor xs) _ l r) s = let i = foldr (S.union . flip f s . fromATKindFor) S.empty xs in f l i `S.union` f r i
         f (ATNode (ATNull x) _ _ _) s = f x s
         f (ATNode _ _ l r) s = f l s `S.union` f r s

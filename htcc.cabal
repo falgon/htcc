@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: abeda3bb97480b52d1bd124b4738ac3c070db2aac38a5d423d0a7b12620767a8
+-- hash: bae060cb3ed869826254fd0cc1e71d19f7d18b288d0ba5b7f53b2979deefbc3d
 
 name:           htcc
 version:        0.0.0.1
@@ -56,6 +56,8 @@ library
       Htcc.Parse.Utils
       Htcc.Parse.Var
       Htcc.Token
+      Htcc.Token.Core
+      Htcc.Token.Utils
       Htcc.Utils
   other-modules:
       Paths_htcc

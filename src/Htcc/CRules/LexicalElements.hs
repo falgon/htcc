@@ -9,10 +9,14 @@ Portability : POSIX
 
 LexicalElements of C language
 -}
+{-# LANGUAGE OverloadedStrings #-}
 module Htcc.CRules.LexicalElements (
     charOps,
-    strOps
+    strOps,
+    strOpsT
 ) where
+
+import qualified Data.Text as T
 
 {-# INLINE charOps #-}
 -- | Valid one characters as C language
@@ -23,6 +27,18 @@ charOps = "+-*/()<>=;{},&|^%!~[]"
 -- | Valid two characters as C language
 strOps :: [String]
 strOps = [
+    "<=",
+    ">=",
+    "==",
+    "!=",
+    "<<",
+    ">>"
+    ]
+
+{-# INLINE strOpsT #-}
+-- | Valid two characters as C language
+strOpsT :: [T.Text]
+strOpsT = [
     "<=",
     ">=",
     "==",

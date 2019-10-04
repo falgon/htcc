@@ -16,7 +16,7 @@ module Htcc.Parse.Utils (
 ) where
 
 import qualified Data.Text as T
-import qualified Htcc.Token as HT
+import qualified Htcc.Token.Core as HT
 import Htcc.Utils (tshow)
 
 -- | "expected" error message

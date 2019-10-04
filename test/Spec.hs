@@ -162,7 +162,11 @@ main = runTestsEx [
     (StatementEqual.test "int main() { return \\\"\\0\\\"[0]; }", ord '\0'),
     (StatementEqual.test "int main() { return \\\"\\j\\\"[0]; }", ord 'j'),
     (StatementEqual.test "int main() { return \\\"\\k\\\"[0]; }", ord 'k'),
-    (StatementEqual.test "int main() { return \\\"\\l\\\"[0]; }", ord 'l')
+    (StatementEqual.test "int main() { return \\\"\\l\\\"[0]; }", ord 'l'),
+    (StatementEqual.test "int main() { return ({ 42; }); }", 42),
+    (StatementEqual.test "int main() { return ({ 1; 2; 3; }); }", 3),
+    (StatementEqual.test "int main() { ({ 1; return 2; 3; }); return 4; }", 2),
+    (StatementEqual.test "int main() { return ({ int a = 42; a; }); }", 42)
     ] >> runTestsEx [
     (LinkFuncStdOut.test "int main() { return test_func1(); }" ["test_func1"], Right "test/Tests/csrc/test_func1.c::test_func1(): [OK]"),
     (LinkFuncStdOut.test "int main() { return test_func2(40); }" ["test_func2"], Right "test/Tests/csrc/test_func2.c::test_func2(40) outputs: \"2 3 5 7 11 13 17 19 23 29 31 37 \": [OK]") --,

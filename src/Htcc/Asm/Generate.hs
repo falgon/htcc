@@ -94,6 +94,7 @@ genStmt c (ATNode (ATCallFunc x (Just args)) _ _ _) = let (toReg, _) = splitAt 6
     T.putStr $ I.defLLbl ".end." n
     T.putStr $ I.push rax
 genStmt c (ATNode (ATBlock stmts) _ _ _) = mapM_ (genStmt c) stmts
+genStmt c (ATNode (ATStmtExpr stmts) _ _ _) = mapM_ (genStmt c) stmts
 genStmt c (ATNode (ATFor exps) _ _ _) = do
     n <- c
     maybe (return ()) (genStmt c . fromATKindFor) $ find isATForInit exps
@@ -192,8 +193,15 @@ textSection tk = do
     T.putStrLn ".text" >> mapM_ (genStmt inc) tk
 
 -- | Generate full assembly code from C language program
-casm :: String -> IO ()
+{-casm :: String -> IO ()
 casm xs = let sline = T.pack xs in flip (either (tokenizeErrExit sline)) (f xs) $ \x -> 
     flip (either $ parseErrExit sline) (parse x) $ \(tk, gvars, lits) -> T.putStr I.declIS >> dataSection gvars lits >> textSection tk
         where
             f = tokenize :: String -> Either (Int, T.Text) [TokenIdx Int]
+-}
+
+casm :: T.Text -> IO ()
+casm xs = flip (either (tokenizeErrExit xs)) (f xs) $ \x -> 
+    flip (either $ parseErrExit xs) (parse x) $ \(tk, gvars, lits) -> T.putStr I.declIS >> dataSection gvars lits >> textSection tk
+        where
+            f = tokenize :: T.Text -> Either (Int, T.Text) [TokenIdx Int]
