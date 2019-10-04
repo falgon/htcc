@@ -12,19 +12,23 @@ The tokenizer
 {-# LANGUAGE ScopedTypeVariables, OverloadedStrings #-}
 module Htcc.Token.Core (
     -- * Token data types
+    TokenLCNums (..),
+    TokenLC,
     Token (..),
-    TokenIdx,
     -- * Tokenizer
     tokenize,
     -- * Utilities for accessing to token data
+    length,
     isTKNum,
     isTKType,
     isTKIdent,
     isTKReserved
 ) where
 
+import Prelude hiding (length)
+import qualified Prelude as P (length)
 import qualified Data.ByteString as B
-import Data.Char (isDigit, isSpace, chr)
+import Data.Char (isDigit, chr)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Read as T
@@ -33,7 +37,7 @@ import Data.Tuple.Extra (first)
 import Data.List (find)
 
 import qualified Htcc.CRules as CR
-import Htcc.Utils (spanLenT, dropSnd, first3, tshow)
+import Htcc.Utils (spanLenT, dropSnd, first3, tshow, isStrictSpace, lor)
 
 -- | Token type
 data Token i = TKReserved T.Text -- ^ The reserved token
@@ -64,12 +68,38 @@ instance Show i => Show (Token i) where
     show (TKString s) = "\"" ++ T.unpack (T.decodeUtf8 s) ++ "\""
     show TKEmpty = ""
 
+{-# INLINE length #-}
+-- | `length` returns the token length
+length :: Show i => Token i -> Int
+length (TKReserved s) = T.length s
+length (TKNum i) = P.length $ show i
+length (TKIdent i) = T.length i
+length TKReturn = 5
+length TKIf = 2
+length TKElse = 4
+length TKWhile = 5
+length TKFor = 3
+length TKSizeof = 6
+length (TKType tk) = P.length $ show tk
+length (TKString s) = B.length s
+length TKEmpty = 0
+
 -- | Lookup keyword from `T.Text`. If the specified `T.Text` is not keyword as C language, `lookupKeyword` returns `Nothing`.
 lookupKeyword :: Show i => T.Text -> Maybe (Token i)
 lookupKeyword s = find ((==) s . tshow) [TKReturn, TKWhile, TKIf, TKElse, TKFor, TKSizeof, TKType CR.CTInt, TKType CR.CTChar]
 
--- | `Token` and its index.
-type TokenIdx i = (i, Token i)
+-- | `TokenLCNums` is data structure for storing the line number and character number of each token
+data TokenLCNums i = TokenLCNums -- ^ The constructor of `TokenLCNums`
+    { 
+        tkLn :: i, -- ^ line number
+        tkCn :: i -- ^ character number
+    } deriving Eq
+
+instance Show i => Show (TokenLCNums i) where
+    show (TokenLCNums ln cn) = show ln ++ ":" ++ show cn
+
+-- | `Token` and its `TokenLCNums`.
+type TokenLC i = (TokenLCNums i, Token i)
 
 {-# INLINE isTKIdent #-}
 -- | Utility for `TKIdent`. When the argument is `TKIdent`, it returns `True`, otherwise `False`.
@@ -107,42 +137,26 @@ escapeChar xxs = case T.uncons xxs of
 
 
 -- | The core function of `tokenize`
-{-
-tokenize' :: (Integral i, Read i, Show i) => i -> T.Text -> Either (i, T.Text) [TokenIdx i]
-tokenize' n xs = f n $ first fromIntegral $ dropSnd $ spanLen isSpace xs
-    where
-        f _ (_, []) = Right []
-        f n' (rssize, xxs@(x:xs'))
-            | isDigit x = let (n'', ts, ds) = first3 fromIntegral $ spanLen isDigit xs'; cur = rssize + n'; next = succ cur + n''; num = x:ts in 
-                ((cur, TKNum $ read num):) <$> tokenize' next ds
-            | x == '"' = let cur = rssize + n' in flip (maybe (Left (cur, "\""))) (elemIndex '"' xs') $ \ind -> let (ts, ds) = splitAt ind xs'; next = 2 + cur + fromIntegral ind in
-                ((cur, TKString (T.encodeUtf8 $ T.pack (escapeChar ts ++ "\0"))):) <$> tokenize' next (tail ds)
-            | not (null xs') && [x, head xs'] `elem` CR.strOps = let cur = rssize + n'; next = cur + 2; op = [x, head xs'] in
-                ((cur, TKReserved op):) <$> tokenize' next (tail xs')
-            | x `elem` CR.charOps = let cur = rssize + n'; next = succ cur in ((cur, TKReserved [x]):) <$> tokenize' next xs'
-            | otherwise = let (len, tk, ds) = spanLen CR.isValidChar xxs; cur = n' + rssize in 
-                if len == 0 then Left (cur, T.pack $ takeWhile (not . CR.isValidChar) ds) else let next = cur + fromIntegral len in 
-                    maybe (((cur, TKIdent tk):) <$> tokenize' next ds) (\tkn -> ((cur, tkn):) <$> tokenize' next ds) $ lookupKeyword tk
--}
-
-tokenize' :: (Integral i, Read i, Show i) => i -> T.Text -> Either (i, T.Text) [TokenIdx i]
-tokenize' n xs = f n $ first fromIntegral $ dropSnd $ spanLenT isSpace xs
+tokenize' :: (Integral i, Read i, Show i) => TokenLCNums i -> T.Text -> Either (TokenLCNums i, T.Text) [TokenLC i]
+tokenize' n xs = f n $ first fromIntegral $ dropSnd $ spanLenT isStrictSpace xs
     where
         f n' (rssize, xxs) = case T.uncons xxs of
             Just (x, xs')
-                | isDigit x -> let (n'', ts, ds) = first3 fromIntegral $ spanLenT isDigit xs'; cur = rssize + n''; next = succ cur + n''; num = T.cons x ts in
+                | lor [(=='\n'), (=='\r')] x -> tokenize' (TokenLCNums (tkLn n' + rssize) 1) xs'
+                | isDigit x -> let (n'', ts, ds) = first3 fromIntegral $ spanLenT isDigit xs'; cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = tkCn cur + n'' }; num = T.cons x ts in
                     flip (either (const $ Left (cur, T.singleton x))) (T.decimal num) $ \(nu, _) -> ((cur, TKNum nu):) <$> tokenize' next ds
-                | x == '"' -> let cur = rssize + n' in flip (maybe (Left (cur, "\""))) (T.findIndex (=='"') xs') $ \ind -> let (ts, ds) = T.splitAt ind xs'; next = 2 + cur + fromIntegral ind in
-                    ((cur, TKString (T.encodeUtf8 $ T.append (escapeChar ts) "\0")):) <$> tokenize' next (T.tail ds) 
-                | not (T.null xs') && (T.take 2 xxs) `elem` CR.strOpsT -> let cur = rssize + n'; next = 2 + cur; op = T.take 2 xxs in
+                | x == '"' -> let cur = n' { tkCn = rssize + tkCn n' } in flip (maybe (Left (cur, "\""))) (T.findIndex (=='"') xs') $ \ind -> 
+                    let (ts, ds) = T.splitAt ind xs'; next = n' { tkCn = 2 + tkCn cur + fromIntegral ind } in 
+                        ((cur, TKString (T.encodeUtf8 $ T.append (escapeChar ts) "\0")):) <$> tokenize' next (T.tail ds)
+                | not (T.null xs') && (T.take 2 xxs) `elem` CR.strOps -> let cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = 2 + tkCn cur }; op = T.take 2 xxs in
                     ((cur, TKReserved op):) <$> tokenize' next (T.tail xs')
-                | elem x CR.charOps -> let cur = rssize + n'; next = succ cur in ((cur, TKReserved (T.singleton x)):) <$> tokenize' next xs'
-                | otherwise -> let (len, tk, ds) = spanLenT CR.isValidChar xxs; cur = n' + rssize in
-                    if len == 0 then Left (cur, T.takeWhile (not . CR.isValidChar) ds) else let next = cur + fromIntegral len in
+                | elem x CR.charOps -> let cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = succ (tkCn cur) } in ((cur, TKReserved (T.singleton x)):) <$> tokenize' next xs'
+                | otherwise -> let (len, tk, ds) = spanLenT CR.isValidChar xxs; cur = n' { tkCn = tkCn n' + rssize } in
+                    if len == 0 then Left (cur, T.takeWhile (not . CR.isValidChar) ds) else let next = n' { tkCn = tkCn cur + fromIntegral len } in
                         maybe (((cur, TKIdent tk):) <$> tokenize' next ds) (\tkn -> ((cur, tkn):) <$> tokenize' next ds) $ lookupKeyword tk
             _ -> Right []
 
 -- | Tokenize the `T.Text`. If an invalid chraracter matches as C language, the part and the character are returned.
 -- Otherwise, @[TokenIdx i]@ is returned.
-tokenize :: (Integral i, Read i, Show i) => T.Text -> Either (i, T.Text) [TokenIdx i]
-tokenize = tokenize' 1
+tokenize :: (Integral i, Read i, Show i) => T.Text -> Either (TokenLCNums i, T.Text) [TokenLC i]
+tokenize = tokenize' (TokenLCNums 1 1)

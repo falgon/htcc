@@ -2,9 +2,9 @@ module Main where
 
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
+import System.IO (hSetNewlineMode, stdin, universalNewlineMode)
 import Data.Bool (bool)
--- import qualified Data.Text.Lazy.IO as T
-import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import Data.Tuple.Extra (second, dupe)
 
 import Htcc.Asm.Generate (casm)
@@ -16,4 +16,4 @@ maybeExit :: Maybe a -> IO a
 maybeExit = maybe exitFailure return
 
 main :: IO ()
-main = checkArgs >>= maybeExit >>= casm . T.pack . head
+main = hSetNewlineMode stdin universalNewlineMode >> checkArgs >>= maybeExit >>= T.readFile . head >>= casm

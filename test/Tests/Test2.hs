@@ -6,14 +6,16 @@ module Tests.Test2 (
 import Tests.Utils
 import Control.Monad (forM_)
 import Control.Exception (finally)
-import Data.Text (pack)
+import qualified Data.Text as T 
+import qualified Data.Text.IO as T
 import Data.List (unwords)
 
 test :: String -> [String] -> IO Int
 test x fnames = let obj = map (++".o") fnames in
-    flip finally (clean $ ["tmp", "tmp.s"] ++ obj) $ do 
-        execErrFin "stack build"
-        execErrFin $ "stack exec htcc -- \"" <> pack x <> "\" > tmp.s"
-        forM_ fnames $ \fname -> execErrFin $ "cc -c test/Tests/csrc/" <> pack fname <> ".c"
-        execErrFin $ "gcc " <> pack (unwords obj) <> " tmp.s -o tmp"
+    flip finally (clean $ ["tmp", "tmp.s", "tmp.c"] ++ obj) $ do 
+        T.writeFile "./tmp.c" (T.pack x)
+        -- execErrFin "stack build"
+        execErrFin $ "stack exec htcc -- tmp.c > tmp.s"
+        forM_ fnames $ \fname -> execErrFin $ "cc -c test/Tests/csrc/" <> T.pack fname <> ".c"
+        execErrFin $ "gcc " <> T.pack (unwords obj) <> " tmp.s -o tmp"
         exitCode id 0 <$> exec "./tmp"

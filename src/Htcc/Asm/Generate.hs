@@ -30,7 +30,7 @@ import System.Exit (exitFailure)
 
 -- Imports Tokenizer and parser
 import Htcc.Utils (err, putStrLnErr, putStrErr, counter, tshow, toInts)
-import Htcc.Token (TokenIdx, tokenize)
+import qualified Htcc.Token as HT
 import Htcc.Parse (ATKind (..), ATree (..), GVar (..), Literal (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, parse, stackSize)
 
 -- Imports about assembly
@@ -163,22 +163,24 @@ genStmt c (ATNode k t lhs rhs) = flip finally (T.putStr $ I.push rax) $ genStmt 
 genStmt _ _ = return ()
 
 repSpace :: Integral i => i -> IO ()
-repSpace = flip (>>) (putStrLnErr (T.singleton '^')) . mapM_ (putStrErr . T.pack . flip replicate ' ' . pred) . toInts
+repSpace = flip (>>) (putStrErr (T.singleton '^')) . mapM_ (putStrErr . T.pack . flip replicate ' ' . pred) . toInts
 
-tokenizeErrExit :: (Integral i, Show i) => T.Text -> (i, T.Text) -> IO ()
+tokenizeErrExit :: (Integral i, Show i) => T.Text -> (HT.TokenLCNums i, T.Text) -> IO ()
 tokenizeErrExit xs e = do
     ($ e) . fix $ \f (i, s) -> unless (T.null s) $ do
         putStrLnErr (tshow i <> ": error: stray '" <> T.singleton (T.head s) <> "' in program")
         putStrLnErr xs
-        repSpace i
-        f (succ i, T.tail s)
+        repSpace (HT.tkCn i)
+        f (i { HT.tkCn = succ (HT.tkCn i) }, T.tail s)
     exitFailure
 
-parseErrExit :: (Integral i, Show i) => T.Text -> (T.Text, TokenIdx i) -> IO ()
-parseErrExit xs (s, (i, _)) = do
+parseErrExit :: (Integral i, Show i) => T.Text -> (T.Text, HT.TokenLC i) -> IO ()
+parseErrExit xs (s, (i, etk)) = let errMesPre = T.replicate 4 " " <> tshow (HT.tkCn i) in do
     putStrLnErr (tshow i <> ": error: " <> s)
-    putStrLnErr xs
-    repSpace i
+    putStrErr $ errMesPre <> " | "
+    putStrLnErr ((T.lines xs) !! (succ $ fromIntegral $ HT.tkLn i))
+    putStrErr $ T.replicate (T.length errMesPre) " " <> " | "
+    repSpace (HT.tkCn i) >> putStrLnErr (T.replicate (pred $ HT.length etk) "~")
     exitFailure
 
 dataSection :: M.Map T.Text GVar -> [Literal] -> IO ()
@@ -193,15 +195,9 @@ textSection tk = do
     T.putStrLn ".text" >> mapM_ (genStmt inc) tk
 
 -- | Generate full assembly code from C language program
-{-casm :: String -> IO ()
-casm xs = let sline = T.pack xs in flip (either (tokenizeErrExit sline)) (f xs) $ \x -> 
-    flip (either $ parseErrExit sline) (parse x) $ \(tk, gvars, lits) -> T.putStr I.declIS >> dataSection gvars lits >> textSection tk
-        where
-            f = tokenize :: String -> Either (Int, T.Text) [TokenIdx Int]
--}
-
 casm :: T.Text -> IO ()
 casm xs = flip (either (tokenizeErrExit xs)) (f xs) $ \x -> 
     flip (either $ parseErrExit xs) (parse x) $ \(tk, gvars, lits) -> T.putStr I.declIS >> dataSection gvars lits >> textSection tk
         where
-            f = tokenize :: T.Text -> Either (Int, T.Text) [TokenIdx Int]
+            f = HT.tokenize :: T.Text -> Either (HT.TokenLCNums Int, T.Text) [HT.TokenLC Int]
+

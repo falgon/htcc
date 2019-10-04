@@ -12,8 +12,7 @@ LexicalElements of C language
 {-# LANGUAGE OverloadedStrings #-}
 module Htcc.CRules.LexicalElements (
     charOps,
-    strOps,
-    strOpsT
+    strOps
 ) where
 
 import qualified Data.Text as T
@@ -25,20 +24,8 @@ charOps = "+-*/()<>=;{},&|^%!~[]"
 
 {-# INLINE strOps #-}
 -- | Valid two characters as C language
-strOps :: [String]
+strOps :: [T.Text]
 strOps = [
-    "<=",
-    ">=",
-    "==",
-    "!=",
-    "<<",
-    ">>"
-    ]
-
-{-# INLINE strOpsT #-}
--- | Valid two characters as C language
-strOpsT :: [T.Text]
-strOpsT = [
     "<=",
     ">=",
     "==",

@@ -15,6 +15,8 @@ module Htcc.Utils (
     takeWhileLen,
     spanLen,
     lastInit,
+    -- * For Char
+    isStrictSpace,
     -- * For Data.Text
     tshow,
     spanLenT,
@@ -46,7 +48,8 @@ module Htcc.Utils (
 
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import Data.Tuple.Extra (both)
+import Data.Char (isSpace)
+import Data.Tuple.Extra (second, both)
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Numeric.Natural
 import System.IO (stderr)
@@ -70,7 +73,7 @@ takeWhileLen = takeWhileLen' 0
     where
         takeWhileLen' n _ [] = (n, [])
         takeWhileLen' n f (x:xs)
-            | f x = let (n', ys) = takeWhileLen' (succ n) f xs in (n', x:ys)
+            | f x = second (x:) $ takeWhileLen' (succ n) f xs 
             | otherwise = (n, [])
 
 -- | Almost the same as `span`, but returns the number of elements in the list that
@@ -80,7 +83,7 @@ spanLen = spanLen' 0
     where
         spanLen' n _ [] = (n, [], [])
         spanLen' n f xs@(x:xs')
-            | f x = let (n', ys, zs) = spanLen' (succ n) f xs' in (n', x:ys, zs)
+            | f x = second3 (x:) $ spanLen' (succ n) f xs'
             | otherwise = (n, [], xs)
 
 {-# INLINE tshow #-}
@@ -94,7 +97,7 @@ spanLenT = spanLenT' 0
     where
         spanLenT' n f xs = case T.uncons xs of
             Just (x, xs') 
-                | f x -> let (n', ys, zs) = spanLenT' (succ n) f xs' in (n', T.cons x ys, zs)
+                | f x -> second3 (T.cons x) $ spanLenT' (succ n) f xs'
                 | otherwise -> (n, T.empty, xs)
             Nothing -> (n, T.empty, T.empty)
 
@@ -198,3 +201,7 @@ toInts :: Integral i => i -> [Int]
 toInts x = if xd >= 1 && xm == 0 then [fromIntegral x] else replicate xd (maxBound :: Int) ++ [xm]
     where
         (xd, xm) = both fromIntegral $ x `divMod` fromIntegral (maxBound :: Int)
+
+-- | Returns True only if the given string is not a linefeed code and `Data.Char.isSpace` returns `True`, otherwise returns `False`. 
+isStrictSpace :: Char -> Bool
+isStrictSpace = land [(not . (=='\n')), (not . (=='\r')), isSpace]

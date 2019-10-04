@@ -60,12 +60,12 @@ import Htcc.Parse.Utils
 -- import Debug.Trace
 
 -- | `program` indicates \(\eqref{eq:eigth}\) among the comments of `inners`.
-program :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> Vars i -> Either (T.Text, HT.TokenIdx i) ([ATree i], Vars i)
+program :: (Show i, Eq i, Read i, Integral i) => [HT.TokenLC i] -> Vars i -> Either (T.Text, HT.TokenLC i) ([ATree i], Vars i)
 program [] vars = Right ([], vars)
 program xs vars = either Left (\(ys, btn, vars') -> first (btn:) <$> program ys (resetLocal vars')) $ globalDef xs ATEmpty vars
 
 -- | `globalDef` parses global definitions (include functions and global variables)
-globalDef :: (Show i, Eq i, Num i, Integral i, Read i) => [HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)
+globalDef :: (Show i, Eq i, Num i, Integral i, Read i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
 globalDef tks@((_, HT.TKType _):_) at va = flip (maybe $ Left ("ISO C forbids declaration with no type", head tks)) (HT.makeTypes tks) $ \(ty, ds) -> globalDef' ty ds at va
     where
         checkErr ar f = let ar' = init $ tail ar in if not (null ar') && snd (head ar') == HT.TKReserved "," then Left ("unexpected ',' token", head ar') else
@@ -91,11 +91,11 @@ globalDef tks@((_, HT.TKType _):_) at va = flip (maybe $ Left ("ISO C forbids de
             Just rs -> flip (either Left) rs $ \(tk, ds) -> case ds of
                 (_, HT.TKReserved ";"):ds' -> flip fmap (addGVar (tk, cur) vars) $ \(_, vars') -> (ds', ATEmpty, vars')
                 _ -> Left ("expected ';' token after '" <> tshow (snd cur) <> "' token", cur)
-        globalDef' _ tk _ _ = Left ("invalid definition of global identifier", if null tk then (0, HT.TKEmpty) else head tk)
-globalDef tk _ _ = Left ("invalid definition of global identifier", if null tk then (0, HT.TKEmpty) else head tk)
+        globalDef' _ tk _ _ = Left ("invalid definition of global identifier", if null tk then (HT.TokenLCNums 0 0, HT.TKEmpty) else head tk)
+globalDef tk _ _ = Left ("invalid definition of global identifier", if null tk then (HT.TokenLCNums 0 0, HT.TKEmpty) else head tk)
 
 -- | `stmt` indicates \(\eqref{eq:nineth}\) among the comments of `inners`.
-stmt :: (Show i, Eq i, Num i, Integral i, Read i) => [HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)
+stmt :: (Show i, Eq i, Num i, Integral i, Read i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
 stmt (cur@(_, HT.TKReturn):xs) atn vars = flip (either Left) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for @return@
     (_, HT.TKReserved ";"):ys -> Right (ys, ATNode ATReturn CT.CTUndef erat ATEmpty, ervars)
     ert' -> Left $ expectedMessage ";" cur ert'
@@ -151,15 +151,15 @@ stmt tk@(cur1@(_, HT.TKType _):_) atn vars = flip (maybe (Left ("invalid type us
 stmt ((_, HT.TKReserved ";"):xs) atn vars = Right (xs, atn, vars) -- for only @;@
 stmt xs atn vars = flip (either Left) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for stmt;
     (_, HT.TKReserved ";"):ys -> Right (ys, ATNode ATExprStmt CT.CTUndef erat ATEmpty, ervars)
-    ert' -> Left $ expectedMessage ";" (0, HT.TKEmpty) ert'
+    ert' -> Left $ expectedMessage ";" (HT.TokenLCNums 0 0, HT.TKEmpty) ert'
 
 {-# INLINE expr #-}
 -- | `expr` is equivalent to `equality`.
-expr :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)
+expr :: (Show i, Eq i, Read i, Integral i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
 expr = assign
 
 -- | `assign` indicates \(\eqref{eq:seventh}\) among the comments of `inners`.
-assign :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)
+assign :: (Show i, Eq i, Read i, Integral i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
 assign xs atn vars = flip (either Left) (bitwiseOr xs atn vars) $ \(ert, erat, ervars) -> case ert of
     (_, HT.TKReserved "="):ys -> second3 (ATNode ATAssign (atype erat) erat) <$> assign ys erat ervars
     _ -> Right (ert, erat, ervars)
@@ -191,7 +191,7 @@ assign xs atn vars = flip (either Left) (bitwiseOr xs atn vars) $ \(ert, erat, e
 -- {\rm factor} &=& {\rm num} \mid\ {\rm ident}\ \left({\rm "(" \left(expr\ \left(\left(","\ expr\right)^\ast\right)?\right)? ")"}\right)?\ \mid\ "(" {\rm expr} ")"\label{eq:third}\tag{13}
 -- \end{eqnarray}
 -- \]
-inners :: ([HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)) -> [(T.Text, ATKind i)] -> [HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)
+inners :: ([HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)) -> [(T.Text, ATKind i)] -> [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
 inners _ _ [] atn vars = Right ([], atn, vars)
 inners f cs xs atn vars = either Left (uncurry3 (inners' f cs)) $ f xs atn vars
     where
@@ -200,36 +200,36 @@ inners f cs xs atn vars = either Left (uncurry3 (inners' f cs)) $ f xs atn vars
             either Left (uncurry3 id . first3 (inners' f cs) . second3 (ATNode k CT.CTInt at)) $ g (tail ys) at ars
 
 -- | `bitwiseOr` indicates \(\eqref{eq:tenth}\) among the comments of `inners`.
-bitwiseOr :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)
+bitwiseOr :: (Show i, Eq i, Read i, Integral i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
 bitwiseOr = inners bitwiseXor [("|", ATOr)]
 
 -- | `bitwiseXor` indicates \(\eqref{eq:eleventh}\) amont the comments of `inners`.
-bitwiseXor :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)
+bitwiseXor :: (Show i, Eq i, Read i, Integral i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
 bitwiseXor = inners bitwiseAnd [("^", ATXor)]
 
 -- | `bitwiseAnd` indicates \(\eqref{eq:twelveth}\) among the comments of `inners`.
-bitwiseAnd :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)
+bitwiseAnd :: (Show i, Eq i, Read i, Integral i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
 bitwiseAnd = inners equality [("&", ATAnd)]
 
 -- | `equality` indicates \(\eqref{eq:fifth}\) among the comments of `inners`.
 -- This is equivalent to the following code:
 --
 --
--- > equality ::  [HT.TokenIdx i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i)
+-- > equality ::  [HT.TokenLC i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i)
 -- > equality xs atn vars = flip (either Left) (relational xs atn vars) $ uncurry3 equality'
 -- >     where
 -- >         equality' ((_, HT.TKReserved "=="):ys) era ars = either Left (uncurry3 id . first3 equality' . second3 (ATNode ATEQ era)) $ relational ys era ars
 -- >         equality' ((_, HT.TKReserved "!="):ys) era ars = either Left (uncurry3 id . first3 equality' . second3 (ATNode ATNEQ era)) $ relational ys era ars
 -- >         equality' ert era ars = Right (ert, era, ars)
-equality :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)
+equality :: (Show i, Eq i, Read i, Integral i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
 equality = inners relational [("==", ATEQ), ("!=", ATNEQ)]
 
 -- | `relational` indicates \(\eqref{eq:sixth}\) among the comments of `inners`.
-relational :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)
+relational :: (Show i, Eq i, Read i, Integral i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
 relational = inners shift [("<", ATLT), ("<=", ATLEQ), (">", ATGT), (">=", ATGEQ)]
 
 -- | `shift` indicates \(\eqref{eq:thirteenth}\\) among the comments of `inners`.
-shift :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)
+shift :: (Show i, Eq i, Read i, Integral i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
 shift = inners add [("<<", ATShl), (">>", ATShr)]
         
 {-# INLINE addKind #-}
@@ -249,7 +249,7 @@ subKind lhs rhs
     | otherwise = Nothing
 
 -- | `add` indicates \(\eqref{eq:first}\) among the comments of `inners`.
-add :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)
+add :: (Show i, Eq i, Read i, Integral i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
 add xs atn vars = flip (either Left) (term xs atn vars) $ uncurry3 add'
     where
         add' (cur@(_, HT.TKReserved "+"):ys) era ars = flip (either Left) (term ys era ars) $ \zz -> 
@@ -259,11 +259,11 @@ add xs atn vars = flip (either Left) (term xs atn vars) $ uncurry3 add'
         add' ert erat ars = Right (ert, erat, ars)
 
 -- | `term` indicates \(\eqref{eq:second}\) amont the comments of `inners`.
-term ::  (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)
+term ::  (Show i, Eq i, Read i, Integral i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
 term = inners unary [("*", ATMul), ("/", ATDiv), ("%", ATMod)]
 
 -- | `unary` indicates \(\eqref{eq:fourth}\) amount the comments of `inners`.
-unary :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)
+unary :: (Show i, Eq i, Read i, Integral i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
 unary ((_, HT.TKReserved "+"):xs) at vars = factor xs at vars
 unary ((_, HT.TKReserved "-"):xs) at vars = second3 (ATNode ATSub CT.CTInt (ATNode (ATNum 0) CT.CTInt ATEmpty ATEmpty)) <$> factor xs at vars
 unary ((_, HT.TKReserved "!"):xs) at vars = second3 (\x -> ATNode ATElse CT.CTUndef (ATNode ATIf CT.CTUndef (ATNode ATEQ CT.CTInt x (ATNode (ATNum 0) CT.CTInt ATEmpty ATEmpty)) (ATNode ATReturn CT.CTUndef (ATNode (ATNum 1) CT.CTInt ATEmpty ATEmpty) ATEmpty)) (ATNode ATReturn CT.CTUndef (ATNode (ATNum 0) CT.CTInt ATEmpty ATEmpty) ATEmpty)) <$> unary xs at vars
@@ -275,13 +275,13 @@ unary xs at vars = either Left (uncurry3 f) $ factor xs at vars
     where
         f (cur@(_, HT.TKReserved "["):xs') erat ervars = flip (either Left) (expr xs' erat ervars) $ \(ert', erat', ervars') -> case ert' of
             (_, HT.TKReserved "]"):xs'' -> flip (maybe $ Left ("invalid operands", cur)) (addKind erat erat') $ \erat'' -> -- = ATNode atk' typek erat erat' in
-                flip (maybe $ Left ("subscripted value is neither array nor pointer nor vector", if null xs then (0, HT.TKEmpty) else head xs)) 
+                flip (maybe $ Left ("subscripted value is neither array nor pointer nor vector", if null xs then (HT.TokenLCNums 0 0, HT.TKEmpty) else head xs)) 
                     (CT.derefMaybe $ atype erat'') $ \t -> f xs'' (ATNode ATDeref t erat'' ATEmpty) ervars'
             _ -> Left $ if null ert' then ("expected expression after '[' token", cur) else ("expected expression before '" <> tshow (snd (head ert')) <> "' token", head ert')
         f ert erat ervars = Right (ert, erat, ervars)
 
 -- | `factor` indicates \(\eqref{eq:third}\) amount the comments of `inners`.
-factor :: (Show i, Eq i, Read i, Integral i) => [HT.TokenIdx i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenIdx i) ([HT.TokenIdx i], ATree i, Vars i)
+factor :: (Show i, Eq i, Read i, Integral i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
 factor [] atn vars = Right ([], atn, vars)
 factor ((_, HT.TKReserved "("):xs@((_, HT.TKReserved "{"):_)) _ vars = flip (maybe $ Left (internalCE, head xs)) (HT.takeBrace "{" "}" xs) $ -- for statement expression (GNU extension: <https://gcc.gnu.org/onlinedocs/gcc/Statement-Exprs.html>)
     either (Left . ("the statement expression is not closed",)) $ \(scope, ds) -> case ds of
@@ -318,12 +318,12 @@ factor (cur@(_, HT.TKIdent ident):xs) _ vars = flip (maybe (Left ("undefined var
     Right (LVar t o) -> Right (xs, ATNode (ATLVar t o) t ATEmpty ATEmpty, vars) -- for declared local variable
     Left (GVar t) -> Right (xs, ATNode (ATGVar t ident) t ATEmpty ATEmpty, vars) -- for declared global variable
 factor ert _ _ = Left (if null ert then "unexpected token in program" else "unexpected token '" <> tshow (snd (head ert)) <> "' in program", 
-    if null ert then (0, HT.TKEmpty) else head ert)
+    if null ert then (HT.TokenLCNums 0 0, HT.TKEmpty) else head ert)
 
 {-# INLINE parse #-}
 -- | Constructs the abstract syntax tree based on the list of token strings.
 -- if construction fails, `Nothing` is returned.
-parse :: (Show i, Num i, Eq i, Integral i, Read i) => [HT.TokenIdx i] -> Either (T.Text, HT.TokenIdx i) ([ATree i], M.Map T.Text GVar, [Literal])
+parse :: (Show i, Num i, Eq i, Integral i, Read i) => [HT.TokenLC i] -> Either (T.Text, HT.TokenLC i) ([ATree i], M.Map T.Text GVar, [Literal])
 parse = fmap (\(ast, vars) -> (ast, globals vars, literals vars)) . flip program initVars
 
 -- | `stackSize` returns the stack size of variable per function.
