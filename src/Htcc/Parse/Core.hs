@@ -295,7 +295,7 @@ factor ((_, HT.TKReserved "("):xs@((_, HT.TKReserved "{"):_)) _ vars = flip (may
                     Just (erat', ert') <$ (writeSTRef v ervars' >> when (case erat' of ATEmpty -> False; _ -> True) (writeSTRef lastA erat'))
             (>>=) (readSTRef eri) $ flip maybe (return . Left) $ do
                 v' <- readSTRef v
-                flip fmap (readSTRef lastA) $ \z -> case z of
+                flip fmap (readSTRef lastA) $ \case
                         (ATNode ATExprStmt _ lhs _) -> Right (ds', ATNode (ATStmtExpr (init mk ++ [lhs])) (atype lhs) ATEmpty ATEmpty, v')
                         _ -> Left ("void value not ignored as it ought to be. the statement expression starts here:", head xs)
         _ -> Left $ if null scope then ("expected ')' token. the statement expression starts here: ", head xs) else

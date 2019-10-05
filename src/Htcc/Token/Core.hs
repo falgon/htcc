@@ -37,7 +37,7 @@ import Data.Tuple.Extra (first)
 import Data.List (find)
 
 import qualified Htcc.CRules as CR
-import Htcc.Utils (spanLenT, dropSnd, first3, tshow, isStrictSpace, lor)
+import Htcc.Utils (spanLenT, subTextIndex, dropSnd, first3, tshow, isStrictSpace, lor)
 
 -- | Token type
 data Token i = TKReserved T.Text -- ^ The reserved token
@@ -74,7 +74,7 @@ length :: Show i => Token i -> Int
 length (TKReserved s) = T.length s
 length (TKNum i) = P.length $ show i
 length (TKIdent i) = T.length i
-length TKReturn = 5
+length TKReturn = 6
 length TKIf = 2
 length TKElse = 4
 length TKWhile = 5
@@ -129,7 +129,7 @@ isTKType _ = False
 escapeChar :: T.Text -> T.Text
 escapeChar xxs = case T.uncons xxs of
     Just (x, xs)
-        | x == '\\' && not (T.null xs) -> maybe (escapeChar xs) (flip T.cons (escapeChar (T.tail xs))) (M.lookup (T.head xs) mp)
+        | x == '\\' && not (T.null xs) -> maybe (escapeChar xs) (`T.cons` (escapeChar (T.tail xs))) (M.lookup (T.head xs) mp)
         | otherwise -> T.cons x $ escapeChar xs
     _ -> T.empty
     where
@@ -142,15 +142,18 @@ tokenize' n xs = f n $ first fromIntegral $ dropSnd $ spanLenT isStrictSpace xs
     where
         f n' (rssize, xxs) = case T.uncons xxs of
             Just (x, xs')
-                | lor [(=='\n'), (=='\r')] x -> tokenize' (TokenLCNums (tkLn n' + rssize) 1) xs'
+                | lor [(=='\n'), (=='\r')] x -> tokenize' (TokenLCNums (succ $ tkLn n') 1) xs' -- for new line
+                | not (T.null xs') && x == '/' && T.head xs' == '/' -> tokenize' (TokenLCNums (succ $ tkLn n') 1) $ T.dropWhile (/='\n') (T.tail xs') -- for line comment
+                | not (T.null xs') && x == '/' && T.head xs' == '*' -> let xs'' = T.tail xs'; cur = n' { tkCn = rssize + tkCn n' } in -- for block comment
+                    flip (maybe (Left (cur, "*/"))) (subTextIndex "*/" xs'') $ \ind -> let next = n' { tkCn = tkCn cur + fromIntegral ind + 2 } in tokenize' next $ T.drop (ind + 3) xs''
                 | isDigit x -> let (n'', ts, ds) = first3 fromIntegral $ spanLenT isDigit xs'; cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = tkCn cur + n'' }; num = T.cons x ts in
                     flip (either (const $ Left (cur, T.singleton x))) (T.decimal num) $ \(nu, _) -> ((cur, TKNum nu):) <$> tokenize' next ds
                 | x == '"' -> let cur = n' { tkCn = rssize + tkCn n' } in flip (maybe (Left (cur, "\""))) (T.findIndex (=='"') xs') $ \ind -> 
                     let (ts, ds) = T.splitAt ind xs'; next = n' { tkCn = 2 + tkCn cur + fromIntegral ind } in 
                         ((cur, TKString (T.encodeUtf8 $ T.append (escapeChar ts) "\0")):) <$> tokenize' next (T.tail ds)
-                | not (T.null xs') && (T.take 2 xxs) `elem` CR.strOps -> let cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = 2 + tkCn cur }; op = T.take 2 xxs in
+                | not (T.null xs') && T.take 2 xxs `elem` CR.strOps -> let cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = 2 + tkCn cur }; op = T.take 2 xxs in
                     ((cur, TKReserved op):) <$> tokenize' next (T.tail xs')
-                | elem x CR.charOps -> let cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = succ (tkCn cur) } in ((cur, TKReserved (T.singleton x)):) <$> tokenize' next xs'
+                | x `elem` CR.charOps -> let cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = succ (tkCn cur) } in ((cur, TKReserved (T.singleton x)):) <$> tokenize' next xs'
                 | otherwise -> let (len, tk, ds) = spanLenT CR.isValidChar xxs; cur = n' { tkCn = tkCn n' + rssize } in
                     if len == 0 then Left (cur, T.takeWhile (not . CR.isValidChar) ds) else let next = n' { tkCn = tkCn cur + fromIntegral len } in
                         maybe (((cur, TKIdent tk):) <$> tokenize' next ds) (\tkn -> ((cur, tkn):) <$> tokenize' next ds) $ lookupKeyword tk

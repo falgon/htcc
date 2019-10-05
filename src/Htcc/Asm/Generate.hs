@@ -166,19 +166,19 @@ repSpace :: Integral i => i -> IO ()
 repSpace = flip (>>) (putStrErr (T.singleton '^')) . mapM_ (putStrErr . T.pack . flip replicate ' ' . pred) . toInts
 
 tokenizeErrExit :: (Integral i, Show i) => T.Text -> (HT.TokenLCNums i, T.Text) -> IO ()
-tokenizeErrExit xs e = do
-    ($ e) . fix $ \f (i, s) -> unless (T.null s) $ do
-        putStrLnErr (tshow i <> ": error: stray '" <> T.singleton (T.head s) <> "' in program")
-        putStrLnErr xs
-        repSpace (HT.tkCn i)
-        f (i { HT.tkCn = succ (HT.tkCn i) }, T.tail s)
+tokenizeErrExit xs e = let errMesPre = T.replicate 4 " " <> tshow (HT.tkLn (fst e)) in do
+    putStrLnErr (tshow (fst e) <> ": error: stray '" <> snd e <> "' in program")
+    putStrErr $ errMesPre <> " | "
+    putStrLnErr (T.lines xs !! (pred $ fromIntegral $ HT.tkLn (fst e)))
+    putStrErr $ T.replicate (T.length errMesPre) " " <> " | "
+    repSpace (HT.tkCn $ fst e) >> putStrLnErr ""
     exitFailure
 
 parseErrExit :: (Integral i, Show i) => T.Text -> (T.Text, HT.TokenLC i) -> IO ()
-parseErrExit xs (s, (i, etk)) = let errMesPre = T.replicate 4 " " <> tshow (HT.tkCn i) in do
+parseErrExit xs (s, (i, etk)) = let errMesPre = T.replicate 4 " " <> tshow (HT.tkLn i) in do
     putStrLnErr (tshow i <> ": error: " <> s)
     putStrErr $ errMesPre <> " | "
-    putStrLnErr ((T.lines xs) !! (succ $ fromIntegral $ HT.tkLn i))
+    putStrLnErr (T.lines xs !! (pred $ fromIntegral $ HT.tkLn i))
     putStrErr $ T.replicate (T.length errMesPre) " " <> " | "
     repSpace (HT.tkCn i) >> putStrLnErr (T.replicate (pred $ HT.length etk) "~")
     exitFailure

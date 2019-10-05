@@ -20,6 +20,7 @@ module Htcc.Utils (
     -- * For Data.Text
     tshow,
     spanLenT,
+    subTextIndex,
     -- * For Data.Maybe
     fstNothingIdx,
     -- * For Numeric.Natural
@@ -46,6 +47,7 @@ module Htcc.Utils (
     toInts
 ) where
 
+import qualified Data.Text.Internal.Search as T
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Char (isSpace)
@@ -202,6 +204,13 @@ toInts x = if xd >= 1 && xm == 0 then [fromIntegral x] else replicate xd (maxBou
     where
         (xd, xm) = both fromIntegral $ x `divMod` fromIntegral (maxBound :: Int)
 
--- | Returns True only if the given string is not a linefeed code and `Data.Char.isSpace` returns `True`, otherwise returns `False`. 
+-- | `isStrictSpace` returns True only if the given string is not a linefeed code and `Data.Char.isSpace` returns `True`, otherwise returns `False`. 
 isStrictSpace :: Char -> Bool
-isStrictSpace = land [(not . (=='\n')), (not . (=='\r')), isSpace]
+isStrictSpace = land [(/='\n'), (/='\r'), isSpace]
+
+-- | `subTextIndex` searches text for a substring of text and returns its starting position.
+-- If nothing is found, `Nothing` is returned.
+subTextIndex :: T.Text -> T.Text -> Maybe Int
+subTextIndex s t = case T.indices s t of
+    (i:_) -> Just i
+    _ -> Nothing
