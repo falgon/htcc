@@ -129,7 +129,7 @@ isTKType _ = False
 escapeChar :: T.Text -> T.Text
 escapeChar xxs = case T.uncons xxs of
     Just (x, xs)
-        | x == '\\' && not (T.null xs) -> maybe (escapeChar xs) (`T.cons` (escapeChar (T.tail xs))) (M.lookup (T.head xs) mp)
+        | x == '\\' && not (T.null xs) -> maybe (escapeChar xs) (`T.cons` escapeChar (T.tail xs)) (M.lookup (T.head xs) mp)
         | otherwise -> T.cons x $ escapeChar xs
     _ -> T.empty
     where

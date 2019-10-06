@@ -62,11 +62,11 @@ import Htcc.Parse.Utils
 -- | `program` indicates \(\eqref{eq:eigth}\) among the comments of `inners`.
 program :: (Show i, Eq i, Read i, Integral i) => [HT.TokenLC i] -> Vars i -> Either (T.Text, HT.TokenLC i) ([ATree i], Vars i)
 program [] vars = Right ([], vars)
-program xs vars = either Left (\(ys, btn, vars') -> first (btn:) <$> program ys (resetLocal vars')) $ globalDef xs ATEmpty vars
+program xs vars = either Left (\(ys, btn, vars') -> first (btn:) <$> program ys vars') $ globalDef xs ATEmpty vars
 
 -- | `globalDef` parses global definitions (include functions and global variables)
 globalDef :: (Show i, Eq i, Num i, Integral i, Read i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
-globalDef tks@((_, HT.TKType _):_) at va = flip (maybe $ Left ("ISO C forbids declaration with no type", head tks)) (HT.makeTypes tks) $ \(ty, ds) -> globalDef' ty ds at va
+globalDef tks@((_, HT.TKType _):_) at va = flip (maybe $ Left ("ISO C forbids declaration with no type", head tks)) (HT.makeTypes tks) $ \(ty, ds) -> globalDef' ty ds at $ resetLocal va
     where
         checkErr ar f = let ar' = init $ tail ar in if not (null ar') && snd (head ar') == HT.TKReserved "," then Left ("unexpected ',' token", head ar') else
             let args = linesBy ((==HT.TKReserved ",") . snd) ar'; args' = map HT.makeTypes args in flip (maybe (f args')) (fstNothingIdx args') $ \idx -> let inv = head (args !! idx) in
@@ -84,7 +84,7 @@ globalDef tks@((_, HT.TKType _):_) at va = flip (maybe $ Left ("ISO C forbids de
                     (>>=) (readSTRef eri) $ flip maybe (return . Left) $ 
                         fmap (second3 (flip (ATNode (ATDefFunc fname $ if null mk then Nothing else Just mk) CT.CTUndef) ATEmpty)) . stmt st atn <$> readSTRef v
                 _ -> stmt tk atn vars
-        globalDef' ty' (cur@(_, HT.TKIdent _):xs) _ vars = case HT.arrayDeclSuffix ty' xs of -- TODO: support initialize by global variables
+        globalDef' ty' (cur@(_, HT.TKIdent _):xs) _ vars = case HT.arrayDeclSuffix ty' xs of -- for global variables -- TODO: support initialize by global variables
             Nothing -> case xs of 
                 (_, HT.TKReserved ";"):ds -> flip fmap (addGVar (ty', cur) vars) $ \(_, vars') -> (ds, ATEmpty, vars')
                 _ -> Left ("expected ';' token after '" <> tshow (snd cur) <> "' token", cur)
@@ -132,11 +132,11 @@ stmt xxs@(cur@(_, HT.TKFor):(_, HT.TKReserved "("):_) atn vars = flip (maybe $ L
 stmt xxs@(cur@(_, HT.TKReserved "{"):_) _ vars = flip (maybe $ Left (internalCE, cur)) (HT.takeBrace "{" "}" xxs) $ -- for compound statement
     either (Left . ("the compound statement is not closed",)) $ \(scope, ds) -> runST $ do
         eri <- newSTRef Nothing
-        v <- newSTRef vars
+        v <- newSTRef $ succNest vars
         mk <- flip unfoldrM (init $ tail scope) $ \ert -> if null ert then return Nothing else do
             ervars <- readSTRef v
             either (\err -> Nothing <$ writeSTRef eri (Just err)) (\(ert', erat', ervars') -> Just (erat', ert') <$ writeSTRef v ervars') $ stmt ert ATEmpty ervars
-        (>>=) (readSTRef eri) $ flip maybe (return . Left) $ Right . (ds, ATNode (ATBlock mk) CT.CTUndef ATEmpty ATEmpty,) <$> readSTRef v
+        (>>=) (readSTRef eri) $ flip maybe (return . Left) $ Right . (ds, ATNode (ATBlock mk) CT.CTUndef ATEmpty ATEmpty,) . fallBack vars <$> readSTRef v
 stmt tk@(cur1@(_, HT.TKType _):_) atn vars = flip (maybe (Left ("invalid type using", cur1))) (HT.makeTypes tk) $ \(t, ds) -> case ds of -- for a local variable declaration
     cur2@(_, HT.TKIdent _):(_, HT.TKReserved ";"):ds' -> flip (either Left) (addLVar t cur2 vars) $ \(lat, vars') -> Right (ds', ATNode (ATNull lat) CT.CTUndef ATEmpty ATEmpty, vars')
     cur2@(_, HT.TKIdent _):(_, HT.TKReserved "="):ds' -> flip (either Left) (addLVar t cur2 vars) $ \(lat, vars') -> 
@@ -285,9 +285,9 @@ factor :: (Show i, Eq i, Read i, Integral i) => [HT.TokenLC i] -> ATree i -> Var
 factor [] atn vars = Right ([], atn, vars)
 factor ((_, HT.TKReserved "("):xs@((_, HT.TKReserved "{"):_)) _ vars = flip (maybe $ Left (internalCE, head xs)) (HT.takeBrace "{" "}" xs) $ -- for statement expression (GNU extension: <https://gcc.gnu.org/onlinedocs/gcc/Statement-Exprs.html>)
     either (Left . ("the statement expression is not closed",)) $ \(scope, ds) -> case ds of
-        ((_, HT.TKReserved ")"):ds') -> runST $ do
+        (_, HT.TKReserved ")"):ds' -> runST $ do
             eri <- newSTRef Nothing
-            v <- newSTRef vars
+            v <- newSTRef $ succNest vars
             lastA <- newSTRef ATEmpty 
             mk <- flip unfoldrM (init $ tail scope) $ \ert -> if null ert then return Nothing else do
                 ervars <- readSTRef v
@@ -296,7 +296,7 @@ factor ((_, HT.TKReserved "("):xs@((_, HT.TKReserved "{"):_)) _ vars = flip (may
             (>>=) (readSTRef eri) $ flip maybe (return . Left) $ do
                 v' <- readSTRef v
                 flip fmap (readSTRef lastA) $ \case
-                        (ATNode ATExprStmt _ lhs _) -> Right (ds', ATNode (ATStmtExpr (init mk ++ [lhs])) (atype lhs) ATEmpty ATEmpty, v')
+                        (ATNode ATExprStmt _ lhs _) -> Right (ds', ATNode (ATStmtExpr (init mk ++ [lhs])) (atype lhs) ATEmpty ATEmpty, fallBack vars v')
                         _ -> Left ("void value not ignored as it ought to be. the statement expression starts here:", head xs)
         _ -> Left $ if null scope then ("expected ')' token. the statement expression starts here: ", head xs) else
             ("expected ')' token after '" <> tshow (snd $ last scope) <> "' token", last scope)
@@ -315,10 +315,9 @@ factor (cur1@(_, HT.TKIdent v):cur2@(_, HT.TKReserved "("):xs) _ vars = flip (ma
 factor ((_, HT.TKSizeof):xs) atn vars = second3 (\x -> ATNode (ATNum (fromIntegral $ CT.sizeof $ atype x)) CT.CTInt ATEmpty ATEmpty) <$> unary xs atn vars -- for `sizeof` -- TODO: the type of sizeof must be @size_t@
 factor (cur@(_, HT.TKString slit):xs) _ vars = uncurry (xs,,) <$> addLiteral (CT.CTArray (fromIntegral $ B.length slit) CT.CTChar, cur) vars -- for literals
 factor (cur@(_, HT.TKIdent ident):xs) _ vars = flip (maybe (Left ("undefined variable", cur))) (lookupVar ident vars) $ \case -- if the variable is not declared, it returns error wrapped with `Left`
-    Right (LVar t o) -> Right (xs, ATNode (ATLVar t o) t ATEmpty ATEmpty, vars) -- for declared local variable
+    Right (LVar t o _) -> Right (xs, ATNode (ATLVar t o) t ATEmpty ATEmpty, vars) -- for declared local variable
     Left (GVar t) -> Right (xs, ATNode (ATGVar t ident) t ATEmpty ATEmpty, vars) -- for declared global variable
-factor ert _ _ = Left (if null ert then "unexpected token in program" else "unexpected token '" <> tshow (snd (head ert)) <> "' in program", 
-    if null ert then (HT.TokenLCNums 0 0, HT.TKEmpty) else head ert)
+factor ert _ _ = Left (if null ert then "unexpected token in program" else "unexpected token '" <> tshow (snd (head ert)) <> "' in program", if null ert then (HT.TokenLCNums 0 0, HT.TKEmpty) else head ert)
 
 {-# INLINE parse #-}
 -- | Constructs the abstract syntax tree based on the list of token strings.

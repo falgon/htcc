@@ -168,7 +168,10 @@ main = runTestsEx [
     (StatementEqual.test "int main() { ({ 1; return 2; 3; }); return 4; }", 2),
     (StatementEqual.test "int main() { return ({ int a = 42; a; }); }", 42),
     (StatementEqual.test "int main() { /* return 0; */ return 42; }", 42),
-    (StatementEqual.test "int main() { // hoge\nreturn 42; }", 42)
+    (StatementEqual.test "int main() { // hoge\nreturn 42; }", 42),
+    (StatementEqual.test "int main() { int a = 42; { int a = 32; } return a; }", 42),
+    (StatementEqual.test "int main() { int a = 42; { int a = 32; } { int a = 53; return a; } return 42; }", 53),
+    (StatementEqual.test "int main() { int a = 42; { a = 32; } return a; }", 32)
     ] >> runTestsEx [
     (LinkFuncStdOut.test "int main() { return test_func1(); }" ["test_func1"], Right "test/Tests/csrc/test_func1.c::test_func1(): [OK]"),
     (LinkFuncStdOut.test "int main() { return test_func2(40); }" ["test_func2"], Right "test/Tests/csrc/test_func2.c::test_func2(40) outputs: \"2 3 5 7 11 13 17 19 23 29 31 37 \": [OK]") --,

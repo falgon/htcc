@@ -14,4 +14,4 @@ test x = flip finally (clean ["tmp", "tmp.s", "tmp.c"]) $ do
     execErrFin "stack build"
     execErrFin $ "stack exec htcc -- tmp.c > tmp.s"
     execErrFin "gcc -no-pie -o tmp tmp.s"
-    exitCode id 0 <$> exec "./tmp"
+    exec "./tmp" >>= exitCode (\ec -> putStr x >> putStrLn ": [OK]" >> return ec) (return 0)

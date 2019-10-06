@@ -19,7 +19,6 @@ module Htcc.Asm.Generate (
 -- Imports universal modules
 import Control.Exception (finally)
 import Control.Monad (zipWithM_, unless)
-import Control.Monad.Fix (fix)
 import qualified Data.ByteString as B
 import Data.List (find)
 import Data.Either (either)
@@ -169,7 +168,7 @@ tokenizeErrExit :: (Integral i, Show i) => T.Text -> (HT.TokenLCNums i, T.Text) 
 tokenizeErrExit xs e = let errMesPre = T.replicate 4 " " <> tshow (HT.tkLn (fst e)) in do
     putStrLnErr (tshow (fst e) <> ": error: stray '" <> snd e <> "' in program")
     putStrErr $ errMesPre <> " | "
-    putStrLnErr (T.lines xs !! (pred $ fromIntegral $ HT.tkLn (fst e)))
+    putStrLnErr (T.lines xs !! pred (fromIntegral $ HT.tkLn (fst e)))
     putStrErr $ T.replicate (T.length errMesPre) " " <> " | "
     repSpace (HT.tkCn $ fst e) >> putStrLnErr ""
     exitFailure
@@ -178,7 +177,7 @@ parseErrExit :: (Integral i, Show i) => T.Text -> (T.Text, HT.TokenLC i) -> IO (
 parseErrExit xs (s, (i, etk)) = let errMesPre = T.replicate 4 " " <> tshow (HT.tkLn i) in do
     putStrLnErr (tshow i <> ": error: " <> s)
     putStrErr $ errMesPre <> " | "
-    putStrLnErr (T.lines xs !! (pred $ fromIntegral $ HT.tkLn i))
+    putStrLnErr (T.lines xs !! pred (fromIntegral $ HT.tkLn i))
     putStrErr $ T.replicate (T.length errMesPre) " " <> " | "
     repSpace (HT.tkCn i) >> putStrLnErr (T.replicate (pred $ HT.length etk) "~")
     exitFailure

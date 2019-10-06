@@ -25,13 +25,15 @@ module Htcc.Parse.Var (
     addLiteral,
     -- * Utilities
     initVars,
-    resetLocal
+    resetLocal,
+    succNest,
+    fallBack
 ) where
 
 import qualified Data.ByteString as B
 import qualified Data.Text as T
 import qualified Data.Map.Strict as M
-import Data.Tuple.Extra (first, second, dupe)
+-- import Data.Tuple.Extra (first, second, dupe)
 import Numeric.Natural
 
 import qualified Htcc.Token.Core as HT
@@ -51,7 +53,8 @@ newtype GVar = GVar -- ^ The constructor of global variable
 data LVar a = LVar -- ^ The constructor of local variable
     {
         lvtype :: CT.TypeKind, -- ^ The type of the local variable
-        rbpOffset :: a -- ^ The offset value from RBP
+        rbpOffset :: a, -- ^ The offset value from RBP
+        nestDepth :: Natural -- ^ The nest depth of a local variable
     } deriving (Eq, Ord, Show)
 
 -- | The literal
@@ -67,18 +70,19 @@ data Vars a = Vars -- ^ The constructor of variables
     { 
         globals :: M.Map T.Text GVar, -- ^ The global variables
         locals :: M.Map T.Text (LVar a), -- ^ The local variables
-        literals :: [Literal] -- ^ Literals
+        literals :: [Literal], -- ^ Literals
+        curNestDepth :: Natural -- ^ Nesting depth in the token being processed
     } deriving Show
 
 {-# INLINE initVars #-}
 -- | Helper function representing an empty variables
 initVars :: Vars a
-initVars = Vars M.empty M.empty []
+initVars = Vars M.empty M.empty [] 0
 
 {-# INLINE resetLocal #-}
 -- | `resetLocal` initialize the local variable list for `Vars`
 resetLocal :: Vars a -> Vars a
-resetLocal = uncurry (flip Vars M.empty) . first globals . second literals . dupe
+resetLocal vs = vs { locals = M.empty }
 
 {-# INLINE lookupGVar #-}
 -- | Search for a global variable with a given name
@@ -101,14 +105,28 @@ maximumOffset m
     | M.null m = 0
     | otherwise = maximum $ map rbpOffset $ M.elems m
 
+{-# INLINE succNest #-}
+-- | Raise scope nesting one step
+succNest :: Vars a -> Vars a
+succNest vs = vs { curNestDepth = succ $ curNestDepth vs }
+
+{-# INLINE fallBack #-}
+-- | Organize variable list state after scoping
+fallBack :: Vars a -> Vars a -> Vars a
+fallBack pre post = pre { literals = literals post }
+
 -- | If the specified token is `HT.TKIdent` and the local variable does not exist in the list, `addLVar` adds a new local variable to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
 addLVar :: (Num i, Ord i) => CT.TypeKind -> HT.TokenLC i -> Vars i -> Either (T.Text, HT.TokenLC i) (ATree i, Vars i)
-addLVar t cur@(_, HT.TKIdent ident) vars = flip (flip maybe $ const $ Left ("redeclaration of '" <> ident <> "' with no linkage", cur)) (lookupLVar ident vars) $ -- ODR
-    let lvar = LVar t ((+) (fromIntegral (CT.sizeof t)) $ maximumOffset $ locals vars); nat = ATNode (ATLVar (lvtype lvar) (rbpOffset lvar)) t ATEmpty ATEmpty in
-            Right (nat, vars { locals = M.insert ident lvar $ locals vars })
+addLVar t cur@(_, HT.TKIdent ident) vars = case lookupLVar ident vars of
+    Just foundedVar 
+        | nestDepth foundedVar /= curNestDepth vars -> varnat
+        | otherwise -> Left ("redeclaration of '" <> ident <> "' with no linkage", cur)
+    Nothing -> varnat
+    where
+        varnat = let lvar = LVar t ((+) (fromIntegral (CT.sizeof t)) $ maximumOffset $ locals vars) (curNestDepth vars)
+            in Right (ATNode (ATLVar (lvtype lvar) (rbpOffset lvar)) t ATEmpty ATEmpty, vars { locals = M.insert ident lvar $ locals vars })
 addLVar _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
-
 
 -- | If the specified token is `HT.TKIdent` and the global variable does not exist in the list, `addLVar` adds a new global variable to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
