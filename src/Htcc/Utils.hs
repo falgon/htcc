@@ -9,7 +9,7 @@ Portability : POSIX
 
 General-purpose utilities
 -}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, BangPatterns #-}
 module Htcc.Utils (
     -- * Extra functions for lists
     takeWhileLen,
@@ -73,8 +73,8 @@ lastInit y (x:xs) = (x:) <$> lastInit y xs
 takeWhileLen :: (a -> Bool) -> [a] -> (Int, [a])
 takeWhileLen = takeWhileLen' 0
     where
-        takeWhileLen' n _ [] = (n, [])
-        takeWhileLen' n f (x:xs)
+        takeWhileLen' !n _ [] = (n, [])
+        takeWhileLen' !n f (x:xs)
             | f x = second (x:) $ takeWhileLen' (succ n) f xs 
             | otherwise = (n, [])
 
@@ -83,8 +83,8 @@ takeWhileLen = takeWhileLen' 0
 spanLen :: (a -> Bool) -> [a] -> (Int, [a], [a])
 spanLen = spanLen' 0
     where
-        spanLen' n _ [] = (n, [], [])
-        spanLen' n f xs@(x:xs')
+        spanLen' !n _ [] = (n, [], [])
+        spanLen' !n f xs@(x:xs')
             | f x = second3 (x:) $ spanLen' (succ n) f xs'
             | otherwise = (n, [], xs)
 
@@ -97,7 +97,7 @@ tshow = T.pack . show
 spanLenT :: (Char -> Bool) -> T.Text -> (Int, T.Text, T.Text)
 spanLenT = spanLenT' 0
     where
-        spanLenT' n f xs = case T.uncons xs of
+        spanLenT' !n f xs = case T.uncons xs of
             Just (x, xs') 
                 | f x -> second3 (T.cons x) $ spanLenT' (succ n) f xs'
                 | otherwise -> (n, T.empty, xs)

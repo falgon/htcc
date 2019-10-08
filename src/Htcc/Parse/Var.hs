@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, BangPatterns, DeriveGeneric #-}
 {-|
 Module      : Htcc.Parse.Var
 Description : The Data type of variables and its utilities used in parsing
@@ -33,7 +33,6 @@ module Htcc.Parse.Var (
 import qualified Data.ByteString as B
 import qualified Data.Text as T
 import qualified Data.Map.Strict as M
--- import Data.Tuple.Extra (first, second, dupe)
 import Numeric.Natural
 
 import qualified Htcc.Token.Core as HT
@@ -53,7 +52,7 @@ newtype GVar = GVar -- ^ The constructor of global variable
 data LVar a = LVar -- ^ The constructor of local variable
     {
         lvtype :: CT.TypeKind, -- ^ The type of the local variable
-        rbpOffset :: a, -- ^ The offset value from RBP
+        rbpOffset :: !a, -- ^ The offset value from RBP
         nestDepth :: Natural -- ^ The nest depth of a local variable
     } deriving (Eq, Ord, Show)
 
@@ -61,7 +60,7 @@ data LVar a = LVar -- ^ The constructor of local variable
 data Literal = Literal -- ^ The literal constructor
     {
         litype :: CT.TypeKind, -- ^ The single literal type
-        ln :: Natural, -- ^ The number of labels placed in the @.data@ section
+        ln :: !Natural, -- ^ The number of labels placed in the @.data@ section
         lcts :: B.ByteString -- ^ The content
     } deriving (Eq, Show)
 
@@ -71,7 +70,7 @@ data Vars a = Vars -- ^ The constructor of variables
         globals :: M.Map T.Text GVar, -- ^ The global variables
         locals :: M.Map T.Text (LVar a), -- ^ The local variables
         literals :: [Literal], -- ^ Literals
-        curNestDepth :: Natural -- ^ Nesting depth in the token being processed
+        curNestDepth :: !Natural -- ^ Nesting depth in the token being processed
     } deriving Show
 
 {-# INLINE initVars #-}

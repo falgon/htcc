@@ -9,7 +9,7 @@ Portability : POSIX
 
 The tokenizer
 -}
-{-# LANGUAGE ScopedTypeVariables, OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables, OverloadedStrings, BangPatterns, DeriveGeneric #-}
 module Htcc.Token.Core (
     -- * Token data types
     TokenLCNums (..),
@@ -26,7 +26,10 @@ module Htcc.Token.Core (
 ) where
 
 import Prelude hiding (length)
+import GHC.Generics (Generic, Generic1)
 import qualified Prelude as P (length)
+
+import Control.DeepSeq (NFData (..), NFData1 (..))
 import qualified Data.ByteString as B
 import Data.Char (isDigit, chr)
 import qualified Data.Text as T
@@ -41,7 +44,7 @@ import Htcc.Utils (spanLenT, subTextIndex, dropSnd, first3, tshow, isStrictSpace
 
 -- | Token type
 data Token i = TKReserved T.Text -- ^ The reserved token
-    | TKNum i -- ^ The number data
+    | TKNum !i -- ^ The number data
     | TKIdent T.Text -- ^ The identifier
     | TKReturn -- ^ The @return@ keyword
     | TKIf -- ^ The @if@ keyword
@@ -52,7 +55,10 @@ data Token i = TKReserved T.Text -- ^ The reserved token
     | TKType CR.TypeKind -- ^ Types
     | TKString B.ByteString -- ^ The string literal
     | TKEmpty -- ^ The empty token (This is not used by `tokenize`, but when errors are detected during parsing, the token at error locations cannot be specified)
-    deriving Eq
+    deriving (Eq, Generic, Generic1)
+
+instance NFData i => NFData (Token i)
+instance NFData1 Token
 
 instance Show i => Show (Token i) where
     show (TKReserved s) = T.unpack s
@@ -91,12 +97,15 @@ lookupKeyword s = find ((==) s . tshow) [TKReturn, TKWhile, TKIf, TKElse, TKFor,
 -- | `TokenLCNums` is data structure for storing the line number and character number of each token
 data TokenLCNums i = TokenLCNums -- ^ The constructor of `TokenLCNums`
     { 
-        tkLn :: i, -- ^ line number
-        tkCn :: i -- ^ character number
-    } deriving Eq
+        tkLn :: !i, -- ^ line number
+        tkCn :: !i -- ^ character number
+    } deriving (Eq, Generic, Generic1)
 
 instance Show i => Show (TokenLCNums i) where
     show (TokenLCNums ln cn) = show ln ++ ":" ++ show cn
+
+instance NFData i => NFData (TokenLCNums i)
+instance NFData1 TokenLCNums
 
 -- | `Token` and its `TokenLCNums`.
 type TokenLC i = (TokenLCNums i, Token i)
@@ -129,12 +138,33 @@ isTKType _ = False
 escapeChar :: T.Text -> T.Text
 escapeChar xxs = case T.uncons xxs of
     Just (x, xs)
-        | x == '\\' && not (T.null xs) -> maybe (escapeChar xs) (`T.cons` escapeChar (T.tail xs)) (M.lookup (T.head xs) mp)
+        | x == '\\' && not (T.null xs) -> maybe (escapeChar xs) (`T.cons` escapeChar (T.tail xs)) $ M.lookup (T.head xs) mp
         | otherwise -> T.cons x $ escapeChar xs
     _ -> T.empty
     where
-        mp = M.fromList [('\\', '\\'), ('a', '\a'), ('b', '\b'), ('t', '\t'), ('n', '\n'), ('v', '\v'), ('f', '\f'), ('r', '\r'), ('e', chr 27), ('0', '\0')]
+        mp = M.fromList [
+            ('\\', '\\'), 
+            ('a', '\a'), 
+            ('b', '\b'), 
+            ('t', '\t'),
+            ('n', '\n'), 
+            ('v', '\v'), 
+            ('f', '\f'), 
+            ('r', '\r'), 
+            ('e', chr 27), 
+            ('0', '\0')]
 
+-- | `spanStrLiteral` separate the string literal part and the non-string literal part from the input text
+spanStrLiteral :: T.Text -> Maybe (T.Text, T.Text)
+spanStrLiteral ts = first escapeChar <$> f ts
+    where
+        f ts' = case T.uncons ts' of
+            Just (x, xs)
+                | x == '\\' && not (T.null xs) && T.head xs == '"' -> first (T.cons '"') <$> f (T.tail xs)
+                | x == '\\' && not (T.null xs) && T.head xs == '\\' -> first (T.append "\\\\") <$> f (T.tail xs)
+                | x == '"' -> Just (T.empty, xs)
+                | otherwise -> first (T.cons x) <$> f xs
+            Nothing -> Nothing
 
 -- | The core function of `tokenize`
 tokenize' :: (Integral i, Read i, Show i) => TokenLCNums i -> T.Text -> Either (TokenLCNums i, T.Text) [TokenLC i]
@@ -146,14 +176,14 @@ tokenize' n xs = f n $ first fromIntegral $ dropSnd $ spanLenT isStrictSpace xs
                 | not (T.null xs') && x == '/' && T.head xs' == '/' -> tokenize' (TokenLCNums (succ $ tkLn n') 1) $ T.dropWhile (/='\n') (T.tail xs') -- for line comment
                 | not (T.null xs') && x == '/' && T.head xs' == '*' -> let xs'' = T.tail xs'; cur = n' { tkCn = rssize + tkCn n' } in -- for block comment
                     flip (maybe (Left (cur, "*/"))) (subTextIndex "*/" xs'') $ \ind -> let next = n' { tkCn = tkCn cur + fromIntegral ind + 2 } in tokenize' next $ T.drop (ind + 3) xs''
-                | isDigit x -> let (n'', ts, ds) = first3 fromIntegral $ spanLenT isDigit xs'; cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = tkCn cur + n'' }; num = T.cons x ts in
+                | isDigit x -> let (n'', ts, ds) = first3 fromIntegral $ spanLenT isDigit xs'; cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = tkCn cur + n'' }; num = T.cons x ts in -- for numbers
                     flip (either (const $ Left (cur, T.singleton x))) (T.decimal num) $ \(nu, _) -> ((cur, TKNum nu):) <$> tokenize' next ds
-                | x == '"' -> let cur = n' { tkCn = rssize + tkCn n' } in flip (maybe (Left (cur, "\""))) (T.findIndex (=='"') xs') $ \ind -> 
-                    let (ts, ds) = T.splitAt ind xs'; next = n' { tkCn = 2 + tkCn cur + fromIntegral ind } in 
-                        ((cur, TKString (T.encodeUtf8 $ T.append (escapeChar ts) "\0")):) <$> tokenize' next (T.tail ds)
-                | not (T.null xs') && T.take 2 xxs `elem` CR.strOps -> let cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = 2 + tkCn cur }; op = T.take 2 xxs in
+                | x == '\"' -> let cur = n' { tkCn = rssize + tkCn n' } in flip (maybe (Left (cur, "\""))) (spanStrLiteral xs') $ \(lit, ds) -> -- for a string literal
+                    let next = n' { tkCn = tkCn cur + 2 + fromIntegral (T.length lit) } in 
+                            ((cur, TKString (T.encodeUtf8 $ T.append lit "\0")):) <$> tokenize' next ds
+                | not (T.null xs') && T.take 2 xxs `elem` CR.strOps -> let cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = 2 + tkCn cur }; op = T.take 2 xxs in -- for operators (two character)
                     ((cur, TKReserved op):) <$> tokenize' next (T.tail xs')
-                | x `elem` CR.charOps -> let cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = succ (tkCn cur) } in ((cur, TKReserved (T.singleton x)):) <$> tokenize' next xs'
+                | x `elem` CR.charOps -> let cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = succ (tkCn cur) } in ((cur, TKReserved (T.singleton x)):) <$> tokenize' next xs' -- for operators (one character)
                 | otherwise -> let (len, tk, ds) = spanLenT CR.isValidChar xxs; cur = n' { tkCn = tkCn n' + rssize } in
                     if len == 0 then Left (cur, T.takeWhile (not . CR.isValidChar) ds) else let next = n' { tkCn = tkCn cur + fromIntegral len } in
                         maybe (((cur, TKIdent tk):) <$> tokenize' next ds) (\tkn -> ((cur, tkn):) <$> tokenize' next ds) $ lookupKeyword tk

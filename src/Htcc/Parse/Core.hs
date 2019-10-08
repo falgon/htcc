@@ -266,8 +266,8 @@ term = inners unary [("*", ATMul), ("/", ATDiv), ("%", ATMod)]
 unary :: (Show i, Eq i, Read i, Integral i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
 unary ((_, HT.TKReserved "+"):xs) at vars = factor xs at vars
 unary ((_, HT.TKReserved "-"):xs) at vars = second3 (ATNode ATSub CT.CTInt (ATNode (ATNum 0) CT.CTInt ATEmpty ATEmpty)) <$> factor xs at vars
-unary ((_, HT.TKReserved "!"):xs) at vars = second3 (\x -> ATNode ATElse CT.CTUndef (ATNode ATIf CT.CTUndef (ATNode ATEQ CT.CTInt x (ATNode (ATNum 0) CT.CTInt ATEmpty ATEmpty)) (ATNode ATReturn CT.CTUndef (ATNode (ATNum 1) CT.CTInt ATEmpty ATEmpty) ATEmpty)) (ATNode ATReturn CT.CTUndef (ATNode (ATNum 0) CT.CTInt ATEmpty ATEmpty) ATEmpty)) <$> unary xs at vars
-unary ((_, HT.TKReserved "~"):xs) at vars = second3 (flip (ATNode ATNot CT.CTInt) ATEmpty) <$> unary xs at vars
+unary ((_, HT.TKReserved "!"):xs) at vars = second3 (flip (ATNode ATNot CT.CTInt) ATEmpty) <$> unary xs at vars
+unary ((_, HT.TKReserved "~"):xs) at vars = second3 (flip (ATNode ATBitNot CT.CTInt) ATEmpty) <$> unary xs at vars
 unary ((_, HT.TKReserved "&"):xs) at vars = second3 (\x -> (ATNode ATAddr $ CT.CTPtr $ if CT.isCTArray (atype x) then fromJust $ CT.derefMaybe (atype x) else atype x) x ATEmpty) <$> unary xs at vars
 unary (cur@(_, HT.TKReserved "*"):xs) at vars = flip (either Left) (unary xs at vars) $ \(ert, erat, ervars) -> 
     flip (maybe $ Left ("invalid pointer dereference", cur)) (CT.derefMaybe $ atype erat) $ \t -> Right (ert, ATNode ATDeref t erat ATEmpty, ervars)
@@ -331,6 +331,7 @@ stackSize (ATNode (ATDefFunc _ args) _ body _) = toNatural $ alignas 8 $ sum $ m
     maybe S.empty (foldr (\(ATNode (ATLVar t x) _ _ _) acc -> S.insert (t, x) acc) S.empty) args 
     where
         f ATEmpty s = s
+        f (ATNode (ATCallFunc _ (Just arg)) t l r) s = f (ATNode (ATBlock arg) t l r) s
         f (ATNode (ATLVar t x) _ l r) s = let i = S.insert (t, x) s in f l i `S.union` f r i
         f (ATNode (ATBlock xs) _ l r) s = let i = foldr (S.union . (`f` s)) s xs in f l i `S.union` f r i
         f (ATNode (ATStmtExpr xs) t l r) s = f (ATNode (ATBlock xs) t l r) s 

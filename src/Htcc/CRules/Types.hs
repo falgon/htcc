@@ -9,6 +9,7 @@ Portability : POSIX
 
 The types of C language
 -}
+{-# LANGUAGE DeriveGeneric #-}
 module Htcc.CRules.Types (
     -- * TypeKind data type
     TypeKind (..),
@@ -26,6 +27,8 @@ module Htcc.CRules.Types (
     isFundamental
 ) where
 
+import GHC.Generics (Generic)
+import Control.DeepSeq (NFData (..))
 import Numeric.Natural
 import Data.List (foldl')
 
@@ -37,7 +40,7 @@ data TypeKind = CTInt -- ^ The type @int@ as C language
     | CTPtr TypeKind -- ^ The pointer type of `TypeKind`
     | CTArray Natural TypeKind -- ^ The array type
     | CTUndef -- ^ Undefined type
-    deriving Eq
+    deriving (Eq, Generic)
 
 instance Show TypeKind where
     show CTInt = "int"
@@ -48,6 +51,8 @@ instance Show TypeKind where
 
 instance Ord TypeKind where
     compare x = compare (sizeof x) . sizeof
+
+instance NFData TypeKind
 
 -- | `isCTArray` returns `True` when the given argument is `CTArray`. Otherwise, returns `False`.
 {-# INLINE isCTArray #-}

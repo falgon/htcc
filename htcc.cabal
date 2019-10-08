@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: bae060cb3ed869826254fd0cc1e71d19f7d18b288d0ba5b7f53b2979deefbc3d
+-- hash: 7bdc0154d402a68b9b52d42cdcb70a2784dd35ead780f7e6c5592f6ba017e966
 
 name:           htcc
 version:        0.0.0.1
@@ -67,6 +67,7 @@ library
       base >=4.7 && <5
     , bytestring
     , containers
+    , deepseq
     , extra
     , monad-loops
     , split
@@ -84,6 +85,7 @@ executable htcc
       base >=4.7 && <5
     , bytestring
     , containers
+    , deepseq
     , extra
     , htcc
     , monad-loops
@@ -95,6 +97,7 @@ test-suite htcc-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Tests.SubProcTests
       Tests.Test1
       Tests.Test2
       Tests.Test3
@@ -108,6 +111,7 @@ test-suite htcc-test
     , base >=4.7 && <5
     , bytestring
     , containers
+    , deepseq
     , directory
     , extra
     , foldl
@@ -117,4 +121,22 @@ test-suite htcc-test
     , text
     , time
     , turtle
+  default-language: Haskell2010
+
+benchmark criterion
+  type: exitcode-stdio-1.0
+  main-is: bench/Criterion.hs
+  other-modules:
+      Paths_htcc
+  build-depends:
+      base >=4.7 && <5
+    , bytestring
+    , containers
+    , criterion
+    , deepseq
+    , extra
+    , htcc
+    , monad-loops
+    , split
+    , text
   default-language: Haskell2010

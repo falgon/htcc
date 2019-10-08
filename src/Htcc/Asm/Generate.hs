@@ -77,11 +77,13 @@ genStmt c lc@(ATNode (ATDefFunc x Nothing) _ st _) = T.putStr (I.defGLbl x <> pr
 genStmt c lc@(ATNode (ATDefFunc x (Just args)) _ st _) = do -- TODO: supports more than 7 arguments
     T.putStr $ I.defGLbl x <> prologue (stackSize lc)
     flip (`zipWithM_` args) argRegs $ \(ATNode (ATLVar t o) _ _ _) reg -> 
-        maybe (err "internal compiler error: there is no register that fits the specified size") (T.putStr . I.mov (Ref $ rbp `osub` o)) $ find ((== CR.sizeof t) . byteWidth) reg
+        maybe (err "internal compiler error: there is no register that fits the specified size") (T.putStr . I.mov (Ref $ rbp `osub` o)) $
+            find ((== CR.sizeof t) . byteWidth) reg
     genStmt c st
 genStmt _ (ATNode (ATCallFunc x Nothing) _ _ _) = T.putStr $ I.call x <> I.push rax
 genStmt c (ATNode (ATCallFunc x (Just args)) _ _ _) = let (toReg, _) = splitAt 6 args in do -- TODO: supports more than 7 arguments
-    zipWithM_ (\t reg -> genStmt c t >> T.putStr (I.pop reg)) toReg [rdi, rsi, rdx, rcx, rn 8, rn 9]
+    mapM_ (genStmt c) toReg
+    mapM_ (\reg -> T.putStr (I.pop $ maximum reg)) $ reverse (take (length toReg) argRegs)
     -- unless (null toStack) $ forM_ (reverse toStack) $ genStmt c
     n <- c
     T.putStr $ I.mov rax rsp <> I.and rax (0x0f :: Int)
@@ -130,9 +132,10 @@ genStmt c (ATNode ATElse _ (ATNode ATIf _ llhs rrhs) rhs) = do
 genStmt _ (ATNode ATElse _ _ _) = error "Asm code generator shold not reached here. Maybe abstract tree is broken it cause (bug)."
 genStmt c (ATNode ATReturn _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> epilogue) 
 genStmt c (ATNode ATExprStmt _ lhs _) = genStmt c lhs >> T.putStr (I.add rsp (8 :: Int))
-genStmt c (ATNode ATNot _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.not rax <> I.push rax)
+genStmt c (ATNode ATBitNot _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.not rax <> I.push rax)
 genStmt c (ATNode ATAddr _ lhs _) = genAddr c lhs
 genStmt c (ATNode ATDeref t lhs _) = genStmt c lhs >> unless (CR.isCTArray t) (T.putStr $ load t) 
+genStmt c (ATNode ATNot _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.cmp rax (0 :: Int) <> I.sete al <> I.movzb rax al <> I.push rax)
 genStmt _ (ATNode (ATNum x) _ _ _) = T.putStr $ I.push x
 genStmt c n@(ATNode (ATLVar _ _) t _ _) = genAddr c n >> unless (CR.isCTArray t) (T.putStr $ load t)
 genStmt c n@(ATNode (ATGVar _ _) t _ _) = genAddr c n >> unless (CR.isCTArray t) (T.putStr $ load t)
@@ -185,8 +188,8 @@ parseErrExit xs (s, (i, etk)) = let errMesPre = T.replicate 4 " " <> tshow (HT.t
 dataSection :: M.Map T.Text GVar -> [Literal] -> IO ()
 dataSection gvars lits = do
     T.putStrLn ".data"
+    mapM_ (\(Literal _ n cnt) -> T.putStrLn (".L.data." <> tshow n <> ":") >> T.putStr "\t.byte " >> T.putStrLn (T.intercalate ", " $ map tshow $ B.unpack cnt)) lits
     mapM_ (\(n, GVar t) -> T.putStrLn (n <> T.singleton ':') >> T.putStrLn ("\t.zero " <> tshow (CR.sizeof t))) $ M.toList gvars
-    mapM_ (\(Literal _ n cnt) -> T.putStrLn (".L.data." <> tshow n <> ":") >> mapM_ (T.putStrLn . T.append "\t.byte " . tshow) (B.unpack cnt)) lits
 
 textSection :: (Show i, Ord i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => [ATree i] -> IO ()
 textSection tk = do

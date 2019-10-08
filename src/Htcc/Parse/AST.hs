@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
 {-|
 Module      : Htcc.Parse.AST
 Description : The AST data type and its utilities
@@ -80,7 +80,7 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATAnd -- ^ bitwise and: @x & y@
     | ATOr -- ^ bitwise or: @x | y@
     | ATXor -- ^ bitwise xor: @x ^ y@
-    | ATNot -- ^ bitwise not: @~x@
+    | ATBitNot -- ^ bitwise not: @~x@
     | ATShl -- ^ left shift: @x << y@
     | ATShr -- ^ right shift: @x >> y@
     | ATLT  -- ^ \(x\lt y\): @x < y@
@@ -89,6 +89,7 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATGEQ -- ^ \(x\geq y\): @x >= y@
     | ATEQ  -- ^ \(x=y\): @x == y@
     | ATNEQ -- ^ \(x\not= y\): @x != y@
+    | ATNot -- ^ The not operator @!@: @!x@
     | ATAddr -- ^ The addressing operator @&@: @&x@
     | ATDeref -- ^ The dereferencing operator @*@: @*p@
     | ATAssign -- ^ The assign operator: @x=y@

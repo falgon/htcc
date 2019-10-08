@@ -33,6 +33,7 @@ dependencies:
 - monad-loops
 - containers
 - bytestring
+- deepseq
 
 library:
   source-dirs: src
@@ -69,3 +70,10 @@ tests:
     - directory
     - time
     - foldl
+
+benchmarks:
+    criterion:
+        main: bench/Criterion.hs
+        dependencies:
+            - criterion
+            - htcc
