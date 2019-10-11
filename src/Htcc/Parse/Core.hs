@@ -34,7 +34,6 @@ module Htcc.Parse.Core (
     stackSize
 ) where
 
-import Data.Bits ((.&.), complement)
 import qualified Data.ByteString as B
 import Data.Tuple.Extra (first, second, uncurry3, snd3)
 import Data.List (find)
@@ -56,8 +55,6 @@ import qualified Htcc.CRules.Types as CT
 import Htcc.Parse.AST
 import Htcc.Parse.Var
 import Htcc.Parse.Utils
-
--- import Debug.Trace
 
 -- | `program` indicates \(\eqref{eq:eigth}\) among the comments of `inners`.
 program :: (Show i, Eq i, Read i, Integral i) => [HT.TokenLC i] -> Vars i -> Either (T.Text, HT.TokenLC i) ([ATree i], Vars i)
@@ -331,7 +328,7 @@ parse = fmap (\(ast, vars) -> (ast, globals vars, literals vars)) . flip program
 
 -- | `stackSize` returns the stack size of variable per function.
 stackSize :: (Show i, Ord i) => ATree i -> Natural
-stackSize (ATNode (ATDefFunc _ args) _ body _) = toNatural $ alignas 8 $ sum $ map ((fromIntegral :: Natural -> Integer) . CT.sizeof . fst) $ S.toList $ f body $
+stackSize (ATNode (ATDefFunc _ args) _ body _) = toNatural $ flip CT.alignas 8 $ sum $ map ((fromIntegral :: Natural -> Integer) . CT.sizeof . fst) $ S.toList $ f body $
     maybe S.empty (foldr (\(ATNode (ATLVar t x) _ _ _) acc -> S.insert (t, x) acc) S.empty) args 
     where
         f ATEmpty s = s
@@ -342,6 +339,5 @@ stackSize (ATNode (ATDefFunc _ args) _ body _) = toNatural $ alignas 8 $ sum $ m
         f (ATNode (ATFor xs) _ l r) s = let i = foldr (S.union . flip f s . fromATKindFor) S.empty xs in f l i `S.union` f r i
         f (ATNode (ATNull x) _ _ _) s = f x s
         f (ATNode _ _ l r) s = f l s `S.union` f r s
-        alignas aval n = pred (n + aval) .&. complement (pred aval)
 stackSize _ = 0
 

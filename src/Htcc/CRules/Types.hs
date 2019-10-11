@@ -9,7 +9,7 @@ Portability : POSIX
 
 The types of C language
 -}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric, BangPatterns #-}
 module Htcc.CRules.Types (
     -- * TypeKind data type
     StructMember (..),
@@ -23,6 +23,9 @@ module Htcc.CRules.Types (
     lookupMember,
     isCTArray,
     isCTStruct,
+    -- * Utilities of align
+    alignof,
+    alignas,
     -- * Type traits
     removeAllExtents,
     isPtr,
@@ -33,7 +36,9 @@ module Htcc.CRules.Types (
 import GHC.Generics (Generic)
 import Control.DeepSeq (NFData (..))
 import Numeric.Natural
-import Data.List (foldl')
+import Data.List (foldl', foldl1')
+import Data.Bits ((.&.), complement, Bits (..))
+import Data.Tuple.Extra (first, second, dupe)
 import qualified Data.Map as M
 import qualified Data.Text as T
 
@@ -93,10 +98,30 @@ sizeof CTInt = 8 -- TODO: 8 is workaround. it should be 4 byte.
 sizeof CTChar = 1
 sizeof (CTPtr _) = 8
 sizeof (CTArray v t) = v * sizeof t
-sizeof (CTStruct m) 
+sizeof t@(CTStruct m) 
     | M.null m = 1
-    | otherwise = foldl' (\acc x -> acc + sizeof (smType x)) 0 $ M.elems m
+    | otherwise = let sn = foldl1' (\acc x -> if smOffset x > smOffset acc then x else acc) $ M.elems m in
+        itn $ alignas (itf $ smOffset sn + sizeof (smType sn)) (itf $ alignof t)
+    where
+        itf = fromIntegral :: Natural -> Integer
+        itn = fromIntegral :: Integer -> Natural
 sizeof CTUndef = 0
+
+-- | `alignof` returns the alignment of the type defined by C language.
+alignof :: TypeKind -> Natural
+alignof CTInt = 8
+alignof CTChar = 1
+alignof (CTPtr _) = 8
+alignof (CTArray _ t) = alignof $ removeAllExtents t
+alignof (CTStruct m)
+    | M.null m = 1
+    | otherwise = maximum $ map (alignof . smType) $ M.elems m
+alignof CTUndef = 0
+
+{-# INLINE alignas #-}
+-- | `alignas` align to @n@.
+alignas :: (Bits a, Num a, Enum a) => a -> a -> a
+alignas !n !aval = pred (n + aval) .&. complement (pred aval)
 
 -- | `derefMaybe` returns @Just x@ for the underlying type @x@ only if `TypeKind` is `CTPtr` or `CTArray`. Otherwise returns `Nothing`. 
 derefMaybe :: TypeKind -> Maybe TypeKind
@@ -168,3 +193,4 @@ isArray _ = False
 {-# INLINE isFundamental #-}
 isFundamental :: TypeKind -> Bool
 isFundamental = not . lor [isPtr, isArray]
+

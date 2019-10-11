@@ -3,15 +3,19 @@
  * This comment is also a block comment test.
  */
 
+int test_num;
 int g;
 int gr[3];
+
 int assert(int expected, int actual, char* code)
 {
+
     if (expected == actual) {
-        printf("[OK]: '%s' => %d\n", code, actual);
+        printf("[OK]: test #%d: \'%s\' => %d\n", test_num, code, actual);
+        test_num = test_num + 1;
         return 0;
     } else {
-        printf("[Failed]: '%s' => %d expected but got %d\n", code, expected, actual);
+        printf("[Failed]: test #%d: \'%s\' => %d, but expected %d\n", test_num, code, actual, expected);
         exit(1);
     }
 }
@@ -26,6 +30,7 @@ int sub3(int a, int b, int c) { return a - b - c; }
 
 int main()
 {
+    test_num = 1;
     assert(42, 42, "42");
     assert(7, 1 + 2 + 4, "1 + 2 + 4");
     assert(6, 10 - 7 + 3, "10 - 7 + 3");
@@ -172,15 +177,17 @@ int main()
     assert(1, ({ struct { int a; int b; } ar[3]; int* p = ar; p[1] = 1; ar[0].b; }), "({ struct { int a; int b; } ar[3]; int* p = ar; p[1] = 1; ar[0].b; })");
     assert(2, ({ struct { int a; int b; } ar[3]; int* p = ar; p[2] = 2; ar[1].a; }), "({ struct { int a; int b; } ar[3]; int* p = ar; p[2] = 2; ar[1].a; }),");
     assert(3, ({ struct { int a; int b; } ar[3]; int* p = ar; p[3] = 3; ar[1].b; }), "({ struct { int a; int b; } ar[3]; int* p = ar; p[3] = 3; ar[1].b; })");
-	assert(6, ({ struct {int a[3]; int b[5];} x; int *p=&x; x.a[0]=6; p[0]; }), "struct {int a[3]; int b[5];} x; int *p=&x; x.a[0]=6; p[0];");
-  	assert(7, ({ struct {int a[3]; int b[5];} x; int *p=&x; x.b[0]=7; p[3]; }), "struct {int a[3]; int b[5];} x; int *p=&x; x.b[0]=7; p[3];");
-	assert(6, ({ struct { struct { int b; } a; } x; x.a.b=6; x.a.b; }), "struct { struct { int b; } a; } x; x.a.b=6; x.a.b;");
-	assert(8, ({ struct { int a; } x; sizeof(x); }), "struct { int a; } x; sizeof(x);");
-  	assert(16, ({ struct { int a; int b; } x; sizeof(x); }), "struct { int a; int b; } x; sizeof(x);");
-  	assert(24, ({ struct {int ar[3];} x; sizeof(x); }), "struct { int ar[3]; } ar; sizeof(ar);");
-  	assert(32, ({ struct { int a; } x[4]; sizeof(x); }), "struct { int a; } x[4]; sizeof(x);");
-  	assert(48, ({ struct { int ar[3]; } x[2]; sizeof(x); }), "struct { int ar[3]; } x[2]; sizeof(x) };");
-  	assert(2, ({ struct { char a; char b; } x; sizeof(x); }), "struct { char a; char b; } x; sizeof(x);");
-  	assert(9, ({ struct { char a; int b; } x; sizeof(x); }), "struct { char a; int b; } x; sizeof(x);");
+    assert(6, ({ struct { int a[3]; int b[5]; } x; int*p = &x; x.a[0] = 6; p[0]; }), "({ struct { int a[3]; int b[5]; } x; int* p = &x; x.a[0] = 6; p[0]; )}");
+    assert(7, ({ struct {int a[3]; int b[5]; } x; int* p = &x; x.b[0] = 7; p[3]; }), "({ struct { int a[3]; int b[5]; } x; int*p = &x; x.b[0] = 7; p[3]; })");
+    assert(6, ({ struct { struct { int b; } a; } x; x.a.b=6; x.a.b; }), "({ struct { struct { int b; } a; } x; x.a.b=6; x.a.b; })");
+    assert(8, ({ struct { int a; } x; sizeof(x); }), "({ struct { int a; } x; sizeof(x); )}");
+    assert(16, ({ struct { int a; int b; } x; sizeof(x); }), "({ struct { int a; int b; } x; sizeof(x); )}");
+    assert(24, ({ struct {int ar[3];} x; sizeof(x); }), "({ struct { int ar[3]; } ar; sizeof(ar); })");
+    assert(32, ({ struct { int a; } x[4]; sizeof(x); }), "({ struct { int a; } x[4]; sizeof(x); })");
+    assert(48, ({ struct { int ar[3]; } x[2]; sizeof(x); }), "({ struct { int ar[3]; } x[2]; sizeof(x) }; })");
+    assert(2, ({ struct { char a; char b; } x; sizeof(x); }), "({ struct { char a; char b; } x; sizeof(x); })");
+    assert(16, ({ struct { char a; int b; } x; sizeof(x); }), "({ struct { char a; int b; } x; sizeof(x); })");
+    assert(16, ({ struct { int a; char b; } x; sizeof(x); }), "({ struct { int a; char b; } x; sizeof(x); })");
+
     return 0;
 }

@@ -22,11 +22,13 @@ import qualified Data.Text as T
 import qualified Data.Map as M
 import Data.Tuple.Extra (first)
 import Data.Maybe (fromJust)
+import Numeric.Natural
 
 import qualified Htcc.CRules as CR
 import Htcc.Utils (lastInit, spanLen, dropSnd, tshow, toNatural)
 import Htcc.Parse.Utils (internalCE)
 import Htcc.Token.Core
+
 
 -- | Extract the partial token enclosed in parentheses from the token sequence. If it is invalid, `takeBrace` returns @(i, Text)@ indicating the error location.
 -- Otherwise, `takeBrace` returns a partial token enclosed in parentheses and subsequent tokens.
@@ -76,7 +78,6 @@ takeExps _ = Nothing
 -- | `makeTypes` returns a pair of type (including pointer type) and the remaining tokens wrapped in 
 -- `Just` only if the token starts with `TKType` or `TKStruct`.
 -- Otherwise `Nothing` is returned.
--- makeTypes :: (Integral i, Show i) => [TokenLC i] -> Maybe (CR.TypeKind, [TokenLC i])
 makeTypes :: (Integral i, Show i, Read i) => [TokenLC i] -> Either (T.Text, TokenLC i) (CR.TypeKind, [TokenLC i])
 makeTypes ((_, TKType tktype):xs) = Right $ first (flip CR.makePtr tktype . toNatural) $ dropSnd $ spanLen ((==TKReserved "*") . snd) xs
 makeTypes ((_, TKStruct):cur@(_, TKReserved "{"):xs) = flip (maybe (Left (internalCE, cur))) (takeBrace "{" "}" (cur:xs)) $
@@ -87,13 +88,17 @@ makeTypes ((_, TKStruct):cur@(_, TKReserved "{"):xs) = flip (maybe (Left (intern
             case head ds' of
                 (_, TKIdent ident) -> case arrayDeclSuffix ty (tail ds') of
                     Nothing 
-                        | not (null $ tail ds') && snd (ds' !! 1) == TKReserved ";" -> M.insert ident (CR.StructMember ty n) <$> go (drop 2 ds') (n + CR.sizeof ty)
+                        | not (null $ tail ds') && snd (ds' !! 1) == TKReserved ";" -> let ofs = itn $ CR.alignas (itf n) $ itf $ CR.alignof ty in
+                            M.insert ident (CR.StructMember ty ofs) <$> go (drop 2 ds') (ofs + fromIntegral (CR.sizeof ty))
                         | otherwise -> Left ("expected ';' at member variable declaration", head ds')
                     Just (Left er) -> Left er
                     Just (Right (ty', ds''))
-                        | snd (head ds'') == TKReserved ";" -> M.insert ident (CR.StructMember ty' n) <$> go (tail ds'') (n + CR.sizeof ty')
+                        | snd (head ds'') == TKReserved ";" -> let ofs = itn $ CR.alignas (itf n) $ itf $ CR.alignof ty' in
+                            M.insert ident (CR.StructMember ty' ofs) <$> go (tail ds'') (ofs + fromIntegral (CR.sizeof ty'))
                         | otherwise -> Left ("expected ';' at member variable declaration", head ds'')
                 _ -> Left ("expected member name or ';' after declaration specifiers", head ds')
+        itf = fromIntegral :: Natural -> Integer
+        itn = fromIntegral :: Integer -> Natural
 makeTypes (x:_) = Left ("ISO C forbids declaration with no type", x)
 makeTypes _ = Left ("ISO C forbids declaration with no type", (TokenLCNums 0 0, TKEmpty))
 
