@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, BangPatterns, DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-|
 Module      : Htcc.Parse.Var
 Description : The Data type of variables and its utilities used in parsing

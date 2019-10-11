@@ -37,6 +37,7 @@ module Htcc.Asm.Intrinsic.Instruction (
 ) where
 
 import qualified Data.Text as T
+import Numeric.Natural
 
 import Htcc.Asm.Intrinsic.Register (Register (..))
 import Htcc.Asm.Intrinsic.Operand (IsOperand (..), Ref (..))
@@ -135,6 +136,7 @@ setge = intelSyntaxUnaryInst "setge"
 
 instance UnaryInstruction Integer
 instance UnaryInstruction Int
+instance UnaryInstruction Natural
 instance UnaryInstruction Register
 instance UnaryInstruction Offset
 
@@ -185,6 +187,7 @@ class Show a => BinaryInstruction a where
 
 instance BinaryInstruction Integer
 instance BinaryInstruction Int
+instance BinaryInstruction Natural
 instance BinaryInstruction Register
 instance IsOperand a => BinaryInstruction (Ref a)
 

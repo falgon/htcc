@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-|
 Module      : Htcc.Parse.AST
 Description : The AST data type and its utilities
@@ -94,6 +94,7 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATDeref -- ^ The dereferencing operator @*@: @*p@
     | ATAssign -- ^ The assign operator: @x=y@
     | ATNum a -- ^ The number
+    | ATMemberAcc CT.StructMember -- ^ Accessing the member of the @struct@
     | ATReturn -- ^ The @return@ keyword
     | ATIf -- ^ The @if@ keyword
     | ATElse -- ^ The @else@ keyword

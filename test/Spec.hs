@@ -11,9 +11,9 @@ import qualified Tests.SubProcTests as SubProcTests
 
 inc :: IO ()
 inc = flip finally (clean ["spec", "spec.s"]) $ do
-    execErrFin $ "stack exec htcc -- ./test/Tests/csrc/test_core.c > spec.s"
-    execErrFin $ "gcc -no-pie -o spec spec.s"
-    execErrFin $ "./spec"
+    execErrFin "stack exec htcc -- ./test/Tests/csrc/test_core.c > spec.s"
+    execErrFin "gcc -no-pie -o spec spec.s"
+    execErrFin "./spec"
 
 main :: IO ()
 main = do

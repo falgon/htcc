@@ -14,8 +14,7 @@ test :: String -> [String] -> IO Int
 test x fnames = let obj = map (++".o") fnames in
     flip finally (clean $ ["tmp", "tmp.s", "tmp.c"] ++ obj) $ do 
         T.writeFile "./tmp.c" (T.pack x)
-        -- execErrFin "stack build"
-        execErrFin $ "stack exec htcc -- tmp.c > tmp.s"
+        execErrFin "stack exec htcc -- tmp.c > tmp.s"
         forM_ fnames $ \fname -> execErrFin $ "cc -c test/Tests/csrc/" <> T.pack fname <> ".c"
         execErrFin $ "gcc " <> T.pack (unwords obj) <> " tmp.s -o tmp"
         exitCode id 0 <$> exec "./tmp"

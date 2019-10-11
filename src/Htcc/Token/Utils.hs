@@ -9,7 +9,7 @@ Portability : POSIX
 
 The tokenizer
 -}
-{-# LANGUAGE ScopedTypeVariables, OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables, OverloadedStrings, TupleSections, BangPatterns #-}
 module Htcc.Token.Utils (
     -- * Utilities of the token
     takeBrace,
@@ -19,11 +19,13 @@ module Htcc.Token.Utils (
 ) where
 
 import qualified Data.Text as T
+import qualified Data.Map as M
 import Data.Tuple.Extra (first)
 import Data.Maybe (fromJust)
 
 import qualified Htcc.CRules as CR
 import Htcc.Utils (lastInit, spanLen, dropSnd, tshow, toNatural)
+import Htcc.Parse.Utils (internalCE)
 import Htcc.Token.Core
 
 -- | Extract the partial token enclosed in parentheses from the token sequence. If it is invalid, `takeBrace` returns @(i, Text)@ indicating the error location.
@@ -72,11 +74,28 @@ takeExps ((_, TKIdent _):(_, TKReserved "("):xs) = flip (maybe Nothing) (lastIni
 takeExps _ = Nothing
 
 -- | `makeTypes` returns a pair of type (including pointer type) and the remaining tokens wrapped in 
--- `Just` only if the token starts with `TKType`.
+-- `Just` only if the token starts with `TKType` or `TKStruct`.
 -- Otherwise `Nothing` is returned.
-makeTypes :: Eq i => [TokenLC i] -> Maybe (CR.TypeKind, [TokenLC i])
-makeTypes ((_, TKType tktype):xs) = Just $ first (flip CR.makePtr tktype . toNatural) $ dropSnd $ spanLen ((==TKReserved "*") . snd) xs
-makeTypes _ = Nothing
+-- makeTypes :: (Integral i, Show i) => [TokenLC i] -> Maybe (CR.TypeKind, [TokenLC i])
+makeTypes :: (Integral i, Show i, Read i) => [TokenLC i] -> Either (T.Text, TokenLC i) (CR.TypeKind, [TokenLC i])
+makeTypes ((_, TKType tktype):xs) = Right $ first (flip CR.makePtr tktype . toNatural) $ dropSnd $ spanLen ((==TKReserved "*") . snd) xs
+makeTypes ((_, TKStruct):cur@(_, TKReserved "{"):xs) = flip (maybe (Left (internalCE, cur))) (takeBrace "{" "}" (cur:xs)) $
+    either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> ((, ds) . CR.CTStruct) <$> go (tail $ init field) 0
+    where
+        go [] _ = Right M.empty
+        go fs !n = (>>=) (makeTypes fs) $ \(ty, ds') -> if null ds' then Left ("expected member name or ';' after declaration specifiers", if null fs then (TokenLCNums 0 0, TKEmpty) else head fs) else
+            case head ds' of
+                (_, TKIdent ident) -> case arrayDeclSuffix ty (tail ds') of
+                    Nothing 
+                        | not (null $ tail ds') && snd (ds' !! 1) == TKReserved ";" -> M.insert ident (CR.StructMember ty n) <$> go (drop 2 ds') (n + CR.sizeof ty)
+                        | otherwise -> Left ("expected ';' at member variable declaration", head ds')
+                    Just (Left er) -> Left er
+                    Just (Right (ty', ds''))
+                        | snd (head ds'') == TKReserved ";" -> M.insert ident (CR.StructMember ty' n) <$> go (tail ds'') (n + CR.sizeof ty')
+                        | otherwise -> Left ("expected ';' at member variable declaration", head ds'')
+                _ -> Left ("expected member name or ';' after declaration specifiers", head ds')
+makeTypes (x:_) = Left ("ISO C forbids declaration with no type", x)
+makeTypes _ = Left ("ISO C forbids declaration with no type", (TokenLCNums 0 0, TKEmpty))
 
 -- | For a number \(n\in\mathbb{R}\), let \(k\) be the number of consecutive occurrences of
 -- @TKReserved "[", n, TKReserved "]"@ from the beginning of the token sequence.

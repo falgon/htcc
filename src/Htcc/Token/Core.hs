@@ -9,7 +9,7 @@ Portability : POSIX
 
 The tokenizer
 -}
-{-# LANGUAGE ScopedTypeVariables, OverloadedStrings, BangPatterns, DeriveGeneric #-}
+{-# LANGUAGE ScopedTypeVariables, OverloadedStrings, DeriveGeneric #-}
 module Htcc.Token.Core (
     -- * Token data types
     TokenLCNums (..),
@@ -21,6 +21,7 @@ module Htcc.Token.Core (
     length,
     isTKNum,
     isTKType,
+    isTKStruct,
     isTKIdent,
     isTKReserved
 ) where
@@ -52,6 +53,7 @@ data Token i = TKReserved T.Text -- ^ The reserved token
     | TKWhile -- ^ The @while@ keyword
     | TKFor -- ^ The @for@ keyword
     | TKSizeof -- ^ The @sizeof@ keyword
+    | TKStruct -- ^ The @struct@ keyword
     | TKType CR.TypeKind -- ^ Types
     | TKString B.ByteString -- ^ The string literal
     | TKEmpty -- ^ The empty token (This is not used by `tokenize`, but when errors are detected during parsing, the token at error locations cannot be specified)
@@ -69,6 +71,7 @@ instance Show i => Show (Token i) where
     show TKElse = "else"
     show TKWhile = "while"
     show TKFor = "for"
+    show TKStruct = "struct"
     show TKSizeof = "sizeof"
     show (TKType x) = show x
     show (TKString s) = "\"" ++ T.unpack (T.decodeUtf8 s) ++ "\""
@@ -85,6 +88,7 @@ length TKIf = 2
 length TKElse = 4
 length TKWhile = 5
 length TKFor = 3
+length TKStruct = 6
 length TKSizeof = 6
 length (TKType tk) = P.length $ show tk
 length (TKString s) = B.length s
@@ -92,7 +96,7 @@ length TKEmpty = 0
 
 -- | Lookup keyword from `T.Text`. If the specified `T.Text` is not keyword as C language, `lookupKeyword` returns `Nothing`.
 lookupKeyword :: Show i => T.Text -> Maybe (Token i)
-lookupKeyword s = find ((==) s . tshow) [TKReturn, TKWhile, TKIf, TKElse, TKFor, TKSizeof, TKType CR.CTInt, TKType CR.CTChar]
+lookupKeyword s = find ((==) s . tshow) [TKReturn, TKWhile, TKIf, TKElse, TKFor, TKStruct, TKSizeof, TKType CR.CTInt, TKType CR.CTChar]
 
 -- | `TokenLCNums` is data structure for storing the line number and character number of each token
 data TokenLCNums i = TokenLCNums -- ^ The constructor of `TokenLCNums`
@@ -133,6 +137,12 @@ isTKReserved _ = False
 isTKType :: Token i -> Bool
 isTKType (TKType _) = True
 isTKType _ = False
+
+{-# INLINE isTKStruct #-}
+-- | Utility for `TKStruct`. When the argument is `TKStruct`, it returns `True`, otherwise `False`.
+isTKStruct :: Token i -> Bool
+isTKStruct TKStruct = True
+isTKStruct _ = False
 
 -- | `escapeChar` converts escape characters in the input `T.Text` to correct escape characters
 escapeChar :: T.Text -> T.Text

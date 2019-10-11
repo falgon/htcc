@@ -50,7 +50,7 @@ import Control.Monad.ST (runST)
 import Control.Monad.Loops (unfoldrM)
 import Numeric.Natural
 
-import Htcc.Utils (first3, second3, tshow, fstNothingIdx, toNatural)
+import Htcc.Utils (first3, second3, tshow, toNatural, mapEither)
 import qualified Htcc.Token as HT
 import qualified Htcc.CRules.Types as CT
 import Htcc.Parse.AST
@@ -66,18 +66,16 @@ program xs vars = either Left (\(ys, btn, vars') -> first (btn:) <$> program ys 
 
 -- | `globalDef` parses global definitions (include functions and global variables)
 globalDef :: (Show i, Eq i, Num i, Integral i, Read i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
-globalDef tks@((_, HT.TKType _):_) at va = flip (maybe $ Left ("ISO C forbids declaration with no type", head tks)) (HT.makeTypes tks) $ \(ty, ds) -> globalDef' ty ds at $ resetLocal va
+globalDef tks at va = (>>=) (HT.makeTypes tks) $ \(ty, ds) -> globalDef' ty ds at $ resetLocal va
     where
         checkErr ar f = let ar' = init $ tail ar in if not (null ar') && snd (head ar') == HT.TKReserved "," then Left ("unexpected ',' token", head ar') else
-            let args = linesBy ((==HT.TKReserved ",") . snd) ar'; args' = map HT.makeTypes args in flip (maybe (f args')) (fstNothingIdx args') $ \idx -> let inv = head (args !! idx) in
-                Left $ if HT.isTKIdent $ snd inv then (T.singleton '\'' <> tshow (snd inv) <> "' was not declared in this scope", inv) else 
-                    ("invalid token '" <> tshow (snd inv) <> "' here", inv)
+            let args = linesBy ((==HT.TKReserved ",") . snd) ar' in (>>=) (mapEither HT.makeTypes args) f
         globalDef' _ tk@(cur@(_, HT.TKIdent fname):(_, HT.TKReserved "("):_) atn vars = flip (maybe $ Left (internalCE, cur)) (HT.takeBrace "(" ")" $ tail tk) $ -- for function definitions
             either (Left . ("invalid function definition",)) $ \(fndec, st) -> case st of
                 ((_, HT.TKReserved "{"):_) -> checkErr fndec $ \args -> runST $ do
                     eri <- newSTRef Nothing
                     v <- newSTRef vars
-                    mk <- flip unfoldrM args $ \args' -> if null args' then return Nothing else let (Just arg) = head args' in do
+                    mk <- flip unfoldrM args $ \args' -> if null args' then return Nothing else let arg = head args' in do
                         m <- uncurry addLVar (second head arg) <$> readSTRef v
                         flip (either ((<$) Nothing . writeSTRef eri . Just)) m $ \(vat, vars') ->
                             Just (vat, tail args') <$ writeSTRef v vars'
@@ -88,23 +86,22 @@ globalDef tks@((_, HT.TKType _):_) at va = flip (maybe $ Left ("ISO C forbids de
             Nothing -> case xs of 
                 (_, HT.TKReserved ";"):ds -> flip fmap (addGVar (ty', cur) vars) $ \(_, vars') -> (ds, ATEmpty, vars')
                 _ -> Left ("expected ';' token after '" <> tshow (snd cur) <> "' token", cur)
-            Just rs -> flip (either Left) rs $ \(tk, ds) -> case ds of
+            Just rs -> (>>=) rs $ \(tk, ds) -> case ds of
                 (_, HT.TKReserved ";"):ds' -> flip fmap (addGVar (tk, cur) vars) $ \(_, vars') -> (ds', ATEmpty, vars')
                 _ -> Left ("expected ';' token after '" <> tshow (snd cur) <> "' token", cur)
         globalDef' _ tk _ _ = Left ("invalid definition of global identifier", if null tk then (HT.TokenLCNums 0 0, HT.TKEmpty) else head tk)
-globalDef tk _ _ = Left ("invalid definition of global identifier", if null tk then (HT.TokenLCNums 0 0, HT.TKEmpty) else head tk)
 
 -- | `stmt` indicates \(\eqref{eq:nineth}\) among the comments of `inners`.
 stmt :: (Show i, Eq i, Num i, Integral i, Read i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
-stmt (cur@(_, HT.TKReturn):xs) atn vars = flip (either Left) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for @return@
+stmt (cur@(_, HT.TKReturn):xs) atn vars = (>>=) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for @return@
     (_, HT.TKReserved ";"):ys -> Right (ys, ATNode ATReturn CT.CTUndef erat ATEmpty, ervars)
     ert' -> Left $ expectedMessage ";" cur ert'
-stmt (cur@(_, HT.TKIf):(_, HT.TKReserved "("):xs) atn vars = flip (either Left) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for @if@
-    (_, HT.TKReserved ")"):ys -> flip (either Left) (stmt ys erat ervars) $ \x -> case second3 (ATNode ATIf CT.CTUndef erat) x of
+stmt (cur@(_, HT.TKIf):(_, HT.TKReserved "("):xs) atn vars = (>>=) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for @if@
+    (_, HT.TKReserved ")"):ys -> (>>=) (stmt ys erat ervars) $ \x -> case second3 (ATNode ATIf CT.CTUndef erat) x of
         ((_, HT.TKElse):zs, eerat, eervars) -> second3 (ATNode ATElse CT.CTUndef eerat) <$> stmt zs eerat eervars -- for @else@
         zs -> Right zs
     ert' -> Left $ expectedMessage ")" cur ert'
-stmt (cur@(_, HT.TKWhile):(_, HT.TKReserved "("):xs) atn vars = flip (either Left) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for @while@
+stmt (cur@(_, HT.TKWhile):(_, HT.TKReserved "("):xs) atn vars = (>>=) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for @while@
     (_, HT.TKReserved ")"):ys -> second3 (ATNode ATWhile CT.CTUndef erat) <$> stmt ys erat ervars
     ert' -> Left $ expectedMessage ")" cur ert'
 stmt xxs@(cur@(_, HT.TKFor):(_, HT.TKReserved "("):_) atn vars = flip (maybe $ Left (internalCE, cur)) (HT.takeBrace "(" ")" (tail xxs)) $ -- for @for@
@@ -137,21 +134,22 @@ stmt xxs@(cur@(_, HT.TKReserved "{"):_) _ vars = flip (maybe $ Left (internalCE,
             ervars <- readSTRef v
             either (\err -> Nothing <$ writeSTRef eri (Just err)) (\(ert', erat', ervars') -> Just (erat', ert') <$ writeSTRef v ervars') $ stmt ert ATEmpty ervars
         (>>=) (readSTRef eri) $ flip maybe (return . Left) $ Right . (ds, ATNode (ATBlock mk) CT.CTUndef ATEmpty ATEmpty,) . fallBack vars <$> readSTRef v
-stmt tk@(cur1@(_, HT.TKType _):_) atn vars = flip (maybe (Left ("invalid type using", cur1))) (HT.makeTypes tk) $ \(t, ds) -> case ds of -- for a local variable declaration
-    cur2@(_, HT.TKIdent _):(_, HT.TKReserved ";"):ds' -> flip (either Left) (addLVar t cur2 vars) $ \(lat, vars') -> Right (ds', ATNode (ATNull lat) CT.CTUndef ATEmpty ATEmpty, vars')
-    cur2@(_, HT.TKIdent _):(_, HT.TKReserved "="):ds' -> flip (either Left) (addLVar t cur2 vars) $ \(lat, vars') -> 
-        flip (either Left) (expr ds' atn vars') $ \(ert, erat, ervar) -> case ert of
-            (_, HT.TKReserved ";"):ds'' -> Right (ds'', ATNode ATExprStmt CT.CTUndef (ATNode ATAssign (atype lat) lat erat) ATEmpty, ervar)
-            _ -> Left ("expected ';' token. The subject iteration statement start here:", cur1)
-    cur2@(_, HT.TKIdent _):ds' -> flip (maybe (err ds (cur2:ds'))) (HT.arrayDeclSuffix t ds') $ either Left $ \(t', ds'') -> 
-        flip (either Left) (addLVar t' cur2 vars) $ \(lat, vars') -> Right (ds'', ATNode (ATNull lat) CT.CTUndef ATEmpty ATEmpty, vars')
-    ds' -> err ds ds'
-    where
-        err ds ds' = Left $ if null ds' then ("expected unqualified-id", cur1) else ("expected unqualified-id before '" <> tshow (snd (head ds)) <> T.singleton '\'', head ds')
 stmt ((_, HT.TKReserved ";"):xs) atn vars = Right (xs, atn, vars) -- for only @;@
-stmt xs atn vars = flip (either Left) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for stmt;
-    (_, HT.TKReserved ";"):ys -> Right (ys, ATNode ATExprStmt CT.CTUndef erat ATEmpty, ervars)
-    ert' -> Left $ expectedMessage ";" (HT.TokenLCNums 0 0, HT.TKEmpty) ert'
+stmt tk atn vars
+    | not (null tk) && (HT.isTKType (snd $ head tk) || HT.isTKStruct (snd $ head tk)) = (>>=) (HT.makeTypes tk) $ \(t, ds) -> case ds of -- for a local variable declaration
+        cur2@(_, HT.TKIdent _):(_, HT.TKReserved ";"):ds' -> (>>=) (addLVar t cur2 vars) $ \(lat, vars') -> Right (ds', ATNode (ATNull lat) CT.CTUndef ATEmpty ATEmpty, vars')
+        cur2@(_, HT.TKIdent _):(_, HT.TKReserved "="):ds' -> (>>=) (addLVar t cur2 vars) $ \(lat, vars') -> 
+            (>>=) (expr ds' atn vars') $ \(ert, erat, ervar) -> case ert of
+                (_, HT.TKReserved ";"):ds'' -> Right (ds'', ATNode ATExprStmt CT.CTUndef (ATNode ATAssign (atype lat) lat erat) ATEmpty, ervar)
+                _ -> Left ("expected ';' token. The subject iteration statement start here:", head tk)
+        cur2@(_, HT.TKIdent _):ds' -> flip (maybe (err ds (cur2:ds'))) (HT.arrayDeclSuffix t ds') $ either Left $ \(t', ds'') -> 
+            (>>=) (addLVar t' cur2 vars) $ \(lat, vars') -> Right (ds'', ATNode (ATNull lat) CT.CTUndef ATEmpty ATEmpty, vars')
+        ds' -> err ds ds'
+    | otherwise = (>>=) (expr tk atn vars) $ \(ert, erat, ervars) -> case ert of -- for stmt;
+        (_, HT.TKReserved ";"):ys -> Right (ys, ATNode ATExprStmt CT.CTUndef erat ATEmpty, ervars)
+        ert' -> Left $ expectedMessage ";" (HT.TokenLCNums 0 0, HT.TKEmpty) ert'
+    where
+        err ds ds' = Left $ if null ds' then ("expected unqualified-id", head tk) else ("expected unqualified-id before '" <> tshow (snd (head ds)) <> T.singleton '\'', head ds')
 
 {-# INLINE expr #-}
 -- | `expr` is equivalent to `equality`.
@@ -160,7 +158,7 @@ expr = assign
 
 -- | `assign` indicates \(\eqref{eq:seventh}\) among the comments of `inners`.
 assign :: (Show i, Eq i, Read i, Integral i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
-assign xs atn vars = flip (either Left) (bitwiseOr xs atn vars) $ \(ert, erat, ervars) -> case ert of
+assign xs atn vars = (>>=) (bitwiseOr xs atn vars) $ \(ert, erat, ervars) -> case ert of
     (_, HT.TKReserved "="):ys -> second3 (ATNode ATAssign (atype erat) erat) <$> assign ys erat ervars
     _ -> Right (ert, erat, ervars)
 
@@ -216,7 +214,7 @@ bitwiseAnd = inners equality [("&", ATAnd)]
 --
 --
 -- > equality ::  [HT.TokenLC i] -> ATree i -> [LVar i] -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i)
--- > equality xs atn vars = flip (either Left) (relational xs atn vars) $ uncurry3 equality'
+-- > equality xs atn vars = (>>=) (relational xs atn vars) $ uncurry3 equality'
 -- >     where
 -- >         equality' ((_, HT.TKReserved "=="):ys) era ars = either Left (uncurry3 id . first3 equality' . second3 (ATNode ATEQ era)) $ relational ys era ars
 -- >         equality' ((_, HT.TKReserved "!="):ys) era ars = either Left (uncurry3 id . first3 equality' . second3 (ATNode ATNEQ era)) $ relational ys era ars
@@ -250,11 +248,11 @@ subKind lhs rhs
 
 -- | `add` indicates \(\eqref{eq:first}\) among the comments of `inners`.
 add :: (Show i, Eq i, Read i, Integral i) => [HT.TokenLC i] -> ATree i -> Vars i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Vars i)
-add xs atn vars = flip (either Left) (term xs atn vars) $ uncurry3 add'
+add xs atn vars = (>>=) (term xs atn vars) $ uncurry3 add'
     where
-        add' (cur@(_, HT.TKReserved "+"):ys) era ars = flip (either Left) (term ys era ars) $ \zz -> 
+        add' (cur@(_, HT.TKReserved "+"):ys) era ars = (>>=) (term ys era ars) $ \zz -> 
             flip (maybe (Left ("invalid operands", cur))) (addKind era $ snd3 zz) $ \nat -> uncurry3 id $ first3 add' $ second3 (const nat) zz
-        add' (cur@(_, HT.TKReserved "-"):ys) era ars = flip (either Left) (term ys era ars) $ \zz -> 
+        add' (cur@(_, HT.TKReserved "-"):ys) era ars = (>>=) (term ys era ars) $ \zz -> 
             flip (maybe (Left ("invalid operands", cur))) (subKind era $ snd3 zz) $ \nat -> uncurry3 id $ first3 add' $ second3 (const nat) zz
         add' ert erat ars = Right (ert, erat, ars)
 
@@ -269,15 +267,21 @@ unary ((_, HT.TKReserved "-"):xs) at vars = second3 (ATNode ATSub CT.CTInt (ATNo
 unary ((_, HT.TKReserved "!"):xs) at vars = second3 (flip (ATNode ATNot CT.CTInt) ATEmpty) <$> unary xs at vars
 unary ((_, HT.TKReserved "~"):xs) at vars = second3 (flip (ATNode ATBitNot CT.CTInt) ATEmpty) <$> unary xs at vars
 unary ((_, HT.TKReserved "&"):xs) at vars = second3 (\x -> (ATNode ATAddr $ CT.CTPtr $ if CT.isCTArray (atype x) then fromJust $ CT.derefMaybe (atype x) else atype x) x ATEmpty) <$> unary xs at vars
-unary (cur@(_, HT.TKReserved "*"):xs) at vars = flip (either Left) (unary xs at vars) $ \(ert, erat, ervars) -> 
+unary (cur@(_, HT.TKReserved "*"):xs) at vars = (>>=) (unary xs at vars) $ \(ert, erat, ervars) -> 
     flip (maybe $ Left ("invalid pointer dereference", cur)) (CT.derefMaybe $ atype erat) $ \t -> Right (ert, ATNode ATDeref t erat ATEmpty, ervars)
 unary xs at vars = either Left (uncurry3 f) $ factor xs at vars
     where
-        f (cur@(_, HT.TKReserved "["):xs') erat ervars = flip (either Left) (expr xs' erat ervars) $ \(ert', erat', ervars') -> case ert' of
-            (_, HT.TKReserved "]"):xs'' -> flip (maybe $ Left ("invalid operands", cur)) (addKind erat erat') $ \erat'' -> -- = ATNode atk' typek erat erat' in
+        f (cur@(_, HT.TKReserved "["):xs') erat ervars = (>>=) (expr xs' erat ervars) $ \(ert', erat', ervars') -> case ert' of
+            (_, HT.TKReserved "]"):xs'' -> flip (maybe $ Left ("invalid operands", cur)) (addKind erat erat') $ \erat'' ->
                 flip (maybe $ Left ("subscripted value is neither array nor pointer nor vector", if null xs then (HT.TokenLCNums 0 0, HT.TKEmpty) else head xs)) 
                     (CT.derefMaybe $ atype erat'') $ \t -> f xs'' (ATNode ATDeref t erat'' ATEmpty) ervars'
             _ -> Left $ if null ert' then ("expected expression after '[' token", cur) else ("expected expression before '" <> tshow (snd (head ert')) <> "' token", head ert')
+        f (cur@(_, HT.TKReserved "."):xs') erat ervars 
+            | CT.isCTStruct (atype erat) = if null xs' then Left ("expected identifier at end of input", cur) else case head xs' of 
+                (_, HT.TKIdent ident) -> flip (maybe (Left ("no such member", cur))) (CT.lookupMember ident (atype erat)) $ \mem ->
+                    f (tail xs') (ATNode (ATMemberAcc mem) (CT.smType mem) erat ATEmpty) ervars
+                _ -> Left ("expected identifier after '.' token", cur)
+            | otherwise = Left ("request for a member in something not a structure or union", cur)
         f ert erat ervars = Right (ert, erat, ervars)
 
 -- | `factor` indicates \(\eqref{eq:third}\) amount the comments of `inners`.
@@ -300,7 +304,7 @@ factor ((_, HT.TKReserved "("):xs@((_, HT.TKReserved "{"):_)) _ vars = flip (may
                         _ -> Left ("void value not ignored as it ought to be. the statement expression starts here:", head xs)
         _ -> Left $ if null scope then ("expected ')' token. the statement expression starts here: ", head xs) else
             ("expected ')' token after '" <> tshow (snd $ last scope) <> "' token", last scope)
-factor (cur@(_, HT.TKReserved "("):xs) atn vars = flip (either Left) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for (expr)
+factor (cur@(_, HT.TKReserved "("):xs) atn vars = (>>=) (expr xs atn vars) $ \(ert, erat, ervars) -> case ert of -- for (expr)
     (_, HT.TKReserved ")"):ys -> Right (ys, erat, ervars)
     ert' -> Left $ expectedMessage ")" cur ert'
 factor ((_, HT.TKNum n):xs) _ vars = Right (xs, ATNode (ATNum n) CT.CTInt ATEmpty ATEmpty, vars) -- for numbers

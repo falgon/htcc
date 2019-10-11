@@ -12,6 +12,7 @@ The types of C language
 {-# LANGUAGE DeriveGeneric #-}
 module Htcc.CRules.Types (
     -- * TypeKind data type
+    StructMember (..),
     TypeKind (..),
     -- * Utilities of TypeKinds
     sizeof,
@@ -19,7 +20,9 @@ module Htcc.CRules.Types (
     makePtr,
     makeArray,
     concatCTArray,
+    lookupMember,
     isCTArray,
+    isCTStruct,
     -- * Type traits
     removeAllExtents,
     isPtr,
@@ -31,14 +34,26 @@ import GHC.Generics (Generic)
 import Control.DeepSeq (NFData (..))
 import Numeric.Natural
 import Data.List (foldl')
+import qualified Data.Map as M
+import qualified Data.Text as T
 
 import Htcc.Utils (lor)
+
+-- | The type and offset value of a data member.
+data StructMember = StructMember -- ^ `StructMember` constructor
+    {
+        smType :: TypeKind, -- ^ The type of a data member
+        smOffset :: Natural -- ^ The offset of a data member
+    } deriving (Eq, Show, Generic)
+
+instance NFData StructMember
 
 -- | The kinds of types in C language.
 data TypeKind = CTInt -- ^ The type @int@ as C language
     | CTChar -- ^ The type @char@ as C language
     | CTPtr TypeKind -- ^ The pointer type of `TypeKind`
     | CTArray Natural TypeKind -- ^ The array type
+    | CTStruct (M.Map T.Text StructMember) -- ^ The struct, has its members and their names.
     | CTUndef -- ^ Undefined type
     deriving (Eq, Generic)
 
@@ -47,6 +62,7 @@ instance Show TypeKind where
     show CTChar = "char"
     show (CTPtr x) = show x ++ "*"
     show (CTArray v t) = show t ++ "[" ++ show v ++ "]"
+    show (CTStruct m) = "struct { " ++ concatMap (\(v, inf) -> show (smType inf) ++ " " ++ T.unpack v ++ "; ") (M.toList m) ++ "}"
     show CTUndef = "undefined"
 
 instance Ord TypeKind where
@@ -54,11 +70,22 @@ instance Ord TypeKind where
 
 instance NFData TypeKind
 
+-- | `lookupMember` search the specified member by its name from `CTStruct`.
+lookupMember :: T.Text -> TypeKind -> Maybe StructMember
+lookupMember t (CTStruct m) = M.lookup t m
+lookupMember _ _ = Nothing
+
 -- | `isCTArray` returns `True` when the given argument is `CTArray`. Otherwise, returns `False`.
 {-# INLINE isCTArray #-}
 isCTArray :: TypeKind -> Bool
 isCTArray (CTArray _ _) = True
 isCTArray _ = False
+
+-- | `isCTStruct` returns `True` when the given argument is `CTStruct`. Otherwise, returns `False`.
+{-# INLINE isCTStruct #-}
+isCTStruct :: TypeKind -> Bool
+isCTStruct (CTStruct _) = True
+isCTStruct _ = False
 
 -- | `sizeof` returns the byte size of the type defined by C language.
 sizeof :: TypeKind -> Natural
@@ -66,6 +93,9 @@ sizeof CTInt = 8 -- TODO: 8 is workaround. it should be 4 byte.
 sizeof CTChar = 1
 sizeof (CTPtr _) = 8
 sizeof (CTArray v t) = v * sizeof t
+sizeof (CTStruct m) 
+    | M.null m = 1
+    | otherwise = foldl' (\acc x -> acc + sizeof (smType x)) 0 $ M.elems m
 sizeof CTUndef = 0
 
 -- | `derefMaybe` returns @Just x@ for the underlying type @x@ only if `TypeKind` is `CTPtr` or `CTArray`. Otherwise returns `Nothing`. 

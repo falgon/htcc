@@ -34,7 +34,8 @@ module Htcc.Asm.Intrinsic.Register (
     rsp, esp, sp, spl,
     rn, rnd, rnw, rnb,
     -- * List of defined registers
-    argRegs
+    argRegs,
+    popRegs
 ) where
 
 import Numeric.Natural
@@ -528,3 +529,11 @@ rnb = Extended . RnB
 -- In the list, the registers used for the first to sixth arguments are arranged in ascending order.
 argRegs :: [[Register]]
 argRegs = [[dil, rdi], [sil, rsi], [dl, rdx], [cl, rcx], [rnb 8, rn 8], [rnb 9, rn 9]]
+
+{-# INLINE popRegs #-}
+-- | `popRegs` is a list of registers used to @pop@ arguments from the stack in function calls.
+-- This is equivalent to the following, but is defined explicitly for reducing time completity.
+--
+-- >>> popRegs 3 == map maximum (reverse (take 3 argRegs))
+popRegs :: Int -> [Register]
+popRegs = flip drop [rn 9, rn 8, rcx, rdx, rsi, rdi] . (6-) 

@@ -28,7 +28,7 @@ import qualified Data.Text.IO as T
 import System.Exit (exitFailure)
 
 -- Imports Tokenizer and parser
-import Htcc.Utils (err, putStrLnErr, putStrErr, counter, tshow, toInts)
+import Htcc.Utils (err, putStrLnErr, putStrErr, counter, tshow, toInts, splitAtLen)
 import qualified Htcc.Token as HT
 import Htcc.Parse (ATKind (..), ATree (..), GVar (..), Literal (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, parse, stackSize)
 
@@ -63,6 +63,7 @@ genAddr :: (Show i, Ord i, IsOperand i, I.UnaryInstruction i, I.BinaryInstructio
 genAddr _ (ATNode (ATLVar _ v) _ _ _) = T.putStr $ I.lea rax (Ref $ rbp `osub` v) <> I.push rax
 genAddr _ (ATNode (ATGVar _ n) _ _ _) = T.putStr $ I.push (I.Offset n)
 genAddr c (ATNode ATDeref _ lhs _) = genStmt c lhs
+genAddr c (ATNode (ATMemberAcc m) _ lhs _) = genAddr c lhs >> T.putStr (I.pop rax <> I.add rax (CR.smOffset m) <> I.push rax)
 genAddr _ _ = err "lvalue required as left operand of assignment"
 
 genLval :: (Show i, Ord i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => IO Int -> ATree i -> IO ()
@@ -81,9 +82,10 @@ genStmt c lc@(ATNode (ATDefFunc x (Just args)) _ st _) = do -- TODO: supports mo
             find ((== CR.sizeof t) . byteWidth) reg
     genStmt c st
 genStmt _ (ATNode (ATCallFunc x Nothing) _ _ _) = T.putStr $ I.call x <> I.push rax
-genStmt c (ATNode (ATCallFunc x (Just args)) _ _ _) = let (toReg, _) = splitAt 6 args in do -- TODO: supports more than 7 arguments
+genStmt c (ATNode (ATCallFunc x (Just args)) _ _ _) = let (n', toReg, _) = splitAtLen 6 args in do -- TODO: supports more than 7 arguments
     mapM_ (genStmt c) toReg
-    mapM_ (\reg -> T.putStr (I.pop $ maximum reg)) $ reverse (take (length toReg) argRegs)
+    -- mapM_ (\reg -> T.putStr (I.pop $ maximum reg)) $ reverse (take n argRegs)
+    mapM_ (T.putStr . I.pop) $ popRegs n'
     -- unless (null toStack) $ forM_ (reverse toStack) $ genStmt c
     n <- c
     T.putStr $ I.mov rax rsp <> I.and rax (0x0f :: Int)
@@ -139,6 +141,7 @@ genStmt c (ATNode ATNot _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.cmp
 genStmt _ (ATNode (ATNum x) _ _ _) = T.putStr $ I.push x
 genStmt c n@(ATNode (ATLVar _ _) t _ _) = genAddr c n >> unless (CR.isCTArray t) (T.putStr $ load t)
 genStmt c n@(ATNode (ATGVar _ _) t _ _) = genAddr c n >> unless (CR.isCTArray t) (T.putStr $ load t)
+genStmt c n@(ATNode (ATMemberAcc _) t _ _) = genAddr c n >> unless (CR.isCTArray t) (T.putStr $ load t)
 genStmt c (ATNode ATAssign t lhs rhs) = genLval c lhs >> genStmt c rhs >> T.putStr (store t)
 genStmt _ (ATNode (ATNull _) _ _ _) = return ()
 genStmt c (ATNode k t lhs rhs) = flip finally (T.putStr $ I.push rax) $ genStmt c lhs *> genStmt c rhs *> T.putStr (I.pop rdi) *> T.putStr (I.pop rax) *> case k of

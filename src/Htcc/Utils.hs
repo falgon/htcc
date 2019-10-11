@@ -13,6 +13,7 @@ General-purpose utilities
 module Htcc.Utils (
     -- * Extra functions for lists
     takeWhileLen,
+    splitAtLen,
     spanLen,
     lastInit,
     -- * For Char
@@ -21,8 +22,8 @@ module Htcc.Utils (
     tshow,
     spanLenT,
     subTextIndex,
-    -- * For Data.Maybe
-    fstNothingIdx,
+    -- * For Data.Either
+    mapEither,
     -- * For Numeric.Natural
     toNatural,
     -- * For IO shortcuts
@@ -78,6 +79,14 @@ takeWhileLen = takeWhileLen' 0
             | f x = second (x:) $ takeWhileLen' (succ n) f xs 
             | otherwise = (n, [])
 
+-- | `splitAtLen`, simmilar to `splitAt` but also returns the length of the splited list.
+splitAtLen :: Int -> [a] -> (Int, [a], [a])
+splitAtLen n = go n
+    where
+        go 0 xs = (n, [], xs)
+        go !n' (x:xs) = second3 (x:) $ go (pred n') xs
+        go !n' [] = (n - n', [], [])
+
 -- | Almost the same as `span`, but returns the number of elements in the list that
 -- satisfy @f@ at the same time.
 spanLen :: (a -> Bool) -> [a] -> (Int, [a], [a])
@@ -103,11 +112,12 @@ spanLenT = spanLenT' 0
                 | otherwise -> (n, T.empty, xs)
             Nothing -> (n, T.empty, T.empty)
 
--- | `fstNothingIdx` returns the index of the first `Nothing`. If `Nothing` is not exist in given list, returns `Nothing`.
-fstNothingIdx :: [Maybe a] -> Maybe Int
-fstNothingIdx [] = Nothing
-fstNothingIdx (Just _:xs) = (1+) <$> fstNothingIdx xs
-fstNothingIdx (Nothing:_) = Just 0
+-- | Continue mapping as long as the function returns `Right`. 
+-- When the function returns `Left`, 
+-- it discards the previous mapping and returns the value of `Left`.
+mapEither :: (a -> Either b c) -> [a] -> Either b [c]
+mapEither _ [] = Right []
+mapEither f (x:xs) = f x >>= flip fmap (mapEither f xs) . (:) 
 
 -- | `toNatural` is a shortcut for @fromIntegral :: Integral i => i -> Natural@
 {-# INLINE toNatural #-}
