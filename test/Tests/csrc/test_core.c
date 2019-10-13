@@ -188,6 +188,13 @@ int main()
     assert(2, ({ struct { char a; char b; } x; sizeof(x); }), "({ struct { char a; char b; } x; sizeof(x); })");
     assert(16, ({ struct { char a; int b; } x; sizeof(x); }), "({ struct { char a; int b; } x; sizeof(x); })");
     assert(16, ({ struct { int a; char b; } x; sizeof(x); }), "({ struct { int a; char b; } x; sizeof(x); })");
+    assert(1, ({ char c; _Alignof c; }), "({ char c; _Alignof c; })");
+    assert(8, ({ int x; _Alignof x; }), "({ int x; _Alignof x; })");
+    assert(8, ({ int* x; _Alignof x; }), "({ int* x; _Alignof x; })");
+    assert(1, ({ char ar[10]; _Alignof ar; }), "({ char ar[10]; _Alignof ar; })");
+    assert(8, ({ int ar[10]; _Alignof ar; }), "({ int ar[10]; _Alignof ar; })");
+    assert(8, ({ struct { char a; int b; } x; _Alignof x; }), "({ struct { char a; int b; } x; _Alignof x; })");
+    assert(8, ({ _Alignof add(1, 2); }), "({ _Alignof add(1, 2); })");
 
     return 0;
 }

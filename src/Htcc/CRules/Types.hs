@@ -23,6 +23,7 @@ module Htcc.CRules.Types (
     lookupMember,
     isCTArray,
     isCTStruct,
+    isCTUndef,
     -- * Utilities of align
     alignof,
     alignas,
@@ -38,7 +39,6 @@ import Control.DeepSeq (NFData (..))
 import Numeric.Natural
 import Data.List (foldl', foldl1')
 import Data.Bits ((.&.), complement, Bits (..))
-import Data.Tuple.Extra (first, second, dupe)
 import qualified Data.Map as M
 import qualified Data.Text as T
 
@@ -91,6 +91,12 @@ isCTArray _ = False
 isCTStruct :: TypeKind -> Bool
 isCTStruct (CTStruct _) = True
 isCTStruct _ = False
+
+{-# INLINE isCTUndef #-}
+-- | `isCTUndef` returns `True` when the given argument is `CTUndef`. Otherwise, returns `False`.
+isCTUndef :: TypeKind -> Bool
+isCTUndef CTUndef = True
+isCTUndef _ = False
 
 -- | `sizeof` returns the byte size of the type defined by C language.
 sizeof :: TypeKind -> Natural

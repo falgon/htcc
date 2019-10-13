@@ -53,6 +53,7 @@ data Token i = TKReserved T.Text -- ^ The reserved token
     | TKWhile -- ^ The @while@ keyword
     | TKFor -- ^ The @for@ keyword
     | TKSizeof -- ^ The @sizeof@ keyword
+    | TKAlignof -- ^ The @_Alignof@ keyword
     | TKStruct -- ^ The @struct@ keyword
     | TKType CR.TypeKind -- ^ Types
     | TKString B.ByteString -- ^ The string literal
@@ -73,6 +74,7 @@ instance Show i => Show (Token i) where
     show TKFor = "for"
     show TKStruct = "struct"
     show TKSizeof = "sizeof"
+    show TKAlignof = "_Alignof"
     show (TKType x) = show x
     show (TKString s) = "\"" ++ T.unpack (T.decodeUtf8 s) ++ "\""
     show TKEmpty = ""
@@ -96,7 +98,7 @@ length TKEmpty = 0
 
 -- | Lookup keyword from `T.Text`. If the specified `T.Text` is not keyword as C language, `lookupKeyword` returns `Nothing`.
 lookupKeyword :: Show i => T.Text -> Maybe (Token i)
-lookupKeyword s = find ((==) s . tshow) [TKReturn, TKWhile, TKIf, TKElse, TKFor, TKStruct, TKSizeof, TKType CR.CTInt, TKType CR.CTChar]
+lookupKeyword s = find ((==) s . tshow) [TKReturn, TKWhile, TKIf, TKElse, TKFor, TKStruct, TKSizeof, TKAlignof, TKType CR.CTInt, TKType CR.CTChar]
 
 -- | `TokenLCNums` is data structure for storing the line number and character number of each token
 data TokenLCNums i = TokenLCNums -- ^ The constructor of `TokenLCNums`
