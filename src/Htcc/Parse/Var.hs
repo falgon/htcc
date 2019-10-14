@@ -30,6 +30,7 @@ module Htcc.Parse.Var (
     fallBack
 ) where
 
+import Data.Bits (Bits (..))
 import qualified Data.ByteString as B
 import qualified Data.Text as T
 import qualified Data.Map.Strict as M
@@ -116,15 +117,16 @@ fallBack pre post = pre { literals = literals post }
 
 -- | If the specified token is `HT.TKIdent` and the local variable does not exist in the list, `addLVar` adds a new local variable to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
-addLVar :: (Num i, Ord i) => CT.TypeKind -> HT.TokenLC i -> Vars i -> Either (T.Text, HT.TokenLC i) (ATree i, Vars i)
+addLVar :: (Show i, Integral i, Bits i) => CT.TypeKind -> HT.TokenLC i -> Vars i -> Either (T.Text, HT.TokenLC i) (ATree i, Vars i)
 addLVar t cur@(_, HT.TKIdent ident) vars = case lookupLVar ident vars of
     Just foundedVar 
         | nestDepth foundedVar /= curNestDepth vars -> varnat
         | otherwise -> Left ("redeclaration of '" <> ident <> "' with no linkage", cur)
     Nothing -> varnat
     where
-        varnat = let lvar = LVar t ((+) (fromIntegral (CT.sizeof t)) $ maximumOffset $ locals vars) (curNestDepth vars)
-            in Right (ATNode (ATLVar (lvtype lvar) (rbpOffset lvar)) t ATEmpty ATEmpty, vars { locals = M.insert ident lvar $ locals vars })
+        ofs = (+) (fromIntegral $ CT.sizeof t) $ CT.alignas (maximumOffset $ locals vars) $ fromIntegral $ CT.alignof t
+        varnat = let lvar = LVar t ofs $ curNestDepth vars in 
+            Right (ATNode (ATLVar (lvtype lvar) (rbpOffset lvar)) t ATEmpty ATEmpty, vars { locals = M.insert ident lvar $ locals vars })
 addLVar _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
 
 -- | If the specified token is `HT.TKIdent` and the global variable does not exist in the list, `addLVar` adds a new global variable to the list,

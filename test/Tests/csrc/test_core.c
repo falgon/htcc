@@ -195,6 +195,8 @@ int main()
     assert(8, ({ int ar[10]; _Alignof ar; }), "({ int ar[10]; _Alignof ar; })");
     assert(8, ({ struct { char a; int b; } x; _Alignof x; }), "({ struct { char a; int b; } x; _Alignof x; })");
     assert(8, ({ _Alignof add(1, 2); }), "({ _Alignof add(1, 2); })");
+    assert(15, ({ int a; char b; int c; int p1 = &c; int p2 = &b; p2 - p1; }), "({ int a; char b; int c; &c - &b; })");
+    assert(1, ({ int a; char b; int p1 = &a; int p2 = &b; p1 - p2; }), "({ int a; int b; int p1 = &a; int p2 = &b; p2 - p1; })");
 
     return 0;
 }
