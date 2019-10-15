@@ -1,6 +1,6 @@
 {-|
 Module      : Htcc.Parse.Scope
-Description : The Data type of variables and its utilities used in parsing
+Description : The Data type of scope and its utilities used in parsing
 Copyright   : (c) roki, 2019
 License     : MIT
 Maintainer  : falgon53@yahoo.co.jp

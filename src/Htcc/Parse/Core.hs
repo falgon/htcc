@@ -330,7 +330,8 @@ factor ert _ _ = Left (if null ert then "unexpected token in program" else "unex
 
 {-# INLINE parse #-}
 -- | Constructs the abstract syntax tree based on the list of token strings.
--- if construction fails, `Nothing` is returned.
+-- if construction fails, `parse` returns the error message and the token at the error location.
+-- Otherwise, `parse` returns a list of abstract syntax trees, a set of global variables, and a list of literals.
 parse :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> Either (T.Text, HT.TokenLC i) ([ATree i], M.Map T.Text PV.GVar, [PV.Literal])
 parse = fmap (\(ast, sc) -> (ast, PV.globals $ vars sc, PV.literals $ vars sc)) . flip program initScope
 

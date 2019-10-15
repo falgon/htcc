@@ -1,6 +1,6 @@
 {-|
 Module      : Htcc.Parse.Struct
-Description : The Data type of variables and its utilities used in parsing
+Description : The Data type of struct and its utilities used in parsing
 Copyright   : (c) roki, 2019
 License     : MIT
 Maintainer  : falgon53@yahoo.co.jp
@@ -29,7 +29,7 @@ import qualified Htcc.Token.Core as HT
 -- | The data type of a struct tag
 data StructTag = StructTag -- ^ The constructor of a struct tag
     {
-        sttype :: CT.TypeKind, --- ^ The type of this struct
+        sttype :: CT.TypeKind, -- ^ The type of this struct
         stNestDepth :: !Natural -- ^ The nest depth of this struct
     } deriving (Eq, Ord, Show)
 
