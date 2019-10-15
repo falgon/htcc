@@ -59,21 +59,21 @@ store t
     | CR.sizeof t == 1 = I.pop rdi <> I.pop rax <> I.mov (Ref rax) dil <> I.push rdi
     | otherwise = I.pop rdi <> I.pop rax <> I.mov (Ref rax) rdi <> I.push rdi
 
-genAddr :: (Show i, Ord i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => IO Int -> ATree i -> IO ()
+genAddr :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => IO Int -> ATree i -> IO ()
 genAddr _ (ATNode (ATLVar _ v) _ _ _) = T.putStr $ I.lea rax (Ref $ rbp `osub` v) <> I.push rax
 genAddr _ (ATNode (ATGVar _ n) _ _ _) = T.putStr $ I.push (I.Offset n)
 genAddr c (ATNode ATDeref _ lhs _) = genStmt c lhs
 genAddr c (ATNode (ATMemberAcc m) _ lhs _) = genAddr c lhs >> T.putStr (I.pop rax <> I.add rax (CR.smOffset m) <> I.push rax)
 genAddr _ _ = err "lvalue required as left operand of assignment"
 
-genLval :: (Show i, Ord i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => IO Int -> ATree i -> IO ()
+genLval :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => IO Int -> ATree i -> IO ()
 genLval c xs@(ATNode _ t _ _)
     | CR.isCTArray t = err "lvalue required as left operand of assignment"
     | otherwise = genAddr c xs
 genLval _ _ = err "internal compiler error: genLval catch ATEmpty"
 
 -- | Simulate the stack machine by traversing an abstract syntax tree and output assembly codes.
-genStmt :: (Show i, Ord i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => IO Int -> ATree i -> IO ()
+genStmt :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => IO Int -> ATree i -> IO ()
 genStmt c lc@(ATNode (ATDefFunc x Nothing) _ st _) = T.putStr (I.defGLbl x <> prologue (stackSize lc)) >> genStmt c st
 genStmt c lc@(ATNode (ATDefFunc x (Just args)) _ st _) = do -- TODO: supports more than 7 arguments
     T.putStr $ I.defGLbl x <> prologue (stackSize lc)
@@ -194,7 +194,7 @@ dataSection gvars lits = do
     mapM_ (\(Literal _ n cnt) -> T.putStrLn (".L.data." <> tshow n <> ":") >> T.putStr "\t.byte " >> T.putStrLn (T.intercalate ", " $ map tshow $ B.unpack cnt)) lits
     mapM_ (\(n, GVar t) -> T.putStrLn (n <> T.singleton ':') >> T.putStrLn ("\t.zero " <> tshow (CR.sizeof t))) $ M.toList gvars
 
-textSection :: (Show i, Ord i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => [ATree i] -> IO ()
+textSection :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => [ATree i] -> IO ()
 textSection tk = do
     inc <- counter 0
     T.putStrLn ".text" >> mapM_ (genStmt inc) tk

@@ -92,6 +92,7 @@ length TKWhile = 5
 length TKFor = 3
 length TKStruct = 6
 length TKSizeof = 6
+length TKAlignof = 8
 length (TKType tk) = P.length $ show tk
 length (TKString s) = B.length s
 length TKEmpty = 0

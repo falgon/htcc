@@ -18,17 +18,19 @@ module Htcc.Token.Utils (
     arrayDeclSuffix
 ) where
 
+import Prelude hiding (toInteger)
+import Numeric.Natural
 import qualified Data.Text as T
 import qualified Data.Map as M
-import Data.Tuple.Extra (first)
+import Data.Tuple.Extra (first, second, dupe)
 import Data.Maybe (fromJust)
-import Numeric.Natural
 
 import qualified Htcc.CRules as CR
-import Htcc.Utils (lastInit, spanLen, dropSnd, tshow, toNatural)
+import Htcc.Utils (lastInit, spanLen, dropSnd, tshow, toNatural, toInteger)
 import Htcc.Parse.Utils (internalCE)
+import qualified Htcc.Parse.Scope as PS
+import qualified Htcc.Parse.Struct as PST
 import Htcc.Token.Core
-
 
 -- | Extract the partial token enclosed in parentheses from the token sequence. If it is invalid, `takeBrace` returns @(i, Text)@ indicating the error location.
 -- Otherwise, `takeBrace` returns a partial token enclosed in parentheses and subsequent tokens.
@@ -75,32 +77,35 @@ takeExps ((_, TKIdent _):(_, TKReserved "("):xs) = flip (maybe Nothing) (lastIni
         f args = maybe Nothing (\(ex, ds) -> (ex:) <$> f ds) $ readFn args
 takeExps _ = Nothing
 
+takeFields :: (Integral i, Show i, Read i) => [TokenLC i] -> PS.Scoped i -> Natural -> Either (T.Text, TokenLC i) (M.Map T.Text CR.StructMember, PS.Scoped i)
+takeFields [] scp' _ = Right (M.empty, scp')
+takeFields fs scp' !n = (>>=) (makeTypes fs scp') $ \(ty, ds', scp'') -> if null ds' then 
+    Left ("expected member name or ';' after declaration specifiers", if null fs then (TokenLCNums 0 0, TKEmpty) else head fs) else case head ds' of
+        (_, TKIdent ident) -> case arrayDeclSuffix ty (tail ds') of
+            Nothing 
+                | not (null $ tail ds') && snd (ds' !! 1) == TKReserved ";" -> let ofs = toNatural $ CR.alignas (toInteger n) $ toInteger $ CR.alignof ty in
+                    first (M.insert ident (CR.StructMember ty ofs)) <$> takeFields (drop 2 ds') scp'' (ofs + fromIntegral (CR.sizeof ty))
+                | otherwise -> Left ("expected ';' at member variable declaration", head ds')
+            Just (Left er) -> Left er
+            Just (Right (ty', ds''))
+                | snd (head ds'') == TKReserved ";" -> let ofs = toNatural $ CR.alignas (toInteger n) $ toInteger $ CR.alignof ty' in
+                    first (M.insert ident (CR.StructMember ty' ofs)) <$> takeFields (tail ds'') scp'' (ofs + fromIntegral (CR.sizeof ty'))
+                | otherwise -> Left ("expected ';' at member variable declaration", head ds'')
+        _ -> Left ("expected member name or ';' after declaration specifiers", head ds')
+
 -- | `makeTypes` returns a pair of type (including pointer type) and the remaining tokens wrapped in 
 -- `Just` only if the token starts with `TKType` or `TKStruct`.
 -- Otherwise `Nothing` is returned.
-makeTypes :: (Integral i, Show i, Read i) => [TokenLC i] -> Either (T.Text, TokenLC i) (CR.TypeKind, [TokenLC i])
-makeTypes ((_, TKType tktype):xs) = Right $ first (flip CR.makePtr tktype . toNatural) $ dropSnd $ spanLen ((==TKReserved "*") . snd) xs
-makeTypes ((_, TKStruct):cur@(_, TKReserved "{"):xs) = flip (maybe (Left (internalCE, cur))) (takeBrace "{" "}" (cur:xs)) $
-    either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> ((, ds) . CR.CTStruct) <$> go (tail $ init field) 0
-    where
-        go [] _ = Right M.empty
-        go fs !n = (>>=) (makeTypes fs) $ \(ty, ds') -> if null ds' then Left ("expected member name or ';' after declaration specifiers", if null fs then (TokenLCNums 0 0, TKEmpty) else head fs) else
-            case head ds' of
-                (_, TKIdent ident) -> case arrayDeclSuffix ty (tail ds') of
-                    Nothing 
-                        | not (null $ tail ds') && snd (ds' !! 1) == TKReserved ";" -> let ofs = itn $ CR.alignas (itf n) $ itf $ CR.alignof ty in
-                            M.insert ident (CR.StructMember ty ofs) <$> go (drop 2 ds') (ofs + fromIntegral (CR.sizeof ty))
-                        | otherwise -> Left ("expected ';' at member variable declaration", head ds')
-                    Just (Left er) -> Left er
-                    Just (Right (ty', ds''))
-                        | snd (head ds'') == TKReserved ";" -> let ofs = itn $ CR.alignas (itf n) $ itf $ CR.alignof ty' in
-                            M.insert ident (CR.StructMember ty' ofs) <$> go (tail ds'') (ofs + fromIntegral (CR.sizeof ty'))
-                        | otherwise -> Left ("expected ';' at member variable declaration", head ds'')
-                _ -> Left ("expected member name or ';' after declaration specifiers", head ds')
-        itf = fromIntegral :: Natural -> Integer
-        itn = fromIntegral :: Integer -> Natural
-makeTypes (x:_) = Left ("ISO C forbids declaration with no type", x)
-makeTypes _ = Left ("ISO C forbids declaration with no type", (TokenLCNums 0 0, TKEmpty))
+makeTypes :: (Integral i, Show i, Read i) => [TokenLC i] -> PS.Scoped i -> Either (T.Text, TokenLC i) (CR.TypeKind, [TokenLC i], PS.Scoped i)
+makeTypes ((_, TKType tktype):xs) scp = Right $ uncurry (,,scp) $ first (flip CR.makePtr tktype . toNatural) $ dropSnd $ spanLen ((==TKReserved "*") . snd) xs -- for a variable or a function definition
+makeTypes ((_, TKStruct):cur@(_, TKReserved "{"):xs) scp = flip (maybe (Left (internalCE, cur))) (takeBrace "{" "}" (cur:xs)) $ -- for a struct definition
+    either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> uncurry (,ds,) . first (CR.CTStruct . fst) . second snd . dupe <$> takeFields (tail $ init field) scp 0
+makeTypes ((_, TKStruct):cur1@(_, TKIdent _):cur2@(_, TKReserved "{"):xs) scp = flip (maybe (Left (internalCE, cur1))) (takeBrace "{" "}" (cur2:xs)) $ -- for a struct definition with its tag
+    either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> (>>=) (takeFields (tail $ init field) scp 0) $ \(mem, scp') -> let ty = CR.CTStruct mem in (ty, ds,) <$> PS.addStructTag ty cur1 scp'
+makeTypes ((_, TKStruct):cur1@(_, TKIdent ident):xs) scp = flip (maybe (Left ("storage size of '" <> ident <> "' isn't known", cur1))) (PS.lookupStructTag ident scp) $ \stg -> -- for a variable or a function definition with tag of the struct
+    Right (PST.sttype stg, xs, scp)
+makeTypes (x:_) _ = Left ("ISO C forbids declaration with no type", x)
+makeTypes _ _ = Left ("ISO C forbids declaration with no type", (TokenLCNums 0 0, TKEmpty))
 
 -- | For a number \(n\in\mathbb{R}\), let \(k\) be the number of consecutive occurrences of
 -- @TKReserved "[", n, TKReserved "]"@ from the beginning of the token sequence.

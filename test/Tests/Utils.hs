@@ -39,8 +39,8 @@ execStdOut cmd = fmap T.lineToText <$> T.fold (T.inshell cmd T.empty) F.head
 execErrFin :: T.MonadIO m => DT.Text -> m ()
 execErrFin cmd = T.shell cmd T.empty >>= exitCode (\x -> void $ T.die (cmd <> " failed with exit code: " <> T.repr x)) (return ()) 
 
-runTestsEx :: (Eq a, Show a) => [(IO a, a)] -> IO () 
-runTestsEx ts = putStrLn "\n\n== Unit Tests started ==" >> zipWithM (\(t, e) i -> (~:) ("test: " ++ show i) . (~?= e) <$> t) ts ms >>= runTests . TestList
+runTestsEx :: (Eq a, Show a) => [(IO (a, String), a)] -> IO () 
+runTestsEx ts = putStrLn "\n\n== Unit Tests started ==" >> zipWithM (\(t, e) i -> fmap (\(ec, t') -> (~:) ("test: #" ++ show i ++ ": " ++ t' ++ "\"") $ (~?= e) ec) t) ts ms >>= runTests . TestList
     where
         ms = take (length ts) $ iterate (+1) (1 :: Int)
 

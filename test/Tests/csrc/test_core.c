@@ -195,8 +195,14 @@ int main()
     assert(8, ({ int ar[10]; _Alignof ar; }), "({ int ar[10]; _Alignof ar; })");
     assert(8, ({ struct { char a; int b; } x; _Alignof x; }), "({ struct { char a; int b; } x; _Alignof x; })");
     assert(8, ({ _Alignof add(1, 2); }), "({ _Alignof add(1, 2); })");
-    assert(15, ({ int a; char b; int c; int p1 = &c; int p2 = &b; p2 - p1; }), "({ int a; char b; int c; &c - &b; })");
+    assert(15, ({ char a; int b; int p1 = &b; int p2 = &a; p2 - p1; }), "({ int a; char b; int c; &c - &b; })");
     assert(1, ({ int a; char b; int p1 = &a; int p2 = &b; p1 - p2; }), "({ int a; int b; int p1 = &a; int p2 = &b; p2 - p1; })");
+    assert(16, ({ struct X { int a; int b; } x; struct X y; sizeof y; }), "({ struct X { int a; int b; } x; struct X y; sizeof y; })");
+    assert(16, ({ struct X { int a; int b; }; struct X y; sizeof y; }), "({ struct X { int a; int b; } x; struct X y; sizeof y; })");
+    assert(2, ({ struct X { char ar[2]; }; { struct X { char ar[4]; }; } struct X x; sizeof x; }), "({ struct X { char ar[2]; }; { struct X { char ar[4]; }; } struct X x; sizeof x; })");
+    assert(3, ({ struct x { int a; }; int x = 1; struct x y; y.a = 2; x + y.a; }), "({ struct x { int a; } int x = 1; struct x y; y.a = 2; x + y.a; })");
+    assert(42, ({ struct X { struct { int a; } x; }; struct X x; x.x.a = 42; x.x.a; }), "({ struct X { struct { int a; } x; }; struct X x; x.x.a = 42; x.x.a; })");
+    printf(">> All tests passed <<\n");
 
     return 0;
 }

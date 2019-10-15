@@ -34,15 +34,16 @@ module Htcc.CRules.Types (
     isFundamental
 ) where
 
+import Prelude hiding (toInteger)
 import GHC.Generics (Generic)
 import Control.DeepSeq (NFData (..))
 import Numeric.Natural
-import Data.List (foldl', foldl1')
+import Data.List (foldl', maximumBy)
 import Data.Bits ((.&.), complement, Bits (..))
 import qualified Data.Map as M
 import qualified Data.Text as T
 
-import Htcc.Utils (lor)
+import Htcc.Utils (lor, toNatural, toInteger)
 
 -- | The type and offset value of a data member.
 data StructMember = StructMember -- ^ `StructMember` constructor
@@ -106,11 +107,8 @@ sizeof (CTPtr _) = 8
 sizeof (CTArray v t) = v * sizeof t
 sizeof t@(CTStruct m) 
     | M.null m = 1
-    | otherwise = let sn = foldl1' (\acc x -> if smOffset x > smOffset acc then x else acc) $ M.elems m in
-        itn $ alignas (itf $ smOffset sn + sizeof (smType sn)) (itf $ alignof t)
-    where
-        itf = fromIntegral :: Natural -> Integer
-        itn = fromIntegral :: Integer -> Natural
+    | otherwise = let sn = maximumBy (flip (.) smOffset . compare . smOffset) $ M.elems m in
+        toNatural $ alignas (toInteger $ smOffset sn + sizeof (smType sn)) (toInteger $ alignof t)
 sizeof CTUndef = 0
 
 -- | `alignof` returns the alignment of the type defined by C language.

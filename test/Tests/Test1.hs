@@ -8,9 +8,7 @@ import Control.Exception (finally)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T 
 
-test :: String -> IO Int
-test x = flip finally (clean ["tmp", "tmp.s", "tmp.c"]) $ do 
-    T.writeFile "./tmp.c" (T.pack x)
-    execErrFin "stack exec htcc -- tmp.c > tmp.s"
-    execErrFin "gcc -no-pie -o tmp tmp.s"
-    exec "./tmp" >>= exitCode (\ec -> putStr x >> putStrLn ": [Processing]" >> return ec) (return 0)
+test :: String -> IO (Int, String)
+test x = flip finally (clean ["tmp"]) $ do 
+    execErrFin $ "echo '" <> T.pack x <> "' | stack exec htcc -- /dev/stdin | gcc -no-pie -xassembler -o tmp -"
+    exec "./tmp" >>= exitCode (\ec -> (ec, x) <$ (putStr x *> putStrLn ": [Processing]")) (return (0, x))

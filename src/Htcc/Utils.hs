@@ -26,6 +26,7 @@ module Htcc.Utils (
     mapEither,
     -- * For Numeric.Natural
     toNatural,
+    toInteger,
     -- * For IO shortcuts
     putStrErr,
     putStrLnErr,
@@ -48,6 +49,7 @@ module Htcc.Utils (
     toInts
 ) where
 
+import Prelude hiding (toInteger)
 import qualified Data.Text.Internal.Search as T
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -121,8 +123,13 @@ mapEither f (x:xs) = f x >>= flip fmap (mapEither f xs) . (:)
 
 -- | `toNatural` is a shortcut for @fromIntegral :: Integral i => i -> Natural@
 {-# INLINE toNatural #-}
-toNatural :: forall i. Integral i => i -> Natural
-toNatural = fromIntegral :: i -> Natural
+toNatural :: Integral i => i -> Natural
+toNatural = fromIntegral
+
+-- | `toInteger` is a shortcut for @fromIntegral :: Natural -> Integer@
+{-# INLINE toInteger #-}
+toInteger :: Natural -> Integer
+toInteger = fromIntegral
 
 -- | Standard error output shortcut (with new line).
 putStrLnErr :: T.Text -> IO ()
