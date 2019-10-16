@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
 {-|
 Module      : Htcc.Parse.Var
 Description : The Data type of variables and its utilities used in parsing
@@ -34,6 +34,8 @@ import qualified Data.ByteString as B
 import qualified Data.Text as T
 import qualified Data.Map.Strict as M
 import Numeric.Natural
+import GHC.Generics (Generic, Generic1)
+import Control.DeepSeq (NFData (..), NFData1 (..))
 
 import qualified Htcc.Token.Core as HT
 import qualified Htcc.CRules.Types as CT
@@ -46,15 +48,20 @@ import Htcc.Utils (tshow)
 newtype GVar = GVar -- ^ The constructor of global variable
     {
         gvtype :: CT.TypeKind -- ^ The type of the global variable
-    } deriving (Eq, Ord, Show)
+    } deriving (Eq, Ord, Show, Generic)
+
+instance NFData GVar
 
 -- | The data type of local variable
 data LVar a = LVar -- ^ The constructor of local variable
     {
         lvtype :: CT.TypeKind, -- ^ The type of the local variable
         rbpOffset :: !a, -- ^ The offset value from RBP
-        nestDepth :: Natural -- ^ The nest depth of a local variable
-    } deriving (Eq, Ord, Show)
+        nestDepth :: !Natural -- ^ The nest depth of a local variable
+    } deriving (Eq, Ord, Show, Generic, Generic1)
+
+instance NFData a => NFData (LVar a)
+instance NFData1 LVar
 
 -- | The literal
 data Literal = Literal -- ^ The literal constructor
@@ -62,7 +69,9 @@ data Literal = Literal -- ^ The literal constructor
         litype :: CT.TypeKind, -- ^ The single literal type
         ln :: !Natural, -- ^ The number of labels placed in the @.data@ section
         lcts :: B.ByteString -- ^ The content
-    } deriving (Eq, Show)
+    } deriving (Eq, Show, Generic)
+
+instance NFData Literal
 
 -- | The data type of local variables
 data Vars a = Vars -- ^ The constructor of variables
@@ -70,7 +79,9 @@ data Vars a = Vars -- ^ The constructor of variables
         globals :: M.Map T.Text GVar, -- ^ The global variables
         locals :: M.Map T.Text (LVar a), -- ^ The local variables
         literals :: [Literal] -- ^ Literals
-    } deriving Show
+    } deriving (Show, Generic, Generic1)
+    
+instance NFData a => NFData (Vars a)
 
 {-# INLINE initVars #-}
 -- | Helper function representing an empty variables

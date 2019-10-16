@@ -25,13 +25,13 @@ A tiny C language compiler (x86-64).
 
 and will add more some features...
 
-## build
+## Build
 
 ```sh
 $ stack build
 ```
 
-## test
+## Test
 
 ```sh
 $ stack test --test-arguments help
@@ -51,8 +51,12 @@ $ stack test --test-arguments inc
 $ stack test --test-arguments subp
 ```
 
-## benchmark
+## Benchmark
 
 ```sh
 $ stack bench
 ```
+
+## Dependencies
+
+![htcc Dependencies graph](./assets/htcc_depend.png)

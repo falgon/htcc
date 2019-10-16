@@ -83,7 +83,7 @@ takeWhileLen = takeWhileLen' 0
 
 -- | `splitAtLen`, simmilar to `splitAt` but also returns the length of the splited list.
 splitAtLen :: Int -> [a] -> (Int, [a], [a])
-splitAtLen n = go n
+splitAtLen !n = go n
     where
         go 0 xs = (n, [], xs)
         go !n' (x:xs) = second3 (x:) $ go (pred n') xs
@@ -217,9 +217,9 @@ sopText = T.all . lor
 -- >>> toInts (fromIntegral (maxBound :: Int) * 3 + 4 :: Integer)
 -- [9223372036854775807,9223372036854775807,9223372036854775807,4]
 toInts :: Integral i => i -> [Int]
-toInts x = if xd >= 1 && xm == 0 then [fromIntegral x] else replicate xd (maxBound :: Int) ++ [xm]
+toInts !x = if xd >= 1 && xm == 0 then [fromIntegral x] else replicate xd (maxBound :: Int) ++ [xm]
     where
-        (xd, xm) = both fromIntegral $ x `divMod` fromIntegral (maxBound :: Int)
+        (!xd, !xm) = both fromIntegral $ x `divMod` fromIntegral (maxBound :: Int)
 
 -- | `isStrictSpace` returns True only if the given string is not a linefeed code and `Data.Char.isSpace` returns `True`, otherwise returns `False`. 
 isStrictSpace :: Char -> Bool

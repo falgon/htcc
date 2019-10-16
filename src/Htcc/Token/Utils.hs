@@ -40,33 +40,33 @@ takeBrace leftb rightb xxs@((_, TKReserved y):_)
     | otherwise = Nothing
     where
         f :: Int -> Int -> [TokenLC i] -> Either (TokenLC i) ([TokenLC i], [TokenLC i])
-        f l r []
+        f !l !r []
             | l /= r = Left $ head xxs 
             | otherwise = Right ([], [])
-        f l r (c@(p, TKReserved x):xs') 
+        f !l !r (c@(p, TKReserved x):xs') 
             | x == rightb = if l == succ r then Right ([c], xs') else g l (succ r) xs'
             | x == leftb = if succ l == r then Right ([c], xs') else g (succ l) r xs'
             | otherwise = g l r xs'
             where
                 g = (.) (fmap (first ((p, TKReserved x):)) .) . f
-        f l r ((p, x):xs') = first ((:) (p, x)) <$> f l r xs'
+        f !l !r ((p, x):xs') = first ((:) (p, x)) <$> f l r xs'
 takeBrace _ _ _ = Nothing
 
 -- | Get an argument from list of `Token` (e.g: Given the token of @f(g(a, b)), 42@, return the token of @f(g(a, b))@).
 readFn :: Eq i => [TokenLC i] -> Maybe ([TokenLC i], [TokenLC i])
 readFn = readFn' 0 (0 :: Int)
     where
-        readFn' li ri (cur@(_, TKReserved ","):xs)
+        readFn' !li !ri (cur@(_, TKReserved ","):xs)
             | li == ri = Just ([], xs)
             | otherwise = first (cur:) <$> readFn' li ri xs
-        readFn' li ri (cur@(_, TKReserved ")"):xs)
+        readFn' !li !ri (cur@(_, TKReserved ")"):xs)
             | li == ri = Just ([], xs)
             | otherwise = first (cur:) <$> readFn' li (succ ri) xs
-        readFn' li ri (cur@(_, TKReserved "("):xs) = first (cur:) <$> readFn' (succ li) ri xs
-        readFn' li ri []
+        readFn' !li !ri (cur@(_, TKReserved "("):xs) = first (cur:) <$> readFn' (succ li) ri xs
+        readFn' !li !ri []
             | li == ri = Just ([], [])
             | otherwise = Nothing
-        readFn' li ri (x:xs) = first (x:) <$> readFn' li ri xs
+        readFn' !li !ri (x:xs) = first (x:) <$> readFn' li ri xs
 
 -- | Get arguments from list of `Token` (e.g: Given the token of @f(f(g(a, b)), 42);@, 
 -- return expressions that are the token of "f(g(a, b))" and the token of "42".
@@ -93,17 +93,23 @@ takeFields fs scp' !n = (>>=) (makeTypes fs scp') $ \(ty, ds', scp'') -> if null
                 | otherwise -> Left ("expected ';' at member variable declaration", head ds'')
         _ -> Left ("expected member name or ';' after declaration specifiers", head ds')
 
+
+{-# INLINE takePtr #-}
+takePtr :: Eq i => CR.TypeKind -> [TokenLC i] -> (CR.TypeKind, [TokenLC i])
+takePtr ty xs = first (flip CR.makePtr ty . toNatural) $ dropSnd $ spanLen ((==TKReserved "*") . snd) xs
+
 -- | `makeTypes` returns a pair of type (including pointer type) and the remaining tokens wrapped in 
 -- `Just` only if the token starts with `TKType` or `TKStruct`.
 -- Otherwise `Nothing` is returned.
 makeTypes :: (Integral i, Show i, Read i) => [TokenLC i] -> PS.Scoped i -> Either (T.Text, TokenLC i) (CR.TypeKind, [TokenLC i], PS.Scoped i)
-makeTypes ((_, TKType tktype):xs) scp = Right $ uncurry (,,scp) $ first (flip CR.makePtr tktype . toNatural) $ dropSnd $ spanLen ((==TKReserved "*") . snd) xs -- for a variable or a function definition
+makeTypes ((_, TKType tktype):xs) scp = Right $ uncurry (,,scp) $ takePtr tktype xs -- for a variable or a function definition
 makeTypes ((_, TKStruct):cur@(_, TKReserved "{"):xs) scp = flip (maybe (Left (internalCE, cur))) (takeBrace "{" "}" (cur:xs)) $ -- for a struct definition
-    either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> uncurry (,ds,) . first (CR.CTStruct . fst) . second snd . dupe <$> takeFields (tail $ init field) scp 0
+    either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> uncurry id . second (flip takePtr ds . CR.CTStruct . fst) . first (uncurry . (\x -> (,,snd x))) . dupe <$> takeFields (tail $ init field) scp 0
 makeTypes ((_, TKStruct):cur1@(_, TKIdent _):cur2@(_, TKReserved "{"):xs) scp = flip (maybe (Left (internalCE, cur1))) (takeBrace "{" "}" (cur2:xs)) $ -- for a struct definition with its tag
-    either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> (>>=) (takeFields (tail $ init field) scp 0) $ \(mem, scp') -> let ty = CR.CTStruct mem in (ty, ds,) <$> PS.addStructTag ty cur1 scp'
+    either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> (>>=) (takeFields (tail $ init field) scp 0) $ \(mem, scp') -> let ty = CR.CTStruct mem in {- (ty, ds,)-} uncurry (,,) (takePtr ty ds) <$> PS.addStructTag ty cur1 scp'
 makeTypes ((_, TKStruct):cur1@(_, TKIdent ident):xs) scp = flip (maybe (Left ("storage size of '" <> ident <> "' isn't known", cur1))) (PS.lookupStructTag ident scp) $ \stg -> -- for a variable or a function definition with tag of the struct
-    Right (PST.sttype stg, xs, scp)
+    Right $ uncurry (,,scp) $ takePtr (PST.sttype stg) xs
+    -- Right (PST.sttype stg, xs, scp)
 makeTypes (x:_) _ = Left ("ISO C forbids declaration with no type", x)
 makeTypes _ _ = Left ("ISO C forbids declaration with no type", (TokenLCNums 0 0, TKEmpty))
 

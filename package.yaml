@@ -48,6 +48,7 @@ executables:
     - -with-rtsopts=-N
     - -Wall
     - -Werror
+    - -O2
     dependencies:
     - htcc
     - extra
@@ -74,6 +75,8 @@ tests:
 benchmarks:
     criterion:
         main: bench/Criterion.hs
+        ghc-options:
+        - -O2
         dependencies:
-            - criterion
-            - htcc
+        - criterion
+        - htcc

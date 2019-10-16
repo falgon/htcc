@@ -9,7 +9,7 @@ Portability : POSIX
 
 The Data type of variables and its utilities used in parsing
 -}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
 module Htcc.Parse.Struct (
     StructTag (..),
     Structs,
@@ -18,9 +18,11 @@ module Htcc.Parse.Struct (
     fallBack
 ) where
 
+import GHC.Generics (Generic (..))
 import Numeric.Natural
 import qualified Data.Map as M
 import qualified Data.Text as T
+import Control.DeepSeq (NFData (..))
 
 import Htcc.Parse.Utils (internalCE)
 import qualified Htcc.CRules.Types as CT
@@ -31,7 +33,9 @@ data StructTag = StructTag -- ^ The constructor of a struct tag
     {
         sttype :: CT.TypeKind, -- ^ The type of this struct
         stNestDepth :: !Natural -- ^ The nest depth of this struct
-    } deriving (Eq, Ord, Show)
+    } deriving (Eq, Ord, Show, Generic)
+
+instance NFData StructTag
 
 -- | The structs data type
 type Structs = M.Map T.Text StructTag
