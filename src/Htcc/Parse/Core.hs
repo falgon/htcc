@@ -290,7 +290,7 @@ unary xs at scp = either Left (uncurry3 f) $ factor xs at scp
                 (_, HT.TKIdent ident) -> flip (maybe (Left ("no such member", cur))) (CT.lookupMember ident (fromJust $ CT.derefMaybe $ atype erat)) $ \mem ->
                     f (tail xs') (ATNode (ATMemberAcc mem) (CT.smType mem) (ATNode ATDeref (CT.smType mem) erat ATEmpty) ATEmpty) erscp
                 _ -> Left ("expected identifier after '->' token", cur)
-            | otherwise = Left ("request for a member in something not a structure or union", cur)
+            | otherwise = Left ("invalid type argument of '->'" <> if CT.isCTUndef (atype erat) then "" else " (have '" <> tshow (atype erat) <> "')", cur)
         f ert erat !erscp = Right (ert, erat, erscp)
 
 -- | `factor` indicates \(\eqref{eq:third}\) amount the comments of `inners`.
