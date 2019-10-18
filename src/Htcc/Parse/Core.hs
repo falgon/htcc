@@ -156,7 +156,7 @@ stmt xxs@(cur@(_, HT.TKReserved "{"):_) _ !scp = flip (maybe $ Left (internalCE,
 stmt ((_, HT.TKReserved ";"):xs) atn !scp = Right (xs, atn, scp) -- for only @;@
 stmt xs@((_, HT.TKTypedef):(_, HT.TKType _):_) atn scp = defTypedef xs atn scp -- for definition of @typedef@
 stmt xs@((_, HT.TKTypedef):(_, HT.TKStruct):_) atn scp = defTypedef xs atn scp -- for definition of @typedef@
-stmt xs@((_, HT.TKTypedef):(_, HT.TKIdent _):_) atn sc = defTypedef xs atn sc -- for global @typedef@ with type defined by @typedef@
+stmt xs@((_, HT.TKTypedef):(_, HT.TKIdent _):_) atn scp = defTypedef xs atn scp -- for global @typedef@ with type defined by @typedef@
 stmt tk atn !scp
     | not (null tk) && (HT.isTKType (snd $ head tk) || HT.isTKStruct (snd $ head tk)) = HT.makeTypes tk scp >>= uncurry3 varDecl -- for a local variable declaration
     | not (null tk) && HT.isTKIdent (snd $ head tk) && isJust (lookupTypedef (T.pack $ show $ snd $ head tk) scp) = HT.makeTypes tk scp >>= uncurry3 varDecl -- for a local variable declaration with typedef

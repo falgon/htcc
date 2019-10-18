@@ -528,7 +528,7 @@ rnb = Extended . RnB
 -- | `argRegs` is a list of each @Register@ used in the function call.
 -- In the list, the registers used for the first to sixth arguments are arranged in ascending order.
 argRegs :: [[Register]]
-argRegs = [[dil, rdi], [sil, rsi], [dl, rdx], [cl, rcx], [rnb 8, rn 8], [rnb 9, rn 9]]
+argRegs = [[dil, edi, rdi], [sil, esi, rsi], [dl, edx, rdx], [cl, ecx, rcx], [rnb 8, rnd 8, rn 8], [rnb 9, rnd 9, rn 9]]
 
 {-# INLINE popRegs #-}
 -- | `popRegs` is a list of registers used to @pop@ arguments from the stack in function calls.

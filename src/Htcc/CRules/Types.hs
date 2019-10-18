@@ -101,7 +101,7 @@ isCTUndef _ = False
 
 -- | `sizeof` returns the byte size of the type defined by C language.
 sizeof :: TypeKind -> Natural
-sizeof CTInt = 8 -- TODO: 8 is workaround. it should be 4 byte.
+sizeof CTInt = 4 
 sizeof CTChar = 1
 sizeof (CTPtr _) = 8
 sizeof (CTArray v t) = v * sizeof t
@@ -113,7 +113,7 @@ sizeof CTUndef = 0
 
 -- | `alignof` returns the alignment of the type defined by C language.
 alignof :: TypeKind -> Natural
-alignof CTInt = 8
+alignof CTInt = 4
 alignof CTChar = 1
 alignof (CTPtr _) = 8
 alignof (CTArray _ t) = alignof $ removeAllExtents t

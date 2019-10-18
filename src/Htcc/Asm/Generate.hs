@@ -51,12 +51,14 @@ epilogue = I.leave <> I.ret
 load :: CR.TypeKind -> T.Text
 load t 
     | CR.sizeof t == 1 = I.pop rax <> I.movsx rax (I.byte I.Ptr (Ref rax)) <> I.push rax
+    | CR.sizeof t == 4 = I.pop rax <> I.movsxd rax (I.dword I.Ptr (Ref rax)) <> I.push rax
     | otherwise = I.pop rax <> I.mov rax (Ref rax) <> I.push rax
 
 {-# INLINE store #-}
 store :: CR.TypeKind -> T.Text
 store t
     | CR.sizeof t == 1 = I.pop rdi <> I.pop rax <> I.mov (Ref rax) dil <> I.push rdi
+    | CR.sizeof t == 4 = I.pop rdi <> I.pop rax <> I.mov (Ref rax) edi <> I.push rdi
     | otherwise = I.pop rdi <> I.pop rax <> I.mov (Ref rax) rdi <> I.push rdi
 
 genAddr :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => IO Int -> ATree i -> IO ()
@@ -84,7 +86,6 @@ genStmt c lc@(ATNode (ATDefFunc x (Just args)) _ st _) = do -- TODO: supports mo
 genStmt _ (ATNode (ATCallFunc x Nothing) _ _ _) = T.putStr $ I.call x <> I.push rax
 genStmt c (ATNode (ATCallFunc x (Just args)) _ _ _) = let (n', toReg, _) = splitAtLen 6 args in do -- TODO: supports more than 7 arguments
     mapM_ (genStmt c) toReg
-    -- mapM_ (\reg -> T.putStr (I.pop $ maximum reg)) $ reverse (take n argRegs)
     mapM_ (T.putStr . I.pop) $ popRegs n'
     -- unless (null toStack) $ forM_ (reverse toStack) $ genStmt c
     n <- c
