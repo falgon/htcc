@@ -207,11 +207,12 @@ int main()
     assert(42, ({ struct X { int a; }* p; struct X x; p = &x; x.a = 42; p->a; }), "({ struct X { int a; }* p; struct X x; p = &x; x.a = 42; p->a; })");
     assert(42, ({ struct X { int a; }* p; struct X x; p = &x; p->a = 42; x.a; }), "({ struct X { int a; }* p; struct X x; p = &x; x.a = 42; p->a; })");
     assert(42, ({ struct X { struct Y { int a; }* py; }; struct X x; struct Y y; y.a = 42; x.py = &y; x.py-> a; }), "({ struct X { struct Y { int a; }* py; }; struct X x; struct Y y; y.a = 42; x.py = &y; x.py-> a; })");
-	
-	assert(1, ({ typedef int t; t x=1; x; }), "typedef int t; t x=1; x;");
-	assert(1, ({ typedef struct {int a;} t; t x; x.a=1; x.a; }), "typedef struct {int a;} t; t x; x.a=1; x.a;");
-	assert(1, ({ typedef int t; t t=1; t; }), "typedef int t; t t=1; t;");
-	assert(2, ({ typedef struct {int a;} t; { typedef int t; } t x; x.a=2; x.a; }), "typedef struct {int a;} t; { typedef int t; } t x; x.a=2; x.a;");
+    assert(42, ({ typedef int t; t x = 42; x; }), "typedef int t; t x = 42; x;");
+    assert(42, ({ typedef struct { int a; } t; t x; x.a = 42; x.a; }), "typedef struct { int a; } t; t x; x.a = 42; x.a;");
+    assert(42, ({ typedef int t; t t = 42; t; }), "typedef int t; t t = 42; t;");
+    assert(42, ({ typedef struct { int a; } t; { typedef int t; } t x; x.a = 42; x.a; }), "typedef struct { int a; } t; { typedef int t; } t x; x.a = 42; x.a;");
+    assert(42, ({ typedef int art[2]; typedef art g; g ar; ar[0] = 0; ar[1] = 42; ar[1]; }), "({ typedef int art[2]; typedef art g; g ar; ar[0] = 0; ar[1] = 42; ar[1]; })");
+    assert(42, ({ typedef int t; typedef int t; t a = 42; a; }), "({ typedef int t; typedef int t; t a = 42; a; })");
     printf(">> All tests passed <<\n");
 
     return 0;
