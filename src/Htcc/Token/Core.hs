@@ -56,6 +56,7 @@ data Token i = TKReserved T.Text -- ^ The reserved token
     | TKAlignof -- ^ The @_Alignof@ keyword
     | TKStruct -- ^ The @struct@ keyword
     | TKType CR.TypeKind -- ^ Types
+    | TKTypedef -- ^ The @typedef@ keyword
     | TKString B.ByteString -- ^ The string literal
     | TKEmpty -- ^ The empty token (This is not used by `tokenize`, but when errors are detected during parsing, the token at error locations cannot be specified)
     deriving (Eq, Generic, Generic1)
@@ -75,6 +76,7 @@ instance Show i => Show (Token i) where
     show TKStruct = "struct"
     show TKSizeof = "sizeof"
     show TKAlignof = "_Alignof"
+    show TKTypedef = "typedef"
     show (TKType x) = show x
     show (TKString s) = "\"" ++ T.unpack (T.decodeUtf8 s) ++ "\""
     show TKEmpty = ""
@@ -93,13 +95,14 @@ length TKFor = 3
 length TKStruct = 6
 length TKSizeof = 6
 length TKAlignof = 8
+length TKTypedef = 7
 length (TKType tk) = P.length $ show tk
 length (TKString s) = B.length s
 length TKEmpty = 0
 
 -- | Lookup keyword from `T.Text`. If the specified `T.Text` is not keyword as C language, `lookupKeyword` returns `Nothing`.
 lookupKeyword :: Show i => T.Text -> Maybe (Token i)
-lookupKeyword s = find ((==) s . tshow) [TKReturn, TKWhile, TKIf, TKElse, TKFor, TKStruct, TKSizeof, TKAlignof, TKType CR.CTInt, TKType CR.CTChar]
+lookupKeyword s = find ((==) s . tshow) [TKReturn, TKWhile, TKIf, TKElse, TKFor, TKStruct, TKSizeof, TKAlignof, TKTypedef, TKType CR.CTInt, TKType CR.CTChar]
 
 -- | `TokenLCNums` is data structure for storing the line number and character number of each token
 data TokenLCNums i = TokenLCNums -- ^ The constructor of `TokenLCNums`

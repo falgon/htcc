@@ -202,11 +202,16 @@ int main()
     assert(2, ({ struct X { char ar[2]; }; { struct X { char ar[4]; }; } struct X x; sizeof x; }), "({ struct X { char ar[2]; }; { struct X { char ar[4]; }; } struct X x; sizeof x; })");
     assert(3, ({ struct x { int a; }; int x = 1; struct x y; y.a = 2; x + y.a; }), "({ struct x { int a; } int x = 1; struct x y; y.a = 2; x + y.a; })");
     assert(42, ({ struct X { struct { int a; } x; }; struct X x; x.x.a = 42; x.x.a; }), "({ struct X { struct { int a; } x; }; struct X x; x.x.a = 42; x.x.a; })");
-    assert(42, ({ struct X { char a; } x; struct X* p = &x; x.a = 42; p->a; }), " ({ struct X { char a; } x; struct X* p = &x; x.a = 42; p->a; })");
-    assert(42, ({ struct X { char a; } x; struct X* p = &x; x.a = 42; p->a; }), " ({ struct X { char a; } x; struct X* p = &x; p->a = 42; x.a; })");
-    assert(42, ({ struct X { int a; }* p; struct X x; p = &x; x.a = 42; p->a; }), " ({ struct X { int a; }* p; struct X x; p = &x; x.a = 42; p->a; })");
-    assert(42, ({ struct X { int a; }* p; struct X x; p = &x; p->a = 42; x.a; }), " ({ struct X { int a; }* p; struct X x; p = &x; x.a = 42; p->a; })");
+    assert(42, ({ struct X { char a; } x; struct X* p = &x; x.a = 42; p->a; }), "({ struct X { char a; } x; struct X* p = &x; x.a = 42; p->a; })");
+    assert(42, ({ struct X { char a; } x; struct X* p = &x; x.a = 42; p->a; }), "({ struct X { char a; } x; struct X* p = &x; p->a = 42; x.a; })");
+    assert(42, ({ struct X { int a; }* p; struct X x; p = &x; x.a = 42; p->a; }), "({ struct X { int a; }* p; struct X x; p = &x; x.a = 42; p->a; })");
+    assert(42, ({ struct X { int a; }* p; struct X x; p = &x; p->a = 42; x.a; }), "({ struct X { int a; }* p; struct X x; p = &x; x.a = 42; p->a; })");
     assert(42, ({ struct X { struct Y { int a; }* py; }; struct X x; struct Y y; y.a = 42; x.py = &y; x.py-> a; }), "({ struct X { struct Y { int a; }* py; }; struct X x; struct Y y; y.a = 42; x.py = &y; x.py-> a; })");
+	
+	assert(1, ({ typedef int t; t x=1; x; }), "typedef int t; t x=1; x;");
+	assert(1, ({ typedef struct {int a;} t; t x; x.a=1; x.a; }), "typedef struct {int a;} t; t x; x.a=1; x.a;");
+	assert(1, ({ typedef int t; t t=1; t; }), "typedef int t; t t=1; t;");
+	assert(2, ({ typedef struct {int a;} t; { typedef int t; } t x; x.a=2; x.a; }), "typedef struct {int a;} t; { typedef int t; } t x; x.a=2; x.a;");
     printf(">> All tests passed <<\n");
 
     return 0;

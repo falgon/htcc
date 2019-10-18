@@ -30,6 +30,7 @@ import Htcc.Utils (lastInit, spanLen, dropSnd, tshow, toNatural, toInteger)
 import Htcc.Parse.Utils (internalCE)
 import qualified Htcc.Parse.Scope as PS
 import qualified Htcc.Parse.Struct as PST
+import qualified Htcc.Parse.Typedef as PSD
 import Htcc.Token.Core
 
 -- | Extract the partial token enclosed in parentheses from the token sequence. If it is invalid, `takeBrace` returns @(i, Text)@ indicating the error location.
@@ -107,9 +108,8 @@ makeTypes ((_, TKStruct):cur@(_, TKReserved "{"):xs) scp = flip (maybe (Left (in
     either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> uncurry id . second (flip takePtr ds . CR.CTStruct . fst) . first (uncurry . (\x -> (,,snd x))) . dupe <$> takeFields (tail $ init field) scp 0
 makeTypes ((_, TKStruct):cur1@(_, TKIdent _):cur2@(_, TKReserved "{"):xs) scp = flip (maybe (Left (internalCE, cur1))) (takeBrace "{" "}" (cur2:xs)) $ -- for a struct definition with its tag
     either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> (>>=) (takeFields (tail $ init field) scp 0) $ \(mem, scp') -> let ty = CR.CTStruct mem in {- (ty, ds,)-} uncurry (,,) (takePtr ty ds) <$> PS.addStructTag ty cur1 scp'
-makeTypes ((_, TKStruct):cur1@(_, TKIdent ident):xs) scp = flip (maybe (Left ("storage size of '" <> ident <> "' isn't known", cur1))) (PS.lookupStructTag ident scp) $ \stg -> -- for a variable or a function definition with tag of the struct
-    Right $ uncurry (,,scp) $ takePtr (PST.sttype stg) xs
-    -- Right (PST.sttype stg, xs, scp)
+makeTypes ((_, TKStruct):cur1@(_, TKIdent ident):xs) scp = flip (maybe (Left ("storage size of '" <> ident <> "' isn't known", cur1))) (PS.lookupStructTag ident scp) $ \stg -> Right $ uncurry (,,scp) $ takePtr (PST.sttype stg) xs  -- for a variable or a function definition with tag of the struct
+makeTypes (cur@(_, TKIdent ident):xs) scp = flip (maybe (Left (tshow (snd cur) <> "is not a type or also a typedef identifier", cur))) (PS.lookupTypedef ident scp) $ \ty -> Right $ uncurry (,,scp) $ takePtr (PSD.tdtype ty) xs -- for a variable or a function definition with type defined by typedef
 makeTypes (x:_) _ = Left ("ISO C forbids declaration with no type", x)
 makeTypes _ _ = Left ("ISO C forbids declaration with no type", (TokenLCNums 0 0, TKEmpty))
 
@@ -128,4 +128,3 @@ arrayDeclSuffix _ ((_, TKReserved "["):cur@(_, TKNum n):xs) = let mes = "expecte
     Just $ Left $ if null xs then (mes <> "after '" <> tshow n <> "' token", cur) else (mes <> "before '" <> tshow (head xs) <> "' token", head xs)
 arrayDeclSuffix _ (cur@(_, TKReserved "["):_) = Just $ Left ("expected storage size after '[' token", cur)
 arrayDeclSuffix _ _ = Nothing
-

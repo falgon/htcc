@@ -16,12 +16,14 @@ module Htcc.Parse.Scope (
     addGVar,
     addLiteral,
     addStructTag,
+    addTypedef,
     succNest,
     fallBack,
     lookupLVar,
     lookupGVar,
     lookupVar,
     lookupStructTag,
+    lookupTypedef,
     initScope,
     resetLocal
 ) where
@@ -38,18 +40,21 @@ import Htcc.Parse.AST (ATree (..))
 import qualified Htcc.CRules.Types as CT
 import qualified Htcc.Parse.Var as PV
 import qualified Htcc.Parse.Struct as PS
+import qualified Htcc.Parse.Typedef as PT
 import qualified Htcc.Token.Core as HT
 
 -- | The data type of a struct tag
 data Scoped i = Scoped -- ^ The constructor of a struct tag
     {
         vars :: PV.Vars i, -- ^ All variables (local variables, global variables and literals) visible during processing
-        structs :: M.Map T.Text PS.StructTag, -- ^ All struct tags
+        structs :: PS.Structs, -- ^ All struct tags
+        typedefs :: PT.Typedefs, -- ^ All typedefs
         curNestDepth :: !Natural -- ^ The nest depth of this struct
     } deriving (Show, Generic, Generic1)
 
 instance NFData i => NFData (Scoped i)
 
+{-# INLINE addVar #-}
 addVar :: (Integral i, Bits i) => (CT.TypeKind -> HT.TokenLC i -> PV.Vars i -> Either (T.Text, HT.TokenLC i) (ATree i, PV.Vars i)) -> CT.TypeKind -> HT.TokenLC i -> Scoped i -> Either (T.Text, HT.TokenLC i) (ATree i, Scoped i)
 addVar f ty tkn sc = second (\x -> sc { vars = x }) <$> f ty tkn (vars sc)
 
@@ -71,7 +76,7 @@ succNest sc = sc { curNestDepth = succ $ curNestDepth sc }
 
 -- | `fallBack` has a scoped type argument and is the same function as `PV.fallBack` internally.
 fallBack :: Scoped i -> Scoped i -> Scoped i
-fallBack pre post = pre { vars = PV.fallBack (vars pre) (vars post), structs = PS.fallBack (structs pre) (structs post) } 
+fallBack pre post = pre { vars = PV.fallBack (vars pre) (vars post), structs = PS.fallBack (structs pre) (structs post), typedefs = PT.fallBack (typedefs pre) (typedefs post) } 
 
 {-# INLINE lookupVar' #-}
 lookupVar' :: (T.Text -> PV.Vars a -> b) -> T.Text -> Scoped a -> b
@@ -93,14 +98,22 @@ lookupVar = lookupVar' PV.lookupVar
 lookupStructTag :: T.Text -> Scoped i -> Maybe PS.StructTag
 lookupStructTag t sc = PS.lookupStructTag t $ structs sc
 
+-- | `lookupTypedef` has a scoped type argument and is the same function as `PT.lookupTypedef` internally.
+lookupTypedef :: T.Text -> Scoped i -> Maybe PT.Typedef
+lookupTypedef t sc = PT.lookupTypedef t $ typedefs sc
+
 -- | `addStructTag` has a scoped type argument and is the same function as `PS.addStructTag` internally.
 addStructTag :: Num i => CT.TypeKind -> HT.TokenLC i -> Scoped i -> Either (T.Text, HT.TokenLC i) (Scoped i)
 addStructTag ty tkn sc = (\x -> sc { structs = x }) <$> PS.addStructTag (curNestDepth sc) ty tkn (structs sc)
 
+-- | `addTypedef` has a scoped type argument and is the same function as `PT.addTypedef` internally.
+addTypedef :: Num i => CT.TypeKind -> HT.TokenLC i -> Scoped i -> Either (T.Text, HT.TokenLC i) (Scoped i)
+addTypedef ty tkn sc = (\x -> sc { typedefs = x }) <$> PT.addTypedef (curNestDepth sc) ty tkn (typedefs sc)
+
 {-# INLINE initScope #-}
 -- | Helper function representing an empty scoped data
 initScope :: Scoped i
-initScope = Scoped PV.initVars M.empty 0
+initScope = Scoped PV.initVars M.empty M.empty 0
 
 {-# INLINE resetLocal #-}
 -- | `resetLocal` has a scoped type argument and is the same function as `PV.resetLocal` internally.

@@ -59,6 +59,20 @@ import qualified Htcc.Parse.Var as PV
 import Htcc.Parse.Scope
 import Htcc.Parse.Utils
 
+-- | Perform type definition from token string starting from @typedef@ token
+defTypedef :: (Integral i, Show i, Read i) => [(HT.TokenLCNums i, HT.Token i)] -> p -> Scoped i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree a, Scoped i)
+defTypedef (cur@(_, HT.TKTypedef):xs) _ !scp = (>>=) (HT.makeTypes xs scp) $ \(t, ds, scp') -> case ds of
+    cur2@(_, HT.TKIdent _):ds' -> case HT.arrayDeclSuffix t ds' of
+        Nothing -> case ds' of
+            (_, HT.TKReserved ";"):ds'' -> (ds'', ATEmpty,) <$> addTypedef t cur2 scp'
+            _ -> Left ("expected ';' token after '" <> tshow (snd cur2) <> "'", cur2)
+        Just rs -> (>>=) rs $ \case 
+            (t', (_, HT.TKReserved ";"):ds'') -> (ds'', ATEmpty,) <$> addTypedef t' cur2 scp'
+            _ -> Left ("unexpected typedef statement", cur2)
+    (_, HT.TKReserved ";"):ds' -> Right (ds', ATEmpty, scp)
+    _ -> Left ("unexpected typedef statement", cur)
+defTypedef _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
+
 -- | `program` indicates \(\eqref{eq:eigth}\) among the comments of `inners`.
 program :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> Scoped i -> Either (T.Text, HT.TokenLC i) ([ATree i], Scoped i)
 program [] !scp = Right ([], scp)
@@ -66,6 +80,8 @@ program xs !scp = either Left (\(ys, btn, !scp') -> first (btn:) <$> program ys 
 
 -- | `globalDef` parses global definitions (include functions and global variables)
 globalDef :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> Scoped i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Scoped i)
+globalDef xs@((_, HT.TKTypedef):(_, HT.TKType _):_) atn sc = defTypedef xs atn sc -- for global @typedef@
+globalDef xs@((_, HT.TKTypedef):(_, HT.TKStruct):_) atn sc = defTypedef xs atn sc -- for global @typedef@
 globalDef tks at !va = (>>=) (HT.makeTypes tks va) $ \(ty, ds, !scp) -> case ds of 
     (_, HT.TKReserved ";"):ds' -> Right (ds', ATEmpty, scp)
     _ -> globalDef' ty ds at $ resetLocal scp
@@ -137,21 +153,25 @@ stmt xxs@(cur@(_, HT.TKReserved "{"):_) _ !scp = flip (maybe $ Left (internalCE,
             either (\err -> Nothing <$ writeSTRef eri (Just err)) (\(ert', erat', erscp') -> Just (erat', ert') <$ writeSTRef v erscp') $ stmt ert ATEmpty erscp
         (>>=) (readSTRef eri) $ flip maybe (return . Left) $ Right . (ds, ATNode (ATBlock mk) CT.CTUndef ATEmpty ATEmpty,) . fallBack scp <$> readSTRef v
 stmt ((_, HT.TKReserved ";"):xs) atn !scp = Right (xs, atn, scp) -- for only @;@
+stmt xs@((_, HT.TKTypedef):(_, HT.TKType _):_) atn scp = defTypedef xs atn scp -- for definition of @typedef@
+stmt xs@((_, HT.TKTypedef):(_, HT.TKStruct):_) atn scp = defTypedef xs atn scp -- for definition of @typedef@
 stmt tk atn !scp
-    | not (null tk) && (HT.isTKType (snd $ head tk) || HT.isTKStruct (snd $ head tk)) = (>>=) (HT.makeTypes tk scp) $ \(t, ds, scp') -> case ds of -- for a local variable declaration
-        (_, HT.TKReserved ";"):ds' -> Right (ds', ATEmpty, scp')
-        cur2@(_, HT.TKIdent _):(_, HT.TKReserved ";"):ds' -> (>>=) (addLVar t cur2 scp') $ \(lat, scp'') -> Right (ds', ATNode (ATNull lat) CT.CTUndef ATEmpty ATEmpty, scp'')
-        cur2@(_, HT.TKIdent _):(_, HT.TKReserved "="):ds' -> (>>=) (addLVar t cur2 scp') $ \(lat, scp'') -> 
-            (>>=) (expr ds' atn scp'') $ \(ert, erat, ervar) -> case ert of
-                (_, HT.TKReserved ";"):ds'' -> Right (ds'', ATNode ATExprStmt CT.CTUndef (ATNode ATAssign (atype lat) lat erat) ATEmpty, ervar)
-                _ -> Left ("expected ';' token. The subject iteration statement start here:", head tk)
-        cur2@(_, HT.TKIdent _):ds' -> flip (maybe (err ds (cur2:ds'))) (HT.arrayDeclSuffix t ds') $ either Left $ \(t', ds'') -> 
-            (>>=) (addLVar t' cur2 scp') $ \(lat, scp'') -> Right (ds'', ATNode (ATNull lat) CT.CTUndef ATEmpty ATEmpty, scp'')
-        ds' -> err ds ds'
+    | not (null tk) && (HT.isTKType (snd $ head tk) || HT.isTKStruct (snd $ head tk)) = HT.makeTypes tk scp >>= uncurry3 varDecl -- for a local variable declaration
+    | not (null tk) && HT.isTKIdent (snd $ head tk) && isJust (lookupTypedef (T.pack $ show $ snd $ head tk) scp) = HT.makeTypes tk scp >>= uncurry3 varDecl -- for a local variable declaration with typedef
     | otherwise = (>>=) (expr tk atn scp) $ \(ert, erat, erscp) -> case ert of -- for stmt;
         (_, HT.TKReserved ";"):ys -> Right (ys, ATNode ATExprStmt CT.CTUndef erat ATEmpty, erscp)
         ert' -> Left $ expectedMessage ";" (HT.TokenLCNums 0 0, HT.TKEmpty) ert'
     where
+        varDecl t ds scp' = case ds of
+            (_, HT.TKReserved ";"):ds' -> Right (ds', ATEmpty, scp')
+            cur2@(_, HT.TKIdent _):(_, HT.TKReserved ";"):ds' -> (>>=) (addLVar t cur2 scp') $ \(lat, scp'') -> Right (ds', ATNode (ATNull lat) CT.CTUndef ATEmpty ATEmpty, scp'')
+            cur2@(_, HT.TKIdent _):(_, HT.TKReserved "="):ds' -> (>>=) (addLVar t cur2 scp') $ \(lat, scp'') -> 
+                (>>=) (expr ds' atn scp'') $ \(ert, erat, ervar) -> case ert of
+                    (_, HT.TKReserved ";"):ds'' -> Right (ds'', ATNode ATExprStmt CT.CTUndef (ATNode ATAssign (atype lat) lat erat) ATEmpty, ervar)
+                    _ -> Left ("expected ';' token. The subject iteration statement start here:", head tk)
+            cur2@(_, HT.TKIdent _):ds' -> flip (maybe (err ds (cur2:ds'))) (HT.arrayDeclSuffix t ds') $ either Left $ \(t', ds'') -> 
+                (>>=) (addLVar t' cur2 scp') $ \(lat, scp'') -> Right (ds'', ATNode (ATNull lat) CT.CTUndef ATEmpty ATEmpty, scp'')
+            ds' -> err ds ds'
         err ds ds' = Left $ if null ds' then ("expected unqualified-id", head tk) else ("expected unqualified-id before '" <> tshow (snd (head ds)) <> T.singleton '\'', head ds')
 
 {-# INLINE expr #-}
