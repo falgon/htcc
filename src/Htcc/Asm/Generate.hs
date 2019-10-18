@@ -51,6 +51,7 @@ epilogue = I.leave <> I.ret
 load :: CR.TypeKind -> T.Text
 load t 
     | CR.sizeof t == 1 = I.pop rax <> I.movsx rax (I.byte I.Ptr (Ref rax)) <> I.push rax
+    | CR.sizeof t == 2 = I.pop rax <> I.movsx rax (I.word I.Ptr (Ref rax)) <> I.push rax
     | CR.sizeof t == 4 = I.pop rax <> I.movsxd rax (I.dword I.Ptr (Ref rax)) <> I.push rax
     | otherwise = I.pop rax <> I.mov rax (Ref rax) <> I.push rax
 
@@ -58,6 +59,7 @@ load t
 store :: CR.TypeKind -> T.Text
 store t
     | CR.sizeof t == 1 = I.pop rdi <> I.pop rax <> I.mov (Ref rax) dil <> I.push rdi
+    | CR.sizeof t == 2 = I.pop rdi <> I.pop rax <> I.mov (Ref rax) di <> I.push rdi
     | CR.sizeof t == 4 = I.pop rdi <> I.pop rax <> I.mov (Ref rax) edi <> I.push rdi
     | otherwise = I.pop rdi <> I.pop rax <> I.mov (Ref rax) rdi <> I.push rdi
 

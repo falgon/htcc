@@ -338,7 +338,7 @@ factor ((_, HT.TKReserved "("):xs@((_, HT.TKReserved "{"):_)) _ !scp = flip (may
 factor (cur@(_, HT.TKReserved "("):xs) atn !scp = (>>=) (expr xs atn scp) $ \(ert, erat, erscp) -> case ert of -- for (expr)
     (_, HT.TKReserved ")"):ys -> Right (ys, erat, erscp)
     ert' -> Left $ expectedMessage ")" cur ert'
-factor ((_, HT.TKNum n):xs) _ !scp = Right (xs, ATNode (ATNum n) CT.CTInt ATEmpty ATEmpty, scp) -- for numbers
+factor ((_, HT.TKNum n):xs) _ !scp = Right (xs, ATNode (ATNum n) CT.CTLong ATEmpty ATEmpty, scp) -- for numbers
 factor ((_, HT.TKIdent v):(_, HT.TKReserved "("):(_, HT.TKReserved ")"):xs) _ !scp = Right (xs, ATNode (ATCallFunc v Nothing) CT.CTInt ATEmpty ATEmpty, scp) -- for no arguments function call
 factor (cur1@(_, HT.TKIdent v):cur2@(_, HT.TKReserved "("):xs) _ scp = flip (maybe $ Left (internalCE, cur1)) (HT.takeBrace "(" ")" (cur2:xs)) $
     either (Left . ("invalid function call",)) $ \(fsec, ds) -> flip (maybe $ Left ("invalid function call", cur1)) (HT.takeExps (cur1:fsec)) $ \exps -> runST $ do

@@ -27,6 +27,8 @@ int fib(int n) { if (n == 0) return 1; else if (n == 1) return 1; else if (n >= 
 int gg(int* p) { *p = 42; return 0; } 
 int sum(int* p, int n) { int sum = 0; int i = 0; for (; i < n; i = i + 1) sum = sum + *(p + i); return sum; }
 int sub3(int a, int b, int c) { return a - b - c; }
+int sub3_short(short a, short b, short c) { return a - b - c; }
+int sub3_long(long a, long b, long c) { return a - b - c; }
 
 int main()
 {
@@ -134,7 +136,7 @@ int main()
     assert(4, ({ int ar[3][5]; sizeof **ar; }), "({ int ar[3][5]; sizeof **ar; })");
     assert(4 + 1, ({ int ar[3][5]; sizeof(**ar) + 1; }), "({ int ar[3][5]; sizeof(**ar) + 1; })");
     assert(4 + 1, ({ int ar[3][5]; sizeof **ar + 1; }), "({ int ar[3][5]; return sizeof **ar + 1; })");
-    assert(4, ({ int ar[3][5]; sizeof(**ar + 1); }), "({ int ar[3][5]; sizeof(**ar + 1); })");
+    assert(8, ({ int ar[3][5]; sizeof(**ar + 1); }), "({ int ar[3][5]; sizeof(**ar + 1); })");
     assert(42, ({ int ar[2]; 2[ar] = 42; ar[2]; }), "({ int ar[2]; 2[ar] = 42; ar[2]; })");
     assert(0, g, "g");
     assert(42, ({ g = 42; g; }), "({ g = 42; g; })");
@@ -213,6 +215,14 @@ int main()
     assert(42, ({ typedef struct { int a; } t; { typedef int t; } t x; x.a = 42; x.a; }), "typedef struct { int a; } t; { typedef int t; } t x; x.a = 42; x.a;");
     assert(42, ({ typedef int art[2]; typedef art g; g ar; ar[0] = 0; ar[1] = 42; ar[1]; }), "({ typedef int art[2]; typedef art g; g ar; ar[0] = 0; ar[1] = 42; ar[1]; })");
     assert(42, ({ typedef int t; typedef int t; t a = 42; a; }), "({ typedef int t; typedef int t; t a = 42; a; })");
+    assert(2, ({ short a; sizeof a; }), "({ short a; sizeof a; })");
+    assert(4, ({ struct { char a; short b; } x; sizeof x; }), "({ struct { char a; short b; } x; sizeof x; })");
+    assert(8, ({ long a; sizeof a; }), "({ long a; sizeof a; })");
+    assert(16, ({ struct { char a; long b; } x; sizeof x; }), "({ struct { char a; long b; } x; sizeof x; })");
+    assert(1, sub3_short(7, 3, 3), "sub3_short(7, 3, 3)");
+    assert(1, sub3_long(7, 3, 3), "sub3_long(7, 3, 3)");
+    assert(4, ({ short int a; int short b; sizeof a + sizeof b; }), "({ short int a; int short b; sizeof a + sizeof b; })");
+    assert(16, ({ long int a; int long b; sizeof a + sizeof b; }), "({ long int a; int long b; sizeof a + sizeof b; })");
     printf(">> All tests passed <<\n");
 
     return 0;

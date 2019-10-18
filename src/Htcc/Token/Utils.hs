@@ -103,7 +103,11 @@ takePtr ty xs = first (flip CR.makePtr ty . toNatural) $ dropSnd $ spanLen ((==T
 -- `Just` only if the token starts with `TKType` or `TKStruct`.
 -- Otherwise `Nothing` is returned.
 makeTypes :: (Integral i, Show i, Read i) => [TokenLC i] -> PS.Scoped i -> Either (T.Text, TokenLC i) (CR.TypeKind, [TokenLC i], PS.Scoped i)
-makeTypes ((_, TKType tktype):xs) scp = Right $ uncurry (,,scp) $ takePtr tktype xs -- for a variable or a function definition
+makeTypes (x@(_, TKType ty1):y@(_, TKType ty2):xs) scp -- for @short int@, @int short@, @long int@, or @int long@
+    | CR.isTypeQualifier ty1 && ty2 == CR.CTInt = maybe (Left (internalCE, (TokenLCNums 0 0, TKEmpty))) (Right . (, xs, scp)) $ CR.qualify ty1 ty2
+    | CR.isTypeQualifier ty2 && ty1 == CR.CTInt = makeTypes (y:x:xs) scp
+    | otherwise = Left ("both '" <> tshow x <> "' and '" <> tshow y <> "' in declaration specifiers", y) 
+makeTypes ((_, TKType ty):xs) scp = Right $ uncurry (,,scp) $ takePtr ty xs -- for a variable or a function definition
 makeTypes ((_, TKStruct):cur@(_, TKReserved "{"):xs) scp = flip (maybe (Left (internalCE, cur))) (takeBrace "{" "}" (cur:xs)) $ -- for a struct definition
     either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> uncurry id . second (flip takePtr ds . CR.CTStruct . fst) . first (uncurry . (\x -> (,,snd x))) . dupe <$> takeFields (tail $ init field) scp 0
 makeTypes ((_, TKStruct):cur1@(_, TKIdent _):cur2@(_, TKReserved "{"):xs) scp = flip (maybe (Left (internalCE, cur1))) (takeBrace "{" "}" (cur2:xs)) $ -- for a struct definition with its tag

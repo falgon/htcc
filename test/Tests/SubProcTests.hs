@@ -133,7 +133,7 @@ exec = runTestsEx [
     (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar; }", fromIntegral $ CT.sizeof CT.CTInt),
     (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar) + 1; }", succ $ fromIntegral $ CT.sizeof CT.CTInt),
     (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar + 1; }", succ $ fromIntegral $ CT.sizeof CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar + 1); }", fromIntegral $ CT.sizeof CT.CTInt),
+    (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar + 1); }", fromIntegral $ CT.sizeof CT.CTLong),
     (StatementEqual.test "int main() { int ar[2]; 2[ar] = 42; return ar[2]; }", 42),
     (StatementEqual.test "int g; int main() { return g; }", 0),
     (StatementEqual.test "int g; int main() { g = 42; return g; }", 42),

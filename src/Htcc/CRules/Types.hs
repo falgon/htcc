@@ -31,7 +31,9 @@ module Htcc.CRules.Types (
     removeAllExtents,
     isPtr,
     isArray,
-    isFundamental
+    isFundamental,
+    isTypeQualifier,
+    qualify
 ) where
 
 import Prelude hiding (toInteger)
@@ -57,6 +59,8 @@ instance NFData StructMember
 -- | The kinds of types in C language.
 data TypeKind = CTInt -- ^ The type @int@ as C language
     | CTChar -- ^ The type @char@ as C language
+    | CTShort -- ^ The type @short@ as C language
+    | CTLong -- ^ The type @long@ as C language
     | CTPtr TypeKind -- ^ The pointer type of `TypeKind`
     | CTArray Natural TypeKind -- ^ The array type
     | CTStruct (M.Map T.Text StructMember) -- ^ The struct, has its members and their names.
@@ -66,6 +70,8 @@ data TypeKind = CTInt -- ^ The type @int@ as C language
 instance Show TypeKind where
     show CTInt = "int"
     show CTChar = "char"
+    show CTShort = "short"
+    show CTLong = "long"
     show (CTPtr x) = show x ++ "*"
     show (CTArray v t) = show t ++ "[" ++ show v ++ "]"
     show (CTStruct m) = "struct { " ++ concatMap (\(v, inf) -> show (smType inf) ++ " " ++ T.unpack v ++ "; ") (M.toList m) ++ "}"
@@ -103,6 +109,8 @@ isCTUndef _ = False
 sizeof :: TypeKind -> Natural
 sizeof CTInt = 4 
 sizeof CTChar = 1
+sizeof CTShort = 2
+sizeof CTLong = 8
 sizeof (CTPtr _) = 8
 sizeof (CTArray v t) = v * sizeof t
 sizeof t@(CTStruct m) 
@@ -115,6 +123,8 @@ sizeof CTUndef = 0
 alignof :: TypeKind -> Natural
 alignof CTInt = 4
 alignof CTChar = 1
+alignof CTShort = 2
+alignof CTLong = 8
 alignof (CTPtr _) = 8
 alignof (CTArray _ t) = alignof $ removeAllExtents t
 alignof (CTStruct m)
@@ -198,3 +208,16 @@ isArray _ = False
 isFundamental :: TypeKind -> Bool
 isFundamental = not . lor [isPtr, isArray]
 
+-- | `isTypeQualifier` return `True` only if the type can be qualifier, otherwise returns `False`
+isTypeQualifier :: TypeKind -> Bool
+isTypeQualifier CTShort = True
+isTypeQualifier CTLong = True
+isTypeQualifier _ = False
+
+-- | If the first argument is a type qualifier, 
+-- `qualify` returns a type that qualifies the type of the second argument with that qualifier. 
+-- Otherwise `Nothing` is returned.
+qualify :: TypeKind -> TypeKind -> Maybe TypeKind
+qualify ty1 ty2 
+    | isTypeQualifier ty1 = if ty2 == CTInt then Just ty1 else Nothing
+    | otherwise = Nothing
