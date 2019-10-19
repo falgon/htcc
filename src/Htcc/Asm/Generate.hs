@@ -13,7 +13,8 @@ Assembly code generator
 module Htcc.Asm.Generate (
     -- * Generator
     genStmt,
-    casm
+    casm,
+    GenStatus (..)
 ) where
 
 -- Imports universal modules
@@ -21,6 +22,7 @@ import Control.Exception (finally)
 import Control.Monad (zipWithM_, unless)
 import qualified Data.ByteString as B
 import Data.List (find)
+import Data.IORef (IORef, newIORef, readIORef, writeIORef) 
 import Data.Either (either)
 import qualified Data.Map as M
 import qualified Data.Text as T
@@ -39,13 +41,20 @@ import qualified Htcc.Asm.Intrinsic.Instruction as I
 import qualified Htcc.Asm.Intrinsic.Utils as I
 import qualified Htcc.CRules.Types as CR
 
+data GenStatus = GenStatus
+    {
+        labelNumber :: IO Int,
+        curFunc :: IORef (Maybe T.Text)
+    }
+
 {-# INLINE prologue #-}
-prologue :: forall i. Integral i => i -> T.Text
-prologue = T.append (I.push rbp <> I.mov rbp rsp) . I.sub rsp . (fromIntegral :: i -> Integer)
+prologue :: forall i. Integral i => i -> IO ()
+prologue = T.putStr . T.append (I.push rbp <> I.mov rbp rsp) . I.sub rsp . (fromIntegral :: i -> Integer)
 
 {-# INLINE epilogue #-}
-epilogue :: T.Text
-epilogue = I.leave <> I.ret
+epilogue :: (Maybe T.Text) -> IO () 
+epilogue Nothing = err "internal compiler error: The function name cannot be tracked."
+epilogue (Just fn) = T.putStr $ I.defLLbl (".return." <> fn <> ".") (0 :: Int) <> I.leave <> I.ret
 
 {-# INLINE load #-}
 load :: CR.TypeKind -> T.Text
@@ -63,34 +72,37 @@ store t
     | CR.sizeof t == 4 = I.pop rdi <> I.pop rax <> I.mov (Ref rax) edi <> I.push rdi
     | otherwise = I.pop rdi <> I.pop rax <> I.mov (Ref rax) rdi <> I.push rdi
 
-genAddr :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => IO Int -> ATree i -> IO ()
+genAddr :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => GenStatus -> ATree i -> IO ()
 genAddr _ (ATNode (ATLVar _ v) _ _ _) = T.putStr $ I.lea rax (Ref $ rbp `osub` v) <> I.push rax
 genAddr _ (ATNode (ATGVar _ n) _ _ _) = T.putStr $ I.push (I.Offset n)
 genAddr c (ATNode ATDeref _ lhs _) = genStmt c lhs
 genAddr c (ATNode (ATMemberAcc m) _ lhs _) = genAddr c lhs >> T.putStr (I.pop rax <> I.add rax (CR.smOffset m) <> I.push rax)
 genAddr _ _ = err "lvalue required as left operand of assignment"
 
-genLval :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => IO Int -> ATree i -> IO ()
+genLval :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => GenStatus -> ATree i -> IO ()
 genLval c xs@(ATNode _ t _ _)
     | CR.isCTArray t = err "lvalue required as left operand of assignment"
     | otherwise = genAddr c xs
 genLval _ _ = err "internal compiler error: genLval catch ATEmpty"
 
 -- | Simulate the stack machine by traversing an abstract syntax tree and output assembly codes.
-genStmt :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => IO Int -> ATree i -> IO ()
-genStmt c lc@(ATNode (ATDefFunc x Nothing) _ st _) = T.putStr (I.defGLbl x <> prologue (stackSize lc)) >> genStmt c st
+genStmt :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => GenStatus -> ATree i -> IO ()
+genStmt c lc@(ATNode (ATDefFunc x Nothing) _ st _) = writeIORef (curFunc c) (Just x) >> T.putStr (I.defGLbl x) >> prologue (stackSize lc) >> genStmt c st >> readIORef (curFunc c) >>= epilogue
 genStmt c lc@(ATNode (ATDefFunc x (Just args)) _ st _) = do -- TODO: supports more than 7 arguments
-    T.putStr $ I.defGLbl x <> prologue (stackSize lc)
+    writeIORef (curFunc c) $ Just x
+    T.putStr $ I.defGLbl x
+    prologue (stackSize lc)
     flip (`zipWithM_` args) argRegs $ \(ATNode (ATLVar t o) _ _ _) reg -> 
         maybe (err "internal compiler error: there is no register that fits the specified size") (T.putStr . I.mov (Ref $ rbp `osub` o)) $
             find ((== CR.sizeof t) . byteWidth) reg
     genStmt c st
+    readIORef (curFunc c) >>= epilogue
 genStmt _ (ATNode (ATCallFunc x Nothing) _ _ _) = T.putStr $ I.call x <> I.push rax
 genStmt c (ATNode (ATCallFunc x (Just args)) _ _ _) = let (n', toReg, _) = splitAtLen 6 args in do -- TODO: supports more than 7 arguments
     mapM_ (genStmt c) toReg
     mapM_ (T.putStr . I.pop) $ popRegs n'
     -- unless (null toStack) $ forM_ (reverse toStack) $ genStmt c
-    n <- c
+    n <- labelNumber c -- <- c
     T.putStr $ I.mov rax rsp <> I.and rax (0x0f :: Int)
     T.putStr $ I.jnz $ I.refLLbl ".call." n
     T.putStr $ I.mov rax (0 :: Int) <> I.call x
@@ -102,7 +114,7 @@ genStmt c (ATNode (ATCallFunc x (Just args)) _ _ _) = let (n', toReg, _) = split
 genStmt c (ATNode (ATBlock stmts) _ _ _) = mapM_ (genStmt c) stmts
 genStmt c (ATNode (ATStmtExpr stmts) _ _ _) = mapM_ (genStmt c) stmts
 genStmt c (ATNode (ATFor exps) _ _ _) = do
-    n <- c
+    n <- labelNumber c
     maybe (return ()) (genStmt c . fromATKindFor) $ find isATForInit exps
     T.putStr $ I.defBegin n
     maybe (return ()) (genStmt c . fromATKindFor) $ find isATForCond exps
@@ -112,7 +124,7 @@ genStmt c (ATNode (ATFor exps) _ _ _) = do
     T.putStr $ I.jmp $ I.refBegin n
     T.putStr $ I.defEnd n 
 genStmt c (ATNode ATWhile _ lhs rhs) = do
-    n <- c
+    n <- labelNumber c
     T.putStr $ I.defBegin n
     genStmt c lhs
     T.putStr $ I.pop rax <> I.cmp rax (0 :: Int) <> I.je (I.refEnd n)
@@ -121,13 +133,13 @@ genStmt c (ATNode ATWhile _ lhs rhs) = do
     T.putStr $ I.defEnd n
 genStmt c (ATNode ATIf _ lhs rhs) = do
     genStmt c lhs
-    n <- c
+    n <- labelNumber c
     T.putStr $ I.pop rax <> I.cmp rax (0 :: Int) <> I.je (I.refEnd n)
     genStmt c rhs
     T.putStr $ I.defEnd n
 genStmt c (ATNode ATElse _ (ATNode ATIf _ llhs rrhs) rhs) = do
     genStmt c llhs
-    n <- c
+    n <- labelNumber c
     T.putStr $ I.pop rax <> I.cmp rax (0 :: Int) <> I.je (I.refLLbl ".else." n)
     genStmt c rrhs
     T.putStr $ I.jmp (I.refEnd n)
@@ -135,7 +147,8 @@ genStmt c (ATNode ATElse _ (ATNode ATIf _ llhs rrhs) rhs) = do
     genStmt c rhs
     T.putStr $ I.defEnd n
 genStmt _ (ATNode ATElse _ _ _) = error "Asm code generator shold not reached here. Maybe abstract tree is broken it cause (bug)."
-genStmt c (ATNode ATReturn _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> epilogue) 
+genStmt c (ATNode ATReturn _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax) >> 
+    readIORef (curFunc c) >>= maybe (err "The function name cannot be tracked.") (T.putStr . (\f -> I.jmp (I.refLLbl (".return." <> f <> ".") (0 :: Int))))
 genStmt c (ATNode ATExprStmt _ lhs _) = genStmt c lhs >> T.putStr (I.add rsp (8 :: Int))
 genStmt c (ATNode ATBitNot _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.not rax <> I.push rax)
 genStmt c (ATNode ATAddr _ lhs _) = genAddr c lhs
@@ -200,12 +213,13 @@ dataSection gvars lits = do
 textSection :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => [ATree i] -> IO ()
 textSection tk = do
     inc <- counter 0
-    T.putStrLn ".text" >> mapM_ (genStmt inc) tk
+    fname <- newIORef Nothing
+    T.putStrLn ".text" >> mapM_ (genStmt $ GenStatus inc fname) tk
 
 -- | Generate full assembly code from C language program
 casm :: T.Text -> IO ()
 casm xs = flip (either (tokenizeErrExit xs)) (f xs) $ \x -> 
-    flip (either $ parseErrExit xs) (parse x) $ \(tk, gvars, lits) -> T.putStr I.declIS >> dataSection gvars lits >> textSection tk
+    flip (either $ parseErrExit xs) (parse x) $ \(tk, gvars, lits) -> T.putStr I.declIS >> dataSection gvars lits >> textSection tk -- >> T.putStr epilogue
         where
             f = HT.tokenize :: T.Text -> Either (HT.TokenLCNums Int, T.Text) [HT.TokenLC Int]
 
