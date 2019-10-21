@@ -29,6 +29,21 @@ and will add more some features...
 
 ```sh
 $ stack build
+$ stack build --fast # no optimized
+```
+
+## Execute
+
+```sh
+$ echo 'int main() { printf("hello world!\n"); }' > t.c
+$ stack exec htcc -- t.c > t.s
+$ gcc -no-pie t.c -o out
+```
+
+For one liner...
+
+```sh
+$ echo 'int main() { printf("hello world!\n"); }' | stack exec htcc -- /dev/stdin | gcc -xassembler -no-pie -o out -  
 ```
 
 ## Test
@@ -60,3 +75,18 @@ $ stack bench
 ## Dependencies
 
 ![htcc Dependencies graph](./assets/htcc_depend.png)
+
+To generate ([Graphviz](https://www.graphviz.org/) is required),
+
+```sh
+$ stack dot --no-include-base --external | dot -Tpng -o out.png
+```
+
+## About emoji of commit messages
+
+The emoji included in the commit message is used according to [gitmoji](https://gitmoji.carloscuesta.me/).
+
+## References
+
+* [N1570 - JTC1/SC22/WG14](http://open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf): C11 working draft (PDF)
+* [N1570 - JTC1/SC22/WG14](https://port70.net/~nsz/c/c11/n1570.html): C11 working draft (HTML)

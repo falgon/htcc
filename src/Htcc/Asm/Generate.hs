@@ -41,10 +41,11 @@ import qualified Htcc.Asm.Intrinsic.Instruction as I
 import qualified Htcc.Asm.Intrinsic.Utils as I
 import qualified Htcc.CRules.Types as CR
 
-data GenStatus = GenStatus
+-- | `GenStatus` is status and information in code generation.
+data GenStatus = GenStatus -- ^ The constructor of `GenStatus`
     {
-        labelNumber :: IO Int,
-        curFunc :: IORef (Maybe T.Text)
+        labelNumber :: IO Int, -- ^ The label number. `labelNumber` is incremented each time it is read
+        curFunc :: IORef (Maybe T.Text) -- ^ `curFunc` stores the name of the function being processed
     }
 
 {-# INLINE prologue #-}

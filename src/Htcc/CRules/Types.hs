@@ -17,7 +17,8 @@ module Htcc.CRules.Types (
     -- * Utilities of TypeKinds
     sizeof,
     derefMaybe,
-    makePtr,
+    ctorPtr,
+    dctorPtr,
     makeArray,
     concatCTArray,
     lookupMember,
@@ -32,7 +33,8 @@ module Htcc.CRules.Types (
     isPtr,
     isArray,
     isFundamental,
-    isTypeQualifier,
+    isQualifier,
+    isQualifiable,
     qualify
 ) where
 
@@ -40,6 +42,7 @@ import Prelude hiding (toInteger)
 import GHC.Generics (Generic)
 import Control.DeepSeq (NFData (..))
 import Numeric.Natural
+import Data.Tuple.Extra (second)
 import Data.List (foldl', maximumBy)
 import Data.Bits ((.&.), complement, Bits (..))
 import qualified Data.Map as M
@@ -147,16 +150,15 @@ derefMaybe ct@(CTArray _ _) = Just $ f ct
         f t = t
 derefMaybe _ = Nothing
 
--- | `makePtr` returns a pointer of @n@-dimensional type @t@. e.g:
--- 
--- >>> makePtr 2 CTInt
--- int**
--- >>> makePtr 2 (CTPtr CTInt)
--- int***
--- >>> makePtr 2 (makePtr 3 CTInt)
--- int*****
-makePtr :: Natural -> TypeKind -> TypeKind
-makePtr n t = foldr id t $ replicate (fromIntegral n) CTPtr
+-- | `ctorPtr` returns a convolution function with \(n\) specified pointers nested
+ctorPtr :: Natural -> (TypeKind -> TypeKind)
+ctorPtr n = foldr (.) id $ replicate (fromIntegral n) CTPtr
+
+-- | `dctorPtr` deconstructs the nested structure of `CTPtr` and
+-- returns the convolution function of the original type and `CTPtr`.
+dctorPtr :: TypeKind -> (TypeKind, TypeKind -> TypeKind)
+dctorPtr (CTPtr x) = second (CTPtr .) $ dctorPtr x
+dctorPtr x = (x, id)
 
 -- | `makeArray` returns a multidimensional arary based on the arguments (list of each dimension). e.g:
 --
@@ -209,15 +211,23 @@ isFundamental :: TypeKind -> Bool
 isFundamental = not . lor [isPtr, isArray]
 
 -- | `isTypeQualifier` return `True` only if the type can be qualifier, otherwise returns `False`
-isTypeQualifier :: TypeKind -> Bool
-isTypeQualifier CTShort = True
-isTypeQualifier CTLong = True
-isTypeQualifier _ = False
+{-# INLINE isQualifier #-}
+isQualifier :: TypeKind -> Bool
+isQualifier CTShort = True
+isQualifier CTLong = True
+isQualifier _ = False
+
+-- | `isTypeQualifier` return `True` only if the type can be qualified, otherwise returns `False`
+{-# INLINE isQualifiable #-}
+isQualifiable :: TypeKind -> Bool
+isQualifiable CTInt = True
+isQualifiable _ = False
 
 -- | If the first argument is a type qualifier, 
 -- `qualify` returns a type that qualifies the type of the second argument with that qualifier. 
 -- Otherwise `Nothing` is returned.
 qualify :: TypeKind -> TypeKind -> Maybe TypeKind
 qualify ty1 ty2 
-    | isTypeQualifier ty1 = if ty2 == CTInt then Just ty1 else Nothing
+    | isQualifier ty1 && isQualifiable ty2 = Just ty1
+    | isQualifier ty2 && isQualifiable ty1 = Just ty2
     | otherwise = Nothing

@@ -6,10 +6,10 @@
 int test_num;
 int g;
 int gr[3];
+int (*gpa)[3];
 
 int assert(int expected, int actual, char* code)
 {
-
     if (expected == actual) {
         printf("[OK]: test #%d: \'%s\' => %d\n", test_num, code, actual);
         test_num = test_num + 1;
@@ -25,10 +25,12 @@ int add(int x, int y) { return x + y; }
 int rec(int a) { if (a == 0) return 42; return rec(a - 1); } 
 int fib(int n) { if (n == 0) return 1; else if (n == 1) return 1; else if (n >= 2) return fib(n - 1) + fib(n - 2); else return 0; }
 int gg(int* p) { *p = 42; return 0; } 
-int sum(int* p, int n) { int sum = 0; int i = 0; for (; i < n; i = i + 1) sum = sum + *(p + i); return sum; }
+int sum(int* p, int n) { int s = 0; int i = 0; for (; i < n; i = i + 1) s = s + *(p + i); return s; }
 int sub3(int a, int b, int c) { return a - b - c; }
 int sub3_short(short a, short b, short c) { return a - b - c; }
 int sub3_long(long a, long b, long c) { return a - b - c; }
+int ptr2ar(int (*p)[3]) { int i = 0; for (; i < sizeof *p / sizeof **p; i = i + 1) p[0][i] = i + 1; return 0; }
+            
 
 int main()
 {
@@ -99,7 +101,7 @@ int main()
     assert(42, ({ int a = 42; int b = 5; *(&b+1); }), "({ int a = 42; int b = 5; *(&b+1); })");
     assert(53, ({ int a = 42; int b = 5; *(&a-1) = 53; b; }), "({ int a = 42; int b = 5; *(&a-1) = 53; b; })");
     assert(53, ({ int a = 42; int b = 5; *(&b+1) = 53; a; }), "({ int a = 42; int b = 5; *(&b+1) = 53; a; })");
-    assert(6, ({ int sum = 0; int i = 1; for (; i < 4; i = i + 1) sum = sum + i; sum; }), "({ int sum = 0; int i = 1; for (; i < 4; i = i + 1) sum = sum + i; return sum; })");
+    assert(6, ({ int s = 0; int i = 1; for (; i < 4; i = i + 1) s = s + i; s; }), "({ int s = 0; int i = 1; for (; i < 4; i = i + 1) s = s + i; return s; })");
     assert(3, ({ int ar[2]; int* p = ar; *p = 3; *ar; }), "({ int ar[2]; int* p = ar; *p = 3; *ar; })");
     assert(3, ({ int ar[2]; int* p = ar; *(p + 1) = 3; *(ar + 1); }), "({ int ar[2]; int* p = ar; *(p + 1) = 3; *(ar + 1); })");
     assert(5, ({ int ar[2]; int* p = ar; *p = 2; *(p + 1) = 3; *ar + *(ar + 1); }), "({ int ar[2]; int* p = ar; *p = 2; *(p + 1) = 3; *ar + *(ar + 1); })");
@@ -107,9 +109,9 @@ int main()
     assert(2, ({ int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; *(ar + 1); }), "({ int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; *(ar + 1); })");
     assert(3, ({ int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; *(ar + 2); }), "({ int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; *(ar + 2); })");
     assert(42, ({ int a = 0; gg(&a); a; }), "({ int a = 0; gg(&a); a; })");
-    assert(45, ({ int ar[10]; int i = 0; for (; i < 10; i = i + 1) { *(ar + i) = i; } int sum = 0; for (i = 0; i < 10; i = i + 1) { sum = sum + *(ar + i); } sum; }), "({ int ar[10]; int i = 0; for (; i < 10; i = i + 1) { *(ar + i) = i; } int sum = 0; for (i = 0; i < 10; i = i + 1) { sum = sum + *(ar + i); } sum; })");
+    assert(45, ({ int ar[10]; int i = 0; for (; i < 10; i = i + 1) { *(ar + i) = i; } int s = 0; for (i = 0; i < 10; i = i + 1) { s = s + *(ar + i); } s; }), "({ int ar[10]; int i = 0; for (; i < 10; i = i + 1) { *(ar + i) = i; } int s = 0; for (i = 0; i < 10; i = i + 1) { s = s + *(ar + i); } s; })");
     assert(45, ({ int ar[10]; int i = 0; for (; i < 10; i = i + 1) *(ar + i) = i; sum(ar, 10); }), "({ int ar[10]; int i = 0; for (; i < 10; i = i + 1) *(ar + i) = i; sum(ar, 10); })");
-    assert(9, ({ int ar[2][3]; int sum = 0; int i = 0; for (; i < 2; i = i + 1) { int j = 0; for (; j < 3; j = j + 1) { *(*(ar + i) + j) = i + j; sum = sum + *(*(ar + i) + j); } } sum; }), "({ int ar[2][3]; int sum = 0; int i = 0; for (; i < 2; i = i + 1) { int j = 0; for (; j < 3; j = j + 1) { *(*(ar + i) + j) = i + j; sum = sum + *(*(ar + i) + j); } } sum; })");
+    assert(9, ({ int ar[2][3]; int s = 0; int i = 0; for (; i < 2; i = i + 1) { int j = 0; for (; j < 3; j = j + 1) { *(*(ar + i) + j) = i + j; s = s + *(*(ar + i) + j); } } s; }), "({ int ar[2][3]; int s = 0; int i = 0; for (; i < 2; i = i + 1) { int j = 0; for (; j < 3; j = j + 1) { *(*(ar + i) + j) = i + j; s = s + *(*(ar + i) + j); } } s; })");
     assert(42, ({ int ar[2][3]; int* p = ar; *p = 42; **ar; }), "({ int ar[2][3]; int* p = ar; *p = 42; **ar; }");
     assert(42, ({ int ar[2][3]; int* p = ar; *(p + 1) = 42; *(*ar + 1); }), "({ int ar[2][3]; int* p = ar; *(p + 1) = 42; *(*ar + 1); })");
     assert(42, ({ int ar[2][3]; int* p = ar; *(p + 2) = 42; *(*ar + 2); }), "({ int ar[2][3]; int* p = ar; *(p + 2) = 42; *(*ar + 2); })");
@@ -138,9 +140,9 @@ int main()
     assert(4 + 1, ({ int ar[3][5]; sizeof **ar + 1; }), "({ int ar[3][5]; return sizeof **ar + 1; })");
     assert(8, ({ int ar[3][5]; sizeof(**ar + 1); }), "({ int ar[3][5]; sizeof(**ar + 1); })");
     assert(42, ({ int ar[2]; 2[ar] = 42; ar[2]; }), "({ int ar[2]; 2[ar] = 42; ar[2]; })");
-    assert(0, g, "g");
+    assert(0, g, "g"); 
     assert(42, ({ g = 42; g; }), "({ g = 42; g; })");
-    assert(1, ({ int i = 0; for (; i < sizeof gr; i = i + 1) gr[i] = i + 1; gr[0]; }), "({ int i = 0; for (; i < sizeof gr; i = i + 1) gr[i] = i + 1; gr[0]; })");
+    assert(1, ({ int i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; gr[0]; }), "({ int i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; gr[0]; })");
     assert(2, gr[1], "gr[1]");
     assert(3, gr[2], "gr[2]");
     assert(1, ({ char c = 1; c; }), "({ char c = 1; c; })");
@@ -223,6 +225,16 @@ int main()
     assert(1, sub3_long(7, 3, 3), "sub3_long(7, 3, 3)");
     assert(4, ({ short int a; int short b; sizeof a + sizeof b; }), "({ short int a; int short b; sizeof a + sizeof b; })");
     assert(16, ({ long int a; int long b; sizeof a + sizeof b; }), "({ long int a; int long b; sizeof a + sizeof b; })");
+    assert(0, ({ typedef int; 0; }), "({ typedef int; 0; })");
+    assert(32, ({ typedef int* p[4]; p a; sizeof a; }), "({ typedef int* p[4]; sizeof p; })");
+    assert(8, ({ typedef int (*pp)[4]; pp a; sizeof a; }), "({ typedef int (*p)[4]; sizeof p; })");
+    assert(1, ({ gpa = gr; (*gpa)[0]; }), "({ gpa = gr; (*gpa)[0]; })");
+    assert(2, gpa[0][1], "(*gpa)[1]");
+    assert(3, gpa[0][2], "(*gpa)[2]");
+    assert(42, ({ int* ar[3]; int x; ar[0] = &x; x = 42; ar[0][0]; }), "({ int* ar[3]; int x; ar[0] = &x; x = 42; ar[0][0]; })");
+    assert(42, ({ int ar[3]; int (*p)[3] = ar; p[0][0] = 42; ar[0]; }), "({ int ar[3]; int (*p)[3] = ar; p[0][0] = 42; ar[0]; })");
+    assert(6, ({ int ar[3]; ptr2ar(&ar); sum(ar, sizeof ar / sizeof *ar); }), "({ int ar[3]; ptr2ar(&ar); sum(ar, sizeof ar / sizeof **ar); }");
+    assert(42, ({ struct { int (*p)[3]; } x; int ar[3]; x.p = &ar; (*x.p)[0] = 42; ar[0]; }), "({ struct { int (*p)[3]; } x; int ar[3]; x.p = &ar; (*x.p)[0]     = 42; ar[0]; })");
     printf(">> All tests passed <<\n");
 
     return 0;

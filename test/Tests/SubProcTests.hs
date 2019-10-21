@@ -137,9 +137,9 @@ exec = runTestsEx [
     (StatementEqual.test "int main() { int ar[2]; 2[ar] = 42; return ar[2]; }", 42),
     (StatementEqual.test "int g; int main() { return g; }", 0),
     (StatementEqual.test "int g; int main() { g = 42; return g; }", 42),
-    (StatementEqual.test "int gr[3]; int main() { int i = 0; for (; i < sizeof gr; i = i + 1) gr[i] = i + 1; return gr[0]; }", 1),
-    (StatementEqual.test "int gr[3]; int main() { int i = 0; for (; i < sizeof gr; i = i + 1) gr[i] = i + 1; return gr[1]; }", 2),
-    (StatementEqual.test "int gr[3]; int main() { int i = 0; for (; i < sizeof gr; i = i + 1) gr[i] = i + 1; return gr[2]; }", 3),
+    (StatementEqual.test "int gr[3]; int main() { int i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; return gr[0]; }", 1),
+    (StatementEqual.test "int gr[3]; int main() { int i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; return gr[1]; }", 2),
+    (StatementEqual.test "int gr[3]; int main() { int i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; return gr[2]; }", 3),
     (StatementEqual.test "int main() { char c = 1; return c; }", 1),
     (StatementEqual.test "int main() { char c1 = 1; char c2 = 2; return c1; }", 1),
     (StatementEqual.test "int main() { char c1 = 1; char c2 = 2; return c2; }", 2),
@@ -173,7 +173,8 @@ exec = runTestsEx [
     (StatementEqual.test "int main() { // hoge\nreturn 42; }", 42),
     (StatementEqual.test "int main() { int a = 42; { int a = 32; } return a; }", 42),
     (StatementEqual.test "int main() { int a = 42; { int a = 32; } { int a = 53; return a; } return 42; }", 53),
-    (StatementEqual.test "int main() { int a = 42; { a = 32; } return a; }", 32)
+    (StatementEqual.test "int main() { int a = 42; { a = 32; } return a; }", 32),
+    (StatementEqual.test "int main() { int* ar[3]; int x; ar[0] = &x; x = 42; ar[0][0]; }", 42)
     ] >> runTestsEx [
     (LinkFuncStdOut.test "int main() { return test_func1(); }" ["test_func1"], Right "test/Tests/csrc/test_func1.c::test_func1(): [OK]"),
     (LinkFuncStdOut.test "int main() { return test_func2(40); }" ["test_func2"], Right "test/Tests/csrc/test_func2.c::test_func2(40) outputs: \"2 3 5 7 11 13 17 19 23 29 31 37 \": [OK]") --,
