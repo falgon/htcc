@@ -1,5 +1,5 @@
 {-|
-Module      : Htcc.Parse.Typedef
+Module      : Htcc.Parse.Scope.Typedef
 Description : The Data type of typedef and its utilities used in parsing
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -10,7 +10,7 @@ Portability : POSIX
 The Data type of variables and its utilities used in parsing
 -}
 {-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
-module Htcc.Parse.Typedef (
+module Htcc.Parse.Scope.Typedef (
     Typedef (..),
     Typedefs,
     addTypedef,

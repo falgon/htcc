@@ -3,6 +3,9 @@
  * This comment is also a block comment test.
  */
 
+int printf();
+int exit();
+
 int test_num;
 int g;
 int gr[3];

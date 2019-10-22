@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
 {-|
-Module      : Htcc.Parse.Var
+Module      : Htcc.Parse.Scope.Var
 Description : The Data type of variables and its utilities used in parsing
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -10,7 +10,7 @@ Portability : POSIX
 
 The Data type of variables and its utilities used in parsing
 -}
-module Htcc.Parse.Var (
+module Htcc.Parse.Scope.Var (
     -- * The data type
     GVar (..),
     LVar (..),

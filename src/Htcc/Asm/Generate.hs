@@ -32,7 +32,8 @@ import System.Exit (exitFailure)
 -- Imports Tokenizer and parser
 import Htcc.Utils (err, putStrLnErr, putStrErr, counter, tshow, toInts, splitAtLen)
 import qualified Htcc.Token as HT
-import Htcc.Parse (ATKind (..), ATree (..), GVar (..), Literal (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, parse, stackSize)
+import Htcc.Parse (ATKind (..), ATree (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, parse, stackSize)
+import Htcc.Parse.Scope.Var (GVar (..), Literal (..))
 
 -- Imports about assembly
 import Htcc.Asm.Intrinsic.Register

@@ -1,5 +1,5 @@
 {-|
-Module      : Htcc.Parse.Struct
+Module      : Htcc.Parse.Scope.Struct
 Description : The Data type of struct and its utilities used in parsing
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -10,7 +10,7 @@ Portability : POSIX
 The Data type of variables and its utilities used in parsing
 -}
 {-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
-module Htcc.Parse.Struct (
+module Htcc.Parse.Scope.Struct (
     StructTag (..),
     Structs,
     addStructTag,

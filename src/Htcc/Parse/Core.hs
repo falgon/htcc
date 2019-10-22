@@ -56,7 +56,7 @@ import Htcc.Utils (first3, second3, tshow, toNatural, toInteger, mapEither, drop
 import qualified Htcc.Token as HT
 import qualified Htcc.CRules.Types as CT
 import Htcc.Parse.AST
-import qualified Htcc.Parse.Var as PV
+import qualified Htcc.Parse.Scope.Var as PV
 import Htcc.Parse.Scope
 import Htcc.Parse.Utils
 
@@ -84,15 +84,16 @@ globalDef xs@((_, HT.TKTypedef):(_, HT.TKStruct):_) _ sc = defTypedef xs sc -- f
 globalDef xs@((_, HT.TKTypedef):(_, HT.TKIdent _):_) _ sc = defTypedef xs sc -- for global @typedef@ with type defined by @typedef@
 globalDef tks at !va = (>>=) (HT.takeType tks va) $ \case
     (_, Nothing, (_, HT.TKReserved ";"):ds', scp) -> Right (ds', ATEmpty, scp) -- e.g., @int;@ is legal in C11 (See N1570/section 6.7 Declarations)
-    (_, Just (cur@(_, HT.TKIdent fname)), tk@((_, HT.TKReserved "("):_), !sc) -> let scp = resetLocal sc in -- for function definitions
+    (funcType, Just (cur@(_, HT.TKIdent fname)), tk@((_, HT.TKReserved "("):_), !sc) -> let scp = resetLocal sc in -- for a function declaration or definition
         flip (maybe $ Left (internalCE, cur)) (HT.takeBrace "(" ")" $ tail (cur:tk)) $
-            either (Left . ("invalid function definition",)) $ \(fndec, st) -> case st of
-                ((_, HT.TKReserved "{"):_) -> checkErr fndec scp $ \args -> runST $ do
+            either (Left . ("invalid function declaration/definition",)) $ \(fndec, st) -> case st of
+                ((_, HT.TKReserved ";"):ds'') -> addFunction False funcType cur scp >>= globalDef ds'' at -- for a function declaration
+                ((_, HT.TKReserved "{"):_) -> (>>=) (addFunction True funcType cur scp) $ \scp' -> checkErr fndec scp' $ \args -> runST $ do -- for a function definition
                     eri <- newSTRef Nothing
-                    v <- newSTRef scp
+                    v <- newSTRef scp'
                     mk <- flip unfoldrM args $ \args' -> if null args' then return Nothing else let arg = head args' in do
                         m <- uncurry addLVar (second fromJust $ dropThd $ dropThd4 $ arg) <$> readSTRef v
-                        flip (either ((<$) Nothing . writeSTRef eri . Just)) m $ \(vat, scp') -> Just (vat, tail args') <$ writeSTRef v scp'
+                        flip (either ((<$) Nothing . writeSTRef eri . Just)) m $ \(vat, scp'') -> Just (vat, tail args') <$ writeSTRef v scp''
                     (>>=) (readSTRef eri) $ flip maybe (return . Left) $
                         fmap (second3 (flip (ATNode (ATDefFunc fname $ if null mk then Nothing else Just mk) CT.CTUndef) ATEmpty)) . stmt st at <$> readSTRef v
                 _ -> stmt tk at scp
@@ -330,14 +331,16 @@ factor (cur@(_, HT.TKReserved "("):xs) atn !scp = (>>=) (expr xs atn scp) $ \(er
     (_, HT.TKReserved ")"):ys -> Right (ys, erat, erscp)
     ert' -> Left $ expectedMessage ")" cur ert'
 factor ((_, HT.TKNum n):xs) _ !scp = Right (xs, ATNode (ATNum n) CT.CTLong ATEmpty ATEmpty, scp) -- for numbers
-factor ((_, HT.TKIdent v):(_, HT.TKReserved "("):(_, HT.TKReserved ")"):xs) _ !scp = Right (xs, ATNode (ATCallFunc v Nothing) CT.CTInt ATEmpty ATEmpty, scp) -- for no arguments function call
-factor (cur1@(_, HT.TKIdent v):cur2@(_, HT.TKReserved "("):xs) _ scp = flip (maybe $ Left (internalCE, cur1)) (HT.takeBrace "(" ")" (cur2:xs)) $
-    either (Left . ("invalid function call",)) $ \(fsec, ds) -> flip (maybe $ Left ("invalid function call", cur1)) (HT.takeExps (cur1:fsec)) $ \exps -> runST $ do
-        mk <- newSTRef scp
-        expl <- forM exps $ \etk -> readSTRef mk >>= either (return . Left) (\(_, erat, ervar) -> Right erat <$ writeSTRef mk ervar) . expr etk ATEmpty
-        if any isLeft expl then return $ Left $ head $ lefts expl else do
-            scp' <- readSTRef mk
-            return $ Right (ds, ATNode (ATCallFunc v (Just $ rights expl)) CT.CTInt ATEmpty ATEmpty, scp')
+factor (cur@(_, HT.TKIdent v):(_, HT.TKReserved "("):(_, HT.TKReserved ")"):xs) _ !scp = flip (maybe (Left ("The function is not declared", cur))) (lookupFunction v scp) $ 
+    const $ Right (xs, ATNode (ATCallFunc v Nothing) CT.CTInt ATEmpty ATEmpty, scp) -- for no arguments function call
+factor (cur1@(_, HT.TKIdent v):cur2@(_, HT.TKReserved "("):xs) _ scp = flip (maybe $ Left (internalCE, cur1)) (HT.takeBrace "(" ")" (cur2:xs)) $ -- for some argumets function call
+    either (Left . ("invalid function call",)) $ \(fsec, ds) -> flip (maybe (Left ("The function is not declared", cur1))) (lookupFunction v scp) $ 
+        const $ flip (maybe $ Left ("invalid function call", cur1)) (HT.takeExps (cur1:fsec)) $ \exps -> runST $ do
+            mk <- newSTRef scp
+            expl <- forM exps $ \etk -> readSTRef mk >>= either (return . Left) (\(_, erat, ervar) -> Right erat <$ writeSTRef mk ervar) . expr etk ATEmpty
+            if any isLeft expl then return $ Left $ head $ lefts expl else do
+                scp' <- readSTRef mk
+                return $ Right (ds, ATNode (ATCallFunc v (Just $ rights expl)) CT.CTInt ATEmpty ATEmpty, scp')
 factor ((_, HT.TKSizeof):xs) atn !scp = second3 (\x -> ATNode (ATNum (fromIntegral $ CT.sizeof $ atype x)) CT.CTInt ATEmpty ATEmpty) <$> unary xs atn scp -- for `sizeof` -- TODO: the type of sizeof must be @size_t@
 factor (cur@(_, HT.TKAlignof):xs) atn !scp = (>>=) (unary xs atn scp) $ \(ert, erat, erscp) -> 
     if CT.isCTUndef (atype erat) then Left ("_Alignof must be an expression or type", cur) else Right (ert, ATNode (ATNum (fromIntegral $ CT.alignof $ atype erat)) CT.CTInt ATEmpty ATEmpty, erscp) -- Note: Using alignof for expressions is a non-standard feature of C11

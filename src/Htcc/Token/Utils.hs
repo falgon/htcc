@@ -28,8 +28,8 @@ import qualified Htcc.CRules as CR
 import Htcc.Utils (dropFst4, lastInit, spanLen, dropSnd, tshow, toNatural, toInteger)
 import Htcc.Parse.Utils (internalCE)
 import qualified Htcc.Parse.Scope as PS
-import qualified Htcc.Parse.Struct as PST
-import qualified Htcc.Parse.Typedef as PSD
+import qualified Htcc.Parse.Scope.Struct as PST
+import qualified Htcc.Parse.Scope.Typedef as PSD
 import Htcc.Token.Core
 
 -- | Extract the partial token enclosed in parentheses from the token sequence. If it is invalid, `takeBrace` returns @(i, Text)@ indicating the error location.

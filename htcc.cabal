@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 2692074c9a5814e51fb0a37ddcd762835f4a8cfe350e517a4634429f7082ebe1
+-- hash: 919773a4eadb606fbaa53962c0d83017951c716bb7da190ba4185b5f08108d49
 
 name:           htcc
 version:        0.0.0.1
@@ -54,10 +54,11 @@ library
       Htcc.Parse.AST
       Htcc.Parse.Core
       Htcc.Parse.Scope
-      Htcc.Parse.Struct
-      Htcc.Parse.Typedef
+      Htcc.Parse.Scope.Function
+      Htcc.Parse.Scope.Struct
+      Htcc.Parse.Scope.Typedef
+      Htcc.Parse.Scope.Var
       Htcc.Parse.Utils
-      Htcc.Parse.Var
       Htcc.Token
       Htcc.Token.Core
       Htcc.Token.Utils
