@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
 {-|
-Module      : Htcc.Parse.Var
+Module      : Htcc.Parser.Scope.Var
 Description : The Data type of variables and its utilities used in parsing
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -10,7 +10,7 @@ Portability : POSIX
 
 The Data type of variables and its utilities used in parsing
 -}
-module Htcc.Parse.Var (
+module Htcc.Parser.Scope.Var (
     -- * The data type
     GVar (..),
     LVar (..),
@@ -29,6 +29,7 @@ module Htcc.Parse.Var (
     fallBack
 ) where
 
+import Prelude hiding (lookup)
 import Data.Bits (Bits (..))
 import qualified Data.ByteString as B
 import qualified Data.Text as T
@@ -37,12 +38,12 @@ import Numeric.Natural
 import GHC.Generics (Generic, Generic1)
 import Control.DeepSeq (NFData (..), NFData1 (..))
 
-import qualified Htcc.Token.Core as HT
+import qualified Htcc.Parser.Scope.ManagedScope as SM
+import qualified Htcc.Tokenizer.Token as HT
 import qualified Htcc.CRules.Types as CT
-import Htcc.Parse.AST (ATree (..), ATKind (..))
-import Htcc.Parse.Utils (internalCE)
+import Htcc.Parser.AST (ATree (..), ATKind (..))
+import Htcc.Parser.Utils (internalCE)
 import Htcc.Utils (tshow)
-
 
 -- | The data type of global variable
 newtype GVar = GVar -- ^ The constructor of global variable
@@ -51,6 +52,11 @@ newtype GVar = GVar -- ^ The constructor of global variable
     } deriving (Eq, Ord, Show, Generic)
 
 instance NFData GVar
+
+instance SM.ManagedScope GVar where
+    lookup = M.lookup
+    fallBack = const
+    initial = M.empty
 
 -- | The data type of local variable
 data LVar a = LVar -- ^ The constructor of local variable
@@ -62,6 +68,11 @@ data LVar a = LVar -- ^ The constructor of local variable
 
 instance NFData a => NFData (LVar a)
 instance NFData1 LVar
+
+instance SM.ManagedScope (LVar a) where
+    lookup = M.lookup
+    fallBack = const
+    initial = M.empty
 
 -- | The literal
 data Literal = Literal -- ^ The literal constructor
@@ -86,7 +97,7 @@ instance NFData a => NFData (Vars a)
 {-# INLINE initVars #-}
 -- | Helper function representing an empty variables
 initVars :: Vars a
-initVars = Vars M.empty M.empty []
+initVars = Vars SM.initial SM.initial []
 
 {-# INLINE resetLocal #-}
 -- | `resetLocal` initialize the local variable list for `Vars`
@@ -96,12 +107,12 @@ resetLocal vs = vs { locals = M.empty }
 {-# INLINE lookupGVar #-}
 -- | Search for a global variable with a given name
 lookupGVar :: T.Text -> Vars a -> Maybe GVar
-lookupGVar s vars =  M.lookup s $ globals vars
+lookupGVar s vars = SM.lookup s $ globals vars
 
 {-# INLINE lookupLVar #-}
 -- | Search for a local variable with a given name
 lookupLVar :: T.Text -> Vars a -> Maybe (LVar a)
-lookupLVar s vars = M.lookup s $ locals vars
+lookupLVar s vars = SM.lookup s $ locals vars
 
 {-# INLINE lookupVar #-}
 -- | First, search for local variables, and if not found, search for global variables. If nothing is found, Nothing is returned

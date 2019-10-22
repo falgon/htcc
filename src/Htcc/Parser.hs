@@ -1,5 +1,5 @@
 {-|
-Module      : Htcc.Parse
+Module      : Htcc.Parser
 Description : Parsing and constructing AST from string
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -9,12 +9,12 @@ Portability : POSIX
 
 Parsing and constructing AST from string
 -}
-module Htcc.Parse (
-    module Htcc.Parse.Var,
-    module Htcc.Parse.AST,
-    module Htcc.Parse.Core
+module Htcc.Parser (
+    module Htcc.Parser.AST,
+    module Htcc.Parser.ASTStatus,
+    module Htcc.Parser.Core
 ) where
 
-import Htcc.Parse.Var
-import Htcc.Parse.AST
-import Htcc.Parse.Core
+import Htcc.Parser.AST
+import Htcc.Parser.ASTStatus
+import Htcc.Parser.Core

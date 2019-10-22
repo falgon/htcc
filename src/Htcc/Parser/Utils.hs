@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-|
-Module      : Htcc.Parse.Utils
+Module      : Htcc.Parser.Utils
 Description : The AST data type and its utilities
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -10,13 +10,13 @@ Portability : POSIX
 
 The utilities of parsing
 -}
-module Htcc.Parse.Utils (
+module Htcc.Parser.Utils (
     expectedMessage,
     internalCE
 ) where
 
 import qualified Data.Text as T
-import qualified Htcc.Token.Core as HT
+import qualified Htcc.Tokenizer.Token as HT
 import Htcc.Utils (tshow)
 
 -- | "expected" error message

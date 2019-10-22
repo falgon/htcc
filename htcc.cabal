@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 2692074c9a5814e51fb0a37ddcd762835f4a8cfe350e517a4634429f7082ebe1
+-- hash: 58cb6d06b203d82559688fff9e950eaa21ae2cfb55f110a8081df444690d676f
 
 name:           htcc
 version:        0.0.0.1
@@ -50,17 +50,21 @@ library
       Htcc.CRules.Char
       Htcc.CRules.LexicalElements
       Htcc.CRules.Types
-      Htcc.Parse
-      Htcc.Parse.AST
-      Htcc.Parse.Core
-      Htcc.Parse.Scope
-      Htcc.Parse.Struct
-      Htcc.Parse.Typedef
-      Htcc.Parse.Utils
-      Htcc.Parse.Var
-      Htcc.Token
-      Htcc.Token.Core
-      Htcc.Token.Utils
+      Htcc.Parser
+      Htcc.Parser.AST
+      Htcc.Parser.ASTStatus
+      Htcc.Parser.Core
+      Htcc.Parser.Scope
+      Htcc.Parser.Scope.Function
+      Htcc.Parser.Scope.ManagedScope
+      Htcc.Parser.Scope.Struct
+      Htcc.Parser.Scope.Typedef
+      Htcc.Parser.Scope.Var
+      Htcc.Parser.Utils
+      Htcc.Tokenizer
+      Htcc.Tokenizer.Core
+      Htcc.Tokenizer.Token
+      Htcc.Tokenizer.Utils
       Htcc.Utils
   other-modules:
       Paths_htcc

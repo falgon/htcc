@@ -1,5 +1,5 @@
 {-|
-Module      : Htcc.Parse.Struct
+Module      : Htcc.Parser.Scope.Struct
 Description : The Data type of struct and its utilities used in parsing
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -10,12 +10,10 @@ Portability : POSIX
 The Data type of variables and its utilities used in parsing
 -}
 {-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
-module Htcc.Parse.Struct (
+module Htcc.Parser.Scope.Struct (
     StructTag (..),
     Structs,
-    addStructTag,
-    lookupStructTag,
-    fallBack
+    add
 ) where
 
 import GHC.Generics (Generic (..))
@@ -24,9 +22,10 @@ import qualified Data.Map as M
 import qualified Data.Text as T
 import Control.DeepSeq (NFData (..))
 
-import Htcc.Parse.Utils (internalCE)
+import Htcc.Parser.Scope.ManagedScope
+import Htcc.Parser.Utils (internalCE)
 import qualified Htcc.CRules.Types as CT
-import qualified Htcc.Token.Core as HT
+import qualified Htcc.Tokenizer.Token as HT
 
 -- | The data type of a struct tag
 data StructTag = StructTag -- ^ The constructor of a struct tag
@@ -37,6 +36,11 @@ data StructTag = StructTag -- ^ The constructor of a struct tag
 
 instance NFData StructTag
 
+instance ManagedScope StructTag where
+    lookup = M.lookup
+    fallBack = const
+    initial = M.empty
+
 -- | The structs data type
 type Structs = M.Map T.Text StructTag
 
@@ -44,24 +48,13 @@ type Structs = M.Map T.Text StructTag
 -- return an error message and its location as a pair. 
 -- Otherwise, add a new tag to `Structs` and return it. 
 -- If the token does not indicate an identifier, an error indicating internal compiler error is returned.
-addStructTag :: Num i => Natural -> CT.TypeKind -> HT.TokenLC i -> Structs -> Either (T.Text, HT.TokenLC i) Structs
-addStructTag cnd t cur@(_, HT.TKIdent ident) sts = case M.lookup ident sts of
+add :: Num i => Natural -> CT.TypeKind -> HT.TokenLC i -> Structs -> Either (T.Text, HT.TokenLC i) Structs
+add cnd t cur@(_, HT.TKIdent ident) sts = case M.lookup ident sts of
     Just foundedTag
         | stNestDepth foundedTag /= cnd -> stnat
         | otherwise -> Left ("redefinition of 'struct " <> ident <> "'", cur) -- ODR
     Nothing -> stnat
     where
         stnat = Right $ M.insert ident (StructTag t cnd) sts
-addStructTag _ _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
+add _ _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
 
--- | `lookupStructTag` searches for tags by the specified `T.Text` from `Structs`.
--- This is equivalent to `M.lookup`.
-{-# INLINE lookupStructTag #-}
-lookupStructTag :: T.Text -> Structs -> Maybe StructTag
-lookupStructTag = M.lookup
-
--- | Organize struct list state after scoping. 
--- This function do nothing but it is defined so that it can be written in the same way as `Htcc.Parse.Var.fallBack`.
-{-# INLINE fallBack #-}
-fallBack :: Structs -> Structs -> Structs
-fallBack = const

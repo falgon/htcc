@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-|
-Module      : Htcc.Parse.AST
+Module      : Htcc.Parser.AST
 Description : The AST data type and its utilities
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -10,7 +10,7 @@ Portability : POSIX
 
 The AST data type and its utilities
 -}
-module Htcc.Parse.AST (
+module Htcc.Parser.AST (
     -- * Abstract tree types
     ATKindFor (..),
     ATKind (..),
