@@ -30,10 +30,10 @@ import qualified Data.Text.IO as T
 import System.Exit (exitFailure)
 
 -- Imports Tokenizer and parser
-import Htcc.Utils (err, putStrLnErr, putStrErr, counter, tshow, toInts, splitAtLen)
-import qualified Htcc.Token as HT
-import Htcc.Parse (ATKind (..), ATree (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, parse, stackSize)
-import Htcc.Parse.Scope.Var (GVar (..), Literal (..))
+import Htcc.Utils (err, putStrLnErr, putStrErr, counter, tshow, toInts, splitAtLen, maybe')
+import qualified Htcc.Tokenizer as HT
+import Htcc.Parser (ATKind (..), ATree (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, parse, stackSize)
+import Htcc.Parser.Scope.Var (GVar (..), Literal (..))
 
 -- Imports about assembly
 import Htcc.Asm.Intrinsic.Register
@@ -165,9 +165,9 @@ genStmt _ (ATNode (ATNull _) _ _ _) = return ()
 genStmt c (ATNode k t lhs rhs) = flip finally (T.putStr $ I.push rax) $ genStmt c lhs *> genStmt c rhs *> T.putStr (I.pop rdi) *> T.putStr (I.pop rax) *> case k of
     ATAdd -> T.putStr $ I.add rax rdi 
     ATSub -> T.putStr $ I.sub rax rdi 
-    ATAddPtr -> flip (maybe (err "The type is not pointer")) (CR.derefMaybe t) $ \dt -> T.putStr $ I.imul rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.add rax rdi
-    ATSubPtr -> flip (maybe (err "The type is not pointer")) (CR.derefMaybe t) $ \dt -> T.putStr $ I.imul rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.sub rax rdi
-    ATPtrDis -> flip (maybe (err "The type is not pointer")) (CR.derefMaybe $ atype lhs) $ \dt -> T.putStr $ I.sub rax rdi <> I.cqo <> I.mov rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.idiv rdi
+    ATAddPtr -> maybe' (err "The type is not pointer") (CR.derefMaybe t) $ \dt -> T.putStr $ I.imul rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.add rax rdi
+    ATSubPtr -> maybe' (err "The type is not pointer") (CR.derefMaybe t) $ \dt -> T.putStr $ I.imul rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.sub rax rdi
+    ATPtrDis -> maybe' (err "The type is not pointer") (CR.derefMaybe $ atype lhs) $ \dt -> T.putStr $ I.sub rax rdi <> I.cqo <> I.mov rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.idiv rdi
     ATMul -> T.putStr $ I.imul rax rdi 
     ATDiv -> T.putStr $ I.cqo <> I.idiv rdi
     ATMod -> T.putStr $ I.cqo <> I.idiv rdi <> I.mov rax rdx

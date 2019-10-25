@@ -1,29 +1,29 @@
 {-|
-Module      : Htcc.Token.Core
-Description : Tokenizer
+Module      : Htcc.Tokenizer.Token
+Description : Types used in lexical analysis and their utility functions
 Copyright   : (c) roki, 2019
 License     : MIT
 Maintainer  : falgon53@yahoo.co.jp
 Stability   : experimental
 Portability : POSIX
 
-The tokenizer
+Types used in lexical analysis and their utility functions
 -}
 {-# LANGUAGE ScopedTypeVariables, OverloadedStrings, DeriveGeneric #-}
-module Htcc.Token.Core (
+module Htcc.Tokenizer.Token (
     -- * Token data types
     TokenLCNums (..),
     TokenLC,
     Token (..),
-    -- * Tokenizer
-    tokenize,
     -- * Utilities for accessing to token data
     length,
     isTKNum,
     isTKType,
     isTKStruct,
     isTKIdent,
-    isTKReserved
+    isTKReserved,
+    spanStrLiteral,
+    lookupKeyword
 ) where
 
 import Prelude hiding (length)
@@ -35,13 +35,12 @@ import qualified Data.ByteString as B
 import Data.Char (isDigit, chr)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import qualified Data.Text.Read as T
 import qualified Data.Map as M
-import Data.Tuple.Extra (first)
+import Data.Tuple.Extra (first, second)
 import Data.List (find)
 
 import qualified Htcc.CRules as CR
-import Htcc.Utils (spanLenT, subTextIndex, dropSnd, first3, tshow, isStrictSpace, lor)
+import Htcc.Utils (spanLen, dropFst3, tshow, maybe')
 
 -- | Token type
 data Token i = TKReserved T.Text -- ^ The reserved token
@@ -58,7 +57,7 @@ data Token i = TKReserved T.Text -- ^ The reserved token
     | TKType CR.TypeKind -- ^ Types
     | TKTypedef -- ^ The @typedef@ keyword
     | TKString B.ByteString -- ^ The string literal
-    | TKEmpty -- ^ The empty token (This is not used by `tokenize`, but when errors are detected during parsing, the token at error locations cannot be specified)
+    | TKEmpty -- ^ The empty token (This is not used by `Htcc.Tokenizer.Core.tokenize`, but when errors are detected during parsing, the token at error locations cannot be specified)
     deriving (Eq, Generic, Generic1)
 
 instance NFData i => NFData (Token i)
@@ -80,6 +79,15 @@ instance Show i => Show (Token i) where
     show (TKType x) = show x
     show (TKString s) = "\"" ++ T.unpack (T.decodeUtf8 s) ++ "\""
     show TKEmpty = ""
+
+instance Read i => Read (Token i) where
+    readsPrec _ xxs@(x:xs) 
+        | isDigit x = [first (TKNum . (read :: String -> i) . (x:)) $ dropFst3 $ spanLen isDigit xs]
+        | x == '\"' = [maybe' (error "No parse: string literal was not closed") (spanStrLiteral $ T.pack xs) $ first (TKString . T.encodeUtf8 . flip T.append "\0") . second T.unpack]
+        | not (null xs) && T.pack (take 2 xxs) `elem` CR.strOps = [(TKReserved $ T.pack $ take 2 xxs, drop 2 xxs)]
+        | x `elem` CR.charOps = [(TKReserved (T.singleton x), xs)]
+        | otherwise = [first (TKIdent . T.pack) $ dropFst3 $ spanLen CR.isValidChar xxs]
+    readsPrec _ _ = [(TKEmpty, [])]
 
 {-# INLINE length #-}
 -- | `length` returns the token length
@@ -150,7 +158,7 @@ isTKStruct :: Token i -> Bool
 isTKStruct TKStruct = True
 isTKStruct _ = False
 
--- | `escapeChar` converts escape characters in the input `T.Text` to correct escape characters
+-- `Htcc.Tokenizer.Token.escapeChar` converts escape characters in the input `T.Text` to correct escape characters
 escapeChar :: T.Text -> T.Text
 escapeChar xxs = case T.uncons xxs of
     Just (x, xs)
@@ -181,31 +189,3 @@ spanStrLiteral ts = first escapeChar <$> f ts
                 | x == '"' -> Just (T.empty, xs)
                 | otherwise -> first (T.cons x) <$> f xs
             Nothing -> Nothing
-
--- | The core function of `tokenize`
-tokenize' :: (Integral i, Read i, Show i) => TokenLCNums i -> T.Text -> Either (TokenLCNums i, T.Text) [TokenLC i]
-tokenize' n xs = f n $ first fromIntegral $ dropSnd $ spanLenT isStrictSpace xs
-    where
-        f n' (rssize, xxs) = case T.uncons xxs of
-            Just (x, xs')
-                | lor [(=='\n'), (=='\r')] x -> tokenize' (TokenLCNums (succ $ tkLn n') 1) xs' -- for new line
-                | not (T.null xs') && x == '/' && T.head xs' == '/' -> tokenize' (TokenLCNums (succ $ tkLn n') 1) $ T.dropWhile (/='\n') (T.tail xs') -- for line comment
-                | not (T.null xs') && x == '/' && T.head xs' == '*' -> let xs'' = T.tail xs'; cur = n' { tkCn = rssize + tkCn n' } in -- for block comment
-                    flip (maybe (Left (cur, "*/"))) (subTextIndex "*/" xs'') $ \ind -> let next = n' { tkCn = tkCn cur + fromIntegral ind + 2 } in tokenize' next $ T.drop (ind + 3) xs''
-                | isDigit x -> let (n'', ts, ds) = first3 fromIntegral $ spanLenT isDigit xs'; cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = tkCn cur + n'' }; num = T.cons x ts in -- for numbers
-                    flip (either (const $ Left (cur, T.singleton x))) (T.decimal num) $ \(nu, _) -> ((cur, TKNum nu):) <$> tokenize' next ds
-                | x == '\"' -> let cur = n' { tkCn = rssize + tkCn n' } in flip (maybe (Left (cur, "\""))) (spanStrLiteral xs') $ \(lit, ds) -> -- for a string literal
-                    let next = n' { tkCn = tkCn cur + 2 + fromIntegral (T.length lit) } in 
-                            ((cur, TKString (T.encodeUtf8 $ T.append lit "\0")):) <$> tokenize' next ds
-                | not (T.null xs') && T.take 2 xxs `elem` CR.strOps -> let cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = 2 + tkCn cur }; op = T.take 2 xxs in -- for operators (two character)
-                    ((cur, TKReserved op):) <$> tokenize' next (T.tail xs')
-                | x `elem` CR.charOps -> let cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = succ (tkCn cur) } in ((cur, TKReserved (T.singleton x)):) <$> tokenize' next xs' -- for operators (one character)
-                | otherwise -> let (len, tk, ds) = spanLenT CR.isValidChar xxs; cur = n' { tkCn = tkCn n' + rssize } in
-                    if len == 0 then Left (cur, T.takeWhile (not . CR.isValidChar) ds) else let next = n' { tkCn = tkCn cur + fromIntegral len } in
-                        maybe (((cur, TKIdent tk):) <$> tokenize' next ds) (\tkn -> ((cur, tkn):) <$> tokenize' next ds) $ lookupKeyword tk
-            _ -> Right []
-
--- | Tokenize the `T.Text`. If an invalid chraracter matches as C language, the part and the character are returned.
--- Otherwise, @[TokenIdx i]@ is returned.
-tokenize :: (Integral i, Read i, Show i) => T.Text -> Either (TokenLCNums i, T.Text) [TokenLC i]
-tokenize = tokenize' (TokenLCNums 1 1)

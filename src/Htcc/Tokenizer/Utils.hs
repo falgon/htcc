@@ -1,5 +1,5 @@
 {-|
-Module      : Htcc.Token.Utils
+Module      : Htcc.Tokenizer.Utils
 Description : Tokenizer
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -10,12 +10,11 @@ Portability : POSIX
 The tokenizer
 -}
 {-# LANGUAGE ScopedTypeVariables, OverloadedStrings, TupleSections, BangPatterns, LambdaCase #-}
-module Htcc.Token.Utils (
+module Htcc.Tokenizer.Utils (
     -- * Utilities of the token
     takeBrace,
     takeExps,
-    takeType,
-    arrayDeclSuffix
+    takeType
 ) where
 
 import Prelude hiding (toInteger)
@@ -25,12 +24,12 @@ import Data.Tuple.Extra (first, uncurry3)
 import Data.Maybe (fromJust)
 
 import qualified Htcc.CRules as CR
-import Htcc.Utils (dropFst4, lastInit, spanLen, dropSnd, tshow, toNatural, toInteger)
-import Htcc.Parse.Utils (internalCE)
-import qualified Htcc.Parse.Scope as PS
-import qualified Htcc.Parse.Scope.Struct as PST
-import qualified Htcc.Parse.Scope.Typedef as PSD
-import Htcc.Token.Core
+import Htcc.Utils (dropFst4, lastInit, spanLen, dropSnd3, tshow, toNatural, toInteger, maybe')
+import Htcc.Parser.Utils (internalCE)
+import qualified Htcc.Parser.Scope as PS
+import qualified Htcc.Parser.Scope.Struct as PST
+import qualified Htcc.Parser.Scope.Typedef as PSD
+import Htcc.Tokenizer.Token
 
 -- | Extract the partial token enclosed in parentheses from the token sequence. If it is invalid, `takeBrace` returns @(i, Text)@ indicating the error location.
 -- Otherwise, `takeBrace` returns a partial token enclosed in parentheses and subsequent tokens.
@@ -71,7 +70,7 @@ readFn = readFn' 0 (0 :: Int)
 -- | Get arguments from list of `Token` (e.g: Given the token of @f(f(g(a, b)), 42);@, 
 -- return expressions that are the token of "f(g(a, b))" and the token of "42".
 takeExps :: Eq i => [TokenLC i] -> Maybe [[TokenLC i]]
-takeExps ((_, TKIdent _):(_, TKReserved "("):xs) = flip (maybe Nothing) (lastInit ((==TKReserved ")") . snd) xs) $ fmap (filter (not . null)) . f
+takeExps ((_, TKIdent _):(_, TKReserved "("):xs) = maybe' Nothing (lastInit ((==TKReserved ")") . snd) xs) $ fmap (filter (not . null)) . f
     where
         f [] = Just []
         f args = maybe Nothing (\(ex, ds) -> (ex:) <$> f ds) $ readFn args
@@ -88,7 +87,7 @@ takeFields tk sc = takeFields' tk sc 0
 
 {-# INLINE takeCtorPtr #-}
 takeCtorPtr :: Integral i => [TokenLC i] -> (CR.TypeKind -> CR.TypeKind, [TokenLC i])
-takeCtorPtr = first (CR.ctorPtr . toNatural) . dropSnd . spanLen ((==TKReserved "*") . snd)
+takeCtorPtr = first (CR.ctorPtr . toNatural) . dropSnd3 . spanLen ((==TKReserved "*") . snd)
 
 {-# INLINE declaration #-}
 declaration :: (Integral i, Show i) => CR.TypeKind -> [TokenLC i] -> Either (T.Text, TokenLC i) (CR.TypeKind, Maybe (TokenLC i), [TokenLC i])
@@ -119,20 +118,20 @@ takeType (x@(_, TKType ty1):y@(_, TKType ty2):xs) scp
     | CR.isQualifier ty1 && CR.isQualifiable ty2 = takeType (x:xs) scp
     | CR.isQualifier ty2 && CR.isQualifiable ty1 = takeType (y:xs) scp
 takeType ((_, TKType ty):xs) scp = uncurry3 (,,,scp) <$> declaration ty xs
-takeType ((_, TKStruct):cur@(_, TKReserved "{"):xs) scp = flip (maybe (Left (internalCE, cur))) (takeBrace "{" "}" (cur:xs)) $
+takeType ((_, TKStruct):cur@(_, TKReserved "{"):xs) scp = maybe' (Left (internalCE, cur)) (takeBrace "{" "}" (cur:xs)) $
     either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> (>>=) (takeFields (tail $ init field) scp) $ \(mem, scp') -> uncurry3 (,,,scp') <$> declaration (CR.CTStruct mem) ds
-takeType ((_, TKStruct):cur1@(_, TKIdent _):cur2@(_, TKReserved "{"):xs) scp = flip (maybe (Left (internalCE, cur1))) (takeBrace "{" "}" (cur2:xs)) $
+takeType ((_, TKStruct):cur1@(_, TKIdent _):cur2@(_, TKReserved "{"):xs) scp = maybe' (Left (internalCE, cur1)) (takeBrace "{" "}" (cur2:xs)) $
     either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> (>>=) (takeFields (tail $ init field) scp) $ \(mem, scp') -> let ty = CR.CTStruct mem in
         (>>=) (PS.addStructTag ty cur1 scp') $ \scp'' -> uncurry3 (,,,scp'') <$> declaration ty ds
-takeType ((_, TKStruct):cur1@(_, TKIdent ident):xs) scp = flip (maybe (Left ("storage size of '" <> ident <> "' isn't known", cur1))) (PS.lookupStructTag ident scp) $ \stg ->
+takeType ((_, TKStruct):cur1@(_, TKIdent ident):xs) scp = maybe' (Left ("storage size of '" <> ident <> "' isn't known", cur1)) (PS.lookupStructTag ident scp) $ \stg ->
     uncurry3 (,,,scp) <$> declaration (PST.sttype stg) xs
-takeType (cur@(_, TKIdent ident):xs) scp = flip (maybe (Left (tshow (snd cur) <> "is not a type or also a typedef identifier", cur))) (PS.lookupTypedef ident scp) $ \stg ->
+takeType (cur@(_, TKIdent ident):xs) scp = maybe' (Left (tshow (snd cur) <> "is not a type or also a typedef identifier", cur)) (PS.lookupTypedef ident scp) $ \stg ->
     uncurry3 (,,,scp) <$> declaration (PSD.tdtype stg) xs
 takeType (x:_) _ = Left ("ISO C forbids declaration with no type", x)
 takeType _ _ = Left ("ISO C forbids declaration with no type", (TokenLCNums 0 0, TKEmpty))
 
 
--- | For a number \(n\in\mathbb{R}\), let \(k\) be the number of consecutive occurrences of
+-- For a number \(n\in\mathbb{R}\), let \(k\) be the number of consecutive occurrences of
 -- @TKReserved "[", n, TKReserved "]"@ from the beginning of the token sequence.
 -- `arrayDeclSuffix` constructs an array type of the given type @t@ based on 
 -- the token sequence if \(k\leq 1\), wraps it in `Right` and `Just` and returns it with the rest of the token sequence.
@@ -141,7 +140,7 @@ takeType _ _ = Left ("ISO C forbids declaration with no type", (TokenLCNums 0 0,
 -- an error mesage and the token at the error location are returned wrapped in
 -- `Left` and `Just`. When \(k=0\), `Nothing` is returned.
 arrayDeclSuffix :: forall i. (Integral i, Show i) => CR.TypeKind -> [TokenLC i] -> Maybe (Either (T.Text, TokenLC i) (CR.TypeKind, [TokenLC i]))
-arrayDeclSuffix t ((_, TKReserved "["):(_, TKNum n):(_, TKReserved "]"):xs) = flip (maybe (Just $ Right (CR.CTArray (toNatural n) t, xs))) (arrayDeclSuffix t xs) $
+arrayDeclSuffix t ((_, TKReserved "["):(_, TKNum n):(_, TKReserved "]"):xs) = maybe' (Just $ Right (CR.CTArray (toNatural n) t, xs)) (arrayDeclSuffix t xs) $
     Just . fmap (first $ fromJust . CR.concatCTArray (CR.CTArray (toNatural n) t))
 arrayDeclSuffix _ ((_, TKReserved "["):cur@(_, TKNum n):xs) = let mes = "expected ']' " in 
     Just $ Left $ if null xs then (mes <> "after '" <> tshow n <> "' token", cur) else (mes <> "before '" <> tshow (head xs) <> "' token", head xs)

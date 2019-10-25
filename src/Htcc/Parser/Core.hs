@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings, TupleSections, LambdaCase, BangPatterns #-}
 {-|
-Module      : Htcc.Parse.Core
+Module      : Htcc.Parser.Core
 Description : The C languge parser and AST constructor
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -10,7 +10,7 @@ Portability : POSIX
 
 The C languge parser and AST constructor
 -}
-module Htcc.Parse.Core (
+module Htcc.Parser.Core (
     -- * Recursive descent implementation functions
     program,
     globalDef,
@@ -52,13 +52,13 @@ import Control.Monad.ST (runST)
 import Control.Monad.Loops (unfoldrM)
 import Numeric.Natural
 
-import Htcc.Utils (first3, second3, tshow, toNatural, toInteger, mapEither, dropThd, dropThd4)
-import qualified Htcc.Token as HT
+import Htcc.Utils (first3, second3, tshow, toNatural, toInteger, mapEither, dropThd3, dropThd4, maybe')
+import qualified Htcc.Tokenizer as HT
 import qualified Htcc.CRules.Types as CT
-import Htcc.Parse.AST
-import qualified Htcc.Parse.Scope.Var as PV
-import Htcc.Parse.Scope
-import Htcc.Parse.Utils
+import Htcc.Parser.AST
+import qualified Htcc.Parser.Scope.Var as PV
+import Htcc.Parser.Scope
+import Htcc.Parser.Utils
 
 -- | Perform type definition from token string starting from @typedef@ token
 defTypedef :: (Integral i, Show i, Read i) => [(HT.TokenLCNums i, HT.Token i)] -> Scoped i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree a, Scoped i)
@@ -85,14 +85,14 @@ globalDef xs@((_, HT.TKTypedef):(_, HT.TKIdent _):_) _ sc = defTypedef xs sc -- 
 globalDef tks at !va = (>>=) (HT.takeType tks va) $ \case
     (_, Nothing, (_, HT.TKReserved ";"):ds', scp) -> Right (ds', ATEmpty, scp) -- e.g., @int;@ is legal in C11 (See N1570/section 6.7 Declarations)
     (funcType, Just (cur@(_, HT.TKIdent fname)), tk@((_, HT.TKReserved "("):_), !sc) -> let scp = resetLocal sc in -- for a function declaration or definition
-        flip (maybe $ Left (internalCE, cur)) (HT.takeBrace "(" ")" $ tail (cur:tk)) $
+        maybe' (Left (internalCE, cur)) (HT.takeBrace "(" ")" $ tail (cur:tk)) $
             either (Left . ("invalid function declaration/definition",)) $ \(fndec, st) -> case st of
                 ((_, HT.TKReserved ";"):ds'') -> addFunction False funcType cur scp >>= globalDef ds'' at -- for a function declaration
                 ((_, HT.TKReserved "{"):_) -> (>>=) (addFunction True funcType cur scp) $ \scp' -> checkErr fndec scp' $ \args -> runST $ do -- for a function definition
                     eri <- newSTRef Nothing
                     v <- newSTRef scp'
                     mk <- flip unfoldrM args $ \args' -> if null args' then return Nothing else let arg = head args' in do
-                        m <- uncurry addLVar (second fromJust $ dropThd $ dropThd4 $ arg) <$> readSTRef v
+                        m <- uncurry addLVar (second fromJust $ dropThd3 $ dropThd4 $ arg) <$> readSTRef v
                         flip (either ((<$) Nothing . writeSTRef eri . Just)) m $ \(vat, scp'') -> Just (vat, tail args') <$ writeSTRef v scp''
                     (>>=) (readSTRef eri) $ flip maybe (return . Left) $
                         fmap (second3 (flip (ATNode (ATDefFunc fname $ if null mk then Nothing else Just mk) CT.CTUndef) ATEmpty)) . stmt st at <$> readSTRef v
@@ -119,7 +119,7 @@ stmt (cur@(_, HT.TKIf):(_, HT.TKReserved "("):xs) atn !scp = (>>=) (expr xs atn 
 stmt (cur@(_, HT.TKWhile):(_, HT.TKReserved "("):xs) atn !scp = (>>=) (expr xs atn scp) $ \(ert, erat, erscp) -> case ert of -- for @while@
     (_, HT.TKReserved ")"):ys -> second3 (ATNode ATWhile CT.CTUndef erat) <$> stmt ys erat erscp
     ert' -> Left $ expectedMessage ")" cur ert'
-stmt xxs@(cur@(_, HT.TKFor):(_, HT.TKReserved "("):_) atn !scp = flip (maybe $ Left (internalCE, cur)) (HT.takeBrace "(" ")" (tail xxs)) $ -- for @for@
+stmt xxs@(cur@(_, HT.TKFor):(_, HT.TKReserved "("):_) atn !scp = maybe' (Left (internalCE, cur)) (HT.takeBrace "(" ")" (tail xxs)) $ -- for @for@
     either (Left . ("expected ')' token. The subject iteration statement starts here:",)) $ \(forSt, ds) ->
         let fsect = linesBy ((== HT.TKReserved ";") . snd) (tail (init forSt)); stlen = length fsect in
             if stlen < 2 || stlen > 3 then 
@@ -141,7 +141,7 @@ stmt xxs@(cur@(_, HT.TKFor):(_, HT.TKReserved "("):_) atn !scp = flip (maybe $ L
                         case ds of 
                             ((_, HT.TKReserved ";"):ys) -> return $ Right (ys, ATNode (ATFor mkk) CT.CTUndef ATEmpty ATEmpty, vsr)
                             _ -> return $ second3 (flip (flip (flip ATNode CT.CTUndef) ATEmpty) ATEmpty . ATFor . (mkk ++) . (:[]) . ATForStmt) <$> stmt ds anr vsr
-stmt xxs@(cur@(_, HT.TKReserved "{"):_) _ !scp = flip (maybe $ Left (internalCE, cur)) (HT.takeBrace "{" "}" xxs) $ -- for compound statement
+stmt xxs@(cur@(_, HT.TKReserved "{"):_) _ !scp = maybe' (Left (internalCE, cur)) (HT.takeBrace "{" "}" xxs) $ -- for compound statement
     either (Left . ("the compound statement is not closed",)) $ \(scope, ds) -> runST $ do
         eri <- newSTRef Nothing
         v <- newSTRef $ succNest scp
@@ -211,7 +211,7 @@ inners _ _ [] atn scp = Right ([], atn, scp)
 inners f cs xs atn scp = either Left (uncurry3 (inners' f cs)) $ f xs atn scp
     where
         inners' _ _ [] at ars = Right ([], at, ars)
-        inners' g ds ys at ars = flip (maybe (Right (ys, at, ars))) (find (\(c, _) -> case snd (head ys) of HT.TKReserved cc -> cc == c; _ -> False) ds) $ \(_, k) -> 
+        inners' g ds ys at ars = maybe' (Right (ys, at, ars)) (find (\(c, _) -> case snd (head ys) of HT.TKReserved cc -> cc == c; _ -> False) ds) $ \(_, k) -> 
             either Left (uncurry3 id . first3 (inners' f cs) . second3 (ATNode k CT.CTInt at)) $ g (tail ys) at ars
 
 -- | `bitwiseOr` indicates \(\eqref{eq:tenth}\) among the comments of `inners`.
@@ -268,9 +268,9 @@ add :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> Scop
 add xs atn scp = (>>=) (term xs atn scp) $ uncurry3 add'
     where
         add' (cur@(_, HT.TKReserved "+"):ys) era ars = (>>=) (term ys era ars) $ \zz -> 
-            flip (maybe (Left ("invalid operands", cur))) (addKind era $ snd3 zz) $ \nat -> uncurry3 id $ first3 add' $ second3 (const nat) zz
+            maybe' (Left ("invalid operands", cur)) (addKind era $ snd3 zz) $ \nat -> uncurry3 id $ first3 add' $ second3 (const nat) zz
         add' (cur@(_, HT.TKReserved "-"):ys) era ars = (>>=) (term ys era ars) $ \zz -> 
-            flip (maybe (Left ("invalid operands", cur))) (subKind era $ snd3 zz) $ \nat -> uncurry3 id $ first3 add' $ second3 (const nat) zz
+            maybe' (Left ("invalid operands", cur)) (subKind era $ snd3 zz) $ \nat -> uncurry3 id $ first3 add' $ second3 (const nat) zz
         add' ert erat ars = Right (ert, erat, ars)
 
 -- | `term` indicates \(\eqref{eq:second}\) amont the comments of `inners`.
@@ -285,23 +285,23 @@ unary ((_, HT.TKReserved "!"):xs) at scp = second3 (flip (ATNode ATNot CT.CTInt)
 unary ((_, HT.TKReserved "~"):xs) at scp = second3 (flip (ATNode ATBitNot CT.CTInt) ATEmpty) <$> unary xs at scp
 unary ((_, HT.TKReserved "&"):xs) at scp = second3 (\x -> (ATNode ATAddr $ CT.CTPtr $ if CT.isCTArray (atype x) then fromJust $ CT.derefMaybe (atype x) else atype x) x ATEmpty) <$> unary xs at scp
 unary (cur@(_, HT.TKReserved "*"):xs) at !scp = (>>=) (unary xs at scp) $ \(ert, erat, erscp) -> 
-    flip (maybe $ Left ("invalid pointer dereference", cur)) (CT.derefMaybe $ atype erat) $ \t -> Right (ert, ATNode ATDeref t erat ATEmpty, erscp)
+    maybe' (Left ("invalid pointer dereference", cur)) (CT.derefMaybe $ atype erat) $ \t -> Right (ert, ATNode ATDeref t erat ATEmpty, erscp)
 unary xs at scp = either Left (uncurry3 f) $ factor xs at scp
     where
         f (cur@(_, HT.TKReserved "["):xs') erat !erscp = (>>=) (expr xs' erat erscp) $ \(ert', erat', erscp') -> case ert' of
-            (_, HT.TKReserved "]"):xs'' -> flip (maybe $ Left ("invalid operands", cur)) (addKind erat erat') $ \erat'' ->
-                flip (maybe $ Left ("subscripted value is neither array nor pointer nor vector", if null xs then (HT.TokenLCNums 0 0, HT.TKEmpty) else head xs)) 
+            (_, HT.TKReserved "]"):xs'' -> maybe' (Left ("invalid operands", cur)) (addKind erat erat') $ \erat'' ->
+                maybe' (Left ("subscripted value is neither array nor pointer nor vector", if null xs then (HT.TokenLCNums 0 0, HT.TKEmpty) else head xs)) 
                     (CT.derefMaybe $ atype erat'') $ \t -> f xs'' (ATNode ATDeref t erat'' ATEmpty) erscp'
             _ -> Left $ if null ert' then ("expected expression after '[' token", cur) else ("expected expression before '" <> tshow (snd (head ert')) <> "' token", head ert')
         f (cur@(_, HT.TKReserved "."):xs') erat !erscp 
             | CT.isCTStruct (atype erat) = if null xs' then Left ("expected identifier at end of input", cur) else case head xs' of 
-                (_, HT.TKIdent ident) -> flip (maybe (Left ("no such member", cur))) (CT.lookupMember ident (atype erat)) $ \mem ->
+                (_, HT.TKIdent ident) -> maybe' (Left ("no such member", cur)) (CT.lookupMember ident (atype erat)) $ \mem ->
                     f (tail xs') (ATNode (ATMemberAcc mem) (CT.smType mem) erat ATEmpty) erscp
                 _ -> Left ("expected identifier after '.' token", cur)
             | otherwise = Left ("request for a member in something not a structure or union", cur)
         f (cur@(_, HT.TKReserved "->"):xs') erat !erscp
             | maybe False CT.isCTStruct $ CT.derefMaybe (atype erat) = if null xs' then Left ("expected identifier at end of input", cur) else case head xs' of
-                (_, HT.TKIdent ident) -> flip (maybe (Left ("no such member", cur))) (CT.lookupMember ident (fromJust $ CT.derefMaybe $ atype erat)) $ \mem ->
+                (_, HT.TKIdent ident) -> maybe' (Left ("no such member", cur)) (CT.lookupMember ident (fromJust $ CT.derefMaybe $ atype erat)) $ \mem ->
                     f (tail xs') (ATNode (ATMemberAcc mem) (CT.smType mem) (ATNode ATDeref (CT.smType mem) erat ATEmpty) ATEmpty) erscp
                 _ -> Left ("expected identifier after '->' token", cur)
             | otherwise = Left ("invalid type argument of '->'" <> if CT.isCTUndef (atype erat) then "" else " (have '" <> tshow (atype erat) <> "')", cur)
@@ -310,7 +310,7 @@ unary xs at scp = either Left (uncurry3 f) $ factor xs at scp
 -- | `factor` indicates \(\eqref{eq:third}\) amount the comments of `inners`.
 factor :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> Scoped i -> Either (T.Text, HT.TokenLC i) ([HT.TokenLC i], ATree i, Scoped i)
 factor [] atn !scp = Right ([], atn, scp)
-factor ((_, HT.TKReserved "("):xs@((_, HT.TKReserved "{"):_)) _ !scp = flip (maybe $ Left (internalCE, head xs)) (HT.takeBrace "{" "}" xs) $ -- for statement expression (GNU extension: <https://gcc.gnu.org/onlinedocs/gcc/Statement-Exprs.html>)
+factor ((_, HT.TKReserved "("):xs@((_, HT.TKReserved "{"):_)) _ !scp = maybe' (Left (internalCE, head xs)) (HT.takeBrace "{" "}" xs) $ -- for statement expression (GNU extension: <https://gcc.gnu.org/onlinedocs/gcc/Statement-Exprs.html>)
     either (Left . ("the statement expression is not closed",)) $ \(scope, ds) -> case ds of
         (_, HT.TKReserved ")"):ds' -> runST $ do
             eri <- newSTRef Nothing
@@ -331,11 +331,11 @@ factor (cur@(_, HT.TKReserved "("):xs) atn !scp = (>>=) (expr xs atn scp) $ \(er
     (_, HT.TKReserved ")"):ys -> Right (ys, erat, erscp)
     ert' -> Left $ expectedMessage ")" cur ert'
 factor ((_, HT.TKNum n):xs) _ !scp = Right (xs, ATNode (ATNum n) CT.CTLong ATEmpty ATEmpty, scp) -- for numbers
-factor (cur@(_, HT.TKIdent v):(_, HT.TKReserved "("):(_, HT.TKReserved ")"):xs) _ !scp = flip (maybe (Left ("The function is not declared", cur))) (lookupFunction v scp) $ 
+factor (cur@(_, HT.TKIdent v):(_, HT.TKReserved "("):(_, HT.TKReserved ")"):xs) _ !scp = maybe' (Left ("The function is not declared", cur)) (lookupFunction v scp) $ 
     const $ Right (xs, ATNode (ATCallFunc v Nothing) CT.CTInt ATEmpty ATEmpty, scp) -- for no arguments function call
-factor (cur1@(_, HT.TKIdent v):cur2@(_, HT.TKReserved "("):xs) _ scp = flip (maybe $ Left (internalCE, cur1)) (HT.takeBrace "(" ")" (cur2:xs)) $ -- for some argumets function call
-    either (Left . ("invalid function call",)) $ \(fsec, ds) -> flip (maybe (Left ("The function is not declared", cur1))) (lookupFunction v scp) $ 
-        const $ flip (maybe $ Left ("invalid function call", cur1)) (HT.takeExps (cur1:fsec)) $ \exps -> runST $ do
+factor (cur1@(_, HT.TKIdent v):cur2@(_, HT.TKReserved "("):xs) _ scp = maybe' (Left (internalCE, cur1)) (HT.takeBrace "(" ")" (cur2:xs)) $ -- for some argumets function call
+    either (Left . ("invalid function call",)) $ \(fsec, ds) -> maybe' (Left ("The function is not declared", cur1)) (lookupFunction v scp) $ 
+        const $ maybe' (Left ("invalid function call", cur1)) (HT.takeExps (cur1:fsec)) $ \exps -> runST $ do
             mk <- newSTRef scp
             expl <- forM exps $ \etk -> readSTRef mk >>= either (return . Left) (\(_, erat, ervar) -> Right erat <$ writeSTRef mk ervar) . expr etk ATEmpty
             if any isLeft expl then return $ Left $ head $ lefts expl else do
@@ -345,7 +345,7 @@ factor ((_, HT.TKSizeof):xs) atn !scp = second3 (\x -> ATNode (ATNum (fromIntegr
 factor (cur@(_, HT.TKAlignof):xs) atn !scp = (>>=) (unary xs atn scp) $ \(ert, erat, erscp) -> 
     if CT.isCTUndef (atype erat) then Left ("_Alignof must be an expression or type", cur) else Right (ert, ATNode (ATNum (fromIntegral $ CT.alignof $ atype erat)) CT.CTInt ATEmpty ATEmpty, erscp) -- Note: Using alignof for expressions is a non-standard feature of C11
 factor (cur@(_, HT.TKString slit):xs) _ !scp = uncurry (xs,,) <$> addLiteral (CT.CTArray (fromIntegral $ B.length slit) CT.CTChar) cur scp -- for literals
-factor (cur@(_, HT.TKIdent ident):xs) _ !scp = flip (maybe (Left ("undefined variable", cur))) (lookupVar ident scp) $ \case -- if the variable is not declared, it returns error wrapped with `Left`
+factor (cur@(_, HT.TKIdent ident):xs) _ !scp = maybe' (Left ("undefined variable", cur)) (lookupVar ident scp) $ \case -- if the variable is not declared, it returns error wrapped with `Left`
     Right (PV.LVar t o _) -> Right (xs, ATNode (ATLVar t o) t ATEmpty ATEmpty, scp) -- for declared local variable
     Left (PV.GVar t) -> Right (xs, ATNode (ATGVar t ident) t ATEmpty ATEmpty, scp) -- for declared global variable
 factor ert _ _ = Left (if null ert then "unexpected token in program" else "unexpected token '" <> tshow (snd (head ert)) <> "' in program", if null ert then (HT.TokenLCNums 0 0, HT.TKEmpty) else head ert)

@@ -9,7 +9,7 @@ Portability : POSIX
 
 The types of C language
 -}
-{-# LANGUAGE DeriveGeneric, BangPatterns #-}
+{-# LANGUAGE DeriveGeneric, BangPatterns, TupleSections #-}
 module Htcc.CRules.Types (
     -- * TypeKind data type
     StructMember (..),
@@ -42,20 +42,21 @@ import Prelude hiding (toInteger)
 import GHC.Generics (Generic)
 import Control.DeepSeq (NFData (..))
 import Numeric.Natural
-import Data.Tuple.Extra (second)
-import Data.List (foldl', maximumBy)
+import Data.Tuple.Extra (first, second)
+import Data.List (foldl', maximumBy, find)
 import Data.Bits ((.&.), complement, Bits (..))
 import qualified Data.Map as M
 import qualified Data.Text as T
 
-import Htcc.Utils (lor, toNatural, toInteger)
+import Htcc.CRules.Char
+import Htcc.Utils (toNatural, toInteger, dropFst3, spanLen, maybe', dropSnd3)
 
 -- | The type and offset value of a data member.
 data StructMember = StructMember -- ^ `StructMember` constructor
     {
         smType :: TypeKind, -- ^ The type of a data member
         smOffset :: Natural -- ^ The offset of a data member
-    } deriving (Eq, Show, Generic)
+    } deriving (Eq, Show, Read, Generic)
 
 instance NFData StructMember
 
@@ -80,10 +81,19 @@ instance Show TypeKind where
     show (CTStruct m) = "struct { " ++ concatMap (\(v, inf) -> show (smType inf) ++ " " ++ T.unpack v ++ "; ") (M.toList m) ++ "}"
     show CTUndef = "undefined"
 
+instance Read TypeKind where
+    readsPrec _ xs = let (ys, ds) = dropFst3 $ spanLen isValidChar xs in
+        maybe' (error "no parse pattern by TypeKind") (find ((ys==) . show) fundamental) $ \x ->
+            [first (flip id x . ctorPtr . toNatural) $ dropSnd3 $ spanLen (=='*') ds]
+
 instance Ord TypeKind where
     compare x = compare (sizeof x) . sizeof
 
 instance NFData TypeKind
+
+{-# INLINE fundamental #-}
+fundamental :: [TypeKind]
+fundamental = [CTChar, CTShort, CTInt, CTLong]
 
 -- | `lookupMember` search the specified member by its name from `CTStruct`.
 lookupMember :: T.Text -> TypeKind -> Maybe StructMember
@@ -208,16 +218,16 @@ isArray _ = False
 -- | `isFundamental` returns `True` only if the type is fundamental type (See also: § 3.9.1), otherwise returns `False`.
 {-# INLINE isFundamental #-}
 isFundamental :: TypeKind -> Bool
-isFundamental = not . lor [isPtr, isArray]
+isFundamental = flip elem fundamental
 
--- | `isTypeQualifier` return `True` only if the type can be qualifier, otherwise returns `False`
+-- | `isQualifier` return `True` only if the type can be qualifier, otherwise returns `False`
 {-# INLINE isQualifier #-}
 isQualifier :: TypeKind -> Bool
 isQualifier CTShort = True
 isQualifier CTLong = True
 isQualifier _ = False
 
--- | `isTypeQualifier` return `True` only if the type can be qualified, otherwise returns `False`
+-- | `isQualifier` return `True` only if the type can be qualified, otherwise returns `False`
 {-# INLINE isQualifiable #-}
 isQualifiable :: TypeKind -> Bool
 isQualifiable CTInt = True
