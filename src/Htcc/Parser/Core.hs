@@ -299,7 +299,9 @@ unary ((_, HT.TKReserved "!"):xs) at scp = second3 (flip (ATNode ATNot CT.CTInt)
 unary ((_, HT.TKReserved "~"):xs) at scp = second3 (flip (ATNode ATBitNot CT.CTInt) ATEmpty) <$> unary xs at scp
 unary ((_, HT.TKReserved "&"):xs) at scp = second3 (\x -> (ATNode ATAddr $ CT.CTPtr $ if CT.isCTArray (atype x) then fromJust $ CT.derefMaybe (atype x) else atype x) x ATEmpty) <$> unary xs at scp
 unary (cur@(_, HT.TKReserved "*"):xs) at !scp = (>>=) (unary xs at scp) $ \(ert, erat, erscp) -> 
-    maybe' (Left ("invalid pointer dereference", cur)) (CT.derefMaybe $ atype erat) $ \t -> Right (ert, ATNode ATDeref t erat ATEmpty, erscp)
+    maybe' (Left ("invalid pointer dereference", cur)) (CT.derefMaybe $ atype erat) $ \case
+        CT.CTVoid -> Left ("void value not ignored as it ought to be", cur)
+        t -> Right (ert, ATNode ATDeref t erat ATEmpty, erscp)
 unary xs at scp = either Left (uncurry3 f) $ factor xs at scp
     where
         f (cur@(_, HT.TKReserved "["):xs') erat !erscp = (>>=) (expr xs' erat erscp) $ \(ert', erat', erscp') -> case ert' of

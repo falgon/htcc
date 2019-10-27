@@ -237,6 +237,8 @@ int main()
     assert(42, ({ int ar[3]; int (*p)[3] = ar; p[0][0] = 42; ar[0]; }), "({ int ar[3]; int (*p)[3] = ar; p[0][0] = 42; ar[0]; })");
     assert(6, ({ int ar[3]; ptr2ar(&ar); sum(ar, sizeof ar / sizeof *ar); }), "({ int ar[3]; ptr2ar(&ar); sum(ar, sizeof ar / sizeof **ar); }");
     assert(42, ({ struct { int (*p)[3]; } x; int ar[3]; x.p = &ar; (*x.p)[0] = 42; ar[0]; }), "({ struct { int (*p)[3]; } x; int ar[3]; x.p = &ar; (*x.p)[0]     = 42; ar[0]; })");
+    { void* x; }
+
     printf(">> All tests passed <<\n");
 
     return 0;

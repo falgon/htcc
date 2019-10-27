@@ -65,6 +65,7 @@ data TypeKind = CTInt -- ^ The type @int@ as C language
     | CTChar -- ^ The type @char@ as C language
     | CTShort -- ^ The type @short@ as C language
     | CTLong -- ^ The type @long@ as C language
+    | CTVoid -- ^ The type @void@ as C language
     | CTPtr TypeKind -- ^ The pointer type of `TypeKind`
     | CTArray Natural TypeKind -- ^ The array type
     | CTStruct (M.Map T.Text StructMember) -- ^ The struct, has its members and their names.
@@ -76,6 +77,7 @@ instance Show TypeKind where
     show CTChar = "char"
     show CTShort = "short"
     show CTLong = "long"
+    show CTVoid = "void"
     show (CTPtr x) = show x ++ "*"
     show (CTArray v t) = show t ++ "[" ++ show v ++ "]"
     show (CTStruct m) = "struct { " ++ concatMap (\(v, inf) -> show (smType inf) ++ " " ++ T.unpack v ++ "; ") (M.toList m) ++ "}"
@@ -124,6 +126,7 @@ sizeof CTInt = 4
 sizeof CTChar = 1
 sizeof CTShort = 2
 sizeof CTLong = 8
+sizeof CTVoid = 1 -- Non standard
 sizeof (CTPtr _) = 8
 sizeof (CTArray v t) = v * sizeof t
 sizeof t@(CTStruct m) 
@@ -138,6 +141,7 @@ alignof CTInt = 4
 alignof CTChar = 1
 alignof CTShort = 2
 alignof CTLong = 8
+alignof CTVoid = 1 -- Non standard
 alignof (CTPtr _) = 8
 alignof (CTArray _ t) = alignof $ removeAllExtents t
 alignof (CTStruct m)
