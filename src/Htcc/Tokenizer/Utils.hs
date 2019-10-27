@@ -122,6 +122,7 @@ takeType :: (Integral i, Show i, Read i) => [TokenLC i] -> ConstructionData i ->
 takeType (x@(_, TKType ty1):y@(_, TKType ty2):xs) scp
     | CR.isQualifier ty1 && CR.isQualifiable ty2 = takeType (x:xs) scp
     | CR.isQualifier ty2 && CR.isQualifiable ty1 = takeType (y:xs) scp
+    | ty1 == CR.CTLong && ty2 == CR.CTLong = takeType (x:xs) scp
 takeType ((_, TKType ty):xs) scp = uncurry3 (,,,scp) <$> declaration ty xs
 takeType ((_, TKStruct):cur@(_, TKReserved "{"):xs) scp = maybe' (Left (internalCE, cur)) (takeBrace "{" "}" (cur:xs)) $
     either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> (>>=) (takeFields (tail $ init field) scp) $ \(mem, scp') -> uncurry3 (,,,scp') <$> declaration (CR.CTStruct mem) ds

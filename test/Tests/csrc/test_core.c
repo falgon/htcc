@@ -241,6 +241,11 @@ int main()
     assert(0, ({ _Bool x = 0; x; }), "({ _Bool x = 0; x; })");
     assert(1, ({ _Bool x = 1; x; }), "({ _Bool x = 1; x; })");
     assert(1, ({ _Bool x = 2; x; }), "({ _Bool x = 2; x; })");
+    assert(8, ({ long long x; sizeof x; }), "({ long long x; sizeof x; })");
+    assert(8, ({ long long int x; sizeof x; }), "({ long long int x; sizeof x; })");
+    assert(8, ({ long int long x; sizeof x; }), "({ long int long x; sizeof x; })");
+    assert(8, ({ int long long x; sizeof x; }), "({ int long long x; sizeof x; })");
+
 
     printf(">> All tests passed <<\n");
 
