@@ -65,6 +65,7 @@ data TypeKind = CTInt -- ^ The type @int@ as C language
     | CTChar -- ^ The type @char@ as C language
     | CTShort -- ^ The type @short@ as C language
     | CTLong -- ^ The type @long@ as C language
+    | CTBool -- ^ The type @_Bool@ as C language
     | CTVoid -- ^ The type @void@ as C language
     | CTPtr TypeKind -- ^ The pointer type of `TypeKind`
     | CTArray Natural TypeKind -- ^ The array type
@@ -77,6 +78,7 @@ instance Show TypeKind where
     show CTChar = "char"
     show CTShort = "short"
     show CTLong = "long"
+    show CTBool = "_Bool"
     show CTVoid = "void"
     show (CTPtr x) = show x ++ "*"
     show (CTArray v t) = show t ++ "[" ++ show v ++ "]"
@@ -126,6 +128,7 @@ sizeof CTInt = 4
 sizeof CTChar = 1
 sizeof CTShort = 2
 sizeof CTLong = 8
+sizeof CTBool = 1
 sizeof CTVoid = 1 -- Non standard
 sizeof (CTPtr _) = 8
 sizeof (CTArray v t) = v * sizeof t
@@ -141,6 +144,7 @@ alignof CTInt = 4
 alignof CTChar = 1
 alignof CTShort = 2
 alignof CTLong = 8
+alignof CTBool = 1
 alignof CTVoid = 1 -- Non standard
 alignof (CTPtr _) = 8
 alignof (CTArray _ t) = alignof $ removeAllExtents t

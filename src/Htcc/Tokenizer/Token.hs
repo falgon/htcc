@@ -111,7 +111,21 @@ length TKEmpty = 0
 -- | Lookup keyword from `T.Text`. If the specified `T.Text` is not keyword as C language, `lookupKeyword` returns `Nothing`.
 lookupKeyword :: Show i => T.Text -> Maybe (Token i)
 lookupKeyword s = find ((==) s . tshow) [
-    TKReturn, TKWhile, TKIf, TKElse, TKFor, TKStruct, TKSizeof, TKAlignof, TKTypedef, TKType CR.CTInt, TKType CR.CTChar, TKType CR.CTShort, TKType CR.CTLong, TKType CR.CTVoid
+    TKReturn, 
+    TKWhile,
+    TKIf, 
+    TKElse,
+    TKFor,
+    TKStruct,
+    TKSizeof,
+    TKAlignof, 
+    TKTypedef, 
+    TKType CR.CTInt,
+    TKType CR.CTChar, 
+    TKType CR.CTShort,
+    TKType CR.CTLong,
+    TKType CR.CTVoid, 
+    TKType CR.CTBool
     ]
 
 -- | `TokenLCNums` is data structure for storing the line number and character number of each token
