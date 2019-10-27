@@ -1,5 +1,5 @@
 {-|
-Module      : Htcc.Parser.Scope.Struct
+Module      : Htcc.Parser.AST.Scope.Struct
 Description : The Data type of struct and its utilities used in parsing
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -10,7 +10,7 @@ Portability : POSIX
 The Data type of variables and its utilities used in parsing
 -}
 {-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
-module Htcc.Parser.Scope.Struct (
+module Htcc.Parser.AST.Scope.Struct (
     StructTag (..),
     Structs,
     add
@@ -22,7 +22,7 @@ import qualified Data.Map as M
 import qualified Data.Text as T
 import Control.DeepSeq (NFData (..))
 
-import Htcc.Parser.Scope.ManagedScope
+import Htcc.Parser.AST.Scope.ManagedScope
 import Htcc.Parser.Utils (internalCE)
 import qualified Htcc.CRules.Types as CT
 import qualified Htcc.Tokenizer.Token as HT
@@ -48,7 +48,7 @@ type Structs = M.Map T.Text StructTag
 -- return an error message and its location as a pair. 
 -- Otherwise, add a new tag to `Structs` and return it. 
 -- If the token does not indicate an identifier, an error indicating internal compiler error is returned.
-add :: Num i => Natural -> CT.TypeKind -> HT.TokenLC i -> Structs -> Either (T.Text, HT.TokenLC i) Structs
+add :: Num i => Natural -> CT.TypeKind -> HT.TokenLC i -> Structs -> Either (ASTError i) Structs
 add cnd t cur@(_, HT.TKIdent ident) sts = case M.lookup ident sts of
     Just foundedTag
         | stNestDepth foundedTag /= cnd -> stnat

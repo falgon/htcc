@@ -9,7 +9,7 @@ Portability : POSIX
 
 The types of C language
 -}
-{-# LANGUAGE DeriveGeneric, BangPatterns, TupleSections #-}
+{-# LANGUAGE DeriveGeneric, BangPatterns #-}
 module Htcc.CRules.Types (
     -- * TypeKind data type
     StructMember (..),

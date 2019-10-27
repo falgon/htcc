@@ -1,5 +1,5 @@
 {-|
-Module      : Htcc.Parser.Scope.Function
+Module      : Htcc.Parser.AST.Scope.Function
 Description : The Data type of typedef and its utilities used in parsing
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -10,7 +10,7 @@ Portability : POSIX
 The Data type of variables and its utilities used in parsing
 -}
 {-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
-module Htcc.Parser.Scope.Function (
+module Htcc.Parser.AST.Scope.Function (
     Function (..),
     Functions,
     add
@@ -21,7 +21,7 @@ import qualified Data.Map as M
 import qualified Data.Text as T
 import Control.DeepSeq (NFData (..))
 
-import Htcc.Parser.Scope.ManagedScope
+import Htcc.Parser.AST.Scope.ManagedScope
 import Htcc.Parser.Utils (internalCE)
 import qualified Htcc.CRules.Types as CT
 import qualified Htcc.Tokenizer.Token as HT
@@ -48,7 +48,7 @@ type Functions = M.Map T.Text Function
 -- return an error message and its location as a pair. 
 -- Otherwise, add a new tag to `Functions` and return it. 
 -- If the token does not indicate an identifier, an error indicating internal compiler error is returned.
-add :: Num i => Bool -> CT.TypeKind -> HT.TokenLC i -> Functions -> Either (T.Text, HT.TokenLC i) Functions
+add :: Num i => Bool -> CT.TypeKind -> HT.TokenLC i -> Functions -> Either (ASTError i) Functions
 add df t cur@(_, HT.TKIdent ident) sts = case M.lookup ident sts of
     Just foundFunc
         | not (fnDefined foundFunc) -> Right $ M.insert ident (Function t True) sts 

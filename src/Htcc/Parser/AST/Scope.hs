@@ -1,5 +1,5 @@
 {-|
-Module      : Htcc.Parser.Scope
+Module      : Htcc.Parser.AST.Scope
 Description : The Data type of scope and its utilities used in parsing
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -10,7 +10,7 @@ Portability : POSIX
 The Data type of variables and its utilities used in parsing
 -}
 {-# LANGUAGE DeriveGeneric #-}
-module Htcc.Parser.Scope (
+module Htcc.Parser.AST.Scope (
     Scoped (..),
     addLVar,
     addGVar,
@@ -37,13 +37,13 @@ import Data.Tuple.Extra (second)
 import qualified Data.Text as T
 import Control.DeepSeq (NFData (..))
 
-import Htcc.Parser.AST (ATree (..))
 import qualified Htcc.CRules.Types as CT
-import qualified Htcc.Parser.Scope.ManagedScope as SM
-import qualified Htcc.Parser.Scope.Var as PV
-import qualified Htcc.Parser.Scope.Struct as PS
-import qualified Htcc.Parser.Scope.Typedef as PT
-import qualified Htcc.Parser.Scope.Function as PF
+import Htcc.Parser.AST.Core (ATree (..))
+import qualified Htcc.Parser.AST.Scope.ManagedScope as SM
+import qualified Htcc.Parser.AST.Scope.Var as PV
+import qualified Htcc.Parser.AST.Scope.Struct as PS
+import qualified Htcc.Parser.AST.Scope.Typedef as PT
+import qualified Htcc.Parser.AST.Scope.Function as PF
 import qualified Htcc.Tokenizer.Token as HT
 
 -- | The data type of a struct tag
@@ -59,26 +59,31 @@ data Scoped i = Scoped -- ^ The constructor of a struct tag
 instance NFData i => NFData (Scoped i)
 
 {-# INLINE addVar #-}
-addVar :: (Integral i, Bits i) => (CT.TypeKind -> HT.TokenLC i -> PV.Vars i -> Either (T.Text, HT.TokenLC i) (ATree i, PV.Vars i)) -> CT.TypeKind -> HT.TokenLC i -> Scoped i -> Either (T.Text, HT.TokenLC i) (ATree i, Scoped i)
+addVar :: (Integral i, Bits i) => (CT.TypeKind -> HT.TokenLC i -> PV.Vars i -> Either (T.Text, HT.TokenLC i) (ATree i, PV.Vars i)) -> CT.TypeKind -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
 addVar f ty tkn sc = second (\x -> sc { vars = x }) <$> f ty tkn (vars sc)
 
 -- | `addLVar` has a scoped type argument and is the same function as `PV.addLVar` internally.
-addLVar :: (Integral i, Bits i) => CT.TypeKind -> HT.TokenLC i -> Scoped i -> Either (T.Text, HT.TokenLC i) (ATree i, Scoped i)
+{-# INLINE addLVar #-}
+addLVar :: (Integral i, Bits i) => CT.TypeKind -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
 addLVar ty tkn scp = addVar (PV.addLVar $ curNestDepth scp) ty tkn scp
 
 -- | `addGVar` has a scoped type argument and is the same function as `PV.addGVar` internally.
-addGVar :: (Integral i, Bits i) => CT.TypeKind -> HT.TokenLC i -> Scoped i -> Either (T.Text, HT.TokenLC i) (ATree i, Scoped i)
+{-# INLINE addGVar #-}
+addGVar :: (Integral i, Bits i) => CT.TypeKind -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
 addGVar = addVar PV.addGVar
 
 -- | `addLiteral` has a scoped type argument and is the same function as `PV.addLiteral` internally.
-addLiteral :: (Integral i, Bits i) => CT.TypeKind -> HT.TokenLC i -> Scoped i -> Either (T.Text, HT.TokenLC i) (ATree i, Scoped i)
+{-# INLINE addLiteral #-}
+addLiteral :: (Integral i, Bits i) => CT.TypeKind -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
 addLiteral = addVar PV.addLiteral
 
 -- | `succNest` has a scoped type argument and is the same function as `PV.succNest` internally.
+{-# INLINE succNest #-}
 succNest :: Scoped i -> Scoped i
 succNest sc = sc { curNestDepth = succ $ curNestDepth sc } 
 
 -- | `fallBack` has a scoped type argument and is the same function as `PV.fallBack` internally.
+{-# INLINE fallBack #-}
 fallBack :: Scoped i -> Scoped i -> Scoped i
 fallBack pre post = pre 
     { 
@@ -93,39 +98,48 @@ lookupVar' :: (T.Text -> PV.Vars a -> b) -> T.Text -> Scoped a -> b
 lookupVar' f s sc = f s $ vars sc
 
 -- | `lookupLVar` has a scoped type argument and is the same function as `PV.lookupLVar` internally.
+{-# INLINE lookupLVar #-}
 lookupLVar :: T.Text -> Scoped i -> Maybe (PV.LVar i)
 lookupLVar = lookupVar' PV.lookupLVar
 
 -- | `lookupGVar` has a scoped type argument and is the same function as `PV.lookupGVar` internally.
+{-# INLINE lookupGVar #-}
 lookupGVar :: T.Text -> Scoped i -> Maybe PV.GVar
 lookupGVar = lookupVar' PV.lookupGVar
 
 -- | `lookupVar` has a scoped type argument and is the same function as `PV.lookupVar` internally.
+{-# INLINE lookupVar #-}
 lookupVar :: T.Text -> Scoped i -> Maybe (Either PV.GVar (PV.LVar i))
 lookupVar = lookupVar' PV.lookupVar
 
 -- | `lookupStructTag` has a scoped type argument and is the same function as `PS.lookupStructTag` internally.
+{-# INLINE lookupStructTag #-}
 lookupStructTag :: T.Text -> Scoped i -> Maybe PS.StructTag
 lookupStructTag t sc = SM.lookup t $ structs sc
 
 -- | `lookupTypedef` has a scoped type argument and is the same function as `PT.lookupTypedef` internally.
+{-# INLINE lookupTypedef #-}
 lookupTypedef :: T.Text -> Scoped i -> Maybe PT.Typedef
 lookupTypedef t sc = SM.lookup t $ typedefs sc
 
 -- | `lookupFunction` has a scoped type argument and is the same function as `PF.lookupFunction` internally.
+{-# INLINE lookupFunction #-}
 lookupFunction :: T.Text -> Scoped i -> Maybe PF.Function
 lookupFunction t sc = SM.lookup t $ functions sc
 
 -- | `addStructTag` has a scoped type argument and is the same function as `PS.addStructTag` internally.
-addStructTag :: Num i => CT.TypeKind -> HT.TokenLC i -> Scoped i -> Either (T.Text, HT.TokenLC i) (Scoped i)
+{-# INLINE addStructTag #-}
+addStructTag :: Num i => CT.TypeKind -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (Scoped i)
 addStructTag ty tkn sc = (\x -> sc { structs = x }) <$> PS.add (curNestDepth sc) ty tkn (structs sc)
 
 -- | `addTypedef` has a scoped type argument and is the same function as `PT.addTypedef` internally.
-addTypedef :: Num i => CT.TypeKind -> HT.TokenLC i -> Scoped i -> Either (T.Text, HT.TokenLC i) (Scoped i)
+{-# INLINE addTypedef #-}
+addTypedef :: Num i => CT.TypeKind -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (Scoped i)
 addTypedef ty tkn sc = (\x -> sc { typedefs = x }) <$> PT.add (curNestDepth sc) ty tkn (typedefs sc)
 
 -- | `addFunction` has a scoped type argument and is the same function as `PT.addTypedef` internally.
-addFunction :: Num i => Bool -> CT.TypeKind -> HT.TokenLC i -> Scoped i -> Either (T.Text, HT.TokenLC i) (Scoped i)
+{-# INLINE addFunction #-}
+addFunction :: Num i => Bool -> CT.TypeKind -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (Scoped i)
 addFunction fd ty tkn sc = (\x -> sc { functions = x }) <$> PF.add fd ty tkn (functions sc)
 
 {-# INLINE initScope #-}

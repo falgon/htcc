@@ -63,7 +63,7 @@ exec = runTestsEx [
     (StatementEqual.test "int main() { int a = 0; while (1) { if (a < 10) a = a + 1; else return a; } }", 10),
     (StatementEqual.test "int main() { int a = 0; for (;;) { a = 42; return a; } return a; }", 42),
     (StatementEqual.test "int main() { int a = 0; for (;;) { if (a < 10) a = a + 1; else return a; } }", 10),
-    (LinkFuncRet.test "int main() { int a = test_func1(); test_func1(); return a; }" ["test_func1"], 0),
+    (LinkFuncRet.test "int test_func1(); int main() { int a = test_func1(); test_func1(); return a; }" ["test_func1"], 0),
     (StatementEqual.test "int main() { int a = 1; int b = 1; return a & b; }", 1),
     (StatementEqual.test "int main() { int a = 42; int b = 53; a = a ^ b; b = b ^ a; a = a ^ b; if (a == 53) if (b == 42) return 1; return 0; }", 1),
     (StatementEqual.test "int main() { return 1 | 0; }", 1),
@@ -79,7 +79,7 @@ exec = runTestsEx [
     (StatementEqual.test "int main() { int a = 2 << 4; return (a & (a - 1)) == 0; }", 1), -- Determining if an integer is a power of 2
     (StatementEqual.test "int main() { 1; {2;} return 3; }", 3),
     -- (LinkFuncRet.test "int main() { return sum7(1, 1, 1, 1, 1, 1, 1); }" ["test_func3"], 7),
-    (LinkFuncRet.test "int main() { return test_func2(40); }" ["test_func2"], 0),
+    (LinkFuncRet.test "int test_func2(); int main() { return test_func2(40); }" ["test_func2"], 0),
     -- (LinkFuncRet.test "int main() { return test_func2(sum7(1, 2, 3, 4, 5, 6, 7)); }" ["test_func2", "test_func3"], 0),
     -- (LinkFuncRet.test "int main() { return sum16(1,1,1,1,1,1,11,10,9,8,7,6,5,4,3,2); }" ["test_func3"], 11),
     (StatementEqual.test "int f() { return 42; } int main() { return f(); }", 42),
@@ -176,7 +176,7 @@ exec = runTestsEx [
     (StatementEqual.test "int main() { int a = 42; { a = 32; } return a; }", 32),
     (StatementEqual.test "int main() { int* ar[3]; int x; ar[0] = &x; x = 42; ar[0][0]; }", 42)
     ] >> runTestsEx [
-    (LinkFuncStdOut.test "int main() { return test_func1(); }" ["test_func1"], Right "test/Tests/csrc/test_func1.c::test_func1(): [OK]"),
-    (LinkFuncStdOut.test "int main() { return test_func2(40); }" ["test_func2"], Right "test/Tests/csrc/test_func2.c::test_func2(40) outputs: \"2 3 5 7 11 13 17 19 23 29 31 37 \": [OK]") --,
+    (LinkFuncStdOut.test "int test_func1(); int main() { return test_func1(); }" ["test_func1"], Right "test/Tests/csrc/test_func1.c::test_func1(): [OK]"),
+    (LinkFuncStdOut.test "int test_func2(); int main() { return test_func2(40); }" ["test_func2"], Right "test/Tests/csrc/test_func2.c::test_func2(40) outputs: \"2 3 5 7 11 13 17 19 23 29 31 37 \": [OK]") --,
     -- (LinkFuncStdOut.test "int main() { return test_func2(sum7(1, 2, 3, 4, 5, 6, 7)); }" ["test_func2", "test_func3"], Right "test/Tests/csrc/test_func2.c::test_func2(28) outputs: \"2 3 5 7 11 13 17 19 23 \": [OK]")
     ]

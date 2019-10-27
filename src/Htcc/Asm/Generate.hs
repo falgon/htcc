@@ -13,11 +13,11 @@ Assembly code generator
 module Htcc.Asm.Generate (
     -- * Generator
     genStmt,
-    casm,
-    GenStatus (..)
+    casm
 ) where
 
 -- Imports universal modules
+import Data.Foldable (toList)
 import Control.Exception (finally)
 import Control.Monad (zipWithM_, unless)
 import qualified Data.ByteString as B
@@ -27,13 +27,15 @@ import Data.Either (either)
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import qualified Data.Sequence as S
 import System.Exit (exitFailure)
 
 -- Imports Tokenizer and parser
 import Htcc.Utils (err, putStrLnErr, putStrErr, counter, tshow, toInts, splitAtLen, maybe')
 import qualified Htcc.Tokenizer as HT
 import Htcc.Parser (ATKind (..), ATree (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, parse, stackSize)
-import Htcc.Parser.Scope.Var (GVar (..), Literal (..))
+import Htcc.Parser.AST.Scope.Var (GVar (..), Literal (..))
+import Htcc.Parser.AST.Scope.ManagedScope (ASTError)
 
 -- Imports about assembly
 import Htcc.Asm.Intrinsic.Register
@@ -54,7 +56,7 @@ prologue :: forall i. Integral i => i -> IO ()
 prologue = T.putStr . T.append (I.push rbp <> I.mov rbp rsp) . I.sub rsp . (fromIntegral :: i -> Integer)
 
 {-# INLINE epilogue #-}
-epilogue :: (Maybe T.Text) -> IO () 
+epilogue :: Maybe T.Text -> IO () 
 epilogue Nothing = err "internal compiler error: The function name cannot be tracked."
 epilogue (Just fn) = T.putStr $ I.defLLbl (".return." <> fn <> ".") (0 :: Int) <> I.leave <> I.ret
 
@@ -185,10 +187,20 @@ genStmt c (ATNode k t lhs rhs) = flip finally (T.putStr $ I.push rax) $ genStmt 
     _ -> err "Failed to assemble."
 genStmt _ _ = return ()
 
+{-# INLINE repSpace #-}
 repSpace :: Integral i => i -> IO ()
 repSpace = flip (>>) (putStrErr (T.singleton '^')) . mapM_ (putStrErr . T.pack . flip replicate ' ' . pred) . toInts
 
-tokenizeErrExit :: (Integral i, Show i) => T.Text -> (HT.TokenLCNums i, T.Text) -> IO ()
+data MessageType = ErrorMessage | WarningMessage deriving (Eq, Ord, Enum)
+
+instance Show MessageType where
+    show ErrorMessage = "error"
+    show WarningMessage = "warning"
+
+-- | Input C code
+type InputCCode = T.Text
+
+tokenizeErrExit :: (Integral i, Show i) => InputCCode -> (HT.TokenLCNums i, T.Text) -> IO ()
 tokenizeErrExit xs e = let errMesPre = T.replicate 4 " " <> tshow (HT.tkLn (fst e)) in do
     putStrLnErr (tshow (fst e) <> ": error: stray '" <> snd e <> "' in program")
     putStrErr $ errMesPre <> " | "
@@ -197,14 +209,19 @@ tokenizeErrExit xs e = let errMesPre = T.replicate 4 " " <> tshow (HT.tkLn (fst 
     repSpace (HT.tkCn $ fst e) >> putStrLnErr ""
     exitFailure
 
-parseErrExit :: (Integral i, Show i) => T.Text -> (T.Text, HT.TokenLC i) -> IO ()
-parseErrExit xs (s, (i, etk)) = let errMesPre = T.replicate 4 " " <> tshow (HT.tkLn i) in do
-    putStrLnErr (tshow i <> ": error: " <> s)
+parsedMessage :: (Integral i, Show i) => MessageType -> InputCCode -> ASTError i -> IO ()
+parsedMessage mest xs (s, (i, etk)) = let errMesPre = T.replicate 4 " " <> tshow (HT.tkLn i) in do
+    putStrLnErr (tshow i <> ": " <> tshow mest <> ": " <> s)
     putStrErr $ errMesPre <> " | "
     putStrLnErr (T.lines xs !! pred (fromIntegral $ HT.tkLn i))
     putStrErr $ T.replicate (T.length errMesPre) " " <> " | "
     repSpace (HT.tkCn i) >> putStrLnErr (T.replicate (pred $ HT.length etk) "~")
-    exitFailure
+
+parsedErrExit :: (Integral i, Show i) => InputCCode -> ASTError i -> IO ()
+parsedErrExit = (.) (>> exitFailure) . parsedMessage ErrorMessage
+
+parsedWarn :: (Integral i, Show i) => InputCCode -> S.Seq (ASTError i) -> IO ()
+parsedWarn xs warns = mapM_ (parsedMessage WarningMessage xs) (toList warns)
 
 dataSection :: M.Map T.Text GVar -> [Literal] -> IO ()
 dataSection gvars lits = do
@@ -219,9 +236,8 @@ textSection tk = do
     T.putStrLn ".text" >> mapM_ (genStmt $ GenStatus inc fname) tk
 
 -- | Generate full assembly code from C language program
-casm :: T.Text -> IO ()
-casm xs = flip (either (tokenizeErrExit xs)) (f xs) $ \x -> 
-    flip (either $ parseErrExit xs) (parse x) $ \(tk, gvars, lits) -> T.putStr I.declIS >> dataSection gvars lits >> textSection tk -- >> T.putStr epilogue
+casm :: Bool -> InputCCode -> IO ()
+casm supWarns xs = flip (either (tokenizeErrExit xs)) (f xs) $ \x -> 
+    flip (either $ parsedErrExit xs) (parse x) $ \(warns, tk, gvars, lits) -> unless supWarns (parsedWarn xs warns) >> T.putStr I.declIS >> dataSection gvars lits >> textSection tk 
         where
-            f = HT.tokenize :: T.Text -> Either (HT.TokenLCNums Int, T.Text) [HT.TokenLC Int]
-
+            f = HT.tokenize :: T.Text -> Either (HT.TokenLCNums Integer, T.Text) [HT.TokenLC Integer]
