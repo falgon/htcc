@@ -154,6 +154,9 @@ class Show a => BinaryInstruction a where
     -- | The @movsxd@ instruction.
     movsxd :: IsOperand b => a -> Ptr b -> T.Text
     movsxd = intelSyntaxBinaryInst "movsxd"
+    -- | The @movabs@ instruction.
+    movabs :: BinaryInstruction b => a -> b -> T.Text
+    movabs = intelSyntaxBinaryInst "movabs"
     -- | The @cmp@ instruction.
     cmp :: BinaryInstruction b => a -> b -> T.Text
     cmp = intelSyntaxBinaryInst "cmp"

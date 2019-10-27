@@ -11,14 +11,14 @@ int g;
 int gr[3];
 int (*gpa)[3];
 
-int assert(int expected, int actual, char* code)
+int assert(long expected, long actual, char* code)
 {
     if (expected == actual) {
-        printf("[OK]: test #%d: \'%s\' => %d\n", test_num, code, actual);
+        printf("[OK]: test #%ld: \'%s\' => %d\n", test_num, code, actual);
         test_num = test_num + 1;
         return 0;
     } else {
-        printf("[Failed]: test #%d: \'%s\' => %d, but expected %d\n", test_num, code, actual, expected);
+        printf("[Failed]: test #%ld: \'%s\' => %d, but expected %d\n", test_num, code, actual, expected);
         exit(1);
     }
 }
