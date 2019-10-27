@@ -14,7 +14,8 @@ module Htcc.Tokenizer.Utils (
     -- * Utilities of the token
     takeBrace,
     takeExps,
-    takeType
+    takeType,
+    emptyToken
 ) where
 
 import Prelude hiding (toInteger)
@@ -25,10 +26,11 @@ import Data.Maybe (fromJust)
 
 import qualified Htcc.CRules as CR
 import Htcc.Utils (dropFst4, lastInit, spanLen, dropSnd3, tshow, toNatural, toInteger, maybe')
+import qualified Htcc.Parser.AST.Scope.Struct as PST
+import qualified Htcc.Parser.AST.Scope.Typedef as PSD
+import Htcc.Parser.AST.Scope.ManagedScope (ASTError)
+import Htcc.Parser.ConstructionData
 import Htcc.Parser.Utils (internalCE)
-import qualified Htcc.Parser.Scope as PS
-import qualified Htcc.Parser.Scope.Struct as PST
-import qualified Htcc.Parser.Scope.Typedef as PSD
 import Htcc.Tokenizer.Token
 
 -- | Extract the partial token enclosed in parentheses from the token sequence. If it is invalid, `takeBrace` returns @(i, Text)@ indicating the error location.
@@ -76,44 +78,44 @@ takeExps ((_, TKIdent _):(_, TKReserved "("):xs) = maybe' Nothing (lastInit ((==
         f args = maybe Nothing (\(ex, ds) -> (ex:) <$> f ds) $ readFn args
 takeExps _ = Nothing
 
-takeFields :: (Integral i, Show i, Read i) => [TokenLC i] -> PS.Scoped i -> Either (T.Text, TokenLC i) (M.Map T.Text CR.StructMember, PS.Scoped i)
+takeFields :: (Integral i, Show i, Read i) => [TokenLC i] -> ConstructionData i -> Either (ASTError i) (M.Map T.Text CR.StructMember, ConstructionData i)
 takeFields tk sc = takeFields' tk sc 0
     where
         takeFields' [] scp' _ = Right (M.empty, scp')
         takeFields' fs scp' !n = (>>=) (takeType fs scp') $ \case
             (ty, Just (_, TKIdent ident), (_, TKReserved ";"):ds, scp'') -> let ofs = toNatural $ CR.alignas (toInteger n) $ toInteger $ CR.alignof ty in
                 first (M.insert ident (CR.StructMember ty ofs)) <$> takeFields' ds scp'' (ofs + fromIntegral (CR.sizeof ty))
-            _ -> Left ("expected member name or ';' after declaration specifiers", if null fs then (TokenLCNums 0 0, TKEmpty) else head fs)
+            _ -> Left ("expected member name or ';' after declaration specifiers", if null fs then emptyToken else head fs)
 
 {-# INLINE takeCtorPtr #-}
 takeCtorPtr :: Integral i => [TokenLC i] -> (CR.TypeKind -> CR.TypeKind, [TokenLC i])
 takeCtorPtr = first (CR.ctorPtr . toNatural) . dropSnd3 . spanLen ((==TKReserved "*") . snd)
 
 {-# INLINE declaration #-}
-declaration :: (Integral i, Show i) => CR.TypeKind -> [TokenLC i] -> Either (T.Text, TokenLC i) (CR.TypeKind, Maybe (TokenLC i), [TokenLC i])
+declaration :: (Integral i, Show i) => CR.TypeKind -> [TokenLC i] -> Either (ASTError i) (CR.TypeKind, Maybe (TokenLC i), [TokenLC i])
 declaration ty xs = case takeCtorPtr xs of 
-    (fn, xs'@((_, (TKReserved "(")):_)) -> dropFst4 <$> declaration' id (fn ty) xs'
-    (fn, ident@(_, (TKIdent _)):ds') -> case arrayDeclSuffix (fn ty) ds' of
+    (fn, xs'@((_, TKReserved "("):_)) -> dropFst4 <$> declaration' id (fn ty) xs'
+    (fn, ident@(_, TKIdent _):ds') -> case arrayDeclSuffix (fn ty) ds' of
         Nothing -> Right (fn ty, Just ident, ds')
         Just rs -> rs >>= Right . uncurry (,Just ident,)
     (fn, es) -> Right (fn ty, Nothing, es)
     where
         declaration' fn ty' xs' = case takeCtorPtr xs' of
-            (ptrf, cur@(_, (TKReserved "(")):ds') -> (>>=) (declaration' (fn . ptrf) ty' ds') $ \case
-                (ptrf', ty'', ident, (_, (TKReserved ")")):ds'') -> case arrayDeclSuffix ty'' ds'' of
+            (ptrf, cur@(_, TKReserved "("):ds') -> (>>=) (declaration' (fn . ptrf) ty' ds') $ \case
+                (ptrf', ty'', ident, (_, TKReserved ")"):ds'') -> case arrayDeclSuffix ty'' ds'' of
                     Nothing -> Right (id, ptrf' ty', ident, ds'')
                     Just rs -> uncurry (id,,ident,) . first ptrf' <$> rs
                 _ -> Left ("expected ')' token", cur)
-            (ptrf, ident@(_, (TKIdent _)):ds') -> case arrayDeclSuffix ty' ds' of
+            (ptrf, ident@(_, TKIdent _):ds') -> case arrayDeclSuffix ty' ds' of
                 Nothing -> Right (ptrf, ty', Just ident, ds')
                 Just rs -> uncurry (ptrf,,Just ident,) <$> rs 
-            _ -> Left ("expected some identifier", (TokenLCNums 0 0, TKEmpty))
+            _ -> Left ("expected some identifier", emptyToken)
 
 
 -- | `takeType` returns a pair of type (including pointer and array type) and the remaining tokens wrapped in 
 -- `Just` only if the token starts with `TKType`, `TKStruct` or identifier that is declarated by @typedef@.
 -- Otherwise `Nothing` is returned.
-takeType :: (Integral i, Show i, Read i) => [TokenLC i] -> PS.Scoped i -> Either (T.Text, TokenLC i) (CR.TypeKind, Maybe (TokenLC i), [TokenLC i], PS.Scoped i)
+takeType :: (Integral i, Show i, Read i) => [TokenLC i] -> ConstructionData i -> Either (ASTError i) (CR.TypeKind, Maybe (TokenLC i), [TokenLC i], ConstructionData i)
 takeType (x@(_, TKType ty1):y@(_, TKType ty2):xs) scp
     | CR.isQualifier ty1 && CR.isQualifiable ty2 = takeType (x:xs) scp
     | CR.isQualifier ty2 && CR.isQualifiable ty1 = takeType (y:xs) scp
@@ -122,13 +124,13 @@ takeType ((_, TKStruct):cur@(_, TKReserved "{"):xs) scp = maybe' (Left (internal
     either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> (>>=) (takeFields (tail $ init field) scp) $ \(mem, scp') -> uncurry3 (,,,scp') <$> declaration (CR.CTStruct mem) ds
 takeType ((_, TKStruct):cur1@(_, TKIdent _):cur2@(_, TKReserved "{"):xs) scp = maybe' (Left (internalCE, cur1)) (takeBrace "{" "}" (cur2:xs)) $
     either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> (>>=) (takeFields (tail $ init field) scp) $ \(mem, scp') -> let ty = CR.CTStruct mem in
-        (>>=) (PS.addStructTag ty cur1 scp') $ \scp'' -> uncurry3 (,,,scp'') <$> declaration ty ds
-takeType ((_, TKStruct):cur1@(_, TKIdent ident):xs) scp = maybe' (Left ("storage size of '" <> ident <> "' isn't known", cur1)) (PS.lookupStructTag ident scp) $ \stg ->
+        (>>=) (addStructTag ty cur1 scp') $ \scp'' -> uncurry3 (,,,scp'') <$> declaration ty ds
+takeType ((_, TKStruct):cur1@(_, TKIdent ident):xs) scp = maybe' (Left ("storage size of '" <> ident <> "' isn't known", cur1)) (lookupStructTag ident scp) $ \stg ->
     uncurry3 (,,,scp) <$> declaration (PST.sttype stg) xs
-takeType (cur@(_, TKIdent ident):xs) scp = maybe' (Left (tshow (snd cur) <> "is not a type or also a typedef identifier", cur)) (PS.lookupTypedef ident scp) $ \stg ->
+takeType (cur@(_, TKIdent ident):xs) scp = maybe' (Left (tshow (snd cur) <> "is not a type or also a typedef identifier", cur)) (lookupTypedef ident scp) $ \stg ->
     uncurry3 (,,,scp) <$> declaration (PSD.tdtype stg) xs
 takeType (x:_) _ = Left ("ISO C forbids declaration with no type", x)
-takeType _ _ = Left ("ISO C forbids declaration with no type", (TokenLCNums 0 0, TKEmpty))
+takeType _ _ = Left ("ISO C forbids declaration with no type", emptyToken)
 
 
 -- For a number \(n\in\mathbb{R}\), let \(k\) be the number of consecutive occurrences of
@@ -139,10 +141,16 @@ takeType _ _ = Left ("ISO C forbids declaration with no type", (TokenLCNums 0 0,
 -- but the subsequent token sequence is invalid as an array declaration in C programming language,
 -- an error mesage and the token at the error location are returned wrapped in
 -- `Left` and `Just`. When \(k=0\), `Nothing` is returned.
-arrayDeclSuffix :: forall i. (Integral i, Show i) => CR.TypeKind -> [TokenLC i] -> Maybe (Either (T.Text, TokenLC i) (CR.TypeKind, [TokenLC i]))
+arrayDeclSuffix :: forall i. (Integral i, Show i) => CR.TypeKind -> [TokenLC i] -> Maybe (Either (ASTError i) (CR.TypeKind, [TokenLC i]))
 arrayDeclSuffix t ((_, TKReserved "["):(_, TKNum n):(_, TKReserved "]"):xs) = maybe' (Just $ Right (CR.CTArray (toNatural n) t, xs)) (arrayDeclSuffix t xs) $
     Just . fmap (first $ fromJust . CR.concatCTArray (CR.CTArray (toNatural n) t))
 arrayDeclSuffix _ ((_, TKReserved "["):cur@(_, TKNum n):xs) = let mes = "expected ']' " in 
     Just $ Left $ if null xs then (mes <> "after '" <> tshow n <> "' token", cur) else (mes <> "before '" <> tshow (head xs) <> "' token", head xs)
 arrayDeclSuffix _ (cur@(_, TKReserved "["):_) = Just $ Left ("expected storage size after '[' token", cur)
 arrayDeclSuffix _ _ = Nothing
+
+{-# INLINE emptyToken #-}
+-- | An empty token that is used when there are no remaining tokens when an error occurs,
+-- or when it cannot be referenced
+emptyToken :: Num i => TokenLC i
+emptyToken = (TokenLCNums 0 0, TKEmpty)

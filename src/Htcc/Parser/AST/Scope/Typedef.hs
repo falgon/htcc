@@ -1,5 +1,5 @@
 {-|
-Module      : Htcc.Parser.Scope.Typedef
+Module      : Htcc.Parser.AST.Scope.Typedef
 Description : The Data type of typedef and its utilities used in parsing
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -10,7 +10,7 @@ Portability : POSIX
 The Data type of variables and its utilities used in parsing
 -}
 {-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
-module Htcc.Parser.Scope.Typedef (
+module Htcc.Parser.AST.Scope.Typedef (
     Typedef (..),
     Typedefs,
     add
@@ -22,7 +22,7 @@ import qualified Data.Map as M
 import qualified Data.Text as T
 import Control.DeepSeq (NFData (..))
 
-import Htcc.Parser.Scope.ManagedScope
+import Htcc.Parser.AST.Scope.ManagedScope
 import Htcc.Parser.Utils (internalCE)
 import qualified Htcc.CRules.Types as CT
 import qualified Htcc.Tokenizer.Token as HT
@@ -48,7 +48,7 @@ type Typedefs = M.Map T.Text Typedef
 -- return an error message and its location as a pair. 
 -- Otherwise, add a new tag to `Typedefs` and return it. 
 -- If the token does not indicate an identifier, an error indicating internal compiler error is returned.
-add :: Num i => Natural -> CT.TypeKind -> HT.TokenLC i -> Typedefs -> Either (T.Text, HT.TokenLC i) Typedefs
+add :: Num i => Natural -> CT.TypeKind -> HT.TokenLC i -> Typedefs -> Either (ASTError i) Typedefs
 add cnd t cur@(_, HT.TKIdent ident) sts = case M.lookup ident sts of
     Just foundedTag
         | tdNestDepth foundedTag /= cnd -> tdnat

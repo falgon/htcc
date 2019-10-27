@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 58cb6d06b203d82559688fff9e950eaa21ae2cfb55f110a8081df444690d676f
+-- hash: 9c1cbd6541c5778b6a744623b77cfb699db55cc39810d567ae25ff1e9f848789
 
 name:           htcc
 version:        0.0.0.1
@@ -52,14 +52,15 @@ library
       Htcc.CRules.Types
       Htcc.Parser
       Htcc.Parser.AST
-      Htcc.Parser.ASTStatus
+      Htcc.Parser.AST.Core
+      Htcc.Parser.AST.Scope
+      Htcc.Parser.AST.Scope.Function
+      Htcc.Parser.AST.Scope.ManagedScope
+      Htcc.Parser.AST.Scope.Struct
+      Htcc.Parser.AST.Scope.Typedef
+      Htcc.Parser.AST.Scope.Var
+      Htcc.Parser.ConstructionData
       Htcc.Parser.Core
-      Htcc.Parser.Scope
-      Htcc.Parser.Scope.Function
-      Htcc.Parser.Scope.ManagedScope
-      Htcc.Parser.Scope.Struct
-      Htcc.Parser.Scope.Typedef
-      Htcc.Parser.Scope.Var
       Htcc.Parser.Utils
       Htcc.Tokenizer
       Htcc.Tokenizer.Core
@@ -93,6 +94,7 @@ executable htcc
     , bytestring
     , containers
     , deepseq
+    , directory
     , extra
     , htcc
     , monad-loops

@@ -9,14 +9,11 @@ Portability : POSIX
 
 The tokenizer
 -}
-{-# LANGUAGE ScopedTypeVariables, OverloadedStrings, DeriveGeneric #-}
+{-# LANGUAGE ScopedTypeVariables, OverloadedStrings #-}
 module Htcc.Tokenizer.Core (
     -- * Tokenizer
     tokenize
 ) where
-
-
-import Prelude hiding (length)
 
 import Data.Char (isDigit)
 import qualified Data.Text as T

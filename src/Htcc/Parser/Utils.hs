@@ -17,10 +17,11 @@ module Htcc.Parser.Utils (
 
 import qualified Data.Text as T
 import qualified Htcc.Tokenizer.Token as HT
+import Htcc.Parser.AST.Scope.ManagedScope (ASTError)
 import Htcc.Utils (tshow)
 
 -- | "expected" error message
-expectedMessage :: Show i => T.Text -> HT.TokenLC i -> [HT.TokenLC i] -> (T.Text, HT.TokenLC i)
+expectedMessage :: Show i => T.Text -> HT.TokenLC i -> [HT.TokenLC i] -> ASTError i
 expectedMessage x t xs
     | length xs > 1 = ("expected '" <> x <> "' token before '" <> tshow (snd (xs !! 1)) <> "'", head xs)
     | otherwise = ("expected '" <> x <> "' token", if null xs then t else head xs)

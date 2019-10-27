@@ -52,6 +52,7 @@ executables:
     dependencies:
     - htcc
     - extra
+    - directory
 
 tests:
   htcc-test:
