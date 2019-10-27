@@ -15,6 +15,7 @@ module Htcc.Tokenizer.Utils (
     takeBrace,
     takeExps,
     takeType,
+    takeTypeName,
     emptyToken
 ) where
 
@@ -22,10 +23,10 @@ import Prelude hiding (toInteger)
 import qualified Data.Text as T
 import qualified Data.Map as M
 import Data.Tuple.Extra (first, uncurry3)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, fromMaybe)
 
 import qualified Htcc.CRules as CR
-import Htcc.Utils (dropFst4, lastInit, spanLen, dropSnd3, tshow, toNatural, toInteger, maybe')
+import Htcc.Utils (dropFst4, dropFst3, dropThd3, lastInit, spanLen, dropSnd3, tshow, toNatural, toInteger, maybe')
 import qualified Htcc.Parser.AST.Scope.Struct as PST
 import qualified Htcc.Parser.AST.Scope.Typedef as PSD
 import Htcc.Parser.AST.Scope.ManagedScope (ASTError)
@@ -91,6 +92,24 @@ takeFields tk sc = takeFields' tk sc 0
 takeCtorPtr :: Integral i => [TokenLC i] -> (CR.TypeKind -> CR.TypeKind, [TokenLC i])
 takeCtorPtr = first (CR.ctorPtr . toNatural) . dropSnd3 . spanLen ((==TKReserved "*") . snd)
 
+-- | It is obtained by parsing the front part of the type from the token string. 
+-- e.g. @int (*)[4]@ applied to this function yields @int@
+takePreType :: (Integral i, Show i, Read i) => [TokenLC i] -> ConstructionData i -> Either (ASTError i) (CR.TypeKind, [TokenLC i], ConstructionData i)
+takePreType (x@(_, TKType ty1):y@(_, TKType ty2):xs) scp
+    | CR.isQualifier ty1 && CR.isQualifiable ty2 = takePreType (x:xs) scp
+    | CR.isQualifier ty2 && CR.isQualifiable ty1 = takePreType (y:xs) scp
+    | ty1 == CR.CTLong && ty2 == CR.CTLong = takePreType (x:xs) scp
+takePreType ((_, TKType ty):xs) scp = Right (ty, xs, scp)
+takePreType ((_, TKStruct):cur@(_, TKReserved "{"):xs) scp = maybe' (Left (internalCE, cur)) (takeBrace "{" "}" (cur:xs)) $
+    either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> uncurry (,ds,) . first CR.CTStruct <$> takeFields (tail $ init field) scp
+takePreType ((_, TKStruct):cur1@(_, TKIdent _):cur2@(_, TKReserved "{"):xs) scp = maybe' (Left (internalCE, cur1)) (takeBrace "{" "}" (cur2:xs)) $
+    either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> (>>=) (takeFields (tail $ init field) scp) $ \(mem, scp') -> let ty = CR.CTStruct mem in
+        addStructTag ty cur1 scp' >>= Right . (ty, ds,) 
+takePreType ((_, TKStruct):cur1@(_, TKIdent ident):xs) scp = maybe' (Left ("storage size of '" <> ident <> "' isn't known", cur1)) (lookupStructTag ident scp) $ Right . (, xs, scp) . PST.sttype
+takePreType (cur@(_, TKIdent ident):xs) scp = maybe' (Left (tshow (snd cur) <> " is not a type or also a typedef identifier", cur)) (lookupTypedef ident scp) $ Right . (, xs, scp) . PSD.tdtype
+takePreType (x:_) _ = Left ("ISO C forbids declaration with no type", x)
+takePreType _ _ = Left ("ISO C forbids declaration with no type", emptyToken)
+
 {-# INLINE declaration #-}
 declaration :: (Integral i, Show i) => CR.TypeKind -> [TokenLC i] -> Either (ASTError i) (CR.TypeKind, Maybe (TokenLC i), [TokenLC i])
 declaration ty xs = case takeCtorPtr xs of 
@@ -108,7 +127,7 @@ declaration ty xs = case takeCtorPtr xs of
                 (ptrf', ty'', ident, (_, TKReserved ")"):ds'') -> case arrayDeclSuffix ty'' ds'' of
                     Nothing -> Right (id, ptrf' ty', ident, ds'')
                     Just rs -> uncurry (id,,ident,) . first ptrf' <$> rs
-                _ -> Left ("expected ')' token", cur)
+                _ -> Left ("expected ')' token for this '('", cur)
             (ptrf, ident@(_, TKIdent _):ds') -> case arrayDeclSuffix ty' ds' of
                 Nothing -> Right (ptrf, ty', Just ident, ds')
                 Just rs -> uncurry (ptrf,,Just ident,) <$> rs 
@@ -119,23 +138,23 @@ declaration ty xs = case takeCtorPtr xs of
 -- `Just` only if the token starts with `TKType`, `TKStruct` or identifier that is declarated by @typedef@.
 -- Otherwise `Nothing` is returned.
 takeType :: (Integral i, Show i, Read i) => [TokenLC i] -> ConstructionData i -> Either (ASTError i) (CR.TypeKind, Maybe (TokenLC i), [TokenLC i], ConstructionData i)
-takeType (x@(_, TKType ty1):y@(_, TKType ty2):xs) scp
-    | CR.isQualifier ty1 && CR.isQualifiable ty2 = takeType (x:xs) scp
-    | CR.isQualifier ty2 && CR.isQualifiable ty1 = takeType (y:xs) scp
-    | ty1 == CR.CTLong && ty2 == CR.CTLong = takeType (x:xs) scp
-takeType ((_, TKType ty):xs) scp = uncurry3 (,,,scp) <$> declaration ty xs
-takeType ((_, TKStruct):cur@(_, TKReserved "{"):xs) scp = maybe' (Left (internalCE, cur)) (takeBrace "{" "}" (cur:xs)) $
-    either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> (>>=) (takeFields (tail $ init field) scp) $ \(mem, scp') -> uncurry3 (,,,scp') <$> declaration (CR.CTStruct mem) ds
-takeType ((_, TKStruct):cur1@(_, TKIdent _):cur2@(_, TKReserved "{"):xs) scp = maybe' (Left (internalCE, cur1)) (takeBrace "{" "}" (cur2:xs)) $
-    either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> (>>=) (takeFields (tail $ init field) scp) $ \(mem, scp') -> let ty = CR.CTStruct mem in
-        (>>=) (addStructTag ty cur1 scp') $ \scp'' -> uncurry3 (,,,scp'') <$> declaration ty ds
-takeType ((_, TKStruct):cur1@(_, TKIdent ident):xs) scp = maybe' (Left ("storage size of '" <> ident <> "' isn't known", cur1)) (lookupStructTag ident scp) $ \stg ->
-    uncurry3 (,,,scp) <$> declaration (PST.sttype stg) xs
-takeType (cur@(_, TKIdent ident):xs) scp = maybe' (Left (tshow (snd cur) <> "is not a type or also a typedef identifier", cur)) (lookupTypedef ident scp) $ \stg ->
-    uncurry3 (,,,scp) <$> declaration (PSD.tdtype stg) xs
-takeType (x:_) _ = Left ("ISO C forbids declaration with no type", x)
-takeType _ _ = Left ("ISO C forbids declaration with no type", emptyToken)
+takeType tk scp = takePreType tk scp >>= (\(x, y, z) -> uncurry3 (,,, z) <$> declaration x y)
 
+-- `absDeclaration` parses abstract type declarations
+absDeclaration :: (Integral i, Show i) => CR.TypeKind -> [TokenLC i] -> Either (ASTError i) (CR.TypeKind, [TokenLC i])
+absDeclaration ty xs = case takeCtorPtr xs of
+    (fn, xs'@((_, TKReserved "("):_)) -> dropFst3 <$> absDeclarator' id (fn ty) xs'
+    (fn, ds) -> fromMaybe (Right (fn ty, ds)) $ arrayDeclSuffix (fn ty) ds
+    where
+        absDeclarator' fn ty' xs' = case takeCtorPtr xs' of
+            (ptrf, cur@(_, TKReserved "("):ds') -> (>>=) (absDeclarator' (fn . ptrf) ty' ds') $ \case
+                (ptrf', ty'', (_, TKReserved ")"):ds'') -> maybe (Right (id, ptrf' ty'', ds'')) (fmap (uncurry (id,,) . first ptrf')) $ arrayDeclSuffix ty'' ds''
+                _ -> Left ("expected ')' token for this '('", cur)
+            (p, ds) -> Right (p, ty', ds)
+
+-- | `takeTypeName` is used to parse type names used for sizeof etc. Version without `takeType`s identifier.
+takeTypeName :: (Integral i, Show i, Read i) => [TokenLC i] -> ConstructionData i -> Either (ASTError i) (CR.TypeKind, [TokenLC i])
+takeTypeName tk scp = takePreType tk scp >>= (uncurry absDeclaration . dropThd3)
 
 -- For a number \(n\in\mathbb{R}\), let \(k\) be the number of consecutive occurrences of
 -- @TKReserved "[", n, TKReserved "]"@ from the beginning of the token sequence.

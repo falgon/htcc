@@ -11,8 +11,9 @@ Assembly code generator
 -}
 {-# LANGUAGE ScopedTypeVariables, OverloadedStrings #-}
 module Htcc.Asm.Generate (
+    -- * Type
+    InputCCode,
     -- * Generator
-    genStmt,
     casm
 ) where
 
@@ -44,11 +45,11 @@ import qualified Htcc.Asm.Intrinsic.Instruction as I
 import qualified Htcc.Asm.Intrinsic.Utils as I
 import qualified Htcc.CRules.Types as CR
 
--- | `GenStatus` is status and information in code generation.
-data GenStatus = GenStatus -- ^ The constructor of `GenStatus`
+-- `Htcc.Asm.Generate.GenStatus` is status and information in code generation.
+data GenStatus = GenStatus -- The constructor of `Htcc.Asm.Generate.GenStatus`
     {
-        labelNumber :: IO Int, -- ^ The label number. `labelNumber` is incremented each time it is read
-        curFunc :: IORef (Maybe T.Text) -- ^ `curFunc` stores the name of the function being processed
+        labelNumber :: IO Int, -- The label number. `labelNumber` is incremented each time it is read
+        curFunc :: IORef (Maybe T.Text) -- `curFunc` stores the name of the function being processed
     }
 
 {-# INLINE prologue #-}
@@ -204,21 +205,24 @@ instance Show MessageType where
 -- | Input C code
 type InputCCode = T.Text
 
-tokenizeErrExit :: (Integral i, Show i) => InputCCode -> (HT.TokenLCNums i, T.Text) -> IO ()
-tokenizeErrExit xs e = let errMesPre = T.replicate 4 " " <> tshow (HT.tkLn (fst e)) in do
-    putStrLnErr (tshow (fst e) <> ": error: stray '" <> snd e <> "' in program")
+{-# INLINE format #-}
+format :: T.Text -> Int -> InputCCode -> IO ()
+format errMesPre e xs = do
     putStrErr $ errMesPre <> " | "
-    putStrLnErr (T.lines xs !! pred (fromIntegral $ HT.tkLn (fst e)))
+    putStrLnErr (T.lines xs !! max 0 (fromIntegral e))
     putStrErr $ T.replicate (T.length errMesPre) " " <> " | "
+
+tokenizeErrExit :: (Integral i, Show i) => InputCCode -> (HT.TokenLCNums i, T.Text) -> IO ()
+tokenizeErrExit xs e = do
+    putStrLnErr (tshow (fst e) <> ": error: stray '" <> snd e <> "' in program")
+    format (T.replicate 4 " " <> tshow (HT.tkLn (fst e))) (pred $ fromIntegral $ HT.tkLn $ fst e) xs
     repSpace (HT.tkCn $ fst e) >> putStrLnErr ""
     exitFailure
 
 parsedMessage :: (Integral i, Show i) => MessageType -> InputCCode -> ASTError i -> IO ()
-parsedMessage mest xs (s, (i, etk)) = let errMesPre = T.replicate 4 " " <> tshow (HT.tkLn i) in do
+parsedMessage mest xs (s, (i, etk)) = do
     putStrLnErr (tshow i <> ": " <> tshow mest <> ": " <> s)
-    putStrErr $ errMesPre <> " | "
-    putStrLnErr (T.lines xs !! pred (fromIntegral $ HT.tkLn i))
-    putStrErr $ T.replicate (T.length errMesPre) " " <> " | "
+    format (T.replicate 4 " " <> tshow (HT.tkLn i)) (pred $ fromIntegral $ HT.tkLn i) xs
     repSpace (HT.tkCn i) >> putStrLnErr (T.replicate (pred $ HT.length etk) "~")
 
 parsedErrExit :: (Integral i, Show i) => InputCCode -> ASTError i -> IO ()

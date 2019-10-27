@@ -32,6 +32,7 @@ module Htcc.Parser.Core (
     parse,
     -- * Types and synonyms
     ASTSuccess,
+    ASTConstruction,
     ASTResult,
     -- * Utilities
     stackSize
@@ -172,7 +173,7 @@ stmt tk atn !scp
     | not (null tk) && HT.isTKIdent (snd $ head tk) && isJust (lookupTypedef (T.pack $ show $ snd $ head tk) scp) = HT.takeType tk scp >>= varDecl -- for a local variable declaration with @typedef@
     | otherwise = (>>=) (expr tk atn scp) $ \(ert, erat, erscp) -> case ert of -- for stmt;
         (_, HT.TKReserved ";"):ys -> Right (ys, ATNode ATExprStmt CT.CTUndef erat ATEmpty, erscp)
-        ert' -> Left $ expectedMessage ";" HT.emptyToken ert'
+        ert' -> Left $ expectedMessage ";" (if null tk then HT.emptyToken else last tk) ert'
     where
         varDecl (_, Nothing, (_, HT.TKReserved ";"):ds, scp') = Right (ds, ATEmpty, scp')
         varDecl (t, Just ident, (_, HT.TKReserved ";"):ds, scp') = (>>=) (addLVar t ident scp') $ \(lat, scp'') -> Right (ds, ATNode (ATNull lat) CT.CTUndef ATEmpty ATEmpty, scp'')
@@ -359,8 +360,11 @@ factor (cur1@(_, HT.TKIdent v):cur2@(_, HT.TKReserved "("):xs) _ scp = maybe' (L
             if any isLeft expl then return $ Left $ head $ lefts expl else do
                 scp'' <- readSTRef mk
                 return $ Right (ds, ATNode (ATCallFunc v (Just $ rights expl)) CT.CTInt ATEmpty ATEmpty, scp'')
-        
-factor ((_, HT.TKSizeof):xs) atn !scp = second3 (\x -> ATNode (ATNum (fromIntegral $ CT.sizeof $ atype x)) CT.CTInt ATEmpty ATEmpty) <$> unary xs atn scp -- for `sizeof` -- TODO: the type of sizeof must be @size_t@
+factor ((_, HT.TKSizeof):cur@(_, HT.TKReserved "("):xs) atn scp = case HT.takeTypeName xs scp of
+    Left _ -> second3 (\x -> ATNode (ATNum (fromIntegral $ CT.sizeof $ atype x)) CT.CTInt ATEmpty ATEmpty) <$> unary (cur:xs) atn scp -- for `sizeof(variable)`
+    Right (t, (_, HT.TKReserved ")"):ds) -> Right (ds, ATNode (ATNum (fromIntegral $ CT.sizeof t)) CT.CTInt ATEmpty ATEmpty, scp) -- for `sizeof(type)`
+    Right _ -> Left ("The token ')' corresponding to '(' is expected", cur) 
+factor ((_, HT.TKSizeof):xs) atn !scp = second3 (\x -> ATNode (ATNum (fromIntegral $ CT.sizeof $ atype x)) CT.CTInt ATEmpty ATEmpty) <$> unary xs atn scp -- for `sizeof variable` -- TODO: the type of sizeof must be @size_t@
 factor (cur@(_, HT.TKAlignof):xs) atn !scp = (>>=) (unary xs atn scp) $ \(ert, erat, erscp) -> 
     if CT.isCTUndef (atype erat) then Left ("_Alignof must be an expression or type", cur) else Right (ert, ATNode (ATNum (fromIntegral $ CT.alignof $ atype erat)) CT.CTInt ATEmpty ATEmpty, erscp) -- Note: Using alignof for expressions is a non-standard feature of C11
 factor (cur@(_, HT.TKString slit):xs) _ !scp = uncurry (xs,,) <$> addLiteral (CT.CTArray (fromIntegral $ B.length slit) CT.CTChar) cur scp -- for literals

@@ -23,7 +23,7 @@ import Data.Tuple.Extra (first)
 
 import qualified Htcc.CRules as CR
 import Htcc.Tokenizer.Token
-import Htcc.Utils (spanLenT, subTextIndex, first3, dropSnd3, isStrictSpace, lor, maybe')
+import Htcc.Utils (spanLenT, subTextIndex, first3, dropSnd3, isStrictSpace, lor, land, maybe')
 
 -- | The core function of `tokenize`
 tokenize' :: (Integral i, Read i, Show i) => TokenLCNums i -> T.Text -> Either (TokenLCNums i, T.Text) [TokenLC i]
@@ -32,9 +32,12 @@ tokenize' n xs = f n $ first fromIntegral $ dropSnd3 $ spanLenT isStrictSpace xs
         f n' (rssize, xxs) = case T.uncons xxs of
             Just (x, xs')
                 | lor [(=='\n'), (=='\r')] x -> tokenize' (TokenLCNums (succ $ tkLn n') 1) xs' -- for new line
-                | not (T.null xs') && x == '/' && T.head xs' == '/' -> tokenize' (TokenLCNums (succ $ tkLn n') 1) $ T.dropWhile (/='\n') (T.tail xs') -- for line comment
+                | not (T.null xs') && x == '/' && T.head xs' == '/' -> tokenize' n' $ T.dropWhile (land [(/='\n'), (/='\r')]) (T.tail xs') -- for line comment
                 | not (T.null xs') && x == '/' && T.head xs' == '*' -> let xs'' = T.tail xs'; cur = n' { tkCn = rssize + tkCn n' } in -- for block comment
-                    maybe' (Left (cur, "*/")) (subTextIndex "*/" xs'') $ \ind -> let next = n' { tkCn = tkCn cur + fromIntegral ind + 2 } in tokenize' next $ T.drop (ind + 3) xs''
+                    maybe' (Left (cur, "*/")) (subTextIndex "*/" xs'') $ \ind -> 
+                        let comment = T.take (ind + 3) xs''
+                            next = TokenLCNums (tkLn cur + fromIntegral (T.length $ T.filter (lor [(=='\n'), (=='\r')]) comment)) 
+                                (tkCn cur + fromIntegral (T.length $ T.filter (land [(/='\n'), (=='\r')]) comment) + 2) in tokenize' next $ T.drop (ind + 3) xs''
                 | isDigit x -> let (n'', ts, ds) = first3 fromIntegral $ spanLenT isDigit xs'; cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = tkCn cur + n'' }; num = T.cons x ts in -- for numbers
                     flip (either (const $ Left (cur, T.singleton x))) (T.decimal num) $ \(nu, _) -> ((cur, TKNum nu):) <$> tokenize' next ds
                 | x == '\"' -> let cur = n' { tkCn = rssize + tkCn n' } in maybe' (Left (cur, "\"")) (spanStrLiteral xs') $ \(lit, ds) -> -- for a string literal
