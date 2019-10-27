@@ -25,6 +25,7 @@ import qualified Data.ByteString as B
 import Data.List (find)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef) 
 import Data.Either (either)
+import Data.Int (Int32)
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -163,7 +164,9 @@ genStmt c (ATNode ATBitNot _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.
 genStmt c (ATNode ATAddr _ lhs _) = genAddr c lhs
 genStmt c (ATNode ATDeref t lhs _) = genStmt c lhs >> unless (CR.isCTArray t) (T.putStr $ load t) 
 genStmt c (ATNode ATNot _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.cmp rax (0 :: Int) <> I.sete al <> I.movzb rax al <> I.push rax)
-genStmt _ (ATNode (ATNum x) _ _ _) = T.putStr $ I.push x
+genStmt _ (ATNode (ATNum x) _ _ _) 
+    | x <= fromIntegral (maxBound :: Int32) = T.putStr $ I.push x
+    | otherwise = T.putStr $ I.movabs rax x <> I.push rax
 genStmt c n@(ATNode (ATLVar _ _) t _ _) = genAddr c n >> unless (CR.isCTArray t) (T.putStr $ load t)
 genStmt c n@(ATNode (ATGVar _ _) t _ _) = genAddr c n >> unless (CR.isCTArray t) (T.putStr $ load t)
 genStmt c n@(ATNode (ATMemberAcc _) t _ _) = genAddr c n >> unless (CR.isCTArray t) (T.putStr $ load t)
