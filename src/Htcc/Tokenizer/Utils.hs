@@ -94,12 +94,15 @@ takeCtorPtr = first (CR.ctorPtr . toNatural) . dropSnd3 . spanLen ((==TKReserved
 {-# INLINE declaration #-}
 declaration :: (Integral i, Show i) => CR.TypeKind -> [TokenLC i] -> Either (ASTError i) (CR.TypeKind, Maybe (TokenLC i), [TokenLC i])
 declaration ty xs = case takeCtorPtr xs of 
-    (fn, xs'@((_, TKReserved "("):_)) -> dropFst4 <$> declaration' id (fn ty) xs'
+    (fn, xs'@((_, TKReserved "("):_)) -> declaration' id (fn ty) xs' >>= uncurry3 (validDecl emptyToken) . dropFst4
     (fn, ident@(_, TKIdent _):ds') -> case arrayDeclSuffix (fn ty) ds' of
-        Nothing -> Right (fn ty, Just ident, ds')
-        Just rs -> rs >>= Right . uncurry (,Just ident,)
-    (fn, es) -> Right (fn ty, Nothing, es)
+        Nothing -> validDecl ident (fn ty) (Just ident) ds'
+        Just rs -> rs >>= uncurry (flip (validDecl ident) (Just ident))
+    (fn, es) -> validDecl emptyToken (fn ty) Nothing es
     where
+        validDecl errtk t ident ds
+            | t == CR.CTVoid = Left ("variable or field '" <> tshow (snd errtk) <> "' declared void", errtk) 
+            | otherwise = Right (t, ident, ds)
         declaration' fn ty' xs' = case takeCtorPtr xs' of
             (ptrf, cur@(_, TKReserved "("):ds') -> (>>=) (declaration' (fn . ptrf) ty' ds') $ \case
                 (ptrf', ty'', ident, (_, TKReserved ")"):ds'') -> case arrayDeclSuffix ty'' ds'' of
