@@ -238,6 +238,9 @@ int main()
     assert(6, ({ int ar[3]; ptr2ar(&ar); sum(ar, sizeof ar / sizeof *ar); }), "({ int ar[3]; ptr2ar(&ar); sum(ar, sizeof ar / sizeof **ar); }");
     assert(42, ({ struct { int (*p)[3]; } x; int ar[3]; x.p = &ar; (*x.p)[0] = 42; ar[0]; }), "({ struct { int (*p)[3]; } x; int ar[3]; x.p = &ar; (*x.p)[0]     = 42; ar[0]; })");
     { void* x; }
+    assert(0, ({ _Bool x = 0; x; }), "({ _Bool x = 0; x; })");
+    assert(1, ({ _Bool x = 1; x; }), "({ _Bool x = 1; x; })");
+    assert(1, ({ _Bool x = 2; x; }), "({ _Bool x = 2; x; })");
 
     printf(">> All tests passed <<\n");
 

@@ -70,11 +70,15 @@ load t
 
 {-# INLINE store #-}
 store :: CR.TypeKind -> T.Text
-store t
-    | CR.sizeof t == 1 = I.pop rdi <> I.pop rax <> I.mov (Ref rax) dil <> I.push rdi
-    | CR.sizeof t == 2 = I.pop rdi <> I.pop rax <> I.mov (Ref rax) di <> I.push rdi
-    | CR.sizeof t == 4 = I.pop rdi <> I.pop rax <> I.mov (Ref rax) edi <> I.push rdi
-    | otherwise = I.pop rdi <> I.pop rax <> I.mov (Ref rax) rdi <> I.push rdi
+store ty = I.pop rdi <> I.pop rax <> booleanRound ty <> store' ty <> I.push rdi
+    where
+        booleanRound CR.CTBool = I.cmp rdi (0 :: Int) <> I.setne dil <> I.movzb rdi dil
+        booleanRound _ = ""
+        store' t
+            | CR.sizeof t == 1 = I.mov (Ref rax) dil
+            | CR.sizeof t == 2 = I.mov (Ref rax) di
+            | CR.sizeof t == 4 = I.mov (Ref rax) edi
+            | otherwise = I.mov (Ref rax) rdi
 
 genAddr :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => GenStatus -> ATree i -> IO ()
 genAddr _ (ATNode (ATLVar _ v) _ _ _) = T.putStr $ I.lea rax (Ref $ rbp `osub` v) <> I.push rax
