@@ -28,27 +28,27 @@ import qualified Htcc.CRules.Types as CT
 import qualified Htcc.Tokenizer.Token as HT
 
 -- | The data type of a typedef tag
-data Typedef = Typedef -- ^ The contypedefor of a typedef tag
+data Typedef a = Typedef -- ^ The contypedefor of a typedef tag
     {
-        tdtype :: CT.TypeKind, -- ^ The type of this typedef
+        tdtype :: CT.TypeKind a, -- ^ The type of this typedef
         tdNestDepth :: !Natural -- ^ The nest depth of this typedef
     } deriving (Eq, Ord, Show, Generic)
 
-instance NFData Typedef
+instance NFData i => NFData (Typedef i)
 
-instance ManagedScope Typedef where
+instance ManagedScope (Typedef i) where
     lookup = M.lookup
     fallBack = const
     initial = M.empty
 
 -- | The typedefs data type
-type Typedefs = M.Map T.Text Typedef
+type Typedefs a = M.Map T.Text (Typedef a)
 
 -- | Given the current nesting number, type, identifier token, and `Typedefs`, if the specified identifier already exists in the same scope, 
 -- return an error message and its location as a pair. 
 -- Otherwise, add a new tag to `Typedefs` and return it. 
 -- If the token does not indicate an identifier, an error indicating internal compiler error is returned.
-add :: Num i => Natural -> CT.TypeKind -> HT.TokenLC i -> Typedefs -> Either (ASTError i) Typedefs
+add :: (Num i, Eq i) => Natural -> CT.TypeKind i -> HT.TokenLC i -> Typedefs i -> Either (ASTError i) (Typedefs i)
 add cnd t cur@(_, HT.TKIdent ident) sts = case M.lookup ident sts of
     Just foundedTag
         | tdNestDepth foundedTag /= cnd -> tdnat

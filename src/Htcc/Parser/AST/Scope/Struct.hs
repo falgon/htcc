@@ -11,7 +11,7 @@ The Data type of variables and its utilities used in parsing
 -}
 {-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
 module Htcc.Parser.AST.Scope.Struct (
-    StructTag (..),
+    Tag (..),
     Structs,
     add
 ) where
@@ -28,33 +28,33 @@ import qualified Htcc.CRules.Types as CT
 import qualified Htcc.Tokenizer.Token as HT
 
 -- | The data type of a struct tag
-data StructTag = StructTag -- ^ The constructor of a struct tag
+data Tag i = Tag -- ^ The constructor of a struct tag
     {
-        sttype :: CT.TypeKind, -- ^ The type of this struct
+        sttype :: CT.TypeKind i, -- ^ The type of this struct
         stNestDepth :: !Natural -- ^ The nest depth of this struct
     } deriving (Eq, Ord, Show, Generic)
 
-instance NFData StructTag
+instance NFData i => NFData (Tag i)
 
-instance ManagedScope StructTag where
+instance ManagedScope (Tag i) where
     lookup = M.lookup
     fallBack = const
     initial = M.empty
 
 -- | The structs data type
-type Structs = M.Map T.Text StructTag
+type Structs i = M.Map T.Text (Tag i)
 
 -- | Given the current nesting number, type, identifier token, and `Structs`, if the specified identifier already exists in the same scope, 
 -- return an error message and its location as a pair. 
 -- Otherwise, add a new tag to `Structs` and return it. 
 -- If the token does not indicate an identifier, an error indicating internal compiler error is returned.
-add :: Num i => Natural -> CT.TypeKind -> HT.TokenLC i -> Structs -> Either (ASTError i) Structs
+add :: Num i => Natural -> CT.TypeKind i -> HT.TokenLC i -> Structs i -> Either (ASTError i) (Structs i)
 add cnd t cur@(_, HT.TKIdent ident) sts = case M.lookup ident sts of
     Just foundedTag
         | stNestDepth foundedTag /= cnd -> stnat
         | otherwise -> Left ("redefinition of 'struct " <> ident <> "'", cur) -- ODR
     Nothing -> stnat
     where
-        stnat = Right $ M.insert ident (StructTag t cnd) sts
+        stnat = Right $ M.insert ident (Tag t cnd) sts
 add _ _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
 
