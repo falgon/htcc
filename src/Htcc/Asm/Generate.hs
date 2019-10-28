@@ -18,6 +18,7 @@ module Htcc.Asm.Generate (
 ) where
 
 -- Imports universal modules
+import Prelude hiding (truncate)
 import Data.Foldable (toList)
 import Control.Exception (finally)
 import Control.Monad (zipWithM_, unless)
@@ -81,6 +82,17 @@ store ty = I.pop rdi <> I.pop rax <> booleanRound ty <> store' ty <> I.push rdi
             | CR.sizeof t == 2 = I.mov (Ref rax) di
             | CR.sizeof t == 4 = I.mov (Ref rax) edi
             | otherwise = I.mov (Ref rax) rdi
+
+truncate :: CR.TypeKind -> T.Text
+truncate ty = I.pop rax <> booleanRound ty <> truncate' ty <> I.push rax
+    where   
+        booleanRound CR.CTBool = I.cmp rax (0 :: Int) <> I.setne al
+        booleanRound _ = ""
+        truncate' t
+            | CR.sizeof t == 1 = I.movsx rax al
+            | CR.sizeof t == 2 = I.movsx rax ax
+            | CR.sizeof t == 4 = I.movsxd rax eax
+            | otherwise = ""
 
 genAddr :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => GenStatus -> ATree i -> IO ()
 genAddr _ (ATNode (ATLVar _ v) _ _ _) = T.putStr $ I.lea rax (Ref $ rbp `osub` v) <> I.push rax
@@ -159,6 +171,7 @@ genStmt c (ATNode ATElse _ (ATNode ATIf _ llhs rrhs) rhs) = do
 genStmt _ (ATNode ATElse _ _ _) = error "Asm code generator shold not reached here. Maybe abstract tree is broken it cause (bug)."
 genStmt c (ATNode ATReturn _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax) >> 
     readIORef (curFunc c) >>= maybe (err "The function name cannot be tracked.") (T.putStr . (\f -> I.jmp (I.refLLbl (".return." <> f <> ".") (0 :: Int))))
+genStmt c (ATNode ATCast t lhs _) = genStmt c lhs >> T.putStr (truncate t)
 genStmt c (ATNode ATExprStmt _ lhs _) = genStmt c lhs >> T.putStr (I.add rsp (8 :: Int))
 genStmt c (ATNode ATBitNot _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.not rax <> I.push rax)
 genStmt c (ATNode ATAddr _ lhs _) = genAddr c lhs

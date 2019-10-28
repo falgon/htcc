@@ -267,6 +267,15 @@ int main()
     assert(16, sizeof(int[4]), "sizeof(int[4])");
     assert(48, sizeof(int[3][4]), "sizeof(int[3][4])");
     assert(8, sizeof(struct { int a; int b; }), "sizeof(struct { int a; int b; })");
+    assert(131585, (int)8590066177, "(int)8590066177");
+    assert(513, (short)8590066177, "(short)8590066177");
+    assert(1, (char)8590066177, "(char)8590066177");
+    assert(1, (_Bool)1, "(_Bool)1");
+    assert(1, (_Bool)2, "(_Bool)2");
+    assert(0, (_Bool)(char)256, "(_Bool)(char)256");
+    assert(1, (long)1, "(long)1");
+    assert(0, (long)&*(int *)0, "(long)&*(int *)0");
+    assert(42, ({ int a = 42 ; long b = (long)&a; *(int*)b; }), "int a = 42; long b = (long)&a; *(int*)b");
 
     printf(">> All tests passed <<\n");
 

@@ -149,10 +149,10 @@ class Show a => BinaryInstruction a where
     movl :: BinaryInstruction b => a -> b -> T.Text
     movl = intelSyntaxBinaryInst "movl"
     -- | The @movsx@ instruction.
-    movsx :: IsOperand b => a -> Ptr b -> T.Text
+    movsx :: BinaryInstruction b => a -> b -> T.Text
     movsx = intelSyntaxBinaryInst "movsx"
     -- | The @movsxd@ instruction.
-    movsxd :: IsOperand b => a -> Ptr b -> T.Text
+    movsxd :: BinaryInstruction b => a -> b -> T.Text
     movsxd = intelSyntaxBinaryInst "movsxd"
     -- | The @movabs@ instruction.
     movabs :: BinaryInstruction b => a -> b -> T.Text
@@ -195,6 +195,7 @@ instance BinaryInstruction Integer
 instance BinaryInstruction Int
 instance BinaryInstruction Natural
 instance BinaryInstruction Register
+instance (IsOperand a, BinaryInstruction a) => BinaryInstruction (Ptr a)
 instance IsOperand a => BinaryInstruction (Ref a)
 
 -- | The @cqo@ instruction.

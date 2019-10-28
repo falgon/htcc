@@ -217,8 +217,9 @@ assign xs atn scp = (>>=) (bitwiseOr xs atn scp) $ \(ert, erat, erscp) -> case e
 -- {\rm shift} &=& {\rm add}\ \left("\lt\lt"\ {\rm add}\mid\ "\gt\gt"\ {\rm add}\right)^\ast\label{eq:thirteenth}\tag{9}\\
 -- {\rm add} &=& {\rm term}\ \left("+"\ {\rm term}\ \mid\ "-"\ {\rm term}\right)^\ast\label{eq:first}\tag{10} \\
 -- {\rm term} &=& {\rm factor}\ \left("\ast"\ {\rm factor}\ \mid\ "/"\ {\rm factor}\right)^\ast\label{eq:second}\tag{11} \\
--- {\rm unary} &=& \left("+"\ \mid\ "-"\right)?\ {\rm factor}\mid\ \left("!"\ \mid\ "\sim"\ \mid\ "\&"\ \mid\ "\ast"\right)?\ {\rm unary}\label{eq:fourth}\tag{12} \\
--- {\rm factor} &=& {\rm num} \mid\ {\rm ident}\ \left({\rm "(" \left(expr\ \left(\left(","\ expr\right)^\ast\right)?\right)? ")"}\right)?\ \mid\ "(" {\rm expr} ")"\label{eq:third}\tag{13}
+-- {\rm cast} &=& "(" type-name ")"\ {\rm cast}\ \mid\ {\rm unary}\label{eq:fourteenth}\tag{12}
+-- {\rm unary} &=& \left("+"\ \mid\ "-"\right)?\ {\rm cast}\mid\ \left("!"\ \mid\ "\sim"\ \mid\ "\&"\ \mid\ "\ast"\right)?\ {\rm unary}\label{eq:fourth}\tag{13} \\
+-- {\rm factor} &=& {\rm num} \mid\ {\rm ident}\ \left({\rm "(" \left(expr\ \left(\left(","\ expr\right)^\ast\right)?\right)? ")"}\right)?\ \mid\ "(" {\rm expr} ")"\label{eq:third}\tag{14}
 -- \end{eqnarray}
 -- \]
 inners :: ([HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i) -> [(T.Text, ATKind i)] -> [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
@@ -289,17 +290,24 @@ add xs atn scp = (>>=) (term xs atn scp) $ uncurry3 add'
         add' ert erat ars = Right (ert, erat, ars)
 
 -- | `term` indicates \(\eqref{eq:second}\) amont the comments of `inners`.
-term ::  (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
-term = inners unary [("*", ATMul), ("/", ATDiv), ("%", ATMod)]
+term :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
+term = inners cast [("*", ATMul), ("/", ATDiv), ("%", ATMod)]
+
+-- | `cast` indicates \(\eqref{eq:fourteenth}\) amont the comments of `inners`.
+cast :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
+cast (cur@(_, HT.TKReserved "("):xs) at scp = flip (either (const $ unary (cur:xs) at scp)) (HT.takeTypeName xs scp) $ \case
+    (t, (_, HT.TKReserved ")"):xs') -> second3 (flip (ATNode ATCast t) ATEmpty) <$> cast xs' at scp
+    _ -> Left ("The token ')' corresponding to '(' is expected", cur)
+cast xs at scp = unary xs at scp
 
 -- | `unary` indicates \(\eqref{eq:fourth}\) amount the comments of `inners`.
 unary :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
-unary ((_, HT.TKReserved "+"):xs) at scp = factor xs at scp
-unary ((_, HT.TKReserved "-"):xs) at scp = second3 (ATNode ATSub CT.CTInt (ATNode (ATNum 0) CT.CTInt ATEmpty ATEmpty)) <$> factor xs at scp
-unary ((_, HT.TKReserved "!"):xs) at scp = second3 (flip (ATNode ATNot CT.CTInt) ATEmpty) <$> unary xs at scp
-unary ((_, HT.TKReserved "~"):xs) at scp = second3 (flip (ATNode ATBitNot CT.CTInt) ATEmpty) <$> unary xs at scp
-unary ((_, HT.TKReserved "&"):xs) at scp = second3 (\x -> (ATNode ATAddr $ CT.CTPtr $ if CT.isCTArray (atype x) then fromJust $ CT.derefMaybe (atype x) else atype x) x ATEmpty) <$> unary xs at scp
-unary (cur@(_, HT.TKReserved "*"):xs) at !scp = (>>=) (unary xs at scp) $ \(ert, erat, erscp) -> 
+unary ((_, HT.TKReserved "+"):xs) at scp = cast xs at scp
+unary ((_, HT.TKReserved "-"):xs) at scp = second3 (ATNode ATSub CT.CTInt (ATNode (ATNum 0) CT.CTInt ATEmpty ATEmpty)) <$> cast xs at scp
+unary ((_, HT.TKReserved "!"):xs) at scp = second3 (flip (ATNode ATNot CT.CTInt) ATEmpty) <$> cast xs at scp
+unary ((_, HT.TKReserved "~"):xs) at scp = second3 (flip (ATNode ATBitNot CT.CTInt) ATEmpty) <$> cast xs at scp
+unary ((_, HT.TKReserved "&"):xs) at scp = second3 (\x -> (ATNode ATAddr $ CT.CTPtr $ if CT.isCTArray (atype x) then fromJust $ CT.derefMaybe (atype x) else atype x) x ATEmpty) <$> cast xs at scp
+unary (cur@(_, HT.TKReserved "*"):xs) at !scp = (>>=) (cast xs at scp) $ \(ert, erat, erscp) -> 
     maybe' (Left ("invalid pointer dereference", cur)) (CT.derefMaybe $ atype erat) $ \case
         CT.CTVoid -> Left ("void value not ignored as it ought to be", cur)
         t -> Right (ert, ATNode ATDeref t erat ATEmpty, erscp)
