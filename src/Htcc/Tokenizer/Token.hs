@@ -23,6 +23,7 @@ module Htcc.Tokenizer.Token (
     isTKIdent,
     isTKReserved,
     spanStrLiteral,
+    spanCharLiteral,
     lookupKeyword
 ) where
 
@@ -194,14 +195,23 @@ escapeChar xxs = case T.uncons xxs of
             ('e', chr 27), 
             ('0', '\0')]
 
--- | `spanStrLiteral` separate the string literal part and the non-string literal part from the input text
-spanStrLiteral :: T.Text -> Maybe (T.Text, T.Text)
-spanStrLiteral ts = first escapeChar <$> f ts
+spanLiteral :: Char -> T.Text -> Maybe (T.Text, T.Text)
+spanLiteral c ts = first escapeChar <$> f ts
     where
         f ts' = case T.uncons ts' of
             Just (x, xs)
                 | x == '\\' && not (T.null xs) && T.head xs == '"' -> first (T.cons '"') <$> f (T.tail xs)
                 | x == '\\' && not (T.null xs) && T.head xs == '\\' -> first (T.append "\\\\") <$> f (T.tail xs)
-                | x == '"' -> Just (T.empty, xs)
+                | x == c -> Just (T.empty, xs)
                 | otherwise -> first (T.cons x) <$> f xs
             Nothing -> Nothing
+
+
+-- | `spanStrLiteral` separate the string literal part and the non-string literal part from the input text
+spanStrLiteral :: T.Text -> Maybe (T.Text, T.Text)
+spanStrLiteral = spanLiteral '"'
+
+
+-- | `spanCharLiteral` separate the string literal part and the non-string literal part from the input text
+spanCharLiteral :: T.Text -> Maybe (T.Text, T.Text)
+spanCharLiteral = spanLiteral '\''

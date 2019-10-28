@@ -276,6 +276,8 @@ int main()
     assert(1, (long)1, "(long)1");
     assert(0, (long)&*(int *)0, "(long)&*(int *)0");
     assert(42, ({ int a = 42 ; long b = (long)&a; *(int*)b; }), "int a = 42; long b = (long)&a; *(int*)b");
+    assert(97, 'a', "'a'");
+    assert(10, '\n', "\'\\n\'");
 
     printf(">> All tests passed <<\n");
 
