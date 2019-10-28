@@ -22,6 +22,7 @@ module Htcc.Parser.Core (
     shift,
     add,
     term,
+    cast,
     unary,
     factor,
     relational,
