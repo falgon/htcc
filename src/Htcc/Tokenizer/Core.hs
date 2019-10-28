@@ -44,7 +44,7 @@ tokenize' n xs = f n $ first fromIntegral $ dropSnd3 $ spanLenT isStrictSpace xs
                     let next = n' { tkCn = tkCn cur + 2 + fromIntegral (T.length lit) } in 
                             ((cur, TKString (T.encodeUtf8 $ T.append lit "\0")):) <$> tokenize' next ds
                 | x == '\'' -> let cur = n' { tkCn = rssize + tkCn n' } in maybe' (Left (cur, "\'")) (spanCharLiteral xs') $ \(lit, ds) -> -- for a char literal
-                    if T.length lit /= 1 then Left (cur, "\'") else ((cur, TKNum (fromIntegral $ ord $ T.head lit)):) <$> tokenize' (cur { tkCn = 4 + tkCn cur }) ds
+                    if T.length lit /= 1 then Left (cur, "\'") else ((cur, TKNum (fromIntegral $ ord $ T.head lit)):) <$> tokenize' (cur { tkCn = 3 + tkCn cur }) ds
                 | not (T.null xs') && T.take 2 xxs `elem` CR.strOps -> let cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = 2 + tkCn cur }; op = T.take 2 xxs in -- for operators (two character)
                     ((cur, TKReserved op):) <$> tokenize' next (T.tail xs')
                 | x `elem` CR.charOps -> let cur = n' { tkCn = rssize + tkCn n' }; next = n' { tkCn = succ (tkCn cur) } in ((cur, TKReserved (T.singleton x)):) <$> tokenize' next xs' -- for operators (one character)

@@ -95,15 +95,15 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATAssign -- ^ The assign operator: @x=y@
     | ATNum a -- ^ The number
     | ATCast -- ^ The cast operation: @(type) x@
-    | ATMemberAcc CT.StructMember -- ^ Accessing the member of the @struct@
+    | ATMemberAcc (CT.StructMember a) -- ^ Accessing the member of the @struct@
     | ATReturn -- ^ The @return@ keyword
     | ATIf -- ^ The @if@ keyword
     | ATElse -- ^ The @else@ keyword
     | ATWhile -- ^ The @while@ keyword
     | ATFor [ATKindFor a] -- ^ The @for@ keyword
     | ATBlock [ATree a] -- ^ The compound statement
-    | ATLVar CT.TypeKind a -- ^ The local variable. It has a type information (as `CT.TypeKind`) and an offset value
-    | ATGVar CT.TypeKind T.Text -- ^ The global variable. It has a type information (as `CT.TypeKind`) and an name
+    | ATLVar (CT.TypeKind a) a -- ^ The local variable. It has a type information (as `CT.TypeKind`) and an offset value
+    | ATGVar (CT.TypeKind a) T.Text -- ^ The global variable. It has a type information (as `CT.TypeKind`) and an name
     | ATDefFunc T.Text (Maybe [ATree a]) -- ^ The function definition
     | ATCallFunc T.Text (Maybe [ATree a]) -- ^ The function call. It has a offset value and arguments (`Maybe`)
     | ATExprStmt -- ^ The expression of a statement
@@ -115,7 +115,7 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
 data ATree a = ATEmpty -- ^ The empty node 
     | ATNode { 
     atkind :: ATKind a, -- ^ The kind of abstract tree
-    atype :: CT.TypeKind, -- ^ The data type
+    atype :: CT.TypeKind a, -- ^ The data type
     atL :: ATree a, -- ^ The left hand side abstract tree
     atR :: ATree a -- ^ The right hand side abstract tree
     } -- ^ `ATKind` representing the kind of node and the two branches `ATree` it has

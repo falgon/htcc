@@ -20,6 +20,7 @@ module Htcc.Tokenizer.Utils (
 ) where
 
 import Prelude hiding (toInteger)
+import Data.Bits (Bits (..))
 import qualified Data.Text as T
 import qualified Data.Map as M
 import Data.Tuple.Extra (first, uncurry3)
@@ -79,39 +80,71 @@ takeExps ((_, TKIdent _):(_, TKReserved "("):xs) = maybe' Nothing (lastInit ((==
         f args = maybe Nothing (\(ex, ds) -> (ex:) <$> f ds) $ readFn args
 takeExps _ = Nothing
 
-takeFields :: (Integral i, Show i, Read i) => [TokenLC i] -> ConstructionData i -> Either (ASTError i) (M.Map T.Text CR.StructMember, ConstructionData i)
-takeFields tk sc = takeFields' tk sc 0
+takeStructFields :: (Integral i, Show i, Read i, Bits i) => [TokenLC i] -> ConstructionData i -> Either (ASTError i) (M.Map T.Text (CR.StructMember i), ConstructionData i)
+takeStructFields tk sc = takeStructFields' tk sc 0
     where
-        takeFields' [] scp' _ = Right (M.empty, scp')
-        takeFields' fs scp' !n = (>>=) (takeType fs scp') $ \case
+        takeStructFields' [] scp' _ = Right (M.empty, scp')
+        takeStructFields' fs scp' !n = (>>=) (takeType fs scp') $ \case
             (ty, Just (_, TKIdent ident), (_, TKReserved ";"):ds, scp'') -> let ofs = toNatural $ CR.alignas (toInteger n) $ toInteger $ CR.alignof ty in
-                first (M.insert ident (CR.StructMember ty ofs)) <$> takeFields' ds scp'' (ofs + fromIntegral (CR.sizeof ty))
+                first (M.insert ident (CR.StructMember ty ofs)) <$> takeStructFields' ds scp'' (ofs + fromIntegral (CR.sizeof ty))
             _ -> Left ("expected member name or ';' after declaration specifiers", if null fs then emptyToken else head fs)
 
+{-
+enum-specifier:
+    enum identifieropt { enumerator-list }
+    enum identifieropt { enumerator-list , }
+    enum identifier
+enumerator-list:
+    enumerator
+    enumerator-list , enumerator
+enumerator:
+    enumeration-constant
+    enumeration-constant = constant-expression
+ -}
+takeEnumFiels :: (Integral i, Show i, Read i, Bits i) => CR.TypeKind i -> [TokenLC i] -> ConstructionData i -> Either (ASTError i) (M.Map T.Text i, ConstructionData i)
+takeEnumFiels = takeEnumFiels' 0
+    where
+        takeEnumFiels' !n ty [cur@(_, TKIdent ident)] scp = (M.singleton ident n,) <$> addEnumerator ty cur n scp
+        takeEnumFiels' !n ty (cur@(_, TKIdent ident):(_, TKReserved ","):xs) scp = (>>=) (takeEnumFiels' (succ n) ty xs scp) $ \(m, scp') -> 
+            (M.insert ident n m,) <$> addEnumerator ty cur n scp'
+        takeEnumFiels' _ ty (cur@(_, TKIdent ident):(_, TKReserved "="):(_, TKNum val):(_, TKReserved ","):xs) scp = (>>=) (takeEnumFiels' (succ val) ty xs scp) $ \(m, scp') ->
+            (M.insert ident val m,) <$> addEnumerator ty cur val scp'
+        takeEnumFiels' _ ty (cur@(_, TKIdent ident):(_, TKReserved "="):(_, TKNum val):xs) scp = (>>=) (takeEnumFiels' (succ val) ty xs scp) $ \(m, scp') ->
+            (M.insert ident val m,) <$> addEnumerator ty cur val scp'
+        takeEnumFiels' _ _ ((_, TKIdent _):cur@(_, TKReserved "="):_) _ = Left ("expected number after '" <> tshow (snd cur) <> "' token", cur) -- TODO: enumeration-constant = constant-expression
+        takeEnumFiels' _ _ ds _ = let lst = if null ds then emptyToken else last ds in
+            Left ("expected enum identifier_opt { enumerator-list } or enum identifier_opt { enumerator-list , }", lst)
+
 {-# INLINE takeCtorPtr #-}
-takeCtorPtr :: Integral i => [TokenLC i] -> (CR.TypeKind -> CR.TypeKind, [TokenLC i])
+takeCtorPtr :: Integral i => [TokenLC i] -> (CR.TypeKind i -> CR.TypeKind i, [TokenLC i])
 takeCtorPtr = first (CR.ctorPtr . toNatural) . dropSnd3 . spanLen ((==TKReserved "*") . snd)
 
 -- | It is obtained by parsing the front part of the type from the token string. 
 -- e.g. @int (*)[4]@ applied to this function yields @int@
-takePreType :: (Integral i, Show i, Read i) => [TokenLC i] -> ConstructionData i -> Either (ASTError i) (CR.TypeKind, [TokenLC i], ConstructionData i)
-takePreType (x@(_, TKType ty1):y@(_, TKType ty2):xs) scp
+takePreType :: (Integral i, Show i, Read i, Bits i) => [TokenLC i] -> ConstructionData i -> Either (ASTError i) (CR.TypeKind i, [TokenLC i], ConstructionData i)
+takePreType (x@(_, TKType ty1):y@(_, TKType ty2):xs) scp -- for complex type
     | CR.isQualifier ty1 && CR.isQualifiable ty2 = takePreType (x:xs) scp
     | CR.isQualifier ty2 && CR.isQualifiable ty1 = takePreType (y:xs) scp
     | ty1 == CR.CTLong && ty2 == CR.CTLong = takePreType (x:xs) scp
-takePreType ((_, TKType ty):xs) scp = Right (ty, xs, scp)
-takePreType ((_, TKStruct):cur@(_, TKReserved "{"):xs) scp = maybe' (Left (internalCE, cur)) (takeBrace "{" "}" (cur:xs)) $
-    either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> uncurry (,ds,) . first CR.CTStruct <$> takeFields (tail $ init field) scp
-takePreType ((_, TKStruct):cur1@(_, TKIdent _):cur2@(_, TKReserved "{"):xs) scp = maybe' (Left (internalCE, cur1)) (takeBrace "{" "}" (cur2:xs)) $
-    either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> (>>=) (takeFields (tail $ init field) scp) $ \(mem, scp') -> let ty = CR.CTStruct mem in
-        addStructTag ty cur1 scp' >>= Right . (ty, ds,) 
-takePreType ((_, TKStruct):cur1@(_, TKIdent ident):xs) scp = maybe' (Left ("storage size of '" <> ident <> "' isn't known", cur1)) (lookupStructTag ident scp) $ Right . (, xs, scp) . PST.sttype
-takePreType (cur@(_, TKIdent ident):xs) scp = maybe' (Left (tshow (snd cur) <> " is not a type or also a typedef identifier", cur)) (lookupTypedef ident scp) $ Right . (, xs, scp) . PSD.tdtype
+takePreType ((_, TKType ty):xs) scp = Right (ty, xs, scp) -- for fundamental type
+takePreType ((_, TKStruct):cur@(_, TKReserved "{"):xs) scp = maybe' (Left (internalCE, cur)) (takeBrace "{" "}" (cur:xs)) $ -- for @struct@
+    either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> uncurry (,ds,) . first CR.CTStruct <$> takeStructFields (tail $ init field) scp
+takePreType ((_, TKStruct):cur1@(_, TKIdent _):cur2@(_, TKReserved "{"):xs) scp = maybe' (Left (internalCE, cur1)) (takeBrace "{" "}" (cur2:xs)) $ -- for @struct@ with tag
+    either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> (>>=) (takeStructFields (tail $ init field) scp) $ \(mem, scp') -> let ty = CR.CTStruct mem in
+        addTag ty cur1 scp' >>= Right . (ty, ds,) 
+takePreType ((_, TKStruct):cur1@(_, TKIdent ident):xs) scp = maybe' (Left ("storage size of '" <> ident <> "' isn't known", cur1)) (lookupTag ident scp) $ Right . (, xs, scp) . PST.sttype -- declaration for @struct@
+takePreType (cur@(_, TKIdent ident):xs) scp = maybe' (Left (tshow (snd cur) <> " is not a type or also a typedef identifier", cur)) (lookupTypedef ident scp) $ Right . (, xs, scp) . PSD.tdtype -- declaration for @typedef@
+takePreType ((_, TKEnum):cur@(_, TKReserved "{"):xs) scp = maybe' (Left (internalCE, cur)) (takeBrace "{" "}" (cur:xs)) $ -- for @enum@
+    either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> uncurry (,ds,) . first (CR.CTEnum CR.CTInt) <$> takeEnumFiels CR.CTInt (tail $ init field) scp
+takePreType ((_, TKEnum):cur1@(_, TKIdent _):cur2@(_, TKReserved "{"):xs) scp = maybe' (Left (internalCE, cur1)) (takeBrace "{" "}" (cur2:xs)) $ -- for @enum@ with tag
+    either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> (>>=) (takeEnumFiels CR.CTInt (tail $ init field) scp) $ \(mem, scp') -> let ty = CR.CTEnum CR.CTInt mem in
+        addTag ty cur1 scp' >>= Right . (ty, ds,)
+takePreType ((_, TKEnum):cur1@(_, TKIdent ident):xs) scp = maybe' (Left ("storage size of '" <> ident <> "' isn't known", cur1)) (lookupTag ident scp) $ Right . (, xs, scp) . PST.sttype -- declaration for @enum@
 takePreType (x:_) _ = Left ("ISO C forbids declaration with no type", x)
 takePreType _ _ = Left ("ISO C forbids declaration with no type", emptyToken)
 
 {-# INLINE declaration #-}
-declaration :: (Integral i, Show i) => CR.TypeKind -> [TokenLC i] -> Either (ASTError i) (CR.TypeKind, Maybe (TokenLC i), [TokenLC i])
+declaration :: (Integral i, Show i) => CR.TypeKind i -> [TokenLC i] -> Either (ASTError i) (CR.TypeKind i, Maybe (TokenLC i), [TokenLC i])
 declaration ty xs = case takeCtorPtr xs of 
     (fn, xs'@((_, TKReserved "("):_)) -> declaration' id (fn ty) xs' >>= uncurry3 (validDecl emptyToken) . dropFst4
     (fn, ident@(_, TKIdent _):ds') -> case arrayDeclSuffix (fn ty) ds' of
@@ -137,11 +170,11 @@ declaration ty xs = case takeCtorPtr xs of
 -- | `takeType` returns a pair of type (including pointer and array type) and the remaining tokens wrapped in 
 -- `Just` only if the token starts with `TKType`, `TKStruct` or identifier that is declarated by @typedef@.
 -- Otherwise `Nothing` is returned.
-takeType :: (Integral i, Show i, Read i) => [TokenLC i] -> ConstructionData i -> Either (ASTError i) (CR.TypeKind, Maybe (TokenLC i), [TokenLC i], ConstructionData i)
+takeType :: (Integral i, Show i, Read i, Bits i) => [TokenLC i] -> ConstructionData i -> Either (ASTError i) (CR.TypeKind i, Maybe (TokenLC i), [TokenLC i], ConstructionData i)
 takeType tk scp = takePreType tk scp >>= (\(x, y, z) -> uncurry3 (,,, z) <$> declaration x y)
 
 -- `absDeclaration` parses abstract type declarations
-absDeclaration :: (Integral i, Show i) => CR.TypeKind -> [TokenLC i] -> Either (ASTError i) (CR.TypeKind, [TokenLC i])
+absDeclaration :: (Integral i, Show i) => CR.TypeKind i -> [TokenLC i] -> Either (ASTError i) (CR.TypeKind i, [TokenLC i])
 absDeclaration ty xs = case takeCtorPtr xs of
     (fn, xs'@((_, TKReserved "("):_)) -> dropFst3 <$> absDeclarator' id (fn ty) xs'
     (fn, ds) -> fromMaybe (Right (fn ty, ds)) $ arrayDeclSuffix (fn ty) ds
@@ -153,7 +186,7 @@ absDeclaration ty xs = case takeCtorPtr xs of
             (p, ds) -> Right (p, ty', ds)
 
 -- | `takeTypeName` is used to parse type names used for sizeof etc. Version without `takeType`s identifier.
-takeTypeName :: (Integral i, Show i, Read i) => [TokenLC i] -> ConstructionData i -> Either (ASTError i) (CR.TypeKind, [TokenLC i])
+takeTypeName :: (Integral i, Show i, Read i, Bits i) => [TokenLC i] -> ConstructionData i -> Either (ASTError i) (CR.TypeKind i, [TokenLC i])
 takeTypeName tk scp = takePreType tk scp >>= (uncurry absDeclaration . dropThd3)
 
 -- For a number \(n\in\mathbb{R}\), let \(k\) be the number of consecutive occurrences of
@@ -164,7 +197,7 @@ takeTypeName tk scp = takePreType tk scp >>= (uncurry absDeclaration . dropThd3)
 -- but the subsequent token sequence is invalid as an array declaration in C programming language,
 -- an error mesage and the token at the error location are returned wrapped in
 -- `Left` and `Just`. When \(k=0\), `Nothing` is returned.
-arrayDeclSuffix :: forall i. (Integral i, Show i) => CR.TypeKind -> [TokenLC i] -> Maybe (Either (ASTError i) (CR.TypeKind, [TokenLC i]))
+arrayDeclSuffix :: forall i. (Integral i, Show i) => CR.TypeKind i -> [TokenLC i] -> Maybe (Either (ASTError i) (CR.TypeKind i, [TokenLC i]))
 arrayDeclSuffix t ((_, TKReserved "["):(_, TKNum n):(_, TKReserved "]"):xs) = maybe' (Just $ Right (CR.CTArray (toNatural n) t, xs)) (arrayDeclSuffix t xs) $
     Just . fmap (first $ fromJust . CR.concatCTArray (CR.CTArray (toNatural n) t))
 arrayDeclSuffix _ ((_, TKReserved "["):cur@(_, TKNum n):xs) = let mes = "expected ']' " in 

@@ -61,8 +61,9 @@ import Htcc.Utils (first3, second3, tshow, toNatural, toInteger, mapEither, drop
 import qualified Htcc.Tokenizer as HT
 import qualified Htcc.CRules.Types as CT
 import qualified Htcc.Parser.AST.Scope.Var as PV
+import qualified Htcc.Parser.AST.Scope.Enumerator as SE
 import Htcc.Parser.AST
-import Htcc.Parser.AST.Scope (Scoped (..))
+import Htcc.Parser.AST.Scope (Scoped (..), LookupVarResult (..))
 import Htcc.Parser.AST.Scope.ManagedScope (ASTError)
 import Htcc.Parser.ConstructionData
 import Htcc.Parser.Utils
@@ -74,10 +75,10 @@ type ASTSuccess i = ([HT.TokenLC i], ATree i, ConstructionData i)
 type ASTConstruction i = Either (ASTError i) (ASTSuccess i)
 
 -- | A type that represents the result after AST construction. Quadraple of warning list, constructed abstract syntax tree list, global variable map, literal list.
-type ASTResult i = Either (ASTError i) (SQ.Seq (ASTError i), [ATree i], M.Map T.Text PV.GVar, [PV.Literal])
+type ASTResult i = Either (ASTError i) (SQ.Seq (ASTError i), [ATree i], M.Map T.Text (PV.GVar i), [PV.Literal i])
 
 -- | Perform type definition from token string starting from @typedef@ token
-defTypedef :: (Integral i, Show i, Read i) => [(HT.TokenLCNums i, HT.Token i)] -> ConstructionData i -> Either (ASTError i) ([HT.TokenLC i], ATree a, ConstructionData i)
+defTypedef :: (Integral i, Show i, Read i, Bits i) => [(HT.TokenLCNums i, HT.Token i)] -> ConstructionData i -> Either (ASTError i) ([HT.TokenLC i], ATree a, ConstructionData i)
 defTypedef (cur@(_, HT.TKTypedef):xs) !scp = case HT.takeType xs scp of
     Left er -> Left er
     Right (ty, Just ident, ds, scp') -> case ds of
@@ -170,7 +171,7 @@ stmt xs@((_, HT.TKTypedef):(_, HT.TKType _):_) _ scp = defTypedef xs scp -- for 
 stmt xs@((_, HT.TKTypedef):(_, HT.TKStruct):_) _ scp = defTypedef xs scp -- for definition of @typedef@
 stmt xs@((_, HT.TKTypedef):(_, HT.TKIdent _):_) _ scp = defTypedef xs scp -- for global @typedef@ with type defined by @typedef@
 stmt tk atn !scp
-    | not (null tk) && (HT.isTKType (snd $ head tk) || HT.isTKStruct (snd $ head tk)) = HT.takeType tk scp >>= varDecl -- for a local variable declaration
+    | not (null tk) && (HT.isTKType (snd $ head tk) || HT.isTKStruct (snd $ head tk) || HT.isTKEnum (snd $ head tk)) = HT.takeType tk scp >>= varDecl -- for a local variable declaration
     | not (null tk) && HT.isTKIdent (snd $ head tk) && isJust (lookupTypedef (T.pack $ show $ snd $ head tk) scp) = HT.takeType tk scp >>= varDecl -- for a local variable declaration with @typedef@
     | otherwise = (>>=) (expr tk atn scp) $ \(ert, erat, erscp) -> case ert of -- for stmt;
         (_, HT.TKReserved ";"):ys -> Right (ys, ATNode ATExprStmt CT.CTUndef erat ATEmpty, erscp)
@@ -265,7 +266,7 @@ shift :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> Co
 shift = inners add [("<<", ATShl), (">>", ATShr)]
         
 {-# INLINE addKind #-}
-addKind :: Show i => ATree i -> ATree i -> Maybe (ATree i)
+addKind :: (Eq i, Ord i, Show i) => ATree i -> ATree i -> Maybe (ATree i)
 addKind lhs rhs
     | all (CT.isFundamental . atype) [lhs, rhs] = Just $ ATNode ATAdd (max (atype lhs) (atype rhs)) lhs rhs
     | isJust (CT.derefMaybe $ atype lhs) && CT.isFundamental (atype rhs) = Just $ ATNode ATAddPtr (atype lhs) lhs rhs
@@ -273,7 +274,7 @@ addKind lhs rhs
     | otherwise = Nothing
 
 {-# INLINE subKind #-}
-subKind :: ATree i -> ATree i -> Maybe (ATree i)
+subKind :: (Eq i, Ord i) => ATree i -> ATree i -> Maybe (ATree i)
 subKind lhs rhs
     | all (CT.isFundamental . atype) [lhs, rhs] = Just $ ATNode ATSub (max (atype lhs) (atype rhs)) lhs rhs
     | isJust (CT.derefMaybe $ atype lhs) && CT.isFundamental (atype rhs) = Just $ ATNode ATSubPtr (atype lhs) lhs rhs
@@ -377,9 +378,11 @@ factor ((_, HT.TKSizeof):xs) atn !scp = second3 (\x -> ATNode (ATNum (fromIntegr
 factor (cur@(_, HT.TKAlignof):xs) atn !scp = (>>=) (unary xs atn scp) $ \(ert, erat, erscp) -> 
     if CT.isCTUndef (atype erat) then Left ("_Alignof must be an expression or type", cur) else Right (ert, ATNode (ATNum (fromIntegral $ CT.alignof $ atype erat)) CT.CTInt ATEmpty ATEmpty, erscp) -- Note: Using alignof for expressions is a non-standard feature of C11
 factor (cur@(_, HT.TKString slit):xs) _ !scp = uncurry (xs,,) <$> addLiteral (CT.CTArray (fromIntegral $ B.length slit) CT.CTChar) cur scp -- for literals
-factor (cur@(_, HT.TKIdent ident):xs) _ !scp = maybe' (Left ("undefined variable", cur)) (lookupVar ident scp) $ \case -- if the variable is not declared, it returns error wrapped with `Left`
-    Right (PV.LVar t o _) -> Right (xs, ATNode (ATLVar t o) t ATEmpty ATEmpty, scp) -- for declared local variable
-    Left (PV.GVar t) -> Right (xs, ATNode (ATGVar t ident) t ATEmpty ATEmpty, scp) -- for declared global variable
+factor (cur@(_, HT.TKIdent ident):xs) _ !scp = case lookupVar ident scp of
+    FoundGVar (PV.GVar t) -> Right (xs, ATNode (ATGVar t ident) t ATEmpty ATEmpty, scp) -- for declared global variable
+    FoundLVar (PV.LVar t o _) -> Right (xs, ATNode (ATLVar t o) t ATEmpty ATEmpty, scp) -- for declared local variable
+    FoundEnum (SE.Enumerator val _) -> Right (xs, ATNode (ATNum val) CT.CTLong ATEmpty ATEmpty, scp) -- for declared enumerator
+    NotFound -> Left ("The '" <> ident <> "' is undefined variable", cur)
 factor ert _ _ = Left (if null ert then "unexpected token in program" else "unexpected token '" <> tshow (snd (head ert)) <> "' in program", if null ert then HT.emptyToken else head ert)
 
 {-# INLINE parse #-}

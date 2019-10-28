@@ -64,7 +64,7 @@ epilogue Nothing = err "internal compiler error: The function name cannot be tra
 epilogue (Just fn) = T.putStr $ I.defLLbl (".return." <> fn <> ".") (0 :: Int) <> I.leave <> I.ret
 
 {-# INLINE load #-}
-load :: CR.TypeKind -> T.Text
+load :: CR.TypeKind i -> T.Text
 load t 
     | CR.sizeof t == 1 = I.pop rax <> I.movsx rax (I.byte I.Ptr (Ref rax)) <> I.push rax
     | CR.sizeof t == 2 = I.pop rax <> I.movsx rax (I.word I.Ptr (Ref rax)) <> I.push rax
@@ -72,7 +72,7 @@ load t
     | otherwise = I.pop rax <> I.mov rax (Ref rax) <> I.push rax
 
 {-# INLINE store #-}
-store :: CR.TypeKind -> T.Text
+store :: CR.TypeKind i -> T.Text
 store ty = I.pop rdi <> I.pop rax <> booleanRound ty <> store' ty <> I.push rdi
     where
         booleanRound CR.CTBool = I.cmp rdi (0 :: Int) <> I.setne dil <> I.movzb rdi dil
@@ -83,7 +83,7 @@ store ty = I.pop rdi <> I.pop rax <> booleanRound ty <> store' ty <> I.push rdi
             | CR.sizeof t == 4 = I.mov (Ref rax) edi
             | otherwise = I.mov (Ref rax) rdi
 
-truncate :: CR.TypeKind -> T.Text
+truncate :: CR.TypeKind i -> T.Text
 truncate ty = I.pop rax <> booleanRound ty <> truncate' ty <> I.push rax
     where   
         booleanRound CR.CTBool = I.cmp rax (0 :: Int) <> I.setne al
@@ -247,7 +247,7 @@ parsedErrExit = (.) (>> exitFailure) . parsedMessage ErrorMessage
 parsedWarn :: (Integral i, Show i) => InputCCode -> S.Seq (ASTError i) -> IO ()
 parsedWarn xs warns = mapM_ (parsedMessage WarningMessage xs) (toList warns)
 
-dataSection :: M.Map T.Text GVar -> [Literal] -> IO ()
+dataSection :: M.Map T.Text (GVar i) -> [Literal i] -> IO ()
 dataSection gvars lits = do
     T.putStrLn ".data"
     mapM_ (\(Literal _ n cnt) -> T.putStrLn (".L.data." <> tshow n <> ":") >> T.putStr "\t.byte " >> T.putStrLn (T.intercalate ", " $ map tshow $ B.unpack cnt)) lits

@@ -35,7 +35,7 @@ import qualified Data.Text as T
 import qualified Data.Map.Strict as M
 import Numeric.Natural
 import GHC.Generics (Generic, Generic1)
-import Control.DeepSeq (NFData (..), NFData1 (..))
+import Control.DeepSeq (NFData (..))
 
 import qualified Htcc.Parser.AST.Scope.ManagedScope as SM
 import qualified Htcc.Tokenizer.Token as HT
@@ -45,14 +45,14 @@ import Htcc.Parser.Utils (internalCE)
 import Htcc.Utils (tshow)
 
 -- | The data type of global variable
-newtype GVar = GVar -- ^ The constructor of global variable
+newtype GVar i = GVar -- ^ The constructor of global variable
     {
-        gvtype :: CT.TypeKind -- ^ The type of the global variable
+        gvtype :: CT.TypeKind i -- ^ The type of the global variable
     } deriving (Eq, Ord, Show, Generic)
 
-instance NFData GVar
+instance NFData i => NFData (GVar i)
 
-instance SM.ManagedScope GVar where
+instance SM.ManagedScope (GVar i) where
     lookup = M.lookup
     fallBack = const
     initial = M.empty
@@ -60,13 +60,12 @@ instance SM.ManagedScope GVar where
 -- | The data type of local variable
 data LVar a = LVar -- ^ The constructor of local variable
     {
-        lvtype :: CT.TypeKind, -- ^ The type of the local variable
+        lvtype :: CT.TypeKind a, -- ^ The type of the local variable
         rbpOffset :: !a, -- ^ The offset value from RBP
         nestDepth :: !Natural -- ^ The nest depth of a local variable
-    } deriving (Eq, Ord, Show, Generic, Generic1)
+    } deriving (Eq, Ord, Show, Generic)
 
 instance NFData a => NFData (LVar a)
-instance NFData1 LVar
 
 instance SM.ManagedScope (LVar a) where
     lookup = M.lookup
@@ -74,21 +73,21 @@ instance SM.ManagedScope (LVar a) where
     initial = M.empty
 
 -- | The literal
-data Literal = Literal -- ^ The literal constructor
+data Literal a = Literal -- ^ The literal constructor
     {
-        litype :: CT.TypeKind, -- ^ The single literal type
+        litype :: CT.TypeKind a, -- ^ The single literal type
         ln :: !Natural, -- ^ The number of labels placed in the @.data@ section
         lcts :: B.ByteString -- ^ The content
     } deriving (Eq, Show, Generic)
 
-instance NFData Literal
+instance NFData a => NFData (Literal a)
 
 -- | The data type of local variables
 data Vars a = Vars -- ^ The constructor of variables
     { 
-        globals :: M.Map T.Text GVar, -- ^ The global variables
+        globals :: M.Map T.Text (GVar a), -- ^ The global variables
         locals :: M.Map T.Text (LVar a), -- ^ The local variables
-        literals :: [Literal] -- ^ Literals
+        literals :: [Literal a] -- ^ Literals
     } deriving (Show, Generic, Generic1)
     
 instance NFData a => NFData (Vars a)
@@ -105,7 +104,7 @@ resetLocal vs = vs { locals = M.empty }
 
 {-# INLINE lookupGVar #-}
 -- | Search for a global variable with a given name
-lookupGVar :: T.Text -> Vars a -> Maybe GVar
+lookupGVar :: T.Text -> Vars a -> Maybe (GVar a)
 lookupGVar s vars = SM.lookup s $ globals vars
 
 {-# INLINE lookupLVar #-}
@@ -115,7 +114,7 @@ lookupLVar s vars = SM.lookup s $ locals vars
 
 {-# INLINE lookupVar #-}
 -- | First, search for local variables, and if not found, search for global variables. If nothing is found, Nothing is returned
-lookupVar :: T.Text -> Vars a -> Maybe (Either GVar (LVar a))
+lookupVar :: T.Text -> Vars a -> Maybe (Either (GVar a) (LVar a))
 lookupVar s vars = maybe (Left <$> lookupGVar s vars) (Just . Right) $ lookupLVar s vars
 
 {-# INLINE maximumOffset #-}
@@ -131,7 +130,7 @@ fallBack pre post = pre { literals = literals post }
 
 -- | If the specified token is `HT.TKIdent` and the local variable does not exist in the list, `addLVar` adds a new local variable to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
-addLVar :: (Integral i, Bits i) => Natural -> CT.TypeKind -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
+addLVar :: (Integral i, Bits i) => Natural -> CT.TypeKind i -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
 addLVar cnd t cur@(_, HT.TKIdent ident) vars = case lookupLVar ident vars of
     Just foundedVar 
         | nestDepth foundedVar /= cnd -> varnat
@@ -145,7 +144,7 @@ addLVar _ _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
 
 -- | If the specified token is `HT.TKIdent` and the global variable does not exist in the list, `addLVar` adds a new global variable to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
-addGVar :: Num i => CT.TypeKind -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
+addGVar :: Num i => CT.TypeKind i -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
 addGVar t cur@(_, HT.TKIdent ident) vars = flip (flip maybe $ const $ Left ("redeclaration of '" <> ident <> "' with no linkage", cur)) (lookupGVar ident vars) $ -- ODR
     let gvar = GVar t; nat = ATNode (ATGVar (gvtype gvar) ident) t ATEmpty ATEmpty in
             Right (nat, vars { globals = M.insert ident gvar $ globals vars })
@@ -153,7 +152,7 @@ addGVar _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
 
 -- | If the specified token is `HT.TKString`, `addLiteral` adds a new literal to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
-addLiteral :: Num i => CT.TypeKind -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
+addLiteral :: Num i => CT.TypeKind i -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
 addLiteral t (_, HT.TKString cont) vars 
     | null (literals vars) = let lit = Literal (CT.removeAllExtents t) 0 cont; nat = ATNode (ATGVar t ".L.data.0") t ATEmpty ATEmpty in
         Right (nat, vars { literals = lit : literals vars })

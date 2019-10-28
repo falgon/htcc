@@ -20,6 +20,7 @@ module Htcc.Tokenizer.Token (
     isTKNum,
     isTKType,
     isTKStruct,
+    isTKEnum,
     isTKIdent,
     isTKReserved,
     spanStrLiteral,
@@ -52,17 +53,17 @@ data Token i = TKReserved T.Text -- ^ The reserved token
     | TKElse -- ^ The @else@ keyword
     | TKWhile -- ^ The @while@ keyword
     | TKFor -- ^ The @for@ keyword
+    | TKEnum -- ^ The @enum@ keyword
     | TKSizeof -- ^ The @sizeof@ keyword
     | TKAlignof -- ^ The @_Alignof@ keyword
     | TKStruct -- ^ The @struct@ keyword
-    | TKType CR.TypeKind -- ^ Types
+    | TKType (CR.TypeKind i) -- ^ Types
     | TKTypedef -- ^ The @typedef@ keyword
     | TKString B.ByteString -- ^ The string literal
     | TKEmpty -- ^ The empty token (This is not used by `Htcc.Tokenizer.Core.tokenize`, but when errors are detected during parsing, the token at error locations cannot be specified)
-    deriving (Eq, Generic, Generic1)
+    deriving (Eq, Generic)
 
 instance NFData i => NFData (Token i)
-instance NFData1 Token
 
 instance Show i => Show (Token i) where
     show (TKReserved s) = T.unpack s
@@ -73,6 +74,7 @@ instance Show i => Show (Token i) where
     show TKElse = "else"
     show TKWhile = "while"
     show TKFor = "for"
+    show TKEnum = "enum"
     show TKStruct = "struct"
     show TKSizeof = "sizeof"
     show TKAlignof = "_Alignof"
@@ -101,6 +103,7 @@ length TKIf = 2
 length TKElse = 4
 length TKWhile = 5
 length TKFor = 3
+length TKEnum = 4
 length TKStruct = 6
 length TKSizeof = 6
 length TKAlignof = 8
@@ -117,6 +120,7 @@ lookupKeyword s = find ((==) s . tshow) [
     TKIf, 
     TKElse,
     TKFor,
+    TKEnum,
     TKStruct,
     TKSizeof,
     TKAlignof, 
@@ -174,6 +178,12 @@ isTKType _ = False
 isTKStruct :: Token i -> Bool
 isTKStruct TKStruct = True
 isTKStruct _ = False
+
+{-# INLINE isTKEnum #-}
+-- | Utility for `TKEnum`. When the argument is `TKEnum`, it returns `True`, otherwise `False`.
+isTKEnum :: Token i -> Bool
+isTKEnum TKEnum = True
+isTKEnum _ = False
 
 -- `Htcc.Tokenizer.Token.escapeChar` converts escape characters in the input `T.Text` to correct escape characters
 escapeChar :: T.Text -> T.Text
