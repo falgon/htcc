@@ -186,9 +186,12 @@ stmt tk atn !scp
 
 
 {-# INLINE expr #-}
--- | `expr` is equivalent to `equality`.
+-- | \({\rm expr} = {\rm assign}\left("," {\rm assign}\right)\ast\)
 expr :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
-expr = assign
+expr tk at cd = assign tk at cd >>= uncurry3 f
+    where
+        f ((_, HT.TKReserved ","):xs) at' cd' = assign xs at' cd' >>= uncurry3 f . second3 (\x -> ATNode ATComma (atype x) (ATNode ATExprStmt CT.CTUndef at' ATEmpty) x)
+        f tk' at' cd' =  Right (tk', at', cd')
 
 -- | `assign` indicates \(\eqref{eq:seventh}\) among the comments of `inners`.
 assign :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
@@ -219,7 +222,7 @@ assign xs atn scp = (>>=) (bitwiseOr xs atn scp) $ \(ert, erat, erscp) -> case e
 -- {\rm shift} &=& {\rm add}\ \left("\lt\lt"\ {\rm add}\mid\ "\gt\gt"\ {\rm add}\right)^\ast\label{eq:thirteenth}\tag{9}\\
 -- {\rm add} &=& {\rm term}\ \left("+"\ {\rm term}\ \mid\ "-"\ {\rm term}\right)^\ast\label{eq:first}\tag{10} \\
 -- {\rm term} &=& {\rm factor}\ \left("\ast"\ {\rm factor}\ \mid\ "/"\ {\rm factor}\right)^\ast\label{eq:second}\tag{11} \\
--- {\rm cast} &=& "(" type-name ")"\ {\rm cast}\ \mid\ {\rm unary}\label{eq:fourteenth}\tag{12}
+-- {\rm cast} &=& "(" {\rm type-name} ")"\ {\rm cast}\ \mid\ {\rm unary}\label{eq:fourteenth}\tag{12} \\
 -- {\rm unary} &=& \left("+"\ \mid\ "-"\right)?\ {\rm cast}\mid\ \left("!"\ \mid\ "\sim"\ \mid\ "\&"\ \mid\ "\ast"\right)?\ {\rm unary}\label{eq:fourth}\tag{13} \\
 -- {\rm factor} &=& {\rm num} \mid\ {\rm ident}\ \left({\rm "(" \left(expr\ \left(\left(","\ expr\right)^\ast\right)?\right)? ")"}\right)?\ \mid\ "(" {\rm expr} ")"\label{eq:third}\tag{14}
 -- \end{eqnarray}

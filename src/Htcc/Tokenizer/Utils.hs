@@ -90,17 +90,15 @@ takeStructFields tk sc = takeStructFields' tk sc 0
             _ -> Left ("expected member name or ';' after declaration specifiers", if null fs then emptyToken else head fs)
 
 {-
-enum-specifier:
-    enum identifieropt { enumerator-list }
-    enum identifieropt { enumerator-list , }
-    enum identifier
+Take enumerator-list from token list.
+
 enumerator-list:
     enumerator
     enumerator-list , enumerator
 enumerator:
     enumeration-constant
     enumeration-constant = constant-expression
- -}
+-}
 takeEnumFiels :: (Integral i, Show i, Read i, Bits i) => CR.TypeKind i -> [TokenLC i] -> ConstructionData i -> Either (ASTError i) (M.Map T.Text i, ConstructionData i)
 takeEnumFiels = takeEnumFiels' 0
     where

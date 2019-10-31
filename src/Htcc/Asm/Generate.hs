@@ -174,6 +174,7 @@ genStmt c (ATNode ATReturn _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax) >>
 genStmt c (ATNode ATCast t lhs _) = genStmt c lhs >> T.putStr (truncate t)
 genStmt c (ATNode ATExprStmt _ lhs _) = genStmt c lhs >> T.putStr (I.add rsp (8 :: Int))
 genStmt c (ATNode ATBitNot _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.not rax <> I.push rax)
+genStmt c (ATNode ATComma _ lhs rhs) = genStmt c lhs >> genStmt c rhs
 genStmt c (ATNode ATAddr _ lhs _) = genAddr c lhs
 genStmt c (ATNode ATDeref t lhs _) = genStmt c lhs >> unless (CR.isCTArray t) (T.putStr $ load t) 
 genStmt c (ATNode ATNot _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.cmp rax (0 :: Int) <> I.sete al <> I.movzb rax al <> I.push rax)
