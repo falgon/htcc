@@ -83,6 +83,7 @@ store ty = I.pop rdi <> I.pop rax <> booleanRound ty <> store' ty <> I.push rdi
             | CR.sizeof t == 4 = I.mov (Ref rax) edi
             | otherwise = I.mov (Ref rax) rdi
 
+{-# INLINE truncate #-}
 truncate :: CR.TypeKind i -> T.Text
 truncate ty = I.pop rax <> booleanRound ty <> truncate' ty <> I.push rax
     where   
@@ -93,6 +94,14 @@ truncate ty = I.pop rax <> booleanRound ty <> truncate' ty <> I.push rax
             | CR.sizeof t == 2 = I.movsx rax ax
             | CR.sizeof t == 4 = I.movsxd rax eax
             | otherwise = ""
+
+{-# INLINE increment #-}
+increment :: CR.TypeKind i -> T.Text
+increment t = I.pop rax <> I.add rax (maybe 1 CR.sizeof $ CR.derefMaybe t) <> I.push rax
+
+{-# INLINE decrement #-}
+decrement :: CR.TypeKind i -> T.Text
+decrement t = I.pop rax <> I.sub rax (maybe 1 CR.sizeof $ CR.derefMaybe t) <> I.push rax
 
 genAddr :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => GenStatus -> ATree i -> IO ()
 genAddr _ (ATNode (ATLVar _ v) _ _ _) = T.putStr $ I.lea rax (Ref $ rbp `osub` v) <> I.push rax
@@ -174,6 +183,12 @@ genStmt c (ATNode ATReturn _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax) >>
 genStmt c (ATNode ATCast t lhs _) = genStmt c lhs >> T.putStr (truncate t)
 genStmt c (ATNode ATExprStmt _ lhs _) = genStmt c lhs >> T.putStr (I.add rsp (8 :: Int))
 genStmt c (ATNode ATBitNot _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.not rax <> I.push rax)
+
+genStmt c (ATNode ATPreInc t lhs _) = genLval c lhs >> T.putStr (I.push (Ref rsp) <> load t <> increment t <> store t) 
+genStmt c (ATNode ATPreDec t lhs _) = genLval c lhs >> T.putStr (I.push (Ref rsp) <> load t <> decrement t <> store t) 
+genStmt c (ATNode ATPostInc t lhs _) = genLval c lhs >> T.putStr (I.push (Ref rsp) <> load t <> increment t <> store t <> decrement t)
+genStmt c (ATNode ATPostDec t lhs _) = genLval c lhs >> T.putStr (I.push (Ref rsp) <> load t <> decrement t <> store t <> increment t)
+
 genStmt c (ATNode ATComma _ lhs rhs) = genStmt c lhs >> genStmt c rhs
 genStmt c (ATNode ATAddr _ lhs _) = genAddr c lhs
 genStmt c (ATNode ATDeref t lhs _) = genStmt c lhs >> unless (CR.isCTArray t) (T.putStr $ load t) 

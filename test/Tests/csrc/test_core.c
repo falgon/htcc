@@ -290,6 +290,20 @@ int main()
     assert(4, ({ enum { zero, one, two } x; sizeof(x); }), "enum { zero, one, two } x; sizeof(x);");
     assert(4, ({ enum t { zero, one, two }; enum t y; sizeof(y); }), "enum t { zero, one, two }; enum t y; sizeof(y);");
     assert(42, (1, 2, 42), "(1, 2, 42)");
+    assert(3, ({ int i = 2; ++i; }), "int i = 2; ++i;");
+    assert(1, ({ int i = 2; --i; }), "int i = 2; --i;");
+    assert(2, ({ int i = 2; i++; }), "int i = 2; i++;");
+    assert(2, ({ int i = 2; i--; }), "int i = 2; i--;");
+    assert(3, ({ int i = 2; i++; i; }), "int i = 2; i++; i;");
+    assert(1, ({ int i = 2; i--; i; }), "int i = 2; i--; i;");
+    assert(1, ({ int a[3]; a[0] = 0; a[1] = 1; a[2] = 2; int *p = a + 1; *p++; }), "int a[3]; a[0] = 0; a[1] = 1; a[2] = 2; int *p = a + 1; *p++;");
+    assert(2, ({ int a[3]; a[0] = 0; a[1] = 1; a[2] = 2; int *p = a + 1; ++*p; }), "int a[3]; a[0] = 0; a[1] = 1; a[2] = 2; int *p = a + 1; ++*p;");
+    assert(1, ({ int a[3]; a[0] = 0; a[1] = 1; a[2] = 2; int *p = a + 1; *p--; }), "int a[3]; a[0] = 0; a[1] = 1; a[2] = 2; int *p = a + 1; *p--;");
+    assert(0, ({ int a[3]; a[0] = 0; a[1] = 1; a[2] = 2; int *p = a + 1; --*p; }), "int a[3]; a[0] = 0; a[1] = 1; a[2] = 2; int *p = a + 1; --*p;");
+    assert(0, ({ int a[3]; a[0] = 0; a[1] = 1; a[2] = 2; int *p = a + 1; (*p++)--; a[0]; }), "int a[3]; a[0] = 0; a[1] = 1; a[2] = 2; int *p= a + 1; (*p++); a[0];");
+    assert(0, ({ int a[3]; a[0] = 0; a[1] = 1; a[2] = 2; int *p = a + 1; (*p++)--; a[1]; }), "int a[3]; a[0]=0; a[1] = 1; a[2] = 2; int *p = a + 1; (*p++); a[0];");
+    assert(2, ({ int a[3]; a[0] = 0; a[1] = 1; a[2] = 2; int *p = a + 1; (*p++)--; a[2]; }), "int a[3]; a[0] = 0; a[1] = 1; a[2] = 2; int *p = a + 1; (*p++); a[0];");
+    assert(2, ({ int a[3]; a[0] = 0; a[1] = 1; a[2] = 2; int *p = a + 1; (*p++)--; *p; }), "int a[3]; a[0] = 0; a[1] = 1; a[2] = 2; int *p = a + 1; (*p++); a[0];");
 
     printf(">> All tests passed <<\n");
 

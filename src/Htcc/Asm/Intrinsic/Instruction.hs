@@ -139,6 +139,7 @@ instance UnaryInstruction Int
 instance UnaryInstruction Natural
 instance UnaryInstruction Register
 instance UnaryInstruction Offset
+instance IsOperand a => UnaryInstruction (Ref a)
 
 -- | A class of x86_64 instructions with binary arguments.
 class Show a => BinaryInstruction a where

@@ -316,6 +316,8 @@ unary (cur@(_, HT.TKReserved "*"):xs) at !scp = (>>=) (cast xs at scp) $ \(ert, 
     maybe' (Left ("invalid pointer dereference", cur)) (CT.derefMaybe $ atype erat) $ \case
         CT.CTVoid -> Left ("void value not ignored as it ought to be", cur)
         t -> Right (ert, ATNode ATDeref t erat ATEmpty, erscp)
+unary ((_, HT.TKReserved "++"):xs) at scp = second3 (\x -> ATNode ATPreInc (atype x) x ATEmpty) <$> unary xs at scp
+unary ((_, HT.TKReserved "--"):xs) at scp = second3 (\x -> ATNode ATPreDec (atype x) x ATEmpty) <$> unary xs at scp
 unary xs at scp = either Left (uncurry3 f) $ factor xs at scp
     where
         f (cur@(_, HT.TKReserved "["):xs') erat !erscp = (>>=) (expr xs' erat erscp) $ \(ert', erat', erscp') -> case ert' of
@@ -335,6 +337,8 @@ unary xs at scp = either Left (uncurry3 f) $ factor xs at scp
                     f (tail xs') (ATNode (ATMemberAcc mem) (CT.smType mem) (ATNode ATDeref (CT.smType mem) erat ATEmpty) ATEmpty) erscp
                 _ -> Left ("expected identifier after '->' token", cur)
             | otherwise = Left ("invalid type argument of '->'" <> if CT.isCTUndef (atype erat) then "" else " (have '" <> tshow (atype erat) <> "')", cur)
+        f ((_, HT.TKReserved "++"):xs') erat !erscp = f xs' (ATNode ATPostInc (atype erat) erat ATEmpty) erscp
+        f ((_, HT.TKReserved "--"):xs') erat !erscp = f xs' (ATNode ATPostDec (atype erat) erat ATEmpty) erscp
         f ert erat !erscp = Right (ert, erat, erscp)
 
 -- | `factor` indicates \(\eqref{eq:third}\) amount the comments of `inners`.
