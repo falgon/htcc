@@ -289,6 +289,7 @@ int main()
     assert(4, ({ enum { zero, five = 5, three = 3, four }; four; }), "enum { zero, five = 5, three=3, four }; four;");
     assert(4, ({ enum { zero, one, two } x; sizeof(x); }), "enum { zero, one, two } x; sizeof(x);");
     assert(4, ({ enum t { zero, one, two }; enum t y; sizeof(y); }), "enum t { zero, one, two }; enum t y; sizeof(y);");
+    assert(42, (1, 2, 42), "(1, 2, 42)");
 
     printf(">> All tests passed <<\n");
 

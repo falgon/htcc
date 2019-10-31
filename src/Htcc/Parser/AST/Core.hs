@@ -94,6 +94,7 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATDeref -- ^ The dereferencing operator @*@: @*p@
     | ATAssign -- ^ The assign operator: @x=y@
     | ATNum a -- ^ The number
+    | ATComma -- ^ The comma operator: @,@
     | ATCast -- ^ The cast operation: @(type) x@
     | ATMemberAcc (CT.StructMember a) -- ^ Accessing the member of the @struct@
     | ATReturn -- ^ The @return@ keyword
