@@ -93,6 +93,10 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATAddr -- ^ The addressing operator @&@: @&x@
     | ATDeref -- ^ The dereferencing operator @*@: @*p@
     | ATAssign -- ^ The assign operator: @x=y@
+    | ATPreInc -- ^ The Pre-increment operator: @++a@
+    | ATPreDec -- ^ The Pre-decrement operator: @--a@
+    | ATPostInc -- ^ The Post-increment operator: @a++@
+    | ATPostDec -- ^ The Post-decrement operator: @a--@
     | ATNum a -- ^ The number
     | ATComma -- ^ The comma operator: @,@
     | ATCast -- ^ The cast operation: @(type) x@
