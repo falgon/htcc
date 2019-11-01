@@ -193,6 +193,11 @@ genStmt c (ATNode ATLOr _ lhs rhs) = do
     genStmt c lhs >> T.putStr (I.pop rax <> I.cmp rax (0 :: Int) <> I.jne (I.refLLbl ".true." n))
     genStmt c rhs >> T.putStr (I.pop rax <> I.cmp rax (0 :: Int) <> I.jne (I.refLLbl ".true." n))
     T.putStr $ I.push (0 :: Int) <> I.jmp (I.refLLbl ".end." n) <> I.defLLbl ".true." n <> I.push (1 :: Int) <> I.defLLbl ".end." n
+genStmt c (ATNode (ATConditional cn th el) _ _ _) = do
+    n <- labelNumber c
+    genStmt c cn >> T.putStr (I.pop rax <> I.cmp rax (0 :: Int) <> I.je (I.refLLbl ".else." n))
+    genStmt c th >> T.putStr (I.jmp (I.refLLbl ".end." n) <> I.defLLbl ".else." n)
+    genStmt c el >> T.putStr (I.defLLbl ".end." n)
 genStmt c (ATNode ATPreInc t lhs _) = genLval c lhs >> T.putStr (I.push (Ref rsp) <> load t <> increment t <> store t) 
 genStmt c (ATNode ATPreDec t lhs _) = genLval c lhs >> T.putStr (I.push (Ref rsp) <> load t <> decrement t <> store t) 
 genStmt c (ATNode ATPostInc t lhs _) = genLval c lhs >> T.putStr (I.push (Ref rsp) <> load t <> increment t <> store t <> decrement t)
