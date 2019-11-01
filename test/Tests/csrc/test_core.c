@@ -331,6 +331,10 @@ int main()
     assert(2, ({ int a = 4; a >>= 1; a; }), "({ int a = 4; a >>= 1; a; })");
     assert(2, ({ int a = 4; a >>= 1; }), "({ int a = 4; a >>= 1; })");
     assert(-1, ({ int a = -1; a >>= 1; }), "({ int a = -1; a >>= 1; })");
+    assert(42, 1 ? 42 : 0, "1 ? 42 : 0");
+    assert(42, 0 ? 0 : 42, "0 ? 0 : 42");
+    assert(42, ({ int a = 1; int b = 0; a || b ? 42 : 0; }), "({ int a = 1; int b = 0; a || b ? 42 : 0; })");
+    assert(42, ({ int a = 1; int b = 0; a && b ? 0 : 42; }), "({ int a = 1; int b = 0; a && b ? 0 : 42; })");
 
     printf(">> All tests passed <<\n");
 

@@ -78,25 +78,25 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATMul -- ^ \(x\times y\): @x * y@
     | ATDiv -- ^ \(x\div y\): @x / y@
     | ATMod -- ^ \(x\bmod y\): @x % y@
-    | ATAddAssign -- ^ addition assignment: @x += y@
-    | ATSubAssign -- ^ subtraction assignment: @x -= y@
-    | ATMulAssign -- ^ multiplication assignment: @x *= y@
-    | ATDivAssign -- ^ division assignment: @x /= y@
+    | ATAddAssign -- ^ addition assignment: @a += b@
+    | ATSubAssign -- ^ subtraction assignment: @a -= b@
+    | ATMulAssign -- ^ multiplication assignment: @a *= b@
+    | ATDivAssign -- ^ division assignment: @a /= b@
     | ATAddPtrAssign -- ^ addition assignment for pointer: @p += q@
     | ATSubPtrAssign -- ^ subtraction assignment for pointer: @p -= q@
     | ATLAnd -- ^ logical and: @x && y@
     | ATLOr -- ^ logical or: @x || y@
     | ATAnd -- ^ bitwise and: @x & y@
-    | ATAndAssign -- ^ bitwise and assignment: @x &= y@
+    | ATAndAssign -- ^ bitwise and assignment: @a &= b@
     | ATOr -- ^ bitwise or: @x | y@
-    | ATOrAssign -- ^ bitwise or assignment: @x |= y@
+    | ATOrAssign -- ^ bitwise or assignment: @a |= b@
     | ATXor -- ^ bitwise xor: @x ^ y@
-    | ATXorAssign -- ^ bitwise xor assignment: @x ^= y@
+    | ATXorAssign -- ^ bitwise xor assignment: @a ^= b@
     | ATBitNot -- ^ bitwise not: @~x@
     | ATShl -- ^ left shift: @x << y@
-    | ATShlAssign -- ^ left shift assignment: @x <<= y@
+    | ATShlAssign -- ^ left shift assignment: @a <<= b@
     | ATShr -- ^ right shift: @x >> y@
-    | ATShrAssign -- ^ right shift assignment: @x >>= y@
+    | ATShrAssign -- ^ right shift assignment: @a >>= b@
     | ATLT  -- ^ \(x\lt y\): @x < y@
     | ATLEQ -- ^ \(x\leq y\): @x <= y@
     | ATGT  -- ^ \(x\gt y\): @x > y@
@@ -112,7 +112,8 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATPostInc -- ^ post-increment operator: @a++@
     | ATPostDec -- ^ post-decrement operator: @a--@
     | ATNum a -- ^ The number
-    | ATComma -- ^ comma operator: @,@
+    | ATConditional (ATree a) (ATree a) (ATree a) -- ^ conditional operator: @a ? x : y;@. It has three AST (cond, then and else)
+    | ATComma -- ^ comma operator: @x,b@
     | ATCast -- ^ the cast operation: @(type) x@
     | ATMemberAcc (CT.StructMember a) -- ^ accessing the member of the @struct@
     | ATReturn -- ^ the @return@ keyword
