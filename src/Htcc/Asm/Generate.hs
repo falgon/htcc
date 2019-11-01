@@ -229,8 +229,11 @@ genStmt c (ATNode kd ty lhs rhs)
             ATDivAssign -> T.putStr $ I.cqo <> I.idiv rdi
             ATMod -> T.putStr $ I.cqo <> I.idiv rdi <> I.mov rax rdx
             ATAnd -> T.putStr $ I.and rax rdi
+            ATAndAssign -> T.putStr $ I.and rax rdi
             ATOr -> T.putStr $ I.or rax rdi 
+            ATOrAssign -> T.putStr $ I.or rax rdi
             ATXor -> T.putStr $ I.xor rax rdi 
+            ATXorAssign -> T.putStr $ I.xor rax rdi
             ATShl -> T.putStr $ I.mov edx eax <> I.mov rax rdi <> I.mov ecx edx <> I.shl rax cl 
             ATShr -> T.putStr $ I.push rax <> I.mov rax rdi <> I.mov edx eax <> I.pop rax <> I.mov ecx edx <> I.sar rax cl  
             ATEQ -> T.putStr $ I.cmp rax rdi <> I.sete al <> I.movzb rax al

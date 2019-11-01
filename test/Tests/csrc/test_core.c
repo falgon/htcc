@@ -320,6 +320,12 @@ int main()
     assert(0, 0 || (1 - 1), "0 || (1 - 1)");
     assert(1, 1 && 2, "1 && 2");
     assert(0, 2 && 3 && 4 && 0, "2 && 3 && 4 && 0");
+    assert(2, ({ int a = 6; a &= 3; a; }), "({ int a = 6; a &= 3; a; })");
+    assert(2, ({ int a = 6; a &= 3; }), "({ int a = 6; a &= 3; })");
+    assert(7, ({ int a = 6; a |= 3; a; }), "({ int a = 6; a |= 3; a; })");
+    assert(7, ({ int a = 6; a |= 3; }), "({ int a = 6; a |= 3; })");
+    assert(10, ({ int a = 15; a ^= 5; a; }), "({ int a = 15; a ^= 5; a; })");
+    assert(10, ({ int a = 15; a ^= 5; }), "({ int a = 15; a ^= 5; })");
 
     printf(">> All tests passed <<\n");
 
