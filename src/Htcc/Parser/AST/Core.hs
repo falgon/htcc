@@ -21,6 +21,7 @@ module Htcc.Parser.AST.Core (
     isATForStmt,
     isATForIncr,
     fromATKindFor,
+    isComplexAssign,
     isEmptyExprStmt
 ) where
 
@@ -77,6 +78,12 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATMul -- ^ \(x\times y\): @x * y@
     | ATDiv -- ^ \(x\div y\): @x / y@
     | ATMod -- ^ \(x\bmod y\): @x % y@
+    | ATAddAssign -- ^ @x += y@
+    | ATSubAssign -- ^ @x -= y@
+    | ATMulAssign -- ^ @x *= y@
+    | ATDivAssign -- ^ @x /= y@
+    | ATAddPtrAssign -- ^ @p += q@
+    | ATSubPtrAssign -- ^ @p -= q@
     | ATAnd -- ^ bitwise and: @x & y@
     | ATOr -- ^ bitwise or: @x | y@
     | ATXor -- ^ bitwise xor: @x ^ y@
@@ -115,6 +122,16 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATStmtExpr [ATree a] -- ^ The statement of a expression (GNU extension)
     | ATNull (ATree a) -- ^ Indicates nothing to do
     deriving Show
+
+{-# INLINE isComplexAssign #-}
+isComplexAssign :: ATKind a -> Bool
+isComplexAssign ATAddAssign = True
+isComplexAssign ATSubAssign = True
+isComplexAssign ATMulAssign = True
+isComplexAssign ATDivAssign = True
+isComplexAssign ATAddPtrAssign = True
+isComplexAssign ATSubPtrAssign = True
+isComplexAssign _ = False
 
 -- | The data structure of abstract syntax tree
 data ATree a = ATEmpty -- ^ The empty node 

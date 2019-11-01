@@ -10,12 +10,17 @@ Portability : POSIX
 Data types and type synonyms used during AST construction
 -}
 module Htcc.Parser.ConstructionData (
+    -- * Main type
     ConstructionData (..),
+    -- * Adding funcitons
     addLVar,
     addGVar,
     addLiteral,
-    succNest,
-    fallBack,
+    addTag,
+    addTypedef,
+    addFunction,
+    addEnumerator,
+    -- * Searching function
     lookupLVar,
     lookupGVar,
     lookupVar,
@@ -23,10 +28,9 @@ module Htcc.Parser.ConstructionData (
     lookupTypedef,
     lookupFunction,
     lookupEnumerator,
-    addTag,
-    addTypedef,
-    addFunction,
-    addEnumerator,
+    -- * Other utilities
+    succNest,
+    fallBack,
     initConstructionData,
     resetLocal,
     pushWarn

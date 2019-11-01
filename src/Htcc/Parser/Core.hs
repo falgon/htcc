@@ -197,6 +197,10 @@ expr tk at cd = assign tk at cd >>= uncurry3 f
 assign :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
 assign xs atn scp = (>>=) (bitwiseOr xs atn scp) $ \(ert, erat, erscp) -> case ert of
     (_, HT.TKReserved "="):ys -> second3 (ATNode ATAssign (atype erat) erat) <$> assign ys erat erscp
+    (_, HT.TKReserved "*="):ys -> second3 (ATNode ATMulAssign (atype erat) erat) <$> assign ys erat erscp
+    (_, HT.TKReserved "/="):ys -> second3 (ATNode ATDivAssign (atype erat) erat) <$> assign ys erat erscp
+    (_, HT.TKReserved "+="):ys -> second3 (maybe (ATNode ATAddAssign (atype erat) erat) (const $ ATNode ATAddPtrAssign (atype erat) erat) $ CT.derefMaybe (atype erat)) <$> assign ys erat erscp
+    (_, HT.TKReserved "-="):ys -> second3 (maybe (ATNode ATSubAssign (atype erat) erat) (const $ ATNode ATSubPtrAssign (atype erat) erat) $ CT.derefMaybe (atype erat)) <$> assign ys erat erscp
     _ -> Right (ert, erat, erscp)
 
 -- | `inners` is a general function for creating `equality`, `relational`, `add` and `term` in the following syntax (EBNF) of \({\rm LL}\left(k\right)\) where \(k\in\mathbb{N}\).

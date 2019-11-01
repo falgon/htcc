@@ -11,6 +11,7 @@ Portability : POSIX
 The utilities of parsing
 -}
 module Htcc.Parser.Utils (
+    -- * General utilities of parser
     expectedMessage,
     internalCE
 ) where

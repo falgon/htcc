@@ -36,7 +36,7 @@ import System.Exit (exitFailure)
 -- Imports Tokenizer and parser
 import Htcc.Utils (err, putStrLnErr, putStrErr, counter, tshow, toInts, splitAtLen, maybe')
 import qualified Htcc.Tokenizer as HT
-import Htcc.Parser (ATKind (..), ATree (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, parse, stackSize)
+import Htcc.Parser (ATKind (..), ATree (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, isComplexAssign, parse, stackSize)
 import Htcc.Parser.AST.Scope.Var (GVar (..), Literal (..))
 import Htcc.Parser.AST.Scope.ManagedScope (ASTError)
 
@@ -183,12 +183,10 @@ genStmt c (ATNode ATReturn _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax) >>
 genStmt c (ATNode ATCast t lhs _) = genStmt c lhs >> T.putStr (truncate t)
 genStmt c (ATNode ATExprStmt _ lhs _) = genStmt c lhs >> T.putStr (I.add rsp (8 :: Int))
 genStmt c (ATNode ATBitNot _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.not rax <> I.push rax)
-
 genStmt c (ATNode ATPreInc t lhs _) = genLval c lhs >> T.putStr (I.push (Ref rsp) <> load t <> increment t <> store t) 
 genStmt c (ATNode ATPreDec t lhs _) = genLval c lhs >> T.putStr (I.push (Ref rsp) <> load t <> decrement t <> store t) 
 genStmt c (ATNode ATPostInc t lhs _) = genLval c lhs >> T.putStr (I.push (Ref rsp) <> load t <> increment t <> store t <> decrement t)
 genStmt c (ATNode ATPostDec t lhs _) = genLval c lhs >> T.putStr (I.push (Ref rsp) <> load t <> decrement t <> store t <> increment t)
-
 genStmt c (ATNode ATComma _ lhs rhs) = genStmt c lhs >> genStmt c rhs
 genStmt c (ATNode ATAddr _ lhs _) = genAddr c lhs
 genStmt c (ATNode ATDeref t lhs _) = genStmt c lhs >> unless (CR.isCTArray t) (T.putStr $ load t) 
@@ -201,27 +199,38 @@ genStmt c n@(ATNode (ATGVar _ _) t _ _) = genAddr c n >> unless (CR.isCTArray t)
 genStmt c n@(ATNode (ATMemberAcc _) t _ _) = genAddr c n >> unless (CR.isCTArray t) (T.putStr $ load t)
 genStmt c (ATNode ATAssign t lhs rhs) = genLval c lhs >> genStmt c rhs >> T.putStr (store t)
 genStmt _ (ATNode (ATNull _) _ _ _) = return ()
-genStmt c (ATNode k t lhs rhs) = flip finally (T.putStr $ I.push rax) $ genStmt c lhs *> genStmt c rhs *> T.putStr (I.pop rdi) *> T.putStr (I.pop rax) *> case k of
-    ATAdd -> T.putStr $ I.add rax rdi 
-    ATSub -> T.putStr $ I.sub rax rdi 
-    ATAddPtr -> maybe' (err "The type is not pointer") (CR.derefMaybe t) $ \dt -> T.putStr $ I.imul rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.add rax rdi
-    ATSubPtr -> maybe' (err "The type is not pointer") (CR.derefMaybe t) $ \dt -> T.putStr $ I.imul rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.sub rax rdi
-    ATPtrDis -> maybe' (err "The type is not pointer") (CR.derefMaybe $ atype lhs) $ \dt -> T.putStr $ I.sub rax rdi <> I.cqo <> I.mov rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.idiv rdi
-    ATMul -> T.putStr $ I.imul rax rdi 
-    ATDiv -> T.putStr $ I.cqo <> I.idiv rdi
-    ATMod -> T.putStr $ I.cqo <> I.idiv rdi <> I.mov rax rdx
-    ATAnd -> T.putStr $ I.and rax rdi
-    ATOr -> T.putStr $ I.or rax rdi 
-    ATXor -> T.putStr $ I.xor rax rdi 
-    ATShl -> T.putStr $ I.mov edx eax <> I.mov rax rdi <> I.mov ecx edx <> I.shl rax cl 
-    ATShr -> T.putStr $ I.push rax <> I.mov rax rdi <> I.mov edx eax <> I.pop rax <> I.mov ecx edx <> I.sar rax cl  
-    ATEQ -> T.putStr $ I.cmp rax rdi <> I.sete al <> I.movzb rax al
-    ATNEQ -> T.putStr $ I.cmp rax rdi <> I.setne al <> I.movzb rax al
-    ATLT -> T.putStr $ I.cmp rax rdi <> I.setl al <> I.movzb rax al
-    ATLEQ -> T.putStr $ I.cmp rax rdi <> I.setle al <> I.movzb rax al
-    ATGT -> T.putStr $ I.cmp rax rdi <> I.setg al <> I.movzb rax al
-    ATGEQ -> T.putStr $ I.cmp rax rdi <> I.setge al <> I.movzb rax al
-    _ -> err "Failed to assemble."
+genStmt c node@(ATNode kd ty lhs rhs)
+    | isComplexAssign kd = genLval c lhs >> T.putStr (I.push (Ref rsp) <> load ty) >> genStmt c rhs >> f node >> T.putStr (store ty)
+    | otherwise = genStmt c lhs >> genStmt c rhs >> f node
+    where
+        f (ATNode k t _ _) = flip finally (T.putStr $ I.push rax) $ T.putStr (I.pop rdi) *> T.putStr (I.pop rax) *> case k of
+            ATAdd -> T.putStr $ I.add rax rdi 
+            ATAddAssign -> T.putStrLn $ I.add rax rdi
+            ATSub -> T.putStr $ I.sub rax rdi 
+            ATSubAssign -> T.putStr $ I.sub rax rdi
+            ATAddPtr -> maybe' (err "The type is not pointer") (CR.derefMaybe t) $ \dt -> T.putStr $ I.imul rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.add rax rdi
+            ATAddPtrAssign -> maybe' (err "The type is not pointer") (CR.derefMaybe t) $ \dt -> T.putStr $ I.imul rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.add rax rdi
+            ATSubPtr -> maybe' (err "The type is not pointer") (CR.derefMaybe t) $ \dt -> T.putStr $ I.imul rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.sub rax rdi
+            ATSubPtrAssign -> maybe' (err "The type is not pointer") (CR.derefMaybe t) $ \dt -> T.putStr $ I.imul rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.sub rax rdi
+            ATPtrDis -> maybe' (err "The type is not pointer") (CR.derefMaybe $ atype lhs) $ \dt -> T.putStr $ I.sub rax rdi <> I.cqo <> I.mov rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.idiv rdi
+            ATMul -> T.putStr $ I.imul rax rdi 
+            ATMulAssign -> T.putStr $ I.imul rax rdi
+            ATDiv -> T.putStr $ I.cqo <> I.idiv rdi
+            ATDivAssign -> T.putStr $ I.cqo <> I.idiv rdi
+            ATMod -> T.putStr $ I.cqo <> I.idiv rdi <> I.mov rax rdx
+            ATAnd -> T.putStr $ I.and rax rdi
+            ATOr -> T.putStr $ I.or rax rdi 
+            ATXor -> T.putStr $ I.xor rax rdi 
+            ATShl -> T.putStr $ I.mov edx eax <> I.mov rax rdi <> I.mov ecx edx <> I.shl rax cl 
+            ATShr -> T.putStr $ I.push rax <> I.mov rax rdi <> I.mov edx eax <> I.pop rax <> I.mov ecx edx <> I.sar rax cl  
+            ATEQ -> T.putStr $ I.cmp rax rdi <> I.sete al <> I.movzb rax al
+            ATNEQ -> T.putStr $ I.cmp rax rdi <> I.setne al <> I.movzb rax al
+            ATLT -> T.putStr $ I.cmp rax rdi <> I.setl al <> I.movzb rax al
+            ATLEQ -> T.putStr $ I.cmp rax rdi <> I.setle al <> I.movzb rax al
+            ATGT -> T.putStr $ I.cmp rax rdi <> I.setg al <> I.movzb rax al
+            ATGEQ -> T.putStr $ I.cmp rax rdi <> I.setge al <> I.movzb rax al
+            _ -> err "Failed to assemble."
+        f ATEmpty = err "Failed to assemble."
 genStmt _ _ = return ()
 
 {-# INLINE repSpace #-}
