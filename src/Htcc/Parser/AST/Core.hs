@@ -71,24 +71,27 @@ fromATKindFor _ = error "ATKindFor is ATForkw"
 
 -- | The syntax tree type. Let \(x,y\in\mathbb{N}\), Let \(p\) and \(q\) be pointers to variables \(a\) and \(b\), respectively (@p=&a,q=&b@).
 data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
-    | ATAddPtr -- ^ Add operation for pointer \(p+x,x+p\): @p + x, x + p@
+    | ATAddPtr -- ^ add operation for pointer \(p+x,x+p\): @p + x, x + p@
     | ATSub -- ^ \(x-y\): @x - y@
-    | ATSubPtr -- ^ Sub operation for pointer \(p-x\): @p - x@
+    | ATSubPtr -- ^ sub operation for pointer \(p-x\): @p - x@
     | ATPtrDis -- ^ The distance of pointers \(p-q\): @p - q@
     | ATMul -- ^ \(x\times y\): @x * y@
     | ATDiv -- ^ \(x\div y\): @x / y@
     | ATMod -- ^ \(x\bmod y\): @x % y@
-    | ATAddAssign -- ^ @x += y@
-    | ATSubAssign -- ^ @x -= y@
-    | ATMulAssign -- ^ @x *= y@
-    | ATDivAssign -- ^ @x /= y@
-    | ATAddPtrAssign -- ^ @p += q@
-    | ATSubPtrAssign -- ^ @p -= q@
+    | ATAddAssign -- ^ addition assignment: @x += y@
+    | ATSubAssign -- ^ subtraction assignment: @x -= y@
+    | ATMulAssign -- ^ multiplication assignment: @x *= y@
+    | ATDivAssign -- ^ division assignment: @x /= y@
+    | ATAddPtrAssign -- ^ addition assignment for pointer: @p += q@
+    | ATSubPtrAssign -- ^ subtraction assignment for pointer: @p -= q@
     | ATLAnd -- ^ logical and: @x && y@
-    | ATLOr -- ^ logical or: @xx || y@
+    | ATLOr -- ^ logical or: @x || y@
     | ATAnd -- ^ bitwise and: @x & y@
+    | ATAndAssign -- ^ bitwise and assignment: @x &= y@
     | ATOr -- ^ bitwise or: @x | y@
+    | ATOrAssign -- ^ bitwise or assignment: @x |= y@
     | ATXor -- ^ bitwise xor: @x ^ y@
+    | ATXorAssign -- ^ bitwise xor assignment: @x ^= y@
     | ATBitNot -- ^ bitwise not: @~x@
     | ATShl -- ^ left shift: @x << y@
     | ATShr -- ^ right shift: @x >> y@
@@ -98,34 +101,36 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATGEQ -- ^ \(x\geq y\): @x >= y@
     | ATEQ  -- ^ \(x=y\): @x == y@
     | ATNEQ -- ^ \(x\not= y\): @x != y@
-    | ATNot -- ^ The not operator @!@: @!x@
-    | ATAddr -- ^ The addressing operator @&@: @&x@
-    | ATDeref -- ^ The dereferencing operator @*@: @*p@
-    | ATAssign -- ^ The assign operator: @x=y@
-    | ATPreInc -- ^ The Pre-increment operator: @++a@
-    | ATPreDec -- ^ The Pre-decrement operator: @--a@
-    | ATPostInc -- ^ The Post-increment operator: @a++@
-    | ATPostDec -- ^ The Post-decrement operator: @a--@
+    | ATNot -- ^ not operator @!@: @!x@
+    | ATAddr -- ^ addressing operator @&@: @&x@
+    | ATDeref -- ^ dereferencing operator @*@: @*p@
+    | ATAssign -- ^ assign operator: @x=y@
+    | ATPreInc -- ^ pre-increment operator: @++a@
+    | ATPreDec -- ^ pre-decrement operator: @--a@
+    | ATPostInc -- ^ post-increment operator: @a++@
+    | ATPostDec -- ^ post-decrement operator: @a--@
     | ATNum a -- ^ The number
-    | ATComma -- ^ The comma operator: @,@
-    | ATCast -- ^ The cast operation: @(type) x@
-    | ATMemberAcc (CT.StructMember a) -- ^ Accessing the member of the @struct@
-    | ATReturn -- ^ The @return@ keyword
-    | ATIf -- ^ The @if@ keyword
-    | ATElse -- ^ The @else@ keyword
-    | ATWhile -- ^ The @while@ keyword
-    | ATFor [ATKindFor a] -- ^ The @for@ keyword
-    | ATBlock [ATree a] -- ^ The compound statement
-    | ATLVar (CT.TypeKind a) a -- ^ The local variable. It has a type information (as `CT.TypeKind`) and an offset value
-    | ATGVar (CT.TypeKind a) T.Text -- ^ The global variable. It has a type information (as `CT.TypeKind`) and an name
-    | ATDefFunc T.Text (Maybe [ATree a]) -- ^ The function definition
-    | ATCallFunc T.Text (Maybe [ATree a]) -- ^ The function call. It has a offset value and arguments (`Maybe`)
-    | ATExprStmt -- ^ The expression of a statement
-    | ATStmtExpr [ATree a] -- ^ The statement of a expression (GNU extension)
-    | ATNull (ATree a) -- ^ Indicates nothing to do
+    | ATComma -- ^ comma operator: @,@
+    | ATCast -- ^ the cast operation: @(type) x@
+    | ATMemberAcc (CT.StructMember a) -- ^ accessing the member of the @struct@
+    | ATReturn -- ^ the @return@ keyword
+    | ATIf -- ^ the @if@ keyword
+    | ATElse -- ^ the @else@ keyword
+    | ATWhile -- ^ the @while@ keyword
+    | ATFor [ATKindFor a] -- ^ the @for@ keyword
+    | ATBlock [ATree a] -- ^ the compound statement
+    | ATLVar (CT.TypeKind a) a -- ^ the local variable. It has a type information (as `CT.TypeKind`) and an offset value
+    | ATGVar (CT.TypeKind a) T.Text -- ^ the global variable. It has a type information (as `CT.TypeKind`) and an name
+    | ATDefFunc T.Text (Maybe [ATree a]) -- ^ the function definition
+    | ATCallFunc T.Text (Maybe [ATree a]) -- ^ the function call. It has a offset value and arguments (`Maybe`)
+    | ATExprStmt -- ^ the expression of a statement
+    | ATStmtExpr [ATree a] -- ^ the statement of a expression (GNU extension)
+    | ATNull (ATree a) -- ^ indicates nothing to do
     deriving Show
 
 {-# INLINE isComplexAssign #-}
+-- | Returns True if the given `ATKind` is an assignment operator other than simple assignment. 
+-- Otherwise, returns `False`.
 isComplexAssign :: ATKind a -> Bool
 isComplexAssign ATAddAssign = True
 isComplexAssign ATSubAssign = True
@@ -133,6 +138,9 @@ isComplexAssign ATMulAssign = True
 isComplexAssign ATDivAssign = True
 isComplexAssign ATAddPtrAssign = True
 isComplexAssign ATSubPtrAssign = True
+isComplexAssign ATOrAssign = True
+isComplexAssign ATAndAssign = True
+isComplexAssign ATXorAssign = True
 isComplexAssign _ = False
 
 -- | The data structure of abstract syntax tree
