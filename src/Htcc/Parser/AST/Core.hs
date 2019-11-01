@@ -84,6 +84,8 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATDivAssign -- ^ @x /= y@
     | ATAddPtrAssign -- ^ @p += q@
     | ATSubPtrAssign -- ^ @p -= q@
+    | ATLAnd -- ^ logical and: @x && y@
+    | ATLOr -- ^ logical or: @xx || y@
     | ATAnd -- ^ bitwise and: @x & y@
     | ATOr -- ^ bitwise or: @x | y@
     | ATXor -- ^ bitwise xor: @x ^ y@
