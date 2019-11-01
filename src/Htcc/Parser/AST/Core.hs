@@ -94,7 +94,9 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATXorAssign -- ^ bitwise xor assignment: @x ^= y@
     | ATBitNot -- ^ bitwise not: @~x@
     | ATShl -- ^ left shift: @x << y@
+    | ATShlAssign -- ^ left shift assignment: @x <<= y@
     | ATShr -- ^ right shift: @x >> y@
+    | ATShrAssign -- ^ right shift assignment: @x >>= y@
     | ATLT  -- ^ \(x\lt y\): @x < y@
     | ATLEQ -- ^ \(x\leq y\): @x <= y@
     | ATGT  -- ^ \(x\gt y\): @x > y@
@@ -141,6 +143,8 @@ isComplexAssign ATSubPtrAssign = True
 isComplexAssign ATOrAssign = True
 isComplexAssign ATAndAssign = True
 isComplexAssign ATXorAssign = True
+isComplexAssign ATShlAssign = True
+isComplexAssign ATShrAssign = True
 isComplexAssign _ = False
 
 -- | The data structure of abstract syntax tree

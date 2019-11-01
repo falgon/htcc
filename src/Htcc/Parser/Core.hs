@@ -204,6 +204,8 @@ assign xs atn scp = (>>=) (logicalOr xs atn scp) $ \(ert, erat, erscp) -> case e
     (_, HT.TKReserved "&="):ys -> second3 (ATNode ATAndAssign (atype erat) erat) <$> assign ys erat erscp
     (_, HT.TKReserved "|="):ys -> second3 (ATNode ATOrAssign (atype erat) erat) <$> assign ys erat erscp
     (_, HT.TKReserved "^="):ys -> second3 (ATNode ATXorAssign (atype erat) erat) <$> assign ys erat erscp
+    (_, HT.TKReserved "<<="):ys -> second3 (ATNode ATShlAssign (atype erat) erat) <$> assign ys erat erscp
+    (_, HT.TKReserved ">>="):ys -> second3 (ATNode ATShrAssign (atype erat) erat) <$> assign ys erat erscp
     (_, HT.TKReserved "+="):ys -> second3 (maybe (ATNode ATAddAssign (atype erat) erat) (const $ ATNode ATAddPtrAssign (atype erat) erat) $ CT.derefMaybe (atype erat)) <$> assign ys erat erscp
     (_, HT.TKReserved "-="):ys -> second3 (maybe (ATNode ATSubAssign (atype erat) erat) (const $ ATNode ATSubPtrAssign (atype erat) erat) $ CT.derefMaybe (atype erat)) <$> assign ys erat erscp
     _ -> Right (ert, erat, erscp)

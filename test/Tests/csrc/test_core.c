@@ -326,6 +326,11 @@ int main()
     assert(7, ({ int a = 6; a |= 3; }), "({ int a = 6; a |= 3; })");
     assert(10, ({ int a = 15; a ^= 5; a; }), "({ int a = 15; a ^= 5; a; })");
     assert(10, ({ int a = 15; a ^= 5; }), "({ int a = 15; a ^= 5; })");
+    assert(2, ({ int a = 1; a <<= 1; a; }), "({ int a = 1; a <<= 1; a; })");
+    assert(2, ({ int a = 1; a <<= 1; }), "({ int a = 1; a <<= 1; })");
+    assert(2, ({ int a = 4; a >>= 1; a; }), "({ int a = 4; a >>= 1; a; })");
+    assert(2, ({ int a = 4; a >>= 1; }), "({ int a = 4; a >>= 1; })");
+    assert(-1, ({ int a = -1; a >>= 1; }), "({ int a = -1; a >>= 1; })");
 
     printf(">> All tests passed <<\n");
 
