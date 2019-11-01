@@ -235,7 +235,9 @@ genStmt c (ATNode kd ty lhs rhs)
             ATXor -> T.putStr $ I.xor rax rdi 
             ATXorAssign -> T.putStr $ I.xor rax rdi
             ATShl -> T.putStr $ I.mov edx eax <> I.mov rax rdi <> I.mov ecx edx <> I.shl rax cl 
+            ATShlAssign -> T.putStr $ I.mov edx eax <> I.mov rax rdi <> I.mov ecx edx <> I.shl rax cl 
             ATShr -> T.putStr $ I.push rax <> I.mov rax rdi <> I.mov edx eax <> I.pop rax <> I.mov ecx edx <> I.sar rax cl  
+            ATShrAssign -> T.putStr $ I.push rax <> I.mov rax rdi <> I.mov edx eax <> I.pop rax <> I.mov ecx edx <> I.sar rax cl  
             ATEQ -> T.putStr $ I.cmp rax rdi <> I.sete al <> I.movzb rax al
             ATNEQ -> T.putStr $ I.cmp rax rdi <> I.setne al <> I.movzb rax al
             ATLT -> T.putStr $ I.cmp rax rdi <> I.setl al <> I.movzb rax al
