@@ -183,6 +183,16 @@ genStmt c (ATNode ATReturn _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax) >>
 genStmt c (ATNode ATCast t lhs _) = genStmt c lhs >> T.putStr (truncate t)
 genStmt c (ATNode ATExprStmt _ lhs _) = genStmt c lhs >> T.putStr (I.add rsp (8 :: Int))
 genStmt c (ATNode ATBitNot _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.not rax <> I.push rax)
+genStmt c (ATNode ATLAnd _ lhs rhs) = do
+    n <- labelNumber c
+    genStmt c lhs >> T.putStr (I.pop rax <> I.cmp rax (0 :: Int) <> I.je (I.refLLbl ".false." n))
+    genStmt c rhs >> T.putStr (I.pop rax <> I.cmp rax (0 :: Int) <> I.je (I.refLLbl ".false." n))
+    T.putStr $ I.push (1 :: Int) <> I.jmp (I.refLLbl ".end." n) <> I.defLLbl ".false." n <> I.push (0 :: Int) <> I.defLLbl ".end." n
+genStmt c (ATNode ATLOr _ lhs rhs) = do
+    n <- labelNumber c
+    genStmt c lhs >> T.putStr (I.pop rax <> I.cmp rax (0 :: Int) <> I.jne (I.refLLbl ".true." n))
+    genStmt c rhs >> T.putStr (I.pop rax <> I.cmp rax (0 :: Int) <> I.jne (I.refLLbl ".true." n))
+    T.putStr $ I.push (0 :: Int) <> I.jmp (I.refLLbl ".end." n) <> I.defLLbl ".true." n <> I.push (1 :: Int) <> I.defLLbl ".end." n
 genStmt c (ATNode ATPreInc t lhs _) = genLval c lhs >> T.putStr (I.push (Ref rsp) <> load t <> increment t <> store t) 
 genStmt c (ATNode ATPreDec t lhs _) = genLval c lhs >> T.putStr (I.push (Ref rsp) <> load t <> decrement t <> store t) 
 genStmt c (ATNode ATPostInc t lhs _) = genLval c lhs >> T.putStr (I.push (Ref rsp) <> load t <> increment t <> store t <> decrement t)
@@ -199,11 +209,11 @@ genStmt c n@(ATNode (ATGVar _ _) t _ _) = genAddr c n >> unless (CR.isCTArray t)
 genStmt c n@(ATNode (ATMemberAcc _) t _ _) = genAddr c n >> unless (CR.isCTArray t) (T.putStr $ load t)
 genStmt c (ATNode ATAssign t lhs rhs) = genLval c lhs >> genStmt c rhs >> T.putStr (store t)
 genStmt _ (ATNode (ATNull _) _ _ _) = return ()
-genStmt c node@(ATNode kd ty lhs rhs)
-    | isComplexAssign kd = genLval c lhs >> T.putStr (I.push (Ref rsp) <> load ty) >> genStmt c rhs >> f node >> T.putStr (store ty)
-    | otherwise = genStmt c lhs >> genStmt c rhs >> f node
+genStmt c (ATNode kd ty lhs rhs)
+    | isComplexAssign kd = genLval c lhs >> T.putStr (I.push (Ref rsp) <> load ty) >> genStmt c rhs >> f kd ty >> T.putStr (store ty)
+    | otherwise = genStmt c lhs >> genStmt c rhs >> f kd ty
     where
-        f (ATNode k t _ _) = flip finally (T.putStr $ I.push rax) $ T.putStr (I.pop rdi) *> T.putStr (I.pop rax) *> case k of
+        f k t = flip finally (T.putStr $ I.push rax) $ T.putStr (I.pop rdi) *> T.putStr (I.pop rax) *> case k of
             ATAdd -> T.putStr $ I.add rax rdi 
             ATAddAssign -> T.putStrLn $ I.add rax rdi
             ATSub -> T.putStr $ I.sub rax rdi 
@@ -230,7 +240,6 @@ genStmt c node@(ATNode kd ty lhs rhs)
             ATGT -> T.putStr $ I.cmp rax rdi <> I.setg al <> I.movzb rax al
             ATGEQ -> T.putStr $ I.cmp rax rdi <> I.setge al <> I.movzb rax al
             _ -> err "Failed to assemble."
-        f ATEmpty = err "Failed to assemble."
 genStmt _ _ = return ()
 
 {-# INLINE repSpace #-}

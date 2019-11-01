@@ -314,6 +314,12 @@ int main()
     assert(42, ({ int a = 84; a /= 2; }), "int a = 84; a /= 2;");
     assert(1, ({ int ar[2]; int i = 0; for (; i < sizeof ar / sizeof *ar; ++i) ar[i] = i; int* p = ar; p += 1; *p; }), "({ int ar[2]; int i = 0; for (; i < sizeof ar / sizeof *ar; ++i) ar[i] = i; int* p = ar; p += 1; *p; })");
     assert(0, ({ int ar[2]; int i = 0; for (; i < sizeof ar / sizeof *ar; ++i) ar[i] = i; int* p = ar + 1; p -= 1; *p; }), "({ int ar[2]; int i = 0; for (; i < sizeof ar / sizeof *ar; ++i) ar[i] = i; int* p = ar + 1; p -= 1; *p; })");
+    assert(1, 1 || 0, "1 || 0");
+    assert(1, (1 + 1) || 0 || 0, "(1 + 1) || 0 || 0");
+    assert(0, 0 || 0, "0 || 0");
+    assert(0, 0 || (1 - 1), "0 || (1 - 1)");
+    assert(1, 1 && 2, "1 && 2");
+    assert(0, 2 && 3 && 4 && 0, "2 && 3 && 4 && 0");
 
     printf(">> All tests passed <<\n");
 

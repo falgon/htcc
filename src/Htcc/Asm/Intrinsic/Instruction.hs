@@ -32,6 +32,7 @@ module Htcc.Asm.Intrinsic.Instruction (
     leave,
     jmp,
     je,
+    jne,
     jnz,
     call
 ) where
@@ -218,6 +219,10 @@ jmp = flip T.append "\n" . T.append "\tjmp "
 -- | The @je@ instruction.
 je :: T.Text -> T.Text
 je = flip T.append "\n" . T.append "\tje "
+
+-- | The @jne@ instruction.
+jne :: T.Text -> T.Text
+jne = flip T.append "\n" . T.append "\tjne "
 
 -- | The @jnz@ instruction.
 jnz :: T.Text -> T.Text
