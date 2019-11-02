@@ -23,7 +23,7 @@ import qualified Data.Text as T
 import Control.DeepSeq (NFData (..))
 
 import Htcc.Parser.AST.Scope.ManagedScope
-import Htcc.Parser.Utils (internalCE)
+import Htcc.Parser.AST.Scope.Utils (internalCE)
 import qualified Htcc.CRules.Types as CT
 import qualified Htcc.Tokenizer.Token as HT
 
