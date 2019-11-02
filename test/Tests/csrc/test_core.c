@@ -335,6 +335,8 @@ int main()
     assert(42, 0 ? 0 : 42, "0 ? 0 : 42");
     assert(42, ({ int a = 1; int b = 0; a || b ? 42 : 0; }), "({ int a = 1; int b = 0; a || b ? 42 : 0; })");
     assert(42, ({ int a = 1; int b = 0; a && b ? 0 : 42; }), "({ int a = 1; int b = 0; a && b ? 0 : 42; })");
+    assert(43, ({ enum { a = 14 + 14 + 14, b }; b; }), "({ enum { a = 14 + 14 + 14, b }; b; })");
+    assert(10, ({ int ar[2 ? 5 * 2 : 5]; sizeof ar / sizeof *ar; }), "({ int ar[2 ? 5 * 2 : 5]; sizeof ar / sizeof *ar; })");
 
     printf(">> All tests passed <<\n");
 

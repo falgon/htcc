@@ -11,10 +11,8 @@ The tokenizer
 -}
 module Htcc.Tokenizer (
     module Htcc.Tokenizer.Core,
-    module Htcc.Tokenizer.Token,
-    module Htcc.Tokenizer.Utils
+    module Htcc.Tokenizer.Token
 ) where
 
 import Htcc.Tokenizer.Core
 import Htcc.Tokenizer.Token
-import Htcc.Tokenizer.Utils

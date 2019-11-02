@@ -41,7 +41,7 @@ import qualified Htcc.Parser.AST.Scope.ManagedScope as SM
 import qualified Htcc.Tokenizer.Token as HT
 import qualified Htcc.CRules.Types as CT
 import Htcc.Parser.AST.Core (ATree (..), ATKind (..))
-import Htcc.Parser.Utils (internalCE)
+import Htcc.Parser.AST.Scope.Utils (internalCE)
 import Htcc.Utils (tshow)
 
 -- | The data type of global variable

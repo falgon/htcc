@@ -17,6 +17,7 @@ module Htcc.Tokenizer.Token (
     Token (..),
     -- * Utilities for accessing to token data
     length,
+    emptyToken,
     isTKNum,
     isTKType,
     isTKStruct,
@@ -226,3 +227,7 @@ spanStrLiteral = spanLiteral '"'
 -- | `spanCharLiteral` separate the string literal part and the non-string literal part from the input text
 spanCharLiteral :: T.Text -> Maybe (T.Text, T.Text)
 spanCharLiteral = spanLiteral '\''
+
+-- or when it cannot be referenced
+emptyToken :: Num i => TokenLC i
+emptyToken = (TokenLCNums 0 0, TKEmpty)
