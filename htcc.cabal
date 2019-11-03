@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4b98e6a5831ad137f26d59ee991f740d6fbe63180a8656584fc76fbb56798b58
+-- hash: 314b0a180989daca9af16db56d5e54b60f6f3e360a8efd2f1cdab8a6229dff3e
 
 name:           htcc
 version:        0.0.0.1
@@ -50,6 +50,8 @@ library
       Htcc.CRules.Char
       Htcc.CRules.LexicalElements
       Htcc.CRules.Types
+      Htcc.CRules.Types.Core
+      Htcc.CRules.Types.CType
       Htcc.Parser
       Htcc.Parser.AST
       Htcc.Parser.AST.Core

@@ -152,7 +152,7 @@ addGVar _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
 
 -- | If the specified token is `HT.TKString`, `addLiteral` adds a new literal to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
-addLiteral :: Num i => CT.TypeKind i -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
+addLiteral :: (Ord i, Num i) => CT.TypeKind i -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
 addLiteral t (_, HT.TKString cont) vars 
     | null (literals vars) = let lit = Literal (CT.removeAllExtents t) 0 cont; nat = ATNode (ATGVar t ".L.data.0") t ATEmpty ATEmpty in
         Right (nat, vars { literals = lit : literals vars })

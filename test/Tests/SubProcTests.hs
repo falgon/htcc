@@ -4,6 +4,7 @@ module Tests.SubProcTests (
 ) where
 
 import Data.Char (ord)
+import Numeric.Natural
 
 import Tests.Utils hiding (exec)
 import qualified Tests.Test1 as StatementEqual
@@ -13,7 +14,7 @@ import qualified Tests.Test3 as LinkFuncStdOut
 import qualified Htcc.CRules.Types as CT
 
 exec :: IO ()
-exec = runTestsEx [
+exec = let sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural in runTestsEx [
     (StatementEqual.test "int main() { return 42; }", 42),
     (StatementEqual.test "int main() { return 1+2; }", 3),
     (StatementEqual.test "int main() { return 1+2+4; }", 7),
@@ -124,16 +125,16 @@ exec = runTestsEx [
     (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[4] = 42; return ar[1][1]; }", 42),
     (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[5] = 42; return ar[1][2]; }", 42),
     (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[6] = 42; return ar[2][0]; }", 42),
-    (StatementEqual.test "int main() { int a; return sizeof(a); }", fromIntegral $ CT.sizeof CT.CTInt),
-    (StatementEqual.test "int main() { int a; return sizeof a; }", fromIntegral $ CT.sizeof CT.CTInt),
-    (StatementEqual.test "int main() { int* p; return sizeof p; }", fromIntegral $ CT.sizeof $ CT.CTPtr CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3]; return sizeof ar; }", fromIntegral $ CT.sizeof $ CT.CTArray 3 CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof ar; }", fromIntegral $ CT.sizeof $ CT.CTArray 5 $ CT.CTArray 3 CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof *ar; }", fromIntegral $ CT.sizeof $ CT.CTArray 5 CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar; }", fromIntegral $ CT.sizeof CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar) + 1; }", succ $ fromIntegral $ CT.sizeof CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar + 1; }", succ $ fromIntegral $ CT.sizeof CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar + 1); }", fromIntegral $ CT.sizeof CT.CTLong),
+    (StatementEqual.test "int main() { int a; return sizeof(a); }", fromIntegral $ sizeof CT.CTInt),
+    (StatementEqual.test "int main() { int a; return sizeof a; }", fromIntegral $ sizeof CT.CTInt),
+    (StatementEqual.test "int main() { int* p; return sizeof p; }", fromIntegral $ sizeof $ CT.CTPtr CT.CTInt),
+    (StatementEqual.test "int main() { int ar[3]; return sizeof ar; }", fromIntegral $ sizeof $ CT.CTArray 3 CT.CTInt),
+    (StatementEqual.test "int main() { int ar[3][5]; return sizeof ar; }", fromIntegral $ sizeof $ CT.CTArray 5 $ CT.CTArray 3 CT.CTInt),
+    (StatementEqual.test "int main() { int ar[3][5]; return sizeof *ar; }", fromIntegral $ sizeof $ CT.CTArray 5 CT.CTInt),
+    (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar; }", fromIntegral $ sizeof CT.CTInt),
+    (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar) + 1; }", succ $ fromIntegral $ sizeof CT.CTInt),
+    (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar + 1; }", succ $ fromIntegral $ sizeof CT.CTInt),
+    (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar + 1); }", fromIntegral $ sizeof $ CT.CTLong CT.CTInt),
     (StatementEqual.test "int main() { int ar[2]; 2[ar] = 42; return ar[2]; }", 42),
     (StatementEqual.test "int g; int main() { return g; }", 0),
     (StatementEqual.test "int g; int main() { g = 42; return g; }", 42),
@@ -144,7 +145,7 @@ exec = runTestsEx [
     (StatementEqual.test "int main() { char c1 = 1; char c2 = 2; return c1; }", 1),
     (StatementEqual.test "int main() { char c1 = 1; char c2 = 2; return c2; }", 2),
     (StatementEqual.test "int main() { char x; return sizeof x; }", 1),
-    (StatementEqual.test "int main() { char ar[10]; return sizeof ar; }", fromIntegral $ CT.sizeof $ CT.CTArray 10 CT.CTChar),
+    (StatementEqual.test "int main() { char ar[10]; return sizeof ar; }", fromIntegral $ sizeof $ CT.CTArray 10 CT.CTChar),
     (StatementEqual.test "int f(char a, char b, char c) { return a - b - c; } int main() { return f(7, 3, 3); }", 1),
     (StatementEqual.test "int f(char a, int b, char c) { return a - b - c; } int main() { return f(7, 3, 3); }", 1),
     (StatementEqual.test "int main() { return \"abc\"[0]; }", ord 'a'),

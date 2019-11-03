@@ -51,7 +51,7 @@ takeBrace leftb rightb xxs@((_, HT.TKReserved y):_)
         f !l !r ((p, x):xs') = first ((:) (p, x)) <$> f l r xs'
 takeBrace _ _ _ = Nothing
 
--- | Get an argument from list of `Token` (e.g: Given the token of @f(g(a, b)), 42@, return the token of @f(g(a, b))@).
+-- | Get an argument from list of `Htcc.Tokenizer.Token` (e.g: Given the token of @f(g(a, b)), 42@, return the token of @f(g(a, b))@).
 readFn :: Eq i => [HT.TokenLC i] -> Maybe ([HT.TokenLC i], [HT.TokenLC i])
 readFn = readFn' 0 (0 :: Int)
     where
@@ -67,7 +67,7 @@ readFn = readFn' 0 (0 :: Int)
             | otherwise = Nothing
         readFn' !li !ri (x:xs) = first (x:) <$> readFn' li ri xs
 
--- | Get arguments from list of `Token` (e.g: Given the token of @f(f(g(a, b)), 42);@, 
+-- | Get arguments from list of `Htcc.Tokenizer.Token` (e.g: Given the token of @f(f(g(a, b)), 42);@, 
 -- return expressions that are the token of "f(g(a, b))" and the token of "42".
 takeExps :: Eq i => [HT.TokenLC i] -> Maybe [[HT.TokenLC i]]
 takeExps ((_, HT.TKIdent _):(_, HT.TKReserved "("):xs) = maybe' Nothing (lastInit ((==HT.TKReserved ")") . snd) xs) $ fmap (filter (not . null)) . f

@@ -64,7 +64,7 @@ epilogue Nothing = err "internal compiler error: The function name cannot be tra
 epilogue (Just fn) = T.putStr $ I.defLLbl (".return." <> fn <> ".") (0 :: Int) <> I.leave <> I.ret
 
 {-# INLINE load #-}
-load :: CR.TypeKind i -> T.Text
+load :: Ord i => CR.TypeKind i -> T.Text
 load t 
     | CR.sizeof t == 1 = I.pop rax <> I.movsx rax (I.byte I.Ptr (Ref rax)) <> I.push rax
     | CR.sizeof t == 2 = I.pop rax <> I.movsx rax (I.word I.Ptr (Ref rax)) <> I.push rax
@@ -72,7 +72,7 @@ load t
     | otherwise = I.pop rax <> I.mov rax (Ref rax) <> I.push rax
 
 {-# INLINE store #-}
-store :: CR.TypeKind i -> T.Text
+store :: Ord i => CR.TypeKind i -> T.Text
 store ty = I.pop rdi <> I.pop rax <> booleanRound ty <> store' ty <> I.push rdi
     where
         booleanRound CR.CTBool = I.cmp rdi (0 :: Int) <> I.setne dil <> I.movzb rdi dil
@@ -84,7 +84,7 @@ store ty = I.pop rdi <> I.pop rax <> booleanRound ty <> store' ty <> I.push rdi
             | otherwise = I.mov (Ref rax) rdi
 
 {-# INLINE truncate #-}
-truncate :: CR.TypeKind i -> T.Text
+truncate :: Ord i => CR.TypeKind i -> T.Text
 truncate ty = I.pop rax <> booleanRound ty <> truncate' ty <> I.push rax
     where   
         booleanRound CR.CTBool = I.cmp rax (0 :: Int) <> I.setne al
@@ -96,12 +96,12 @@ truncate ty = I.pop rax <> booleanRound ty <> truncate' ty <> I.push rax
             | otherwise = ""
 
 {-# INLINE increment #-}
-increment :: CR.TypeKind i -> T.Text
-increment t = I.pop rax <> I.add rax (maybe 1 CR.sizeof $ CR.derefMaybe t) <> I.push rax
+increment :: Ord i => CR.TypeKind i -> T.Text
+increment t = I.pop rax <> I.add rax (maybe 1 CR.sizeof $ CR.deref t) <> I.push rax
 
 {-# INLINE decrement #-}
-decrement :: CR.TypeKind i -> T.Text
-decrement t = I.pop rax <> I.sub rax (maybe 1 CR.sizeof $ CR.derefMaybe t) <> I.push rax
+decrement :: Ord i => CR.TypeKind i -> T.Text
+decrement t = I.pop rax <> I.sub rax (maybe 1 CR.sizeof $ CR.deref t) <> I.push rax
 
 genAddr :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => GenStatus -> ATree i -> IO ()
 genAddr _ (ATNode (ATLVar _ v) _ _ _) = T.putStr $ I.lea rax (Ref $ rbp `osub` v) <> I.push rax
@@ -223,11 +223,11 @@ genStmt c (ATNode kd ty lhs rhs)
             ATAddAssign -> T.putStrLn $ I.add rax rdi
             ATSub -> T.putStr $ I.sub rax rdi 
             ATSubAssign -> T.putStr $ I.sub rax rdi
-            ATAddPtr -> maybe' (err "The type is not pointer") (CR.derefMaybe t) $ \dt -> T.putStr $ I.imul rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.add rax rdi
-            ATAddPtrAssign -> maybe' (err "The type is not pointer") (CR.derefMaybe t) $ \dt -> T.putStr $ I.imul rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.add rax rdi
-            ATSubPtr -> maybe' (err "The type is not pointer") (CR.derefMaybe t) $ \dt -> T.putStr $ I.imul rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.sub rax rdi
-            ATSubPtrAssign -> maybe' (err "The type is not pointer") (CR.derefMaybe t) $ \dt -> T.putStr $ I.imul rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.sub rax rdi
-            ATPtrDis -> maybe' (err "The type is not pointer") (CR.derefMaybe $ atype lhs) $ \dt -> T.putStr $ I.sub rax rdi <> I.cqo <> I.mov rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.idiv rdi
+            ATAddPtr -> maybe' (err "The type is not pointer") (CR.deref t) $ \dt -> T.putStr $ I.imul rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.add rax rdi
+            ATAddPtrAssign -> maybe' (err "The type is not pointer") (CR.deref t) $ \dt -> T.putStr $ I.imul rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.add rax rdi
+            ATSubPtr -> maybe' (err "The type is not pointer") (CR.deref t) $ \dt -> T.putStr $ I.imul rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.sub rax rdi
+            ATSubPtrAssign -> maybe' (err "The type is not pointer") (CR.deref t) $ \dt -> T.putStr $ I.imul rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.sub rax rdi
+            ATPtrDis -> maybe' (err "The type is not pointer") (CR.deref $ atype lhs) $ \dt -> T.putStr $ I.sub rax rdi <> I.cqo <> I.mov rdi (fromIntegral (CR.sizeof dt) :: Int) <> I.idiv rdi
             ATMul -> T.putStr $ I.imul rax rdi 
             ATMulAssign -> T.putStr $ I.imul rax rdi
             ATDiv -> T.putStr $ I.cqo <> I.idiv rdi
@@ -291,7 +291,7 @@ parsedErrExit = (.) (>> exitFailure) . parsedMessage ErrorMessage
 parsedWarn :: (Integral i, Show i) => InputCCode -> S.Seq (ASTError i) -> IO ()
 parsedWarn xs warns = mapM_ (parsedMessage WarningMessage xs) (toList warns)
 
-dataSection :: M.Map T.Text (GVar i) -> [Literal i] -> IO ()
+dataSection :: Ord i => M.Map T.Text (GVar i) -> [Literal i] -> IO ()
 dataSection gvars lits = do
     T.putStrLn ".data"
     mapM_ (\(Literal _ n cnt) -> T.putStrLn (".L.data." <> tshow n <> ":") >> T.putStr "\t.byte " >> T.putStrLn (T.intercalate ", " $ map tshow $ B.unpack cnt)) lits
