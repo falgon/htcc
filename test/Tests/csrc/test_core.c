@@ -289,6 +289,7 @@ int main()
     assert(4, ({ enum { zero, five = 5, three = 3, four }; four; }), "enum { zero, five = 5, three = 3, four }; four;");
     assert(4, ({ enum { zero, one, two } x; sizeof x; }), "enum { zero, one, two } x; sizeof x;");
     assert(4, ({ enum t { zero, one, two }; enum t y; sizeof y; }), "enum t { zero, one, two }; enum t y; sizeof y;");
+    assert(0, ({ typedef enum { zero } e; e y = zero; y; }), " ({ typedef enum { zero } e; e y = zero; y; })");
     assert(42, (1, 2, 42), "(1, 2, 42)");
     assert(42, ({ int a = 41; ++a; }), "({ int a = 41; ++a; })");
     assert(42, ({ int a = 43; --a; }), "({ int a = 43; --a; })");
