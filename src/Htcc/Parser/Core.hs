@@ -272,6 +272,7 @@ program xs !scp = either Left (\(ys, atn, !scp') -> first (atn:) <$> program ys 
 globalDef :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
 globalDef xs@((_, HT.TKTypedef):(_, HT.TKType _):_) _ sc = defTypedef xs sc -- for global @typedef@ with type
 globalDef xs@((_, HT.TKTypedef):(_, HT.TKStruct):_) _ sc = defTypedef xs sc -- for global @typedef@ with struct 
+globalDef xs@((_, HT.TKTypedef):(_, HT.TKEnum):_) _ sc = defTypedef xs sc -- for global @typedef@ with enum
 globalDef xs@((_, HT.TKTypedef):(_, HT.TKIdent _):_) _ sc = defTypedef xs sc -- for global @typedef@ with type defined by @typedef@
 globalDef tks at !va = (>>=) (takeType tks va) $ \case
     (_, Nothing, (_, HT.TKReserved ";"):ds', scp) -> Right (ds', ATEmpty, scp) -- e.g., @int;@ is legal in C11 (See N1570/section 6.7 Declarations)
@@ -343,6 +344,7 @@ stmt xxs@(cur@(_, HT.TKReserved "{"):_) _ !scp = maybe' (Left (internalCE, cur))
 stmt ((_, HT.TKReserved ";"):xs) atn !scp = Right (xs, atn, scp) -- for only @;@
 stmt xs@((_, HT.TKTypedef):(_, HT.TKType _):_) _ scp = defTypedef xs scp -- for definition of @typedef@
 stmt xs@((_, HT.TKTypedef):(_, HT.TKStruct):_) _ scp = defTypedef xs scp -- for definition of @typedef@
+stmt xs@((_, HT.TKTypedef):(_, HT.TKEnum):_) _ scp = defTypedef xs scp -- for definition of @typedef@
 stmt xs@((_, HT.TKTypedef):(_, HT.TKIdent _):_) _ scp = defTypedef xs scp -- for global @typedef@ with type defined by @typedef@
 stmt tk atn !scp
     | not (null tk) && (HT.isTKType (snd $ head tk) || HT.isTKStruct (snd $ head tk) || HT.isTKEnum (snd $ head tk)) = takeType tk scp >>= varDecl -- for a local variable declaration
