@@ -276,6 +276,8 @@ int main()
     assert(1, (long)1, "(long)1");
     assert(0, (long)&*(int *)0, "(long)&*(int *)0");
     assert(42, ({ int a = 42 ; long b = (long)&a; *(int*)b; }), "int a = 42; long b = (long)&a; *(int*)b");
+    //assert(2147483648, ({ int a = 2147483647; long b = a + 1; b; }), " ({ int a = 2147483647; long b = a + 1; b; })");
+    //assert(2147483648, ({ int a = 2147483647; long b = a + 1; b; }), " ({ int a = 2147483647; long b = a + 1; b; })");
     assert(97, 'a', "'a'");
     assert(10, '\n', "\'\\n\'");
     assert(0, ({ enum { zero, one, two }; zero; }), "enum { zero, one, two }; zero;");
@@ -338,6 +340,30 @@ int main()
     assert(42, ({ int a = 1; int b = 0; a && b ? 0 : 42; }), "({ int a = 1; int b = 0; a && b ? 0 : 42; })");
     assert(43, ({ enum { a = 14 + 14 + 14, b }; b; }), "({ enum { a = 14 + 14 + 14, b }; b; })");
     assert(10, ({ int ar[2 ? 5 * 2 : 5]; sizeof ar / sizeof *ar; }), "({ int ar[2 ? 5 * 2 : 5]; sizeof ar / sizeof *ar; })");
+    assert(1, sizeof(signed char), "sizeof(signed char)");
+    assert(1, sizeof(char signed), "sizeof(char signed)");
+    assert(4, sizeof(signed int), "sizeof(signed int)");
+    assert(4, sizeof(int signed), "sizeof(int signed)");
+    assert(8, sizeof(signed long), "sizeof(signed long)");
+    assert(8, sizeof(long signed), "sizeof(long signed)");
+    assert(8, sizeof(signed long int), "sizeof(signed long int)");
+    assert(8, sizeof(signed int long), "sizeof(signed int long)");
+    assert(8, sizeof(long signed int), "sizeof(long signed int)");
+    assert(8, sizeof(long int signed), "sizeof(long int signed)");
+    assert(8, sizeof(int signed long), "sizeof(int signed long)");
+    assert(8, sizeof(int long signed), "sizeof(int long signed)");
+    assert(8, sizeof(long long signed int), "sizeof(long long signed int)");
+    assert(8, sizeof(long long int signed), "sizeof(long long signed int)");
+    assert(8, sizeof(long signed long int), "sizeof(long signed long int)");
+    assert(8, sizeof(long signed int long), "sizeof(long signed int long)");
+    assert(8, sizeof(long int long signed), "sizeof(long int long signed)");
+    assert(8, sizeof(long int signed long), "sizeof(long int signed long)");
+    assert(8, sizeof(int long long signed), "sizeof(int long long signed)");
+    assert(8, sizeof(int signed long long), "sizeof(int signed long long)");
+    assert(8, sizeof(int long signed long), "sizeof(int long signed long)");
+    assert(8, sizeof(signed long long int), "sizeof(signed long long int)");
+    assert(8, sizeof(signed long int long), "sizeof(signed long int long)");
+    assert(8, sizeof(signed int long long), "sizeof(signed int long long)");
 
     printf(">> All tests passed <<\n");
 

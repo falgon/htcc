@@ -129,8 +129,9 @@ lookupKeyword s = find ((==) s . tshow) [
     TKTypedef, 
     TKType CR.CTInt,
     TKType CR.CTChar, 
-    TKType CR.CTShort,
-    TKType CR.CTLong,
+    TKType $ CR.CTSigned CR.CTUndef,
+    TKType $ CR.CTShort CR.CTUndef,
+    TKType $ CR.CTLong CR.CTUndef,
     TKType CR.CTVoid, 
     TKType CR.CTBool
     ]
@@ -148,7 +149,7 @@ instance Show i => Show (TokenLCNums i) where
 instance NFData i => NFData (TokenLCNums i)
 instance NFData1 TokenLCNums
 
--- | `Token` and its `TokenLCNums`.
+-- | `Htcc.Tokenizer.Token.Token` and its `TokenLCNums`.
 type TokenLC i = (TokenLCNums i, Token i)
 
 {-# INLINE isTKIdent #-}
@@ -228,6 +229,6 @@ spanStrLiteral = spanLiteral '"'
 spanCharLiteral :: T.Text -> Maybe (T.Text, T.Text)
 spanCharLiteral = spanLiteral '\''
 
--- or when it cannot be referenced
+-- | `emptyToken` is used when it cannot be referenced
 emptyToken :: Num i => TokenLC i
 emptyToken = (TokenLCNums 0 0, TKEmpty)
