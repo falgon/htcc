@@ -44,6 +44,7 @@ import Data.List (find)
 
 import qualified Htcc.CRules as CR
 import Htcc.Utils (spanLen, dropFst3, tshow, maybe')
+import Htcc.CRules.Types.StorageClass
 
 -- | Token type
 data Token i = TKReserved T.Text -- ^ The reserved token
@@ -133,7 +134,10 @@ lookupKeyword s = find ((==) s . tshow) [
     TKType $ CR.CTShort CR.CTUndef,
     TKType $ CR.CTLong CR.CTUndef,
     TKType CR.CTVoid, 
-    TKType CR.CTBool
+    TKType CR.CTBool,
+    TKReserved $ T.pack $ show SCAuto,
+    TKReserved $ T.pack $ show SCStatic,
+    TKReserved $ T.pack $ show SCRegister
     ]
 
 -- | `TokenLCNums` is data structure for storing the line number and character number of each token
