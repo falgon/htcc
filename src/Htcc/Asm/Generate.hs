@@ -21,7 +21,7 @@ module Htcc.Asm.Generate (
 import Prelude hiding (truncate)
 import Data.Foldable (toList)
 import Control.Exception (finally)
-import Control.Monad (zipWithM_, unless)
+import Control.Monad (zipWithM_, when, unless)
 import qualified Data.ByteString as B
 import Data.List (find)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef) 
@@ -129,7 +129,7 @@ genStmt c lc@(ATNode (ATDefFunc x (Just args)) _ st _) = do -- TODO: supports mo
     genStmt c st
     readIORef (curFunc c) >>= epilogue
 genStmt _ (ATNode (ATCallFunc x Nothing) _ _ _) = T.putStr $ I.call x <> I.push rax
-genStmt c (ATNode (ATCallFunc x (Just args)) _ _ _) = let (n', toReg, _) = splitAtLen 6 args in do -- TODO: supports more than 7 arguments
+genStmt c (ATNode (ATCallFunc x (Just args)) t _ _) = let (n', toReg, _) = splitAtLen 6 args in do -- TODO: supports more than 7 arguments
     mapM_ (genStmt c) toReg
     mapM_ (T.putStr . I.pop) $ popRegs n'
     -- unless (null toStack) $ forM_ (reverse toStack) $ genStmt c
@@ -141,6 +141,7 @@ genStmt c (ATNode (ATCallFunc x (Just args)) _ _ _) = let (n', toReg, _) = split
     T.putStr $ I.defLLbl ".call." n
     T.putStr $ I.sub rsp (8 :: Int) <> I.mov rax (0 :: Int) <> I.call x <> I.add rsp (8 :: Int)
     T.putStr $ I.defLLbl ".end." n
+    when (t == CR.CTBool) $ T.putStr $ I.movzb rax al
     T.putStr $ I.push rax
 genStmt c (ATNode (ATBlock stmts) _ _ _) = mapM_ (genStmt c) stmts
 genStmt c (ATNode (ATStmtExpr stmts) _ _ _) = mapM_ (genStmt c) stmts

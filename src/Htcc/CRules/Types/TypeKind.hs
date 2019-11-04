@@ -1,5 +1,5 @@
 {-|
-Module      : Htcc.CRules.Types.Core
+Module      : Htcc.CRules.Types.TypeKind
 Description : The types of C language
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -10,7 +10,7 @@ Portability : POSIX
 The types of C language
 -}
 {-# LANGUAGE DeriveGeneric, BangPatterns #-}
-module Htcc.CRules.Types.Core (
+module Htcc.CRules.Types.TypeKind (
     -- * TypeKind data type
     StructMember (..),
     TypeKind (..),
@@ -57,7 +57,7 @@ data TypeKind i = CTInt -- ^ The type @int@ as C language
     | CTEnum (TypeKind i) (M.Map T.Text i) -- ^ The enum, has its underlying type and a map
     | CTStruct (M.Map T.Text (StructMember i)) -- ^ The struct, has its members and their names.
     | CTUndef -- ^ Undefined type
-    deriving (Eq, Generic)
+    deriving Generic
 
 {-# INLINE fundamental #-}
 fundamental :: [TypeKind i]
@@ -105,6 +105,34 @@ removeAllQualified (CTLong x) = removeAllQualified x
 removeAllQualified (CTShort x) = removeAllQualified x
 removeAllQualified (CTSigned x) = removeAllQualified x
 removeAllQualified x = x
+
+{-# INLINE combTable #-}
+combTable :: TypeKind i -> Maybe Int
+combTable CTChar = Just 1
+combTable CTInt = Just $ shiftL 1 1
+combTable CTBool = Just $ shiftL 1 2
+combTable CTVoid = Just $ shiftL 1 3
+combTable CTUndef = Just $ shiftL 1 4
+combTable (CTPtr x) = (shiftL 1 5 .|.) <$> combTable x
+combTable (CTSigned x) = (shiftL 1 6 .|.) <$> combTable x
+combTable (CTLong x) = (shiftL 1 7 .|.) <$> combTable x
+combTable (CTShort x) = (shiftL 1 8 .|.) <$> combTable x
+combTable _ = Nothing
+
+instance Eq i => Eq (TypeKind i) where
+    (==) CTInt CTInt = True
+    (==) CTChar CTChar = True
+    (==) CTBool CTBool = True
+    (==) CTVoid CTVoid = True
+    (==) (CTEnum ut1 m1) (CTEnum ut2 m2) = ut1 == ut2 && m1 == m2
+    (==) (CTArray v1 t1) (CTArray v2 t2) = v1 == v2 && t1 == t2
+    (==) (CTStruct m1) (CTStruct m2) = m1 == m2
+    (==) CTUndef CTUndef = True
+    (==) (CTPtr t1) (CTPtr t2) = t1 == t2
+    (==) l r
+        | isQualifier l || isQualifier r = maybe' False (combTable l) $ \lh ->
+            maybe' False (combTable r) $ \rh -> lh == rh
+        | otherwise = False
 
 instance Show i => Show (TypeKind i) where
     show CTInt = "int"

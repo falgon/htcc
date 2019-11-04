@@ -276,8 +276,7 @@ int main()
     assert(1, (long)1, "(long)1");
     assert(0, (long)&*(int *)0, "(long)&*(int *)0");
     assert(42, ({ int a = 42 ; long b = (long)&a; *(int*)b; }), "int a = 42; long b = (long)&a; *(int*)b");
-    //assert(2147483648, ({ int a = 2147483647; long b = a + 1; b; }), " ({ int a = 2147483647; long b = a + 1; b; })");
-    //assert(2147483648, ({ int a = 2147483647; long b = a + 1; b; }), " ({ int a = 2147483647; long b = a + 1; b; })");
+    assert(2147483648, ({ int a = 2147483647; long b = a + 1; b; }), " ({ int a = 2147483647; long b = a + 1; b; })");
     assert(97, 'a', "'a'");
     assert(10, '\n', "\'\\n\'");
     assert(0, ({ enum { zero, one, two }; zero; }), "enum { zero, one, two }; zero;");
