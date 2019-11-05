@@ -63,28 +63,28 @@ data ConstructionData i = ConstructionData -- ^ The constructor of ConstructionD
     } deriving Show
 
 {-# INLINE addVar #-}
-addVar :: (Integral i, Bits i) => (CT.TypeKind i -> HT.TokenLC i -> AS.Scoped i -> Either (ASTError i) (ATree i, AS.Scoped i)) -> CT.TypeKind i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ATree i, ConstructionData i)
+addVar :: (Integral i, Bits i) => (CT.StorageClass i -> HT.TokenLC i -> AS.Scoped i -> Either (ASTError i) (ATree i, AS.Scoped i)) -> CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ATree i, ConstructionData i)
 addVar f ty tkn cd = second (\x -> cd { scope = x }) <$> f ty tkn (scope cd)
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.addLVar` for variable @x@ of type `ConstructionData`. 
 -- This function is equivalent to 
 --
 -- >>> second (\x -> y { scope = x }) <$> Htcc.Parser.AST.Scope.addLVar ty tkn (scope x)
-addLVar :: (Integral i, Bits i) => CT.TypeKind i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ATree i, ConstructionData i)
+addLVar :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ATree i, ConstructionData i)
 addLVar = addVar AS.addLVar
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.addGVar` for variable @x@ of type `ConstructionData`. 
 -- This function is equivalent to 
 --
 -- >>> second (\x -> y { scope = x }) <$> Htcc.Parser.AST.Scope.addGVar ty tkn (scope x)
-addGVar :: (Integral i, Bits i) => CT.TypeKind i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ATree i, ConstructionData i)
+addGVar :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ATree i, ConstructionData i)
 addGVar = addVar AS.addGVar
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.addLiteral` for variable @x@ of type `ConstructionData`. 
 -- This function is equivalent to
 --
 -- >>> second (\x -> y { scope = x }) <$> Htcc.Parser.AST.Scope.addLiteral ty tkn (scope x)
-addLiteral :: (Integral i, Bits i) => CT.TypeKind i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ATree i, ConstructionData i)
+addLiteral :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ATree i, ConstructionData i)
 addLiteral = addVar AS.addLiteral
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.succNest` for variable @x@ of type `ConstructionData`. 
@@ -159,28 +159,28 @@ lookupEnumerator = lookupFromScope AS.lookupEnumerator
 -- This function is equivalent to 
 --
 -- >>> (\y -> x { scope = y }) <$> Htcc.Parser.AST.Scope.addTag ty tkn (scope x)
-addTag :: Num i => CT.TypeKind i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ConstructionData i)
+addTag :: Num i => CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ConstructionData i)
 addTag ty tkn cd = (\x -> cd { scope = x }) <$> AS.addTag ty tkn (scope cd)
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.addTypedef` for variable @x@ of type `ConstructionData`. 
 -- This function is equivalent to 
 --
 -- >>> (\y -> x { scope = y }) <$> Htcc.Parser.AST.Scope.addTypedef ty tkn (scope x)
-addTypedef :: (Eq i, Num i) => CT.TypeKind i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ConstructionData i)
+addTypedef :: (Eq i, Num i) => CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ConstructionData i)
 addTypedef ty tkn cd = (\x -> cd { scope = x }) <$> AS.addTypedef ty tkn (scope cd)
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.addFunction` for variable @x@ of type `ConstructionData`. 
 -- This function is equivalent to 
 --
 -- >>> (\y -> x { scope = y }) <$> Htcc.Parser.AST.Scope.addFunction ty tkn (scope x)
-addFunction :: Num i => Bool -> CT.TypeKind i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ConstructionData i)
+addFunction :: Num i => Bool -> CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ConstructionData i)
 addFunction fd ty tkn cd = (\x -> cd { scope = x }) <$> AS.addFunction fd ty tkn (scope cd)
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.addEnumerator` for variable @x@ of type `ConstructionData`. 
 -- This function is equivalent to 
 --
 -- >>> (\y -> x { scope = y }) <$> Htcc.Parser.AST.Scope.addEnumerator ty tkn (scope x)
-addEnumerator :: Num i => CT.TypeKind i -> HT.TokenLC i -> i -> ConstructionData i -> Either (ASTError i) (ConstructionData i)
+addEnumerator :: Num i => CT.StorageClass i -> HT.TokenLC i -> i -> ConstructionData i -> Either (ASTError i) (ConstructionData i)
 addEnumerator ty tkn n cd = (\x -> cd { scope = x }) <$> AS.addEnumerator ty tkn n (scope cd)
 
 -- | Shortcut to the initial state of `ConstructionData`.

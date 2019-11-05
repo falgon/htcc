@@ -30,7 +30,7 @@ import qualified Htcc.Tokenizer.Token as HT
 -- | The data type of a typedef tag
 data Typedef a = Typedef -- ^ The contypedefor of a typedef tag
     {
-        tdtype :: CT.TypeKind a, -- ^ The type of this typedef
+        tdtype :: CT.StorageClass a, -- ^ The type of this typedef
         tdNestDepth :: !Natural -- ^ The nest depth of this typedef
     } deriving (Eq, Ord, Show, Generic)
 
@@ -48,7 +48,7 @@ type Typedefs a = M.Map T.Text (Typedef a)
 -- return an error message and its location as a pair. 
 -- Otherwise, add a new tag to `Typedefs` and return it. 
 -- If the token does not indicate an identifier, an error indicating internal compiler error is returned.
-add :: (Num i, Eq i) => Natural -> CT.TypeKind i -> HT.TokenLC i -> Typedefs i -> Either (ASTError i) (Typedefs i)
+add :: (Num i, Eq i) => Natural -> CT.StorageClass i -> HT.TokenLC i -> Typedefs i -> Either (ASTError i) (Typedefs i)
 add cnd t cur@(_, HT.TKIdent ident) sts = case M.lookup ident sts of
     Just foundedTag
         | tdNestDepth foundedTag /= cnd -> tdnat

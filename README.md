@@ -35,7 +35,7 @@ $ stack build --fast # no optimized
 ## Execute
 
 ```sh
-$ echo 'int main() { printf("hello world!\n"); }' > t.c
+$ echo 'int printf(); int main() { printf("hello world!\n"); }' > t.c
 $ stack exec htcc -- t.c > t.s
 $ gcc -no-pie t.c -o out
 ```
@@ -43,7 +43,7 @@ $ gcc -no-pie t.c -o out
 For one liner...
 
 ```sh
-$ echo 'int main() { printf("hello world!\n"); }' | stack exec htcc -- /dev/stdin | gcc -xassembler -no-pie -o out -  
+$ echo 'int printf(); int main() { printf("hello world!\n"); }' | stack exec htcc -- /dev/stdin | gcc -xassembler -no-pie -o out -  
 ```
 
 ## Test
@@ -85,6 +85,21 @@ $ stack dot --no-include-base --external | dot -Tpng -o out.png
 ## About emoji of commit messages
 
 The emoji included in the commit message is used according to [gitmoji](https://gitmoji.carloscuesta.me/).
+
+## FAQ
+
+### Your compiler is inefficient :)
+
+I know. 
+This is a compiler made for research, not for practical purposes.
+And the author also developed the compiler for the first time.
+If you can suggest improvements, please submit issues or send PRs.
+Thanks in advance for all the improvements.
+
+### When I try to play with ghci, I get a warning "WARNING:. is owned by someone else, IGNORING!".
+
+Check your permissions. 
+The answer on [stack overflow](https://stackoverflow.com/questions/24665531/ghci-haskell-compiler-error-home-user-ghci-is-owned-by-someone-else-ignor) may be useful.
 
 ## References
 

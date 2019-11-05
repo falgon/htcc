@@ -12,12 +12,9 @@ The rules of types of C language
 module Htcc.CRules.Types (
     module Htcc.CRules.Types.CType,
     module Htcc.CRules.Types.TypeKind,
-    module Htcc.CRules.Types.StorageClass,
-    module Htcc.CRules.Types.DeclType
+    module Htcc.CRules.Types.StorageClass
 ) where
 
 import Htcc.CRules.Types.CType
 import Htcc.CRules.Types.TypeKind
 import Htcc.CRules.Types.StorageClass
-import Htcc.CRules.Types.DeclType
-

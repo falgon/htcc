@@ -1,0 +1,9 @@
+import qualified Data.Text as T
+import qualified Data.Map as M
+import qualified Data.Sequence as SQ
+import Data.Either
+import Data.Maybe
+import Numeric.Natural
+
+:set -XOverloadedStrings
+

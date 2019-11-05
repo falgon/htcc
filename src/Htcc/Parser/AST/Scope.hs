@@ -73,22 +73,22 @@ data LookupVarResult i = FoundGVar (PV.GVar i)  -- ^ A type constructor indicati
     deriving (Show, Eq)
 
 {-# INLINE addVar #-}
-addVar :: (Integral i, Bits i) => (CT.TypeKind i -> HT.TokenLC i -> PV.Vars i -> Either (T.Text, HT.TokenLC i) (ATree i, PV.Vars i)) -> CT.TypeKind i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
+addVar :: (Integral i, Bits i) => (CT.StorageClass i -> HT.TokenLC i -> PV.Vars i -> Either (T.Text, HT.TokenLC i) (ATree i, PV.Vars i)) -> CT.StorageClass i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
 addVar f ty tkn sc = second (\x -> sc { vars = x }) <$> f ty tkn (vars sc)
 
 -- | `addLVar` has a scoped type argument and is the same function as `PV.addLVar` internally.
 {-# INLINE addLVar #-}
-addLVar :: (Integral i, Bits i) => CT.TypeKind i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
+addLVar :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
 addLVar ty tkn scp = addVar (PV.addLVar $ curNestDepth scp) ty tkn scp
 
 -- | `addGVar` has a scoped type argument and is the same function as `PV.addGVar` internally.
 {-# INLINE addGVar #-}
-addGVar :: (Integral i, Bits i) => CT.TypeKind i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
+addGVar :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
 addGVar = addVar PV.addGVar
 
 -- | `addLiteral` has a scoped type argument and is the same function as `PV.addLiteral` internally.
 {-# INLINE addLiteral #-}
-addLiteral :: (Integral i, Bits i) => CT.TypeKind i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
+addLiteral :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
 addLiteral = addVar PV.addLiteral
 
 -- | `succNest` has a scoped type argument and is the same function as `PV.succNest` internally.
@@ -153,22 +153,22 @@ lookupEnumerator t sc = SM.lookup t $ enumerators sc
 
 -- | `addTag` has a scoped type argument and is the same function as `PS.add` internally.
 {-# INLINE addTag #-}
-addTag :: Num i => CT.TypeKind i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (Scoped i)
+addTag :: Num i => CT.StorageClass i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (Scoped i)
 addTag ty tkn sc = (\x -> sc { structs = x }) <$> PS.add (curNestDepth sc) ty tkn (structs sc)
 
 -- | `addTypedef` has a scoped type argument and is the same function as `PT.add` internally.
 {-# INLINE addTypedef #-}
-addTypedef :: (Eq i, Num i) => CT.TypeKind i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (Scoped i)
+addTypedef :: (Eq i, Num i) => CT.StorageClass i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (Scoped i)
 addTypedef ty tkn sc = (\x -> sc { typedefs = x }) <$> PT.add (curNestDepth sc) ty tkn (typedefs sc)
 
 -- | `addFunction` has a scoped type argument and is the same function as `PT.add` internally.
 {-# INLINE addFunction #-}
-addFunction :: Num i => Bool -> CT.TypeKind i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (Scoped i)
+addFunction :: Num i => Bool -> CT.StorageClass i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (Scoped i)
 addFunction fd ty tkn sc = (\x -> sc { functions = x }) <$> PF.add fd ty tkn (functions sc)
 
 -- | `addEnumerator` has a scoped type argument and is the same function as `SE.add` internally.
 {-# INLINE addEnumerator #-}
-addEnumerator :: Num i => CT.TypeKind i -> HT.TokenLC i -> i -> Scoped i -> Either (SM.ASTError i) (Scoped i)
+addEnumerator :: Num i => CT.StorageClass i -> HT.TokenLC i -> i -> Scoped i -> Either (SM.ASTError i) (Scoped i)
 addEnumerator ty tkn val sc = (\x -> sc { enumerators = x }) <$> SE.add ty tkn val (enumerators sc)
 
 {-# INLINE initScope #-}

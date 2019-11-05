@@ -1,0 +1,4 @@
+.stack-work
+*.swp
+bench_report.html
+docs/

@@ -47,7 +47,7 @@ import Htcc.Utils (tshow)
 -- | The data type of global variable
 newtype GVar i = GVar -- ^ The constructor of global variable
     {
-        gvtype :: CT.TypeKind i -- ^ The type of the global variable
+        gvtype :: CT.StorageClass i -- ^ The type of the global variable
     } deriving (Eq, Ord, Show, Generic)
 
 instance NFData i => NFData (GVar i)
@@ -60,7 +60,7 @@ instance SM.ManagedScope (GVar i) where
 -- | The data type of local variable
 data LVar a = LVar -- ^ The constructor of local variable
     {
-        lvtype :: CT.TypeKind a, -- ^ The type of the local variable
+        lvtype :: CT.StorageClass a, -- ^ The type of the local variable
         rbpOffset :: !a, -- ^ The offset value from RBP
         nestDepth :: !Natural -- ^ The nest depth of a local variable
     } deriving (Eq, Ord, Show, Generic)
@@ -75,7 +75,7 @@ instance SM.ManagedScope (LVar a) where
 -- | The literal
 data Literal a = Literal -- ^ The literal constructor
     {
-        litype :: CT.TypeKind a, -- ^ The single literal type
+        litype :: CT.StorageClass a, -- ^ The single literal type
         ln :: !Natural, -- ^ The number of labels placed in the @.data@ section
         lcts :: B.ByteString -- ^ The content
     } deriving (Eq, Show, Generic)
@@ -130,7 +130,7 @@ fallBack pre post = pre { literals = literals post }
 
 -- | If the specified token is `HT.TKIdent` and the local variable does not exist in the list, `addLVar` adds a new local variable to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
-addLVar :: (Integral i, Bits i) => Natural -> CT.TypeKind i -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
+addLVar :: (Integral i, Bits i) => Natural -> CT.StorageClass i -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
 addLVar cnd t cur@(_, HT.TKIdent ident) vars = case lookupLVar ident vars of
     Just foundedVar 
         | nestDepth foundedVar /= cnd -> varnat
@@ -144,7 +144,7 @@ addLVar _ _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
 
 -- | If the specified token is `HT.TKIdent` and the global variable does not exist in the list, `addLVar` adds a new global variable to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
-addGVar :: Num i => CT.TypeKind i -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
+addGVar :: Num i => CT.StorageClass i -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
 addGVar t cur@(_, HT.TKIdent ident) vars = flip (flip maybe $ const $ Left ("redeclaration of '" <> ident <> "' with no linkage", cur)) (lookupGVar ident vars) $ -- ODR
     let gvar = GVar t; nat = ATNode (ATGVar (gvtype gvar) ident) t ATEmpty ATEmpty in
             Right (nat, vars { globals = M.insert ident gvar $ globals vars })
@@ -152,7 +152,7 @@ addGVar _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
 
 -- | If the specified token is `HT.TKString`, `addLiteral` adds a new literal to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
-addLiteral :: (Ord i, Num i) => CT.TypeKind i -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
+addLiteral :: (Ord i, Num i) => CT.StorageClass i -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
 addLiteral t (_, HT.TKString cont) vars 
     | null (literals vars) = let lit = Literal (CT.removeAllExtents t) 0 cont; nat = ATNode (ATGVar t ".L.data.0") t ATEmpty ATEmpty in
         Right (nat, vars { literals = lit : literals vars })

@@ -29,7 +29,7 @@ import qualified Htcc.Tokenizer.Token as HT
 -- | The data type of a typedef tag
 data Function a = Function -- ^ The contypedefor of a typedef tag
     {
-        fntype :: CT.TypeKind a, -- ^ The type of this typedef
+        fntype :: CT.StorageClass a, -- ^ The type of this typedef
         fnDefined :: Bool -- ^ If the function is defined, it will be `True`, otherwise will be `False`.
     } deriving (Eq, Ord, Show, Generic)
 
@@ -48,7 +48,7 @@ type Functions i = M.Map T.Text (Function i)
 -- return an error message and its location as a pair. 
 -- Otherwise, add a new tag to `Functions` and return it. 
 -- If the token does not indicate an identifier, an error indicating internal compiler error is returned.
-add :: Num i => Bool -> CT.TypeKind i -> HT.TokenLC i -> Functions i -> Either (ASTError i) (Functions i)
+add :: Num i => Bool -> CT.StorageClass i -> HT.TokenLC i -> Functions i -> Either (ASTError i) (Functions i)
 add df t cur@(_, HT.TKIdent ident) sts = case M.lookup ident sts of
     Just foundFunc
         | not (fnDefined foundFunc) -> Right $ M.insert ident (Function t True) sts 

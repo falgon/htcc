@@ -15,6 +15,7 @@ module Htcc.Asm.Intrinsic.Utils (
     defLLbl,
     refLLbl,
     defGLbl,
+    defLbl,
     defBegin,
     defEnd,
     refBegin,
@@ -40,6 +41,11 @@ refLLbl = (.) (T.append ".L") . flip (.) tshow . T.append
 {-# INLINE defGLbl #-}
 defGLbl :: T.Text -> T.Text
 defGLbl = uncurry T.append . first (flip T.append "\n" . T.append ".global ") . second (`T.append` ":\n") . dupe
+
+-- | Define the local label
+{-# INLINE defLbl #-}
+defLbl :: T.Text -> T.Text
+defLbl x = x <> ":\n"
 
 -- | Define the .Lbeginx local label
 {-# INLINE defBegin #-}

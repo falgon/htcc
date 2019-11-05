@@ -1,25 +1,104 @@
 {-|
 Module      : Htcc.CRules.Types.StorageClass
-Description : The rules of types of C language
+Description : The storage-class of C language
 Copyright   : (c) roki, 2019
 License     : MIT
 Maintainer  : falgon53@yahoo.co.jp
 Stability   : experimental
 Portability : POSIX
 
-The rules of storage-class of C language
+The storage-class of C language
 -}
+{-# LANGUAGE DeriveGeneric #-}
 module Htcc.CRules.Types.StorageClass (
-    StorageClass (..)
+    -- * StorageClass data type
+    StorageClass (..),
+    -- * The utilities of storage-class
+    fromsc,
+    picksc,
+    isSCStatic
 ) where
 
--- | The data type representing `StorageClass`
-data StorageClass = SCAuto -- ^ The @auto@ keyword
-    | SCStatic -- ^ The @static@ keyword
-    | SCRegister -- ^ The @register@ keyword
-    deriving (Eq, Enum)
+import GHC.Generics (Generic)
+import Control.DeepSeq (NFData (..))
+import Data.Tuple.Extra (first, second)
 
-instance Show StorageClass where
-    show SCAuto = "auto"
-    show SCStatic = "static"
-    show SCRegister = "register"
+import Htcc.CRules.Types.CType
+import Htcc.CRules.Types.TypeKind
+
+-- | The data type representing `StorageClass`
+data StorageClass i = SCAuto (TypeKind i) -- ^ The @auto@ keyword
+    | SCStatic (TypeKind i) -- ^ The @static@ keyword
+    | SCRegister (TypeKind i) -- ^ The @register@ keyword
+    | SCUndef (TypeKind i) -- ^ `SCUndef` is used when storage-class specifier is not defined
+    deriving (Eq, Generic)
+
+{-# INLINE fromsc #-}
+-- | Take type from `StorageClass`
+fromsc :: StorageClass i -> TypeKind i
+fromsc (SCAuto t) = t
+fromsc (SCStatic t) = t
+fromsc (SCRegister t) = t
+fromsc (SCUndef t) = t
+
+{-# INLINE picksc #-}
+-- | Take storage-class from `StorageClass`
+picksc :: StorageClass i -> TypeKind i -> StorageClass i
+picksc (SCAuto _) = SCAuto
+picksc (SCStatic _) = SCStatic
+picksc (SCRegister _) = SCRegister
+picksc (SCUndef _) = SCUndef
+
+{-# INLINE isSameSC #-}
+isSameSC :: StorageClass i -> StorageClass i -> Bool
+isSameSC (SCAuto _) (SCAuto _) = True
+isSameSC (SCStatic _) (SCStatic _) = True
+isSameSC (SCRegister _) (SCRegister _) = True
+isSameSC (SCUndef _) (SCUndef _) = True
+isSameSC _ _ = False
+
+{-# INLINE isSCStatic #-}
+-- | When the given argument is `SCStatic`, `isSCStatic` returns `True`, otherwise `False`.
+isSCStatic :: StorageClass i -> Bool
+isSCStatic (SCStatic _) = True
+isSCStatic _ = False
+
+{-# INLINE applyWithoutSC #-}
+applyWithoutSC :: (TypeKind i -> TypeKind i) -> StorageClass i -> StorageClass i
+applyWithoutSC f sc = picksc sc $ f $ fromsc sc
+
+instance Ord i => Ord (StorageClass i) where
+    compare x y = compare (fromsc x) (fromsc y)
+
+instance Show i => Show (StorageClass i) where
+    show (SCAuto CTUndef) = "auto"
+    show (SCAuto t) = "auto " ++ show t
+    show (SCStatic CTUndef) = "static"
+    show (SCStatic t) = "static " ++ show t
+    show (SCRegister CTUndef) = "register"
+    show (SCRegister t) = "register " ++ show t
+    show (SCUndef CTUndef) = ""
+    show (SCUndef t) = show t
+
+instance Ord i => CType (StorageClass i) where
+    isCTArray = isCTArray . fromsc
+    isCTStruct = isCTStruct . fromsc
+    isCTUndef = isCTUndef . fromsc
+    isFundamental = isFundamental . fromsc
+    qualify x y 
+        | isSameSC x y = picksc x <$> qualify (fromsc x) (fromsc y)
+        | otherwise = Nothing
+    sizeof = sizeof . fromsc
+    alignof = alignof . fromsc
+    deref x = picksc x <$> deref (fromsc x)
+    ctorPtr n = applyWithoutSC (ctorPtr n)
+    dctorPtr x = first (picksc x) $ second (\f y -> picksc y $ f $ fromsc y) $ dctorPtr (fromsc x)
+    makeCTArray ns = applyWithoutSC (makeCTArray ns)
+    concatCTArray x y
+        | isSameSC x y = picksc x <$> concatCTArray (fromsc x) (fromsc y)
+        | otherwise = Nothing
+    removeAllExtents = applyWithoutSC removeAllExtents
+    conversion x y = SCAuto $ conversion (fromsc x) (fromsc y)
+    implicitInt = applyWithoutSC implicitInt
+
+instance NFData i => NFData (StorageClass i)

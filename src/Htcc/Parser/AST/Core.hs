@@ -122,8 +122,8 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATWhile -- ^ the @while@ keyword
     | ATFor [ATKindFor a] -- ^ the @for@ keyword
     | ATBlock [ATree a] -- ^ the compound statement
-    | ATLVar (CT.TypeKind a) a -- ^ the local variable. It has a type information (as `CT.TypeKind`) and an offset value
-    | ATGVar (CT.TypeKind a) T.Text -- ^ the global variable. It has a type information (as `CT.TypeKind`) and an name
+    | ATLVar (CT.StorageClass a) a -- ^ the local variable. It has a type information (as `CT.StorageClass`) and an offset value
+    | ATGVar (CT.StorageClass a) T.Text -- ^ the global variable. It has a type information (as `CT.StorageClass`) and an name
     | ATDefFunc T.Text (Maybe [ATree a]) -- ^ the function definition
     | ATCallFunc T.Text (Maybe [ATree a]) -- ^ the function call. It has a offset value and arguments (`Maybe`)
     | ATExprStmt -- ^ the expression of a statement
@@ -152,7 +152,7 @@ isComplexAssign _ = False
 data ATree a = ATEmpty -- ^ The empty node 
     | ATNode { 
     atkind :: ATKind a, -- ^ The kind of abstract tree
-    atype :: CT.TypeKind a, -- ^ The data type
+    atype :: CT.StorageClass a, -- ^ The data type
     atL :: ATree a, -- ^ The left hand side abstract tree
     atR :: ATree a -- ^ The right hand side abstract tree
     } -- ^ `ATKind` representing the kind of node and the two branches `ATree` it has
