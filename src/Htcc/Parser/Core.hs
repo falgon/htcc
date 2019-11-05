@@ -65,7 +65,8 @@ import Numeric.Natural
 
 import Htcc.Utils (
     first3, 
-    second3, 
+    second3,
+    third3,
     tshow, 
     toNatural,
     toInteger,
@@ -209,6 +210,28 @@ arrayDeclSuffix t (cur@(_, HT.TKReserved "["):xs) = case constantExp xs of
         Just . fmap (first $ fromJust . CT.concatCTArray (CT.picksc t $ CT.CTArray (toNatural val) (CT.fromsc t)))
     _ -> Just $ Left ("expected storage size after '[' token", cur)
 arrayDeclSuffix _ _ = Nothing
+        
+{-# INLINE isTypeName #-}
+isTypeName :: HT.TokenLC i -> ConstructionData i -> Bool
+isTypeName (_, HT.TKType _) _ = True
+isTypeName (_, HT.TKStruct) _ = True
+isTypeName (_, HT.TKEnum) _ = True
+isTypeName (_, HT.TKReserved "static") _ = True
+isTypeName (_, HT.TKReserved "auto") _ = True
+isTypeName (_, HT.TKReserved "register") _ = True
+isTypeName (_, HT.TKIdent ident) scp = isJust $ lookupTypedef ident scp
+isTypeName _ _ = False
+
+{-# INLINE varDecl #-}
+varDecl :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
+varDecl tk atn scp = takeType tk scp >>= varDecl'
+    where
+        varDecl' (_, Nothing, (_, HT.TKReserved ";"):ds, scp') = Right (ds, ATEmpty, scp')
+        varDecl' (t, Just ident, (_, HT.TKReserved ";"):ds, scp') = (>>=) (addLVar t ident scp') $ \(lat, scp'') -> Right (ds, ATNode (ATNull lat) (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty, scp'')
+        varDecl' (t, Just ident, (_, HT.TKReserved "="):ds, scp') = (>>=) (addLVar t ident scp') $ \(lat, scp'') -> (>>=) (expr ds atn scp'') $ \(ert, erat, ervar) -> case ert of
+            (_, HT.TKReserved ";"):ds' -> Right (ds', ATNode ATExprStmt (CT.SCUndef CT.CTUndef) (ATNode ATAssign (atype lat) lat erat) ATEmpty, ervar)
+            _ -> Left ("expected ';' token. The subject iteration statement start here:", head tk)
+        varDecl' (_, _, ds, _) = Left $ if null ds then ("expected unqualified-id", head tk) else ("expected unqualified-id before '" <> tshow (snd (head ds)) <> T.singleton '\'', head ds)
 
 -- The `Just` represents an error during construction of the syntax tree, and the `Nothing` represents no valid constant expression.
 type ConstantResult i = Maybe (ASTError i)
@@ -317,28 +340,31 @@ stmt (cur@(_, HT.TKIf):(_, HT.TKReserved "("):xs) atn !scp = (>>=) (expr xs atn 
 stmt (cur@(_, HT.TKWhile):(_, HT.TKReserved "("):xs) atn !scp = (>>=) (expr xs atn scp) $ \(ert, erat, erscp) -> case ert of -- for @while@
     (_, HT.TKReserved ")"):ys -> second3 (ATNode ATWhile (CT.SCUndef CT.CTUndef) erat) <$> stmt ys erat erscp
     ert' -> Left $ expectedMessage ")" cur ert'
-stmt xxs@(cur@(_, HT.TKFor):(_, HT.TKReserved "("):_) atn !scp = maybe' (Left (internalCE, cur)) (takeBrace "(" ")" (tail xxs)) $ -- for @for@
-    either (Left . ("expected ')' token. The subject iteration statement starts here:",)) $ \(forSt, ds) ->
-        let fsect = linesBy ((== HT.TKReserved ";") . snd) (tail (init forSt)); stlen = length fsect in
-            if stlen < 2 || stlen > 3 then 
-                Left ("the iteration statement for must be `for (expression_opt; expression_opt; expression_opt) statement`. See section 6.8.5.", cur) else runST $ do
-                    v <- newSTRef (atn, scp)
-                    mk <- flip (`zipWithM` fsect) [ATForInit, ATForCond, ATForIncr] $ \fs at -> do
-                        aw <- readSTRef v
-                        either (return . Left) (\(_, ert, erscp) -> Right (at ert) <$ writeSTRef v (ert, erscp)) $ 
-                            -- call `stmt` to register a variable only if it matches with declaration expression_opt
-                            -- if isATForInit (at ATEmpty) && not (null fs) && HT.isTKType (snd $ head fs) then 
-                                -- uncurry (stmt $ fs ++ [(fst $ last fs, HT.TKReserved ";")]) aw 
-                            {-else-} if isATForInit (at ATEmpty) || isATForIncr (at ATEmpty) then  -- TODO: support @for@ to define local variables
-                                uncurry ((.) (fmap (second3 (flip (ATNode ATExprStmt $ CT.SCUndef CT.CTUndef) ATEmpty))) . expr fs) aw 
-                            else uncurry (expr fs) aw
-                    if any isLeft mk then return $ Left $ head $ lefts mk else do -- TODO: more efficiency
-                        let jo = [m | (Right m) <- mk, case fromATKindFor m of ATEmpty -> False; x -> not $ isEmptyExprStmt x] 
-                            mkk = maybe (ATForCond (ATNode (ATNum 1) (CT.SCAuto CT.CTInt) ATEmpty ATEmpty) : jo) (const jo) $ find isATForCond jo
-                        (anr, vsr) <- readSTRef v
-                        case ds of 
-                            ((_, HT.TKReserved ";"):ys) -> return $ Right (ys, ATNode (ATFor mkk) (CT.SCAuto CT.CTUndef) ATEmpty ATEmpty, vsr)
-                            _ -> return $ second3 (flip (flip (flip ATNode $ CT.SCUndef CT.CTUndef) ATEmpty) ATEmpty . ATFor . (mkk ++) . (:[]) . ATForStmt) <$> stmt ds anr vsr
+stmt xxs@(cur@(_, HT.TKFor):(_, HT.TKReserved "("):_) _ !scp = maybe' (Left (internalCE, cur)) (takeBrace "(" ")" (tail xxs)) $ -- for @for@
+    either (Left . ("expected ')' token. The subject iteration statement starts here:",)) $ \(forSt, ds) -> (>>=) (initSect (tail (init forSt)) $ succNest scp) $ \(fxs, finit, fscp') ->
+        (>>=) (condSect fxs fscp') $ \(fxs', fcond, fscp'') -> (>>=) (incrSect fxs' fscp'') $ \case
+            ([], fincr, fscp''') -> 
+                let fnd = filter (\x' -> case fromATKindFor x' of ATEmpty -> False; x'' -> not $ isEmptyExprStmt x'') [ATForInit finit, ATForCond fcond, ATForIncr fincr]
+                    mkk = maybe (ATForCond (ATNode (ATNum 1) (CT.SCAuto CT.CTInt) ATEmpty ATEmpty) : fnd) (const fnd) $ find isATForCond fnd in case ds of
+                        ((_, HT.TKReserved ";"):ys) -> Right (ys, ATNode (ATFor mkk) (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty, fallBack scp fscp''')
+                        _ -> third3 (fallBack scp) . second3 (flip (flip (flip ATNode $ CT.SCUndef CT.CTUndef) ATEmpty) ATEmpty . ATFor . (mkk ++) . (:[]) . ATForStmt) <$> stmt ds ATEmpty fscp'''
+            _ -> Left ("unexpected end of for statement", cur)
+    where
+        initSect [] _ = Left ("the iteration statement for must be `for (expression_opt; expression_opt; expression_opt) statement`. See section 6.8.5.", cur)
+        initSect ((_, HT.TKReserved ";"):ds) fsc = Right (ds, ATEmpty, fsc)
+        initSect forSect fsc
+            | isTypeName (head forSect) fsc = varDecl forSect ATEmpty $ fsc
+            | otherwise = (>>=) (expr forSect ATEmpty fsc) $ \(x, y, z) -> case x of
+                (_, HT.TKReserved ";"):ds -> Right (ds, ATNode ATExprStmt (CT.SCUndef CT.CTUndef) y ATEmpty, z)
+                _ -> if null x then Left ("expected ';' token", HT.emptyToken) else Left ("expected ';' token after '" <> tshow (snd $ head x) <> "'", head x)
+        condSect [] _ = Left ("the iteration statement for must be `for (expression_opt; expression_opt; expression_opt) statement`. See section 6.8.5.", cur)
+        condSect ((_, HT.TKReserved ";"):ds) fsc = Right (ds, ATEmpty, fsc)
+        condSect forSect fsc = (>>=) (expr forSect ATEmpty fsc) $ \case
+            ((_, HT.TKReserved ";"):ds, y, z) -> Right (ds, y, z)
+            (x, _, _) -> if null x then Left ("expected ';' token", HT.emptyToken) else Left ("expected ';' token after '" <> tshow (snd $ head x) <> "'", head x)
+        incrSect [] fsc = Right ([], ATEmpty, fsc)
+        incrSect forSect fsc = second3 (flip (ATNode ATExprStmt $ CT.SCUndef CT.CTUndef) ATEmpty) <$> expr forSect ATEmpty fsc
+
 stmt xxs@(cur@(_, HT.TKReserved "{"):_) _ !scp = maybe' (Left (internalCE, cur)) (takeBrace "{" "}" xxs) $ -- for compound statement
     either (Left . ("the compound statement is not closed",)) $ \(sctk, ds) -> runST $ do
         eri <- newSTRef Nothing
@@ -350,25 +376,10 @@ stmt xxs@(cur@(_, HT.TKReserved "{"):_) _ !scp = maybe' (Left (internalCE, cur))
 stmt ((_, HT.TKReserved ";"):xs) atn !scp = Right (xs, atn, scp) -- for only @;@
 stmt xs@((_, HT.TKTypedef):_) _ scp = defTypedef xs scp -- for local @typedef@
 stmt tk atn !scp
-    | not (null tk) && isPossiblyVarDecl (head tk) = takeType tk scp >>= varDecl -- for a local variable declaration
-    | not (null tk) && HT.isTKIdent (snd $ head tk) && isJust (lookupTypedef (T.pack $ show $ snd $ head tk) scp) = takeType tk scp >>= varDecl -- for a local variable declaration with @typedef@
+    | not (null tk) && isTypeName (head tk) scp = varDecl tk atn scp -- for a local variable declaration
     | otherwise = (>>=) (expr tk atn scp) $ \(ert, erat, erscp) -> case ert of -- for stmt;
         (_, HT.TKReserved ";"):ys -> Right (ys, ATNode ATExprStmt (CT.SCUndef CT.CTUndef) erat ATEmpty, erscp)
         ert' -> Left $ expectedMessage ";" (if null tk then HT.emptyToken else last tk) ert'
-    where
-        varDecl (_, Nothing, (_, HT.TKReserved ";"):ds, scp') = Right (ds, ATEmpty, scp')
-        varDecl (t, Just ident, (_, HT.TKReserved ";"):ds, scp') = (>>=) (addLVar t ident scp') $ \(lat, scp'') -> Right (ds, ATNode (ATNull lat) (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty, scp'')
-        varDecl (t, Just ident, (_, HT.TKReserved "="):ds, scp') = (>>=) (addLVar t ident scp') $ \(lat, scp'') -> (>>=) (expr ds atn scp'') $ \(ert, erat, ervar) -> case ert of
-            (_, HT.TKReserved ";"):ds' -> Right (ds', ATNode ATExprStmt (CT.SCUndef CT.CTUndef) (ATNode ATAssign (atype lat) lat erat) ATEmpty, ervar)
-            _ -> Left ("expected ';' token. The subject iteration statement start here:", head tk)
-        varDecl (_, _, ds, _) = Left $ if null ds then ("expected unqualified-id", head tk) else ("expected unqualified-id before '" <> tshow (snd (head ds)) <> T.singleton '\'', head ds)
-        isPossiblyVarDecl (_, HT.TKType _) = True
-        isPossiblyVarDecl (_, HT.TKStruct) = True
-        isPossiblyVarDecl (_, HT.TKEnum) = True
-        isPossiblyVarDecl (_, HT.TKReserved "static") = True
-        isPossiblyVarDecl (_, HT.TKReserved "auto") = True
-        isPossiblyVarDecl (_, HT.TKReserved "register") = True
-        isPossiblyVarDecl _ = False
 
 {-# INLINE expr #-}
 -- | \({\rm expr} = {\rm assign}\left("," {\rm assign}\right)\ast\)
