@@ -30,7 +30,7 @@ import qualified Htcc.Tokenizer.Token as HT
 data Enumerator i = Enumerator 
     {
         enVal :: i, -- ^ The value of enumerator
-        enUnderlying :: CT.TypeKind i -- ^ The underlying type of this enumerator
+        enUnderlying :: CT.StorageClass i -- ^ The underlying type of this enumerator
     } deriving (Eq, Ord, Show, Generic)
 
 instance NFData i => NFData (Enumerator i)
@@ -48,7 +48,7 @@ type Enumerators i = M.Map T.Text (Enumerator i)
 -- return an error message and its location as a pair. 
 -- Otherwise, add a new tag to `Enumerators` and return it. 
 -- If the token does not indicate an identifier, an error indicating internal compiler error is returned.
-add :: Num i => CT.TypeKind i -> HT.TokenLC i -> i -> Enumerators i -> Either (ASTError i) (Enumerators i)
+add :: Num i => CT.StorageClass i -> HT.TokenLC i -> i -> Enumerators i -> Either (ASTError i) (Enumerators i)
 add t cur@(_, HT.TKIdent ident) val sts = case M.lookup ident sts of
     Just _ -> Left ("redeclaration of enumerator '" <> ident <> "'", cur) -- ODR
     Nothing -> Right $ M.insert ident (Enumerator val t) sts

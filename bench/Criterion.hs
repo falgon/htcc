@@ -7,8 +7,8 @@ import qualified Data.Text as T
 import Data.Either (fromRight)
 
 import Htcc.Utils (tshow)
-import qualified Htcc.Token as HT
-import Htcc.Parse (parse)
+import qualified Htcc.Tokenizer as HT
+import Htcc.Parser (parse)
 
 tknize :: T.Text -> Either (HT.TokenLCNums Int, T.Text) [HT.TokenLC Int]
 tknize = HT.tokenize
@@ -30,7 +30,7 @@ instance Show CCodes where
         \int main() { return fib(5); }"
 
 main :: IO ()
-main = defaultMainWith (defaultConfig { reportFile = Just "./report.html" })
+main = defaultMainWith (defaultConfig { reportFile = Just "./bench_report.html" })
     [ bgroup "tokenize programs (whnf)"
         [ bench "Returning zero" $ whnf tknize $ tshow ReturningZero
         , bench "StrLiteral" $ whnf tknize $ tshow StrLiteral

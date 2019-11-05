@@ -33,7 +33,7 @@ int sub3(int a, int b, int c) { return a - b - c; }
 int sub3_short(short a, short b, short c) { return a - b - c; }
 int sub3_long(long a, long b, long c) { return a - b - c; }
 int ptr2ar(int (*p)[3]) { int i = 0; for (; i < sizeof *p / sizeof **p; i = i + 1) p[0][i] = i + 1; return 0; }
-            
+static int static_fun() { return 42; }           
 
 int main()
 {
@@ -363,6 +363,7 @@ int main()
     assert(8, sizeof(signed long long int), "sizeof(signed long long int)");
     assert(8, sizeof(signed long int long), "sizeof(signed long int long)");
     assert(8, sizeof(signed int long long), "sizeof(signed int long long)");
+    assert(42, static_fun(), "static_fun()");
 
     printf(">> All tests passed <<\n");
 

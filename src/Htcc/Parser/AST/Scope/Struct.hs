@@ -30,7 +30,7 @@ import qualified Htcc.Tokenizer.Token as HT
 -- | The data type of a struct tag
 data Tag i = Tag -- ^ The constructor of a struct tag
     {
-        sttype :: CT.TypeKind i, -- ^ The type of this struct
+        sttype :: CT.StorageClass i, -- ^ The type of this struct
         stNestDepth :: !Natural -- ^ The nest depth of this struct
     } deriving (Eq, Ord, Show, Generic)
 
@@ -48,7 +48,7 @@ type Structs i = M.Map T.Text (Tag i)
 -- return an error message and its location as a pair. 
 -- Otherwise, add a new tag to `Structs` and return it. 
 -- If the token does not indicate an identifier, an error indicating internal compiler error is returned.
-add :: Num i => Natural -> CT.TypeKind i -> HT.TokenLC i -> Structs i -> Either (ASTError i) (Structs i)
+add :: Num i => Natural -> CT.StorageClass i -> HT.TokenLC i -> Structs i -> Either (ASTError i) (Structs i)
 add cnd t cur@(_, HT.TKIdent ident) sts = case M.lookup ident sts of
     Just foundedTag
         | stNestDepth foundedTag /= cnd -> stnat

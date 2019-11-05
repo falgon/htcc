@@ -64,7 +64,7 @@ epilogue Nothing = err "internal compiler error: The function name cannot be tra
 epilogue (Just fn) = T.putStr $ I.defLLbl (".return." <> fn <> ".") (0 :: Int) <> I.leave <> I.ret
 
 {-# INLINE load #-}
-load :: Ord i => CR.TypeKind i -> T.Text
+load :: Ord i => CR.StorageClass i -> T.Text
 load t 
     | CR.sizeof t == 1 = I.pop rax <> I.movsx rax (I.byte I.Ptr (Ref rax)) <> I.push rax
     | CR.sizeof t == 2 = I.pop rax <> I.movsx rax (I.word I.Ptr (Ref rax)) <> I.push rax
@@ -72,8 +72,8 @@ load t
     | otherwise = I.pop rax <> I.mov rax (Ref rax) <> I.push rax
 
 {-# INLINE store #-}
-store :: Ord i => CR.TypeKind i -> T.Text
-store ty = I.pop rdi <> I.pop rax <> booleanRound ty <> store' ty <> I.push rdi
+store :: Ord i => CR.StorageClass i -> T.Text
+store ty = I.pop rdi <> I.pop rax <> booleanRound (CR.fromsc ty) <> store' ty <> I.push rdi
     where
         booleanRound CR.CTBool = I.cmp rdi (0 :: Int) <> I.setne dil <> I.movzb rdi dil
         booleanRound _ = ""
@@ -84,8 +84,8 @@ store ty = I.pop rdi <> I.pop rax <> booleanRound ty <> store' ty <> I.push rdi
             | otherwise = I.mov (Ref rax) rdi
 
 {-# INLINE truncate #-}
-truncate :: Ord i => CR.TypeKind i -> T.Text
-truncate ty = I.pop rax <> booleanRound ty <> truncate' ty <> I.push rax
+truncate :: Ord i => CR.StorageClass i -> T.Text
+truncate ty = I.pop rax <> booleanRound (CR.fromsc ty) <> truncate' ty <> I.push rax
     where   
         booleanRound CR.CTBool = I.cmp rax (0 :: Int) <> I.setne al
         booleanRound _ = ""
@@ -96,11 +96,11 @@ truncate ty = I.pop rax <> booleanRound ty <> truncate' ty <> I.push rax
             | otherwise = ""
 
 {-# INLINE increment #-}
-increment :: Ord i => CR.TypeKind i -> T.Text
+increment :: Ord i => CR.StorageClass i -> T.Text
 increment t = I.pop rax <> I.add rax (maybe 1 CR.sizeof $ CR.deref t) <> I.push rax
 
 {-# INLINE decrement #-}
-decrement :: Ord i => CR.TypeKind i -> T.Text
+decrement :: Ord i => CR.StorageClass i -> T.Text
 decrement t = I.pop rax <> I.sub rax (maybe 1 CR.sizeof $ CR.deref t) <> I.push rax
 
 genAddr :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => GenStatus -> ATree i -> IO ()
@@ -118,10 +118,11 @@ genLval _ _ = err "internal compiler error: genLval catch ATEmpty"
 
 -- | Simulate the stack machine by traversing an abstract syntax tree and output assembly codes.
 genStmt :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => GenStatus -> ATree i -> IO ()
-genStmt c lc@(ATNode (ATDefFunc x Nothing) _ st _) = writeIORef (curFunc c) (Just x) >> T.putStr (I.defGLbl x) >> prologue (stackSize lc) >> genStmt c st >> readIORef (curFunc c) >>= epilogue
-genStmt c lc@(ATNode (ATDefFunc x (Just args)) _ st _) = do -- TODO: supports more than 7 arguments
+genStmt c lc@(ATNode (ATDefFunc x Nothing) ty st _) = writeIORef (curFunc c) (Just x) >> T.putStr (if CR.isSCStatic ty then I.defLbl x else I.defGLbl x) >> prologue (stackSize lc) >> genStmt c st >> readIORef (curFunc c) >>= epilogue
+genStmt c lc@(ATNode (ATDefFunc x (Just args)) ty st _) = do -- TODO: supports more than 7 arguments
     writeIORef (curFunc c) $ Just x
-    T.putStr $ I.defGLbl x
+    T.putStr $ if CR.isSCStatic ty then I.defLbl x else I.defGLbl x
+    unless (CR.isSCStatic ty) $ T.putStr $ I.defGLbl x
     prologue (stackSize lc)
     flip (`zipWithM_` args) argRegs $ \(ATNode (ATLVar t o) _ _ _) reg -> 
         maybe (err "internal compiler error: there is no register that fits the specified size") (T.putStr . I.mov (Ref $ rbp `osub` o)) $
@@ -141,7 +142,7 @@ genStmt c (ATNode (ATCallFunc x (Just args)) t _ _) = let (n', toReg, _) = split
     T.putStr $ I.defLLbl ".call." n
     T.putStr $ I.sub rsp (8 :: Int) <> I.mov rax (0 :: Int) <> I.call x <> I.add rsp (8 :: Int)
     T.putStr $ I.defLLbl ".end." n
-    when (t == CR.CTBool) $ T.putStr $ I.movzb rax al
+    when (CR.fromsc t == CR.CTBool) $ T.putStr $ I.movzb rax al
     T.putStr $ I.push rax
 genStmt c (ATNode (ATBlock stmts) _ _ _) = mapM_ (genStmt c) stmts
 genStmt c (ATNode (ATStmtExpr stmts) _ _ _) = mapM_ (genStmt c) stmts

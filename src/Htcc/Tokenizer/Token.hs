@@ -44,7 +44,6 @@ import Data.List (find)
 
 import qualified Htcc.CRules as CR
 import Htcc.Utils (spanLen, dropFst3, tshow, maybe')
-import Htcc.CRules.Types.StorageClass
 
 -- | Token type
 data Token i = TKReserved T.Text -- ^ The reserved token
@@ -59,7 +58,7 @@ data Token i = TKReserved T.Text -- ^ The reserved token
     | TKSizeof -- ^ The @sizeof@ keyword
     | TKAlignof -- ^ The @_Alignof@ keyword
     | TKStruct -- ^ The @struct@ keyword
-    | TKType (CR.TypeKind i) -- ^ Types
+    | TKType (CR.StorageClass i) -- ^ Types
     | TKTypedef -- ^ The @typedef@ keyword
     | TKString B.ByteString -- ^ The string literal
     | TKEmpty -- ^ The empty token (This is not used by `Htcc.Tokenizer.Core.tokenize`, but when errors are detected during parsing, the token at error locations cannot be specified)
@@ -116,7 +115,7 @@ length (TKString s) = B.length s
 length TKEmpty = 0
 
 -- | Lookup keyword from `T.Text`. If the specified `T.Text` is not keyword as C language, `lookupKeyword` returns `Nothing`.
-lookupKeyword :: Show i => T.Text -> Maybe (Token i)
+lookupKeyword :: forall i. (Show i) => T.Text -> Maybe (Token i)
 lookupKeyword s = find ((==) s . tshow) [
     TKReturn, 
     TKWhile,
@@ -128,16 +127,16 @@ lookupKeyword s = find ((==) s . tshow) [
     TKSizeof,
     TKAlignof, 
     TKTypedef, 
-    TKType CR.CTInt,
-    TKType CR.CTChar, 
-    TKType $ CR.CTSigned CR.CTUndef,
-    TKType $ CR.CTShort CR.CTUndef,
-    TKType $ CR.CTLong CR.CTUndef,
-    TKType CR.CTVoid, 
-    TKType CR.CTBool,
-    TKReserved $ T.pack $ show SCAuto,
-    TKReserved $ T.pack $ show SCStatic,
-    TKReserved $ T.pack $ show SCRegister
+    TKType $ CR.SCUndef CR.CTInt,
+    TKType $ CR.SCUndef CR.CTChar, 
+    TKType $ CR.SCUndef $ CR.CTSigned CR.CTUndef,
+    TKType $ CR.SCUndef $ CR.CTShort CR.CTUndef,
+    TKType $ CR.SCUndef $ CR.CTLong CR.CTUndef,
+    TKType $ CR.SCUndef CR.CTVoid, 
+    TKType $ CR.SCUndef CR.CTBool,
+    TKReserved $ T.pack $ show (CR.SCAuto CR.CTUndef :: CR.StorageClass i),
+    TKReserved $ T.pack $ show (CR.SCStatic CR.CTUndef :: CR.StorageClass i),
+    TKReserved $ T.pack $ show (CR.SCRegister CR.CTUndef :: CR.StorageClass i)
     ]
 
 -- | `TokenLCNums` is data structure for storing the line number and character number of each token
