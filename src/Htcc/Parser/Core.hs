@@ -39,7 +39,9 @@ module Htcc.Parser.Core (
     ASTConstruction,
     ASTResult,
     -- * Utilities
-    stackSize
+    stackSize,
+    takePreType,
+    takeType
 ) where
 
 import Prelude hiding (toInteger)
@@ -94,8 +96,9 @@ takeStructFields tk sc = takeStructFields' tk sc 0
     where
         takeStructFields' [] scp' _ = Right (M.empty, scp')
         takeStructFields' fs scp' !n = (>>=) (takeType fs scp') $ \case
-            (ty, Just (_, HT.TKIdent ident), (_, HT.TKReserved ";"):ds, scp'') -> let ofs = toNatural $ CT.alignas (toInteger n) $ toInteger $ CT.alignof ty in
+            (ty@(CT.SCAuto _), Just (_, HT.TKIdent ident), (_, HT.TKReserved ";"):ds, scp'') -> let ofs = toNatural $ CT.alignas (toInteger n) $ toInteger $ CT.alignof ty in 
                 first (M.insert ident (CT.StructMember (CT.fromsc ty) ofs)) <$> takeStructFields' ds scp'' (ofs + fromIntegral (CT.sizeof ty))
+            (_, Just _, _, _) -> Left ("invalid storage-class specifier", head fs)
             _ -> Left ("expected member name or ';' after declaration specifiers", if null fs then HT.emptyToken else head fs)
 
 takeEnumFiels :: (Integral i, Show i, Read i, Bits i) => CT.StorageClass i -> [HT.TokenLC i] -> ConstructionData i -> Either (ASTError i) (M.Map T.Text i, ConstructionData i)
@@ -123,7 +126,7 @@ takeCtorPtr = first (CT.ctorPtr . toNatural) . dropSnd3 . spanLen ((==HT.TKReser
 takePreType :: (Integral i, Show i, Read i, Bits i) => [HT.TokenLC i] -> ConstructionData i -> Either (ASTError i) (CT.StorageClass i, [HT.TokenLC i], ConstructionData i)
 takePreType ((_, HT.TKType ty1):y@(iy, HT.TKType ty2):xs) scp = maybe' (Left (T.singleton '\'' <> tshow ty1 <> " " <> tshow ty2 <> "' is invalid.", y)) (CT.qualify ty1 ty2) $ \ty -> -- for a complex type
     takePreType ((iy, HT.TKType ty):xs) scp
-takePreType ((_, HT.TKType ty):xs) scp = Right (CT.implicitInt ty, xs, scp) -- for fundamental type
+takePreType ((_, HT.TKType ty):xs) scp = Right (CT.SCAuto $ CT.fromsc $ CT.implicitInt ty, xs, scp) -- for fundamental type
 takePreType ((_, HT.TKStruct):cur@(_, HT.TKReserved "{"):xs) scp = maybe' (Left (internalCE, cur)) (takeBrace "{" "}" (cur:xs)) $ -- for @struct@
     either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> uncurry (,ds,) . first (CT.SCAuto . CT.CTStruct) <$> takeStructFields (tail $ init field) scp
 takePreType ((_, HT.TKStruct):cur1@(_, HT.TKIdent _):cur2@(_, HT.TKReserved "{"):xs) scp = maybe' (Left (internalCE, cur1)) (takeBrace "{" "}" (cur2:xs)) $ -- for @struct@ with tag
@@ -137,7 +140,10 @@ takePreType ((_, HT.TKEnum):cur1@(_, HT.TKIdent _):cur2@(_, HT.TKReserved "{"):x
     either (Left . ("expected '}' token to match this '{'",)) $ \(field, ds) -> (>>=) (takeEnumFiels (CT.SCAuto CT.CTInt) (tail $ init field) scp) $ \(mem, scp') -> let ty = CT.SCAuto $ CT.CTEnum CT.CTInt mem in
         addTag ty cur1 scp' >>= Right . (ty, ds,)
 takePreType ((_, HT.TKEnum):cur1@(_, HT.TKIdent ident):xs) scp = maybe' (Left ("storage size of '" <> ident <> "' isn't known", cur1)) (lookupTag ident scp) $ Right . (, xs, scp) . PST.sttype -- declaration for @enum@
+takePreType ((_, HT.TKReserved _):cur@(_, HT.TKReserved _):_) _ = Left ("cannot combine with previous '" <> tshow (snd cur) <> "' declaration specifier", cur)
 takePreType ((_, HT.TKReserved "static"):xs) scp = first3 (CT.SCStatic . CT.fromsc) <$> takePreType xs scp
+takePreType ((_, HT.TKReserved "register"):xs) scp = first3 (CT.SCRegister . CT.fromsc) <$> takePreType xs scp
+takePreType ((_, HT.TKReserved "auto"):xs) scp = takePreType xs scp
 takePreType (x:_) _ = Left ("ISO C forbids declaration with no type", x)
 takePreType _ _ = Left ("ISO C forbids declaration with no type", HT.emptyToken)
 
@@ -253,7 +259,7 @@ type ASTResult i = Either (ASTError i) (SQ.Seq (ASTError i), [ATree i], M.Map T.
 
 -- | Perform type definition from token string starting from @typedef@ token
 defTypedef :: (Integral i, Show i, Read i, Bits i) => [(HT.TokenLCNums i, HT.Token i)] -> ConstructionData i -> Either (ASTError i) ([HT.TokenLC i], ATree a, ConstructionData i)
-defTypedef ((_, HT.TKTypedef):cur@(_, HT.TKReserved "static"):_) _ = Left ("storage-class specifier is not allowed in this context", cur)
+defTypedef ((_, HT.TKTypedef):cur@(_, HT.TKReserved _):_) _ = Left ("storage-class specifier is not allowed in this context", cur)
 defTypedef (cur@(_, HT.TKTypedef):xs) !scp = case takeType xs scp of
     Left er -> Left er
     Right (ty, Just ident, ds, scp') -> case ds of
@@ -271,6 +277,8 @@ program xs !scp = either Left (\(ys, atn, !scp') -> first (atn:) <$> program ys 
 
 -- | `globalDef` parses global definitions (include functions and global variables)
 globalDef :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
+globalDef (cur@(_, HT.TKReserved "register"):_) _ _ = Left ("illegal storage class on file-scoped identifier", cur)
+globalDef (cur@(_, HT.TKReserved "auto"):_) _ _ = Left ("illegal storage class on file-scoped identifier", cur)
 globalDef xs@((_, HT.TKTypedef):_) _ sc = defTypedef xs sc -- for global @typedef@
 globalDef tks at !va = (>>=) (takeType tks va) $ \case
     (_, Nothing, (_, HT.TKReserved ";"):ds', scp) -> Right (ds', ATEmpty, scp) -- e.g., @int;@ is legal in C11 (See N1570/section 6.7 Declarations)
@@ -342,7 +350,7 @@ stmt xxs@(cur@(_, HT.TKReserved "{"):_) _ !scp = maybe' (Left (internalCE, cur))
 stmt ((_, HT.TKReserved ";"):xs) atn !scp = Right (xs, atn, scp) -- for only @;@
 stmt xs@((_, HT.TKTypedef):_) _ scp = defTypedef xs scp -- for local @typedef@
 stmt tk atn !scp
-    | not (null tk) && (HT.isTKType (snd $ head tk) || HT.isTKStruct (snd $ head tk) || HT.isTKEnum (snd $ head tk) || snd (head tk) == HT.TKReserved "static") = takeType tk scp >>= varDecl -- for a local variable declaration
+    | not (null tk) && isPossiblyVarDecl (head tk) = takeType tk scp >>= varDecl -- for a local variable declaration
     | not (null tk) && HT.isTKIdent (snd $ head tk) && isJust (lookupTypedef (T.pack $ show $ snd $ head tk) scp) = takeType tk scp >>= varDecl -- for a local variable declaration with @typedef@
     | otherwise = (>>=) (expr tk atn scp) $ \(ert, erat, erscp) -> case ert of -- for stmt;
         (_, HT.TKReserved ";"):ys -> Right (ys, ATNode ATExprStmt (CT.SCUndef CT.CTUndef) erat ATEmpty, erscp)
@@ -354,7 +362,13 @@ stmt tk atn !scp
             (_, HT.TKReserved ";"):ds' -> Right (ds', ATNode ATExprStmt (CT.SCUndef CT.CTUndef) (ATNode ATAssign (atype lat) lat erat) ATEmpty, ervar)
             _ -> Left ("expected ';' token. The subject iteration statement start here:", head tk)
         varDecl (_, _, ds, _) = Left $ if null ds then ("expected unqualified-id", head tk) else ("expected unqualified-id before '" <> tshow (snd (head ds)) <> T.singleton '\'', head ds)
-
+        isPossiblyVarDecl (_, HT.TKType _) = True
+        isPossiblyVarDecl (_, HT.TKStruct) = True
+        isPossiblyVarDecl (_, HT.TKEnum) = True
+        isPossiblyVarDecl (_, HT.TKReserved "static") = True
+        isPossiblyVarDecl (_, HT.TKReserved "auto") = True
+        isPossiblyVarDecl (_, HT.TKReserved "register") = True
+        isPossiblyVarDecl _ = False
 
 {-# INLINE expr #-}
 -- | \({\rm expr} = {\rm assign}\left("," {\rm assign}\right)\ast\)

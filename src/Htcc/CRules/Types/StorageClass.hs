@@ -77,7 +77,7 @@ instance Show i => Show (StorageClass i) where
     show (SCStatic t) = "static " ++ show t
     show (SCRegister CTUndef) = "register"
     show (SCRegister t) = "register " ++ show t
-    show (SCUndef CTUndef) = ""
+    show (SCUndef CTUndef) = "undefined"
     show (SCUndef t) = show t
 
 instance Ord i => CType (StorageClass i) where
