@@ -364,6 +364,12 @@ int main()
     assert(8, sizeof(signed long int long), "sizeof(signed long int long)");
     assert(8, sizeof(signed int long long), "sizeof(signed int long long)");
     assert(42, static_fun(), "static_fun()");
+    assert(42, ({ register int x = 42; x; }), "({ register int x = 42; x; })");
+    assert(42, ({ auto int x = 42; x; }), "({ auto int x = 42; x; })");
+    assert(42, ({ register struct { int x; } x; x.x = 42; x.x; }), "({ register struct { int x; } x; x.x = 42; x.x; })");
+    assert(42, ({ register struct X { int x; }* p; struct X x; p = &x; p->x = 42; x.x; }), "({ register struct X { int x; }* p; struct X x; p = &x; p->x = 42; x.x; })");
+    assert(42, ({ auto struct { int x; } x; x.x = 42; x.x; }), "({ auto struct { int x; } x; x.x = 42; x.x; })");
+    assert(42, ({ auto struct X { int x; }* p; struct X x; p = &x; p->x = 42; x.x; }), "({ register struct X { int x; }* p; struct X x; p = &x; p->x = 42; x.x; })");
 
     printf(">> All tests passed <<\n");
 
