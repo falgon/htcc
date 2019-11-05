@@ -370,6 +370,9 @@ int main()
     assert(42, ({ register struct X { int x; }* p; struct X x; p = &x; p->x = 42; x.x; }), "({ register struct X { int x; }* p; struct X x; p = &x; p->x = 42; x.x; })");
     assert(42, ({ auto struct { int x; } x; x.x = 42; x.x; }), "({ auto struct { int x; } x; x.x = 42; x.x; })");
     assert(42, ({ auto struct X { int x; }* p; struct X x; p = &x; p->x = 42; x.x; }), "({ register struct X { int x; }* p; struct X x; p = &x; p->x = 42; x.x; })");
+    assert(42, ({ int i = 42; for (int i = 0; i < 10; ++i); i; }), "({ int i = 42; for (int i = 0; i < 10; ++i); i; })");
+    assert(42, ({ int i = 42; for (auto int i = ({ int i = 0; for (; i < 10; ++i); i; }); i > 0; --i); i; }), "for (int i = ({ int i = 0; for (; i < 10; ++i); i; }); i > 0; --i); i; })");
+    assert(42, ({ for (struct { int x; } x; 0;); 42; }), "({ for (struct { int x; } x; 0;); 42; })");
 
     printf(">> All tests passed <<\n");
 
