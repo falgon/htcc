@@ -373,6 +373,18 @@ int main()
     assert(42, ({ int i = 42; for (int i = 0; i < 10; ++i); i; }), "({ int i = 42; for (int i = 0; i < 10; ++i); i; })");
     assert(42, ({ int i = 42; for (auto int i = ({ int i = 0; for (; i < 10; ++i); i; }); i > 0; --i); i; }), "for (int i = ({ int i = 0; for (; i < 10; ++i); i; }); i > 0; --i); i; })");
     assert(42, ({ for (struct { int x; } x; 0;); 42; }), "({ for (struct { int x; } x; 0;); 42; })");
+    assert(511, 0777, "0777");
+    assert(0, 0x0, "0x0");
+    assert(10, 0xa, "0xa");
+    assert(10, 0Xa, "0Xa");
+    assert(48879, 0xbeef, "0xbeef");
+    assert(48879, 0xBEEF, "0xBEEF");
+    assert(0, 0b0, "0b0");
+    assert(1, 0b1, "0b1");
+    assert(42, 0b101010, "0b101010");
+    assert(42, 0B101010, "0B101010");
+    assert(49389, 0xc0ed, "0xc0ed");
+    assert(49389, 0xC0eD, "0xC0eD");
 
     printf(">> All tests passed <<\n");
 

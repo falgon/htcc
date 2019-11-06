@@ -58,7 +58,7 @@ import qualified Data.Set as S
 import qualified Data.Sequence as SQ
 import qualified Data.Map.Strict as M
 import qualified Data.Text as T
-import Control.Monad (forM, zipWithM, when)
+import Control.Monad (forM, when)
 import Control.Monad.ST (runST)
 import Control.Monad.Loops (unfoldrM)
 import Numeric.Natural
@@ -353,7 +353,7 @@ stmt xxs@(cur@(_, HT.TKFor):(_, HT.TKReserved "("):_) _ !scp = maybe' (Left (int
         initSect [] _ = Left ("the iteration statement for must be `for (expression_opt; expression_opt; expression_opt) statement`. See section 6.8.5.", cur)
         initSect ((_, HT.TKReserved ";"):ds) fsc = Right (ds, ATEmpty, fsc)
         initSect forSect fsc
-            | isTypeName (head forSect) fsc = varDecl forSect ATEmpty $ fsc
+            | isTypeName (head forSect) fsc = varDecl forSect ATEmpty fsc
             | otherwise = (>>=) (expr forSect ATEmpty fsc) $ \(x, y, z) -> case x of
                 (_, HT.TKReserved ";"):ds -> Right (ds, ATNode ATExprStmt (CT.SCUndef CT.CTUndef) y ATEmpty, z)
                 _ -> if null x then Left ("expected ';' token", HT.emptyToken) else Left ("expected ';' token after '" <> tshow (snd $ head x) <> "'", head x)
@@ -364,7 +364,6 @@ stmt xxs@(cur@(_, HT.TKFor):(_, HT.TKReserved "("):_) _ !scp = maybe' (Left (int
             (x, _, _) -> if null x then Left ("expected ';' token", HT.emptyToken) else Left ("expected ';' token after '" <> tshow (snd $ head x) <> "'", head x)
         incrSect [] fsc = Right ([], ATEmpty, fsc)
         incrSect forSect fsc = second3 (flip (ATNode ATExprStmt $ CT.SCUndef CT.CTUndef) ATEmpty) <$> expr forSect ATEmpty fsc
-
 stmt xxs@(cur@(_, HT.TKReserved "{"):_) _ !scp = maybe' (Left (internalCE, cur)) (takeBrace "{" "}" xxs) $ -- for compound statement
     either (Left . ("the compound statement is not closed",)) $ \(sctk, ds) -> runST $ do
         eri <- newSTRef Nothing
