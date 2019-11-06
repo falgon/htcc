@@ -9,7 +9,7 @@ Portability : POSIX
 
 Types used in lexical analysis and their utility functions
 -}
-{-# LANGUAGE ScopedTypeVariables, OverloadedStrings, DeriveGeneric #-}
+{-# LANGUAGE ScopedTypeVariables, OverloadedStrings, TupleSections, DeriveGeneric #-}
 module Htcc.Tokenizer.Token (
     -- * Token data types
     TokenLCNums (..),
@@ -26,24 +26,26 @@ module Htcc.Tokenizer.Token (
     isTKReserved,
     spanStrLiteral,
     spanCharLiteral,
-    lookupKeyword
+    lookupKeyword,
+    spanIntLit
 ) where
 
 import Prelude hiding (length)
 import GHC.Generics (Generic, Generic1)
 import qualified Prelude as P (length)
-
 import Control.DeepSeq (NFData (..), NFData1 (..))
 import qualified Data.ByteString as B
-import Data.Char (isDigit, chr)
+import Data.Char (isDigit, chr, ord)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Map as M
 import Data.Tuple.Extra (first, second)
 import Data.List (find)
+import Numeric (readOct, readHex, readDec, readInt)
+import Numeric.Natural
 
 import qualified Htcc.CRules as CR
-import Htcc.Utils (spanLen, dropFst3, tshow, maybe')
+import Htcc.Utils (spanLen, dropFst3, tshow, maybe', lor)
 
 -- | Token type
 data Token i = TKReserved T.Text -- ^ The reserved token
@@ -235,3 +237,19 @@ spanCharLiteral = spanLiteral '\''
 -- | `emptyToken` is used when it cannot be referenced
 emptyToken :: Num i => TokenLC i
 emptyToken = (TokenLCNums 0 0, TKEmpty)
+
+-- | Take the integer literal from given text.
+spanIntLit :: (Eq i, Num i, Read i) => T.Text -> Maybe (Natural, Token i, T.Text)
+spanIntLit ts = case T.uncons ts of
+    Just (x, xs)
+        | T.length xs > 1 && x == '0' && T.head xs == 'x' || T.head xs == 'X' -> let (ntk, ds) = T.span (\c -> isDigit c || 'a' <= c && 'f' >= c || 'A' <= c && 'F' >= c) (T.tail xs) in 
+            (fromIntegral $ T.length ntk,,ds) . TKNum <$> sh (readHex $ T.unpack ntk)
+        | T.length xs > 1 && x == '0' && T.head xs == 'b' || T.head xs == 'B' -> let (ntk, ds) = T.span isDigit (T.tail xs) in 
+            (fromIntegral $ T.length ntk,,ds) . TKNum <$> sh (readBin $ T.unpack ntk)
+        | x == '0' && not (T.null xs) -> let (ntk, ds) = T.span isDigit (x `T.cons` xs) in Just (fromIntegral $ T.length ntk, TKNum $ fst $ head $ readOct $ T.unpack ntk, ds)
+        | isDigit x -> let (ntk, ds) = T.span isDigit (x `T.cons` xs) in Just (fromIntegral $ T.length ntk, TKNum $ fst $ head $ readDec $ T.unpack ntk, ds) 
+        | otherwise -> Nothing
+    Nothing -> Nothing
+    where
+        readBin = readInt 2 (lor [(=='0'), (=='1')]) $ (+) (negate (ord '0')) . ord
+        sh ys | null ys = Nothing | otherwise = Just $ fst $ head ys
