@@ -96,7 +96,7 @@ takeStructFields :: (Integral i, Show i, Read i, Bits i) => [HT.TokenLC i] -> Co
 takeStructFields tk sc = takeStructFields' tk sc 0
     where
         takeStructFields' [] scp' _ = Right (M.empty, scp')
-        takeStructFields' fs scp' !n = (>>=) (takeType fs scp') $ \case
+        takeStructFields' fs scp' !n = (>>=) (takeType fs scp' >>= validDecl (if null tk then HT.emptyToken else head tk)) $ \case
             (ty@(CT.SCAuto _), Just (_, HT.TKIdent ident), (_, HT.TKReserved ";"):ds, scp'') -> let ofs = toNatural $ CT.alignas (toInteger n) $ toInteger $ CT.alignof ty in 
                 first (M.insert ident (CT.StructMember (CT.fromsc ty) ofs)) <$> takeStructFields' ds scp'' (ofs + fromIntegral (CT.sizeof ty))
             (_, Just _, _, _) -> Left ("invalid storage-class specifier", head fs)
@@ -151,15 +151,12 @@ takePreType _ _ = Left ("ISO C forbids declaration with no type", HT.emptyToken)
 {-# INLINE declaration #-}
 declaration :: (Integral i, Bits i, Show i, Read i) => CT.StorageClass i -> [HT.TokenLC i] -> Either (ASTError i) (CT.StorageClass i, Maybe (HT.TokenLC i), [HT.TokenLC i])
 declaration ty xs = case takeCtorPtr xs of 
-    (fn, xs'@((_, HT.TKReserved "("):_)) -> declaration' id (fn ty) xs' >>= uncurry3 (validDecl HT.emptyToken) . dropFst4
+    (fn, xs'@((_, HT.TKReserved "("):_)) -> dropFst4 <$> declaration' id (fn ty) xs'
     (fn, ident@(_, HT.TKIdent _):ds') -> case arrayDeclSuffix (fn ty) ds' of
-        Nothing -> validDecl ident (fn ty) (Just ident) ds'
-        Just rs -> rs >>= uncurry (flip (validDecl ident) (Just ident))
-    (fn, es) -> validDecl HT.emptyToken (fn ty) Nothing es
+        Nothing -> Right (fn ty, Just ident, ds')
+        Just rs -> uncurry (,Just ident,) <$> rs
+    (fn, es) -> Right (fn ty, Nothing, es)
     where
-        validDecl errtk t ident ds
-            | CT.fromsc t == CT.CTVoid = Left ("variable or field '" <> tshow (snd errtk) <> "' declared void", errtk) 
-            | otherwise = Right (t, ident, ds)
         declaration' fn ty' xs' = case takeCtorPtr xs' of
             (ptrf, cur@(_, HT.TKReserved "("):ds') -> (>>=) (declaration' (fn . ptrf) ty' ds') $ \case
                 (ptrf', ty'', ident, (_, HT.TKReserved ")"):ds'') -> case arrayDeclSuffix ty'' ds'' of
@@ -177,6 +174,15 @@ declaration ty xs = case takeCtorPtr xs of
 takeType :: (Integral i, Show i, Read i, Bits i) => [HT.TokenLC i] -> ConstructionData i -> Either (ASTError i) (CT.StorageClass i, Maybe (HT.TokenLC i), [HT.TokenLC i], ConstructionData i)
 takeType tk scp = takePreType tk scp >>= (\(x, y, z) -> uncurry3 (,,, z) <$> declaration x y)
 
+{-# INLINE validDecl #-}
+validDecl :: (Show i, Eq i) => HT.TokenLC i -> (CT.StorageClass i, Maybe (HT.TokenLC i), [HT.TokenLC i], ConstructionData i) -> Either (ASTError i) (CT.StorageClass i, Maybe (HT.TokenLC i), [HT.TokenLC i], ConstructionData i)
+validDecl _ x@(t, Just ident, _, _)
+    | CT.fromsc t == CT.CTVoid = Left ("variable or field '" <> tshow (snd ident) <> "' declared void", ident)
+    | otherwise = Right x
+validDecl errPlaceholder x@(t, _, _, _)
+    | CT.fromsc t == CT.CTVoid = Left ("declarations of type void is invalid in this context", errPlaceholder)
+    | otherwise = Right x
+
 -- `absDeclaration` parses abstract type declarations
 absDeclaration :: (Integral i, Bits i, Show i, Read i) => CT.StorageClass i -> [HT.TokenLC i] -> Either (ASTError i) (CT.StorageClass i, [HT.TokenLC i])
 absDeclaration ty xs = case takeCtorPtr xs of
@@ -191,7 +197,7 @@ absDeclaration ty xs = case takeCtorPtr xs of
 
 -- `takeTypeName` is used to parse type names used for sizeof etc. Version without `takeType`s identifier.
 takeTypeName :: (Integral i, Show i, Read i, Bits i) => [HT.TokenLC i] -> ConstructionData i -> Either (ASTError i) (CT.StorageClass i, [HT.TokenLC i])
-takeTypeName tk scp = (>>=) (takePreType tk scp) $ \(x, y, _) -> if CT.isSCStatic x then Left ("storage-class specifier is not allowed", head tk) else absDeclaration x y
+takeTypeName tk scp = (>>=) (takePreType tk scp) $ \(x, y, _) -> if CT.isSCStatic x then Left ("storage-class specifier is not allowed", head tk) else absDeclaration x y -- !
 
 -- For a number \(n\in\mathbb{R}\), let \(k\) be the number of consecutive occurrences of
 -- @HT.TKReserved "[", n, HT.TKReserved "]"@ from the beginning of the token sequence.
@@ -222,15 +228,23 @@ isTypeName (_, HT.TKReserved "register") _ = True
 isTypeName (_, HT.TKIdent ident) scp = isJust $ lookupTypedef ident scp
 isTypeName _ _ = False
 
+{-# INLINE validAssign #-}
+validAssign :: Eq i => HT.TokenLC i -> ATree i -> Either (ASTError i) (ATree i)
+validAssign errPlaceholder x@(ATNode _ t _ _) 
+    | CT.fromsc t == CT.CTVoid = Left ("void value not ignored as it ought to be", errPlaceholder)
+    | otherwise = Right x
+validAssign errPlaceholder _ = Left ("Expected to assign", errPlaceholder)
+
 {-# INLINE varDecl #-}
 varDecl :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
-varDecl tk atn scp = takeType tk scp >>= varDecl'
+varDecl tk atn scp = takeType tk scp >>= validDecl (if null tk then HT.emptyToken else head tk) >>= varDecl'
     where
         varDecl' (_, Nothing, (_, HT.TKReserved ";"):ds, scp') = Right (ds, ATEmpty, scp')
         varDecl' (t, Just ident, (_, HT.TKReserved ";"):ds, scp') = (>>=) (addLVar t ident scp') $ \(lat, scp'') -> Right (ds, ATNode (ATNull lat) (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty, scp'')
-        varDecl' (t, Just ident, (_, HT.TKReserved "="):ds, scp') = (>>=) (addLVar t ident scp') $ \(lat, scp'') -> (>>=) (expr ds atn scp'') $ \(ert, erat, ervar) -> case ert of
-            (_, HT.TKReserved ";"):ds' -> Right (ds', ATNode ATExprStmt (CT.SCUndef CT.CTUndef) (ATNode ATAssign (atype lat) lat erat) ATEmpty, ervar)
-            _ -> Left ("expected ';' token. The subject iteration statement start here:", head tk)
+        varDecl' (t, Just ident, (_, HT.TKReserved "="):ds, scp') = (>>=) (addLVar t ident scp') $ \(lat, scp'') -> (>>=) (expr ds atn scp'') $ \(ert, erat, ervar) ->
+            (>>=) (validAssign (if not (null ds) then head ds else if not (null tk) then head tk else HT.emptyToken) erat) $ \erat' -> case ert of
+                (_, HT.TKReserved ";"):ds' -> Right (ds', ATNode ATExprStmt (CT.SCUndef CT.CTUndef) (ATNode ATAssign (atype lat) lat erat') ATEmpty, ervar)
+                _ -> Left ("expected ';' token. The subject iteration statement start here:", head tk)
         varDecl' (_, _, ds, _) = Left $ if null ds then ("expected unqualified-id", head tk) else ("expected unqualified-id before '" <> tshow (snd (head ds)) <> T.singleton '\'', head ds)
 
 -- The `Just` represents an error during construction of the syntax tree, and the `Nothing` represents no valid constant expression.
@@ -391,7 +405,7 @@ expr tk at cd = assign tk at cd >>= uncurry3 f
 -- | `assign` indicates \(\eqref{eq:seventh}\) among the comments of `inners`.
 assign :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
 assign xs atn scp = (>>=) (conditional xs atn scp) $ \(ert, erat, erscp) -> case ert of
-    (_, HT.TKReserved "="):ys -> nextNode ATAssign ys  erat erscp
+    (_, HT.TKReserved "="):ys -> nextNode ATAssign ys erat erscp
     (_, HT.TKReserved "*="):ys -> nextNode ATMulAssign ys erat erscp
     (_, HT.TKReserved "/="):ys -> nextNode ATDivAssign ys erat erscp
     (_, HT.TKReserved "&="):ys -> nextNode ATAndAssign ys erat erscp
@@ -403,7 +417,9 @@ assign xs atn scp = (>>=) (conditional xs atn scp) $ \(ert, erat, erscp) -> case
     (_, HT.TKReserved "-="):ys -> nextNode (maybe ATSubAssign (const ATSubPtrAssign) $ CT.deref (atype erat)) ys erat erscp
     _ -> Right (ert, erat, erscp)
     where
-        nextNode atk ys erat erscp = second3 (ATNode atk (atype erat) erat) <$> assign ys erat erscp
+        nextNode atk ys erat erscp = (>>=) (assign ys erat erscp) $ \(zs, erat', erscp') -> 
+            (>>=) (validAssign  (if not (null zs) then head zs else if not (null ys) then head ys else if not (null xs) then head xs else HT.emptyToken) erat') $ \erat'' -> 
+                Right (zs, ATNode atk (atype erat) erat erat'', erscp')
 
 -- | `conditional` indicates \(\eqref{eq:seventeenth}\) among the comments of `inners`.
 conditional :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
