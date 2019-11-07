@@ -14,6 +14,8 @@ module Htcc.CRules.Types.TypeKind (
     -- * TypeKind data type
     StructMember (..),
     TypeKind (..),
+    -- * Type classes that can be converted to `TypeKind`
+    TypeKindBase (..),
     -- * Lookup functions
     lookupMember,
     -- * Utilities of C type
@@ -34,6 +36,39 @@ import qualified Data.Text as T
 import Htcc.CRules.Char
 import Htcc.CRules.Types.CType
 import Htcc.Utils (toNatural, toInteger, dropFst3, spanLen, maybe', dropSnd3)
+
+-- | Class to a type based on `TypeKind`.
+class TypeKindBase a where
+    -- | `isCTArray` returns `True` when the given argument is `Htcc.CRules.Types.Core.CTArray`.
+    -- Otherwise, returns `False`
+    isCTArray :: a i -> Bool
+    -- | `isCTArray` returns `True` when the given argument is `Htcc.CRules.Types.Core.CTStruct`.
+    -- Otherwise, returns `False`
+    isCTStruct :: a i -> Bool
+    -- | `isCTArray` returns `True` when the given argument is `Htcc.CRules.Types.Core.CTUndef`.
+    -- Otherwise, returns `False`
+    isCTUndef :: a i -> Bool
+    -- | `makeCTArray` retunrs a multidimensional array based on the arguments (list of each dimension).
+    -- e.g.:
+    --
+    -- >>> makeCTArray [1, 2] CTInt
+    -- int[1][2]
+    -- >>> makeCTArray [1, 2] (CTArray 2 CTInt)
+    -- int[2][1][2]
+    makeCTArray :: [Natural] -> a i -> a i
+    -- | Only if both arguments is `Htcc.CRules.Types.Core.CTArray`, 
+    -- `concatCTArray` returns a new multidimensional array by conbining the types of
+    -- multidimensional arrays as follows.
+    -- 
+    -- >>> makeCTArray [1, 2] CTInt `concatCTArray` makeCTArray [3, 4] CTInt
+    -- Just int[1][2][3][4]
+    -- >>> CTInt `concatCTArray` CTArray 2 CTInt
+    -- Nothing
+    concatCTArray :: Ord i => a i -> a i -> Maybe (a i)
+    -- | Convert to `TypeKind`.
+    toTypeKind :: a i -> TypeKind i
+    -- | Application to `TypeKind`.
+    mapTypeKind :: (TypeKind i -> TypeKind j) -> a i -> a j
 
 -- | The type and offset value of a data member.
 data StructMember i = StructMember -- ^ `StructMember` constructor
@@ -175,18 +210,6 @@ instance Ord i => CType (TypeKind i) where
                         | isQualifier t && isLongShortable u = Just (t, u) 
                         | otherwise = Nothing
     
-    {-# INLINE isCTArray #-}
-    isCTArray (CTArray _ _) = True
-    isCTArray _ = False
-    
-    {-# INLINE isCTStruct #-}
-    isCTStruct (CTStruct _) = True
-    isCTStruct _ = False
-    
-    {-# INLINE isCTUndef #-}
-    isCTUndef CTUndef = True
-    isCTUndef _ = False
-
     {-# INLINE isFundamental #-}
     isFundamental = flip elem [CTChar, CTInt] . removeAllQualified
 
@@ -242,16 +265,6 @@ instance Ord i => CType (TypeKind i) where
     dctorPtr (CTPtr x) = second (CTPtr .) $ dctorPtr x
     dctorPtr x = (x, id)
 
-    makeCTArray ns t = foldl' (flip CTArray) t ns
-
-    concatCTArray l@(CTArray _ _) r@(CTArray n r')
-        | removeAllExtents l == removeAllExtents r = Just $ CTArray n $ f l r'
-        | otherwise = Nothing
-        where
-            f l'@(CTArray _ _) (CTArray n'' r'') = CTArray n'' $ f l' r''
-            f l' _ = l'
-    concatCTArray _ _ = Nothing
-
     removeAllExtents (CTArray _ t) = removeAllExtents t
     removeAllExtents x = x
 
@@ -265,6 +278,36 @@ instance Ord i => CType (TypeKind i) where
     implicitInt (CTSigned x) = CTSigned $ implicitInt x
     implicitInt CTUndef = CTInt
     implicitInt x = x
+
+instance TypeKindBase TypeKind where
+    {-# INLINE isCTArray #-}
+    isCTArray (CTArray _ _) = True
+    isCTArray _ = False
+    
+    {-# INLINE isCTStruct #-}
+    isCTStruct (CTStruct _) = True
+    isCTStruct _ = False
+    
+    {-# INLINE isCTUndef #-}
+    isCTUndef CTUndef = True
+    isCTUndef _ = False
+    
+    {-# INLINE makeCTArray #-}
+    makeCTArray ns t = foldl' (flip CTArray) t ns
+
+    concatCTArray l@(CTArray _ _) r@(CTArray n r')
+        | removeAllExtents l == removeAllExtents r = Just $ CTArray n $ f l r'
+        | otherwise = Nothing
+        where
+            f l'@(CTArray _ _) (CTArray n'' r'') = CTArray n'' $ f l' r''
+            f l' _ = l'
+    concatCTArray _ _ = Nothing
+
+    {-# INLINE toTypeKind #-}
+    toTypeKind = id
+    
+    {-# INLINE mapTypeKind #-}
+    mapTypeKind = id
 
 {-# INLINE alignas #-}
 -- | `alignas` align to @n@.

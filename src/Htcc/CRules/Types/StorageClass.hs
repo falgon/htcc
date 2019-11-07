@@ -11,12 +11,9 @@ The storage-class of C language
 -}
 {-# LANGUAGE DeriveGeneric #-}
 module Htcc.CRules.Types.StorageClass (
-    -- * StorageClass data type
+    -- * StorageClass data type and class
     StorageClass (..),
-    -- * The utilities of storage-class
-    fromsc,
-    picksc,
-    isSCStatic
+    StorageClassBase (..)
 ) where
 
 import GHC.Generics (Generic)
@@ -33,6 +30,11 @@ data StorageClass i = SCAuto (TypeKind i) -- ^ The @auto@ keyword
     | SCUndef (TypeKind i) -- ^ `SCUndef` is used when storage-class specifier is not defined
     deriving (Eq, Generic)
 
+-- | Class to a type based on `StorageClass`.
+class StorageClassBase a where
+    -- | When the given argument is `SCStatic`, `isSCStatic` returns `True`, otherwise `False`.
+    isSCStatic :: a i -> Bool
+
 {-# INLINE fromsc #-}
 -- | Take type from `StorageClass`
 fromsc :: StorageClass i -> TypeKind i
@@ -43,7 +45,7 @@ fromsc (SCUndef t) = t
 
 {-# INLINE picksc #-}
 -- | Take storage-class from `StorageClass`
-picksc :: StorageClass i -> TypeKind i -> StorageClass i
+picksc :: StorageClass i -> TypeKind j -> StorageClass j
 picksc (SCAuto _) = SCAuto
 picksc (SCStatic _) = SCStatic
 picksc (SCRegister _) = SCRegister
@@ -57,18 +59,8 @@ isSameSC (SCRegister _) (SCRegister _) = True
 isSameSC (SCUndef _) (SCUndef _) = True
 isSameSC _ _ = False
 
-{-# INLINE isSCStatic #-}
--- | When the given argument is `SCStatic`, `isSCStatic` returns `True`, otherwise `False`.
-isSCStatic :: StorageClass i -> Bool
-isSCStatic (SCStatic _) = True
-isSCStatic _ = False
-
-{-# INLINE applyWithoutSC #-}
-applyWithoutSC :: (TypeKind i -> TypeKind i) -> StorageClass i -> StorageClass i
-applyWithoutSC f sc = picksc sc $ f $ fromsc sc
-
 instance Ord i => Ord (StorageClass i) where
-    compare x y = compare (fromsc x) (fromsc y)
+    compare x y = compare (toTypeKind x) (toTypeKind y)
 
 instance Show i => Show (StorageClass i) where
     show (SCAuto CTUndef) = "auto"
@@ -81,24 +73,45 @@ instance Show i => Show (StorageClass i) where
     show (SCUndef t) = show t
 
 instance Ord i => CType (StorageClass i) where
-    isCTArray = isCTArray . fromsc
-    isCTStruct = isCTStruct . fromsc
-    isCTUndef = isCTUndef . fromsc
-    isFundamental = isFundamental . fromsc
+    isFundamental = isFundamental . toTypeKind
     qualify x y 
-        | isSameSC x y = picksc x <$> qualify (fromsc x) (fromsc y)
+        | isSameSC x y = picksc x <$> qualify (toTypeKind x) (toTypeKind y)
         | otherwise = Nothing
-    sizeof = sizeof . fromsc
-    alignof = alignof . fromsc
-    deref x = picksc x <$> deref (fromsc x)
-    ctorPtr n = applyWithoutSC (ctorPtr n)
-    dctorPtr x = first (picksc x) $ second (\f y -> picksc y $ f $ fromsc y) $ dctorPtr (fromsc x)
-    makeCTArray ns = applyWithoutSC (makeCTArray ns)
+    sizeof = sizeof . toTypeKind
+    alignof = alignof . toTypeKind
+    deref x = picksc x <$> deref (toTypeKind x)
+    ctorPtr n = mapTypeKind (ctorPtr n)
+    dctorPtr x = first (picksc x) $ second (\f y -> picksc y $ f $ toTypeKind y) $ dctorPtr (toTypeKind x)
+    removeAllExtents = mapTypeKind removeAllExtents
+    conversion x y = SCAuto $ conversion (toTypeKind x) (toTypeKind y)
+    implicitInt = mapTypeKind implicitInt
+
+instance TypeKindBase StorageClass where
+    {-# INLINE isCTArray #-}
+    isCTArray = isCTArray . toTypeKind
+    
+    {-# INLINE isCTStruct #-}
+    isCTStruct = isCTStruct . toTypeKind
+    
+    {-# INLINE isCTUndef #-}
+    isCTUndef = isCTUndef . toTypeKind
+    
+    {-# INLINE makeCTArray #-}
+    makeCTArray ns = mapTypeKind (makeCTArray ns)
+
     concatCTArray x y
-        | isSameSC x y = picksc x <$> concatCTArray (fromsc x) (fromsc y)
+        | isSameSC x y = picksc x <$> concatCTArray (toTypeKind x) (toTypeKind y)
         | otherwise = Nothing
-    removeAllExtents = applyWithoutSC removeAllExtents
-    conversion x y = SCAuto $ conversion (fromsc x) (fromsc y)
-    implicitInt = applyWithoutSC implicitInt
+    
+    {-# INLINE toTypeKind #-}
+    toTypeKind = fromsc
+    
+    {-# INLINE mapTypeKind #-}
+    mapTypeKind f sc = picksc sc $ f $ toTypeKind sc
+
+instance StorageClassBase StorageClass where
+    {-# INLINE isSCStatic #-}
+    isSCStatic (SCStatic _) = True
+    isSCStatic _ = False
 
 instance NFData i => NFData (StorageClass i)

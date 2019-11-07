@@ -17,15 +17,6 @@ import Numeric.Natural
 
 -- | A data type representing the type of C language
 class CType a where
-    -- | `isCTArray` returns `True` when the given argument is `Htcc.CRules.Types.Core.CTArray`.
-    -- Otherwise, returns `False`
-    isCTArray :: a -> Bool
-    -- | `isCTArray` returns `True` when the given argument is `Htcc.CRules.Types.Core.CTStruct`.
-    -- Otherwise, returns `False`
-    isCTStruct :: a -> Bool
-    -- | `isCTArray` returns `True` when the given argument is `Htcc.CRules.Types.Core.CTUndef`.
-    -- Otherwise, returns `False`
-    isCTUndef :: a -> Bool
     -- | `isFundamental` returns `True` only if the type is fundamental type (See also: § 3.9.1), otherwise retunrs `False`.
     isFundamental :: a -> Bool
     -- | If the first argument is a type qualifier,
@@ -44,23 +35,6 @@ class CType a where
     -- | `dctorPtr` deconstructs the nested structure of `Htcc.CRules.Types.Core.CTPtr` and returns the convolution function
     -- of the original type and `Htcc.CRules.Types.Core.CTPtr`
     dctorPtr :: a -> (a, a -> a)
-    -- | `makeCTArray` retunrs a multidimensional array based on the arguments (list of each dimension).
-    -- e.g.:
-    --
-    -- >>> makeCTArray [1, 2] CTInt
-    -- int[1][2]
-    -- >>> makeCTArray [1, 2] (CTArray 2 CTInt)
-    -- int[2][1][2]
-    makeCTArray :: [Natural] -> a -> a
-    -- | Only if both arguments is `Htcc.CRules.Types.Core.CTArray`, 
-    -- `concatCTArray` returns a new multidimensional array by conbining the types of
-    -- multidimensional arrays as follows.
-    -- 
-    -- >>> makeCTArray [1, 2] CTInt `concatCTArray` makeCTArray [3, 4] CTInt
-    -- Just int[1][2][3][4]
-    -- >>> CTInt `concatCTArray` CTArray 2 CTInt
-    -- Nothing
-    concatCTArray :: a -> a -> Maybe a
     -- | `removeAllExtents` is the same as @std::remove_all_extents@ defined in C++11 @\<type_traits\>@ 
     -- (See also: <http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2012/n3337.pdf N3337>/§ 20.9.7.4) header.
     -- If type @T@ is a multidimensional array of type @X@, type @X@ is returned.
