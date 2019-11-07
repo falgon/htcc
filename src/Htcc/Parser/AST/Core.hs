@@ -22,7 +22,9 @@ module Htcc.Parser.AST.Core (
     isATForIncr,
     fromATKindFor,
     isComplexAssign,
-    isEmptyExprStmt
+    isEmptyExprStmt,
+    isEmptyReturn,
+    isNonEmptyReturn
 ) where
 
 import qualified Data.Text as T
@@ -163,3 +165,18 @@ data ATree a = ATEmpty -- ^ The empty node
 isEmptyExprStmt :: ATree a -> Bool
 isEmptyExprStmt (ATNode ATExprStmt _ ATEmpty ATEmpty) = True
 isEmptyExprStmt _ = False
+
+{-# INLINE isNonEmptyReturn #-}
+-- | `isNonEmptyReturn` returns `True` only if the `ATKind` of the given argument is `ATReturn` and the left side hand node of the given argument is not `ATEmpty`.
+-- Otherwise, returns `False`.
+isNonEmptyReturn :: ATree a -> Bool
+isNonEmptyReturn (ATNode ATReturn _ ATEmpty _) = False
+isNonEmptyReturn (ATNode ATReturn _ _ _) = True
+isNonEmptyReturn _ = False
+
+{-# INLINE isEmptyReturn #-}
+-- | `isEmptyReturn` returns `True` only if the `ATKind` of the given argument is `ATReturn` and the left side hand node of the given argument is `ATEmpty`.
+-- Otherwise, returns `False`.
+isEmptyReturn :: ATree a -> Bool
+isEmptyReturn (ATNode ATReturn _ ATEmpty _) = True
+isEmptyReturn _ = False

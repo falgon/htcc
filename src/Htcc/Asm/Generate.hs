@@ -180,6 +180,7 @@ genStmt c (ATNode ATElse _ (ATNode ATIf _ llhs rrhs) rhs) = do
     genStmt c rhs
     T.putStr $ I.defEnd n
 genStmt _ (ATNode ATElse _ _ _) = error "Asm code generator shold not reached here. Maybe abstract tree is broken it cause (bug)."
+genStmt c (ATNode ATReturn t ATEmpty r) = genStmt c (ATNode ATReturn t (ATNode (ATNum 0) (CR.SCAuto CR.CTInt) ATEmpty ATEmpty) r) -- for return;
 genStmt c (ATNode ATReturn _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax) >> 
     readIORef (curFunc c) >>= maybe (err "The function name cannot be tracked.") (T.putStr . (\f -> I.jmp (I.refLLbl (".return." <> f <> ".") (0 :: Int))))
 genStmt c (ATNode ATCast t lhs _) = genStmt c lhs >> T.putStr (truncate t)
