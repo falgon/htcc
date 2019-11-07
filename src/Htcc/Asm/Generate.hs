@@ -73,7 +73,7 @@ load t
 
 {-# INLINE store #-}
 store :: Ord i => CR.StorageClass i -> T.Text
-store ty = I.pop rdi <> I.pop rax <> booleanRound (CR.fromsc ty) <> store' ty <> I.push rdi
+store ty = I.pop rdi <> I.pop rax <> booleanRound (CR.toTypeKind ty) <> store' ty <> I.push rdi
     where
         booleanRound CR.CTBool = I.cmp rdi (0 :: Int) <> I.setne dil <> I.movzb rdi dil
         booleanRound _ = ""
@@ -85,7 +85,7 @@ store ty = I.pop rdi <> I.pop rax <> booleanRound (CR.fromsc ty) <> store' ty <>
 
 {-# INLINE truncate #-}
 truncate :: Ord i => CR.StorageClass i -> T.Text
-truncate ty = I.pop rax <> booleanRound (CR.fromsc ty) <> truncate' ty <> I.push rax
+truncate ty = I.pop rax <> booleanRound (CR.toTypeKind ty) <> truncate' ty <> I.push rax
     where   
         booleanRound CR.CTBool = I.cmp rax (0 :: Int) <> I.setne al
         booleanRound _ = ""
@@ -142,7 +142,7 @@ genStmt c (ATNode (ATCallFunc x (Just args)) t _ _) = let (n', toReg, _) = split
     T.putStr $ I.defLLbl ".call." n
     T.putStr $ I.sub rsp (8 :: Int) <> I.mov rax (0 :: Int) <> I.call x <> I.add rsp (8 :: Int)
     T.putStr $ I.defLLbl ".end." n
-    when (CR.fromsc t == CR.CTBool) $ T.putStr $ I.movzb rax al
+    when (CR.toTypeKind t == CR.CTBool) $ T.putStr $ I.movzb rax al
     T.putStr $ I.push rax
 genStmt c (ATNode (ATBlock stmts) _ _ _) = mapM_ (genStmt c) stmts
 genStmt c (ATNode (ATStmtExpr stmts) _ _ _) = mapM_ (genStmt c) stmts
