@@ -35,6 +35,7 @@ int sub3_long(long a, long b, long c) { return a - b - c; }
 int ptr2ar(int (*p)[3]) { int i = 0; for (; i < sizeof *p / sizeof **p; i = i + 1) p[0][i] = i + 1; return 0; }
 static int static_fun() { return 42; }
 void swap(int* a, int* b) { *a ^= *b; *b ^= *a; *a ^= *b; }
+void void_fn(int* a) { *a = 42; return; *a = 53; }
 
 int main()
 {
@@ -387,6 +388,7 @@ int main()
     assert(49389, 0xc0ed, "0xc0ed");
     assert(49389, 0xC0eD, "0xC0eD");
     assert(42, ({ int a = 53; int b = 42; swap(&a, &b); a; }), "({ int a = 53; int b = 42; swap(&a, &b); a; })");
+    assert(42, ({ int a = 0; void_fn(&a); a; }), "({ int a = 53; int b = 42; swap(&a, &b); a; })");
 
     printf(">> All tests passed <<\n");
 

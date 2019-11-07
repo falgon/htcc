@@ -212,7 +212,6 @@ arrayDeclSuffix t (cur@(_, HT.TKReserved "["):xs) = case constantExp xs of
         ("The expression '" <> tshow (snd $ head xs) <> "' is not constant-expression", head xs)
     Right ((_, HT.TKReserved "]"):ds, val) -> maybe' (Just $ Right (CT.mapTypeKind (CT.CTArray (toNatural val)) t ,ds)) (arrayDeclSuffix t ds) $
         Just . fmap (first $ fromJust . CT.concatCTArray (CT.mapTypeKind (CT.CTArray (toNatural val)) t))
-        -- Just . fmap (first $ fromJust . CT.concatCTArray (CT.picksc t $ CT.CTArray (toNatural val) (CT.toTypeKind t)))
     _ -> Just $ Left ("expected storage size after '[' token", cur)
 arrayDeclSuffix _ _ = Nothing
         
@@ -328,8 +327,15 @@ globalDef tks at !va = (>>=) (takeType tks va) $ \case
                     mk <- flip unfoldrM args $ \args' -> if null args' then return Nothing else let arg = head args' in do
                         m <- uncurry addLVar (second fromJust $ dropThd3 $ dropThd4 arg) <$> readSTRef v
                         flip (either ((<$) Nothing . writeSTRef eri . Just)) m $ \(vat, scp'') -> Just (vat, tail args') <$ writeSTRef v scp''
-                    (>>=) (readSTRef eri) $ flip maybe (return . Left) $
-                        fmap (second3 (flip (ATNode (ATDefFunc fname $ if null mk then Nothing else Just mk) funcType) ATEmpty)) . stmt st at <$> readSTRef v
+                    (>>=) (readSTRef eri) $ flip maybe (return . Left) $ (flip fmap $ readSTRef v) $ \v' -> (>>=) (stmt st at v') $ \case
+                        (ert, erat@(ATNode (ATBlock block) _ _ _), erscp) 
+                            | CT.toTypeKind funcType == CT.CTVoid -> if isJust (find isNonEmptyReturn block) then
+                                Left ("The return type of function '" <> fname <> "' is void, but the statement returns a value", cur) else
+                                    Right (ert, ATNode (ATDefFunc fname (if null mk then Nothing else Just mk)) funcType erat ATEmpty , erscp)
+                            | otherwise -> let fnode = ATNode (ATDefFunc fname (if null mk then Nothing else Just mk)) funcType erat ATEmpty in
+                                maybe' (Right (ert, fnode, erscp)) (find isEmptyReturn block) $ const $ 
+                                    Right (ert, fnode, pushWarn ("The return type of function '" <> fname <> "' is " <> tshow (CT.toTypeKind funcType) <> ", but the statement returns no value") cur erscp)
+                        _ -> Left (internalCE, HT.emptyToken)
                 _ -> stmt tk at scp
     (ty, Just (cur@(_, HT.TKIdent _)), xs, !scp) -> case xs of -- for global variables -- TODO: support initialize by global variables
         (_, HT.TKReserved ";"):ds -> flip fmap (addGVar ty cur scp) $ \(_, scp') -> (ds, ATEmpty, scp')
@@ -339,9 +345,9 @@ globalDef tks at !va = (>>=) (takeType tks va) $ \case
         checkErr ar !scp' f = let ar' = init $ tail ar in if not (null ar') && snd (head ar') == HT.TKReserved "," then Left ("unexpected ',' token", head ar') else
             let args = linesBy ((==HT.TKReserved ",") . snd) ar' in mapEither (`takeType` scp') args >>= f
 
-
 -- | `stmt` indicates \(\eqref{eq:nineth}\) among the comments of `inners`.
 stmt :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
+stmt ((_, HT.TKReturn):(_, HT.TKReserved ";"):xs) _ scp = Right (xs, ATNode ATReturn (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty, scp) -- for @return;@
 stmt (cur@(_, HT.TKReturn):xs) atn !scp = (>>=) (expr xs atn scp) $ \(ert, erat, erscp) -> case ert of -- for @return@
     (_, HT.TKReserved ";"):ys -> Right (ys, ATNode ATReturn (CT.SCUndef CT.CTUndef) erat ATEmpty, erscp)
     ert' -> Left $ expectedMessage ";" cur ert'
