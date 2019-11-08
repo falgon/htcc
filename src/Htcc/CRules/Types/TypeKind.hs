@@ -52,9 +52,6 @@ class TypeKindBase a where
     isCTUndef :: a i -> Bool
     -- | `isCTIncomplete` returns `True` when the given argument is `Htcc.CRules.Types.CType.CTIncomplete`.
     isCTIncomplete :: a i -> Bool
-    -- | `detach` remove the mold one step. 
-    -- If the mold cannot be removed any more, it is returned as it is.
-    detach :: a i -> a i
     -- | `makeCTArray` retunrs a multidimensional array based on the arguments (list of each dimension).
     -- e.g.:
     --
@@ -92,6 +89,7 @@ class IncompleteBase a where
     isIncompleteArray :: a i -> Bool
     -- | When the given argument is incmoplete struct, `isIncompleteStruct` returns `True`, otherwise `False`.
     isIncompleteStruct :: a i -> Bool
+    fromIncompleteStruct :: a i -> Maybe T.Text
 
 -- | The type representing an incomplete type
 data Incomplete i = IncompleteArray (TypeKind i) -- ^ incomplete array, it has a base type.
@@ -103,6 +101,8 @@ instance IncompleteBase Incomplete where
     isIncompleteArray _ = False
     isIncompleteStruct (IncompleteStruct _) = True
     isIncompleteStruct _ = False
+    fromIncompleteStruct (IncompleteStruct t) = Just t
+    fromIncompleteStruct _ = Nothing
 
 instance Show i => Show (Incomplete i) where
     show (IncompleteArray t) = show t ++ "[]"
@@ -333,13 +333,6 @@ instance TypeKindBase TypeKind where
     isCTIncomplete (CTIncomplete _) = True
     isCTIncomplete _ = False
     
-    {-# INLINE detach #-}
-    detach (CTArray _ x) = x
-    detach (CTPtr x) = x
-    detach (CTLong x) = x
-    detach (CTShort x) = x
-    detach x = x
-    
     {-# INLINE makeCTArray #-}
     makeCTArray ns t = foldl' (flip CTArray) t ns
 
@@ -364,6 +357,9 @@ instance IncompleteBase TypeKind where
     {-# INLINE isIncompleteStruct #-}
     isIncompleteStruct (CTIncomplete x) = isIncompleteStruct x
     isIncompleteStruct _ = False
+    {-# INLINE fromIncompleteStruct #-}
+    fromIncompleteStruct (CTIncomplete x) = fromIncompleteStruct x
+    fromIncompleteStruct _ = Nothing
 
 {-# INLINE alignas #-}
 -- | `alignas` align to @n@.
