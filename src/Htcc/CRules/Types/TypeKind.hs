@@ -14,8 +14,10 @@ module Htcc.CRules.Types.TypeKind (
     -- * TypeKind data type
     StructMember (..),
     TypeKind (..),
+    Incomplete (..),
     -- * Type classes that can be converted to `TypeKind`
     TypeKindBase (..),
+    IncompleteBase (..),
     -- * Lookup functions
     lookupMember,
     -- * Utilities of C type
@@ -48,6 +50,11 @@ class TypeKindBase a where
     -- | `isCTArray` returns `True` when the given argument is `Htcc.CRules.Types.Core.CTUndef`.
     -- Otherwise, returns `False`
     isCTUndef :: a i -> Bool
+    -- | `isCTIncomplete` returns `True` when the given argument is `Htcc.CRules.Types.CType.CTIncomplete`.
+    isCTIncomplete :: a i -> Bool
+    -- | `detach` remove the mold one step. 
+    -- If the mold cannot be removed any more, it is returned as it is.
+    detach :: a i -> a i
     -- | `makeCTArray` retunrs a multidimensional array based on the arguments (list of each dimension).
     -- e.g.:
     --
@@ -79,6 +86,30 @@ data StructMember i = StructMember -- ^ `StructMember` constructor
 
 instance NFData i => NFData (StructMember i)
 
+-- | A class requesting a type that represents an incomplete type.
+class IncompleteBase a where
+    -- | When the given argument is incomplete array, `isIncompleteArray` returns `True`, otherwise `False`.
+    isIncompleteArray :: a i -> Bool
+    -- | When the given argument is incmoplete struct, `isIncompleteStruct` returns `True`, otherwise `False`.
+    isIncompleteStruct :: a i -> Bool
+
+-- | The type representing an incomplete type
+data Incomplete i = IncompleteArray (TypeKind i) -- ^ incomplete array, it has a base type.
+    | IncompleteStruct T.Text -- ^ incomplete struct, it has a tag name.
+    deriving (Eq, Generic)
+
+instance IncompleteBase Incomplete where
+    isIncompleteArray (IncompleteArray _) = True
+    isIncompleteArray _ = False
+    isIncompleteStruct (IncompleteStruct _) = True
+    isIncompleteStruct _ = False
+
+instance Show i => Show (Incomplete i) where
+    show (IncompleteArray t) = show t ++ "[]"
+    show (IncompleteStruct t) = T.unpack t
+
+instance NFData i => NFData (Incomplete i)
+
 -- | The kinds of types in C language.
 data TypeKind i = CTInt -- ^ The type @int@ as C language
     | CTChar -- ^ The type @char@ as C language
@@ -91,6 +122,7 @@ data TypeKind i = CTInt -- ^ The type @int@ as C language
     | CTArray Natural (TypeKind i) -- ^ The array type
     | CTEnum (TypeKind i) (M.Map T.Text i) -- ^ The enum, has its underlying type and a map
     | CTStruct (M.Map T.Text (StructMember i)) -- ^ The struct, has its members and their names.
+    | CTIncomplete (Incomplete i) -- ^ The incomplete type.
     | CTUndef -- ^ Undefined type
     deriving Generic
 
@@ -164,6 +196,7 @@ instance Eq i => Eq (TypeKind i) where
     (==) (CTStruct m1) (CTStruct m2) = m1 == m2
     (==) CTUndef CTUndef = True
     (==) (CTPtr t1) (CTPtr t2) = t1 == t2
+    (==) (CTIncomplete t1) (CTIncomplete t2) = t1 == t2
     (==) l r
         | isQualifier l || isQualifier r = maybe' False (combTable l) $ \lh ->
             maybe' False (combTable r) $ \rh -> lh == rh
@@ -184,6 +217,7 @@ instance Show i => Show (TypeKind i) where
     show (CTArray v t) = show t ++ "[" ++ show v ++ "]"
     show (CTEnum _ m) = "enum { " ++ intercalate ", " (map T.unpack $ M.keys m) ++ " }" 
     show (CTStruct m) = "struct { " ++ concatMap (\(v, inf) -> show (smType inf) ++ " " ++ T.unpack v ++ "; ") (M.toList m) ++ "}"
+    show (CTIncomplete t) = show t
     show CTUndef = "undefined"
 
 instance (Show i, Read i, Ord i) => Read (TypeKind i) where
@@ -226,6 +260,7 @@ instance Ord i => CType (TypeKind i) where
     sizeof (CTPtr _) = 8
     sizeof (CTArray v t) = v * sizeof t
     sizeof (CTEnum t _) = sizeof t
+    sizeof (CTIncomplete _) = 0
     sizeof t@(CTStruct m) 
         | M.null m = 1
         | otherwise = let sn = maximumBy (flip (.) smOffset . compare . smOffset) $ M.elems m in
@@ -246,6 +281,7 @@ instance Ord i => CType (TypeKind i) where
     alignof (CTPtr _) = 8
     alignof (CTArray _ t) = alignof $ removeAllExtents t
     alignof (CTEnum t _) = alignof t
+    alignof (CTIncomplete _) = 1
     alignof (CTStruct m)
         | M.null m = 1
         | otherwise = maximum $ map (alignof . smType) $ M.elems m
@@ -279,6 +315,7 @@ instance Ord i => CType (TypeKind i) where
     implicitInt CTUndef = CTInt
     implicitInt x = x
 
+
 instance TypeKindBase TypeKind where
     {-# INLINE isCTArray #-}
     isCTArray (CTArray _ _) = True
@@ -291,6 +328,17 @@ instance TypeKindBase TypeKind where
     {-# INLINE isCTUndef #-}
     isCTUndef CTUndef = True
     isCTUndef _ = False
+
+    {-# INLINE isCTIncomplete #-}
+    isCTIncomplete (CTIncomplete _) = True
+    isCTIncomplete _ = False
+    
+    {-# INLINE detach #-}
+    detach (CTArray _ x) = x
+    detach (CTPtr x) = x
+    detach (CTLong x) = x
+    detach (CTShort x) = x
+    detach x = x
     
     {-# INLINE makeCTArray #-}
     makeCTArray ns t = foldl' (flip CTArray) t ns
@@ -308,6 +356,14 @@ instance TypeKindBase TypeKind where
     
     {-# INLINE mapTypeKind #-}
     mapTypeKind = id
+
+instance IncompleteBase TypeKind where
+    {-# INLINE isIncompleteArray #-}
+    isIncompleteArray (CTIncomplete x) = isIncompleteArray x
+    isIncompleteArray _ = False
+    {-# INLINE isIncompleteStruct #-}
+    isIncompleteStruct (CTIncomplete x) = isIncompleteStruct x
+    isIncompleteStruct _ = False
 
 {-# INLINE alignas #-}
 -- | `alignas` align to @n@.

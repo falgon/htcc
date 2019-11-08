@@ -46,7 +46,7 @@ import qualified Htcc.CRules.Types as CT
 import Htcc.Parser.AST.Core (ATree (..))
 import qualified Htcc.Parser.AST.Scope.ManagedScope as SM
 import qualified Htcc.Parser.AST.Scope.Var as PV
-import qualified Htcc.Parser.AST.Scope.Struct as PS
+import qualified Htcc.Parser.AST.Scope.Tag as PS
 import qualified Htcc.Parser.AST.Scope.Typedef as PT
 import qualified Htcc.Parser.AST.Scope.Function as PF
 import qualified Htcc.Parser.AST.Scope.Enumerator as SE
@@ -57,7 +57,7 @@ data Scoped i = Scoped -- ^ The constructor of a struct tag
     {
         curNestDepth :: !Natural, -- ^ The nest depth of the parsing process
         vars :: PV.Vars i, -- ^ scoped all identifiers of variables (local variables, global variables and literals) visible during processing
-        structs :: PS.Structs i, -- ^ scoped all struct tags
+        structs :: PS.Tags i, -- ^ scoped all struct tags
         typedefs :: PT.Typedefs i, -- ^ scoped all typedefs
         functions :: PF.Functions i, -- ^ scoped all identifires of functions
         enumerators :: SE.Enumerators i -- ^ scoped all identifiers of enumerators

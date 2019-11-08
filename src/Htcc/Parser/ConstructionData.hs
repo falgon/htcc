@@ -44,7 +44,7 @@ import Data.Tuple.Extra (second)
 import qualified Htcc.CRules.Types as CT
 import qualified Htcc.Parser.AST.Scope as AS
 import qualified Htcc.Parser.AST.Scope.Var as PV
-import qualified Htcc.Parser.AST.Scope.Struct as PS
+import qualified Htcc.Parser.AST.Scope.Tag as PS
 import qualified Htcc.Parser.AST.Scope.Typedef as PT
 import qualified Htcc.Parser.AST.Scope.Function as PF
 import qualified Htcc.Parser.AST.Scope.Enumerator as SE

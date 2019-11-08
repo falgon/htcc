@@ -1,5 +1,5 @@
 {-|
-Module      : Htcc.Parser.AST.Scope.Struct
+Module      : Htcc.Parser.AST.Scope.Tag
 Description : The Data type of struct and its utilities used in parsing
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -10,9 +10,9 @@ Portability : POSIX
 The Data type of variables and its utilities used in parsing
 -}
 {-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
-module Htcc.Parser.AST.Scope.Struct (
+module Htcc.Parser.AST.Scope.Tag (
     Tag (..),
-    Structs,
+    Tags,
     add
 ) where
 
@@ -27,11 +27,11 @@ import Htcc.Parser.AST.Scope.Utils (internalCE)
 import qualified Htcc.CRules.Types as CT
 import qualified Htcc.Tokenizer.Token as HT
 
--- | The data type of a struct tag
-data Tag i = Tag -- ^ The constructor of a struct tag
+-- | The data type of a tag
+data Tag i = Tag -- ^ The constructor of a tag
     {
-        sttype :: CT.StorageClass i, -- ^ The type of this struct
-        stNestDepth :: !Natural -- ^ The nest depth of this struct
+        sttype :: CT.StorageClass i, -- ^ The type of this tag
+        stNestDepth :: !Natural -- ^ The nest depth of this tag
     } deriving (Eq, Ord, Show, Generic)
 
 instance NFData i => NFData (Tag i)
@@ -41,14 +41,14 @@ instance ManagedScope (Tag i) where
     fallBack = const
     initial = M.empty
 
--- | The structs data type
-type Structs i = M.Map T.Text (Tag i)
+-- | The `Tags` data type
+type Tags i = M.Map T.Text (Tag i)
 
--- | Given the current nesting number, type, identifier token, and `Structs`, if the specified identifier already exists in the same scope, 
+-- | Given the current nesting number, type, identifier token, and `Tags`, if the specified identifier already exists in the same scope, 
 -- return an error message and its location as a pair. 
--- Otherwise, add a new tag to `Structs` and return it. 
+-- Otherwise, add a new tag to `Tags` and return it. 
 -- If the token does not indicate an identifier, an error indicating internal compiler error is returned.
-add :: Num i => Natural -> CT.StorageClass i -> HT.TokenLC i -> Structs i -> Either (ASTError i) (Structs i)
+add :: Num i => Natural -> CT.StorageClass i -> HT.TokenLC i -> Tags i -> Either (ASTError i) (Tags i)
 add cnd t cur@(_, HT.TKIdent ident) sts = case M.lookup ident sts of
     Just foundedTag
         | stNestDepth foundedTag /= cnd -> stnat
