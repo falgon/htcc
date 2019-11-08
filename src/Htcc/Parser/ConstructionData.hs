@@ -33,13 +33,15 @@ module Htcc.Parser.ConstructionData (
     fallBack,
     initConstructionData,
     resetLocal,
-    pushWarn
+    pushWarn,
+    incomplete
 ) where
 
 import Data.Bits (Bits (..))
 import qualified Data.Text as T
 import qualified Data.Sequence as S
 import Data.Tuple.Extra (second)
+import Data.Maybe (fromJust)
 
 import qualified Htcc.CRules.Types as CT
 import qualified Htcc.Parser.AST.Scope as AS
@@ -198,3 +200,12 @@ resetLocal cd = cd { scope = AS.resetLocal (scope cd) }
 -- | Function to add warning text.
 pushWarn :: T.Text -> TokenLC i -> ConstructionData i -> ConstructionData i
 pushWarn t tkn cd = cd { warns = warns cd S.|> (t, tkn) } 
+
+-- | Returns `Nothing` if incomplete, otherwise `Htcc.CRules.Types.StorageClass`.
+{-# INLINE incomplete #-}
+incomplete :: CT.StorageClass i -> ConstructionData i -> Maybe (CT.StorageClass i)
+incomplete ty scp
+    | not (CT.isCTIncomplete ty) = Just ty
+    | CT.isIncompleteStruct ty = (>>=) (lookupTag (fromJust $ CT.fromIncompleteStruct ty) scp) $ \tag -> 
+        if CT.isCTIncomplete (PS.sttype tag) then Nothing else Just (PS.sttype tag) 
+    | otherwise = Nothing

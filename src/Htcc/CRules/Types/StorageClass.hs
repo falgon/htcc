@@ -112,14 +112,13 @@ instance TypeKindBase StorageClass where
     {-# INLINE mapTypeKind #-}
     mapTypeKind f sc = picksc sc $ f $ toTypeKind sc
 
-    {-# INLINE detach #-}
-    detach sc = picksc sc $ detach $ toTypeKind sc
-
 instance IncompleteBase StorageClass where
     {-# INLINE isIncompleteArray #-}
     isIncompleteArray = isIncompleteArray . toTypeKind
     {-# INLINE isIncompleteStruct #-}
     isIncompleteStruct = isIncompleteStruct . toTypeKind
+    {-# INLINE fromIncompleteStruct #-}
+    fromIncompleteStruct = fromIncompleteStruct . toTypeKind
 
 instance StorageClassBase StorageClass where
     {-# INLINE isSCStatic #-}

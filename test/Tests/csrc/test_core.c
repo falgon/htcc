@@ -391,7 +391,8 @@ int main()
     assert(42, ({ int a = 53; int b = 42; swap(&a, &b); a; }), "({ int a = 53; int b = 42; swap(&a, &b); a; })");
     assert(42, ({ int a = 0; void_fn(&a); a; }), "({ int a = 53; int b = 42; swap(&a, &b); a; })");
     assert(42, ({ int ar[2]; ar[0] = 42; param_decay(ar); }), "({ int ar[2]; ar[0] = 0; param_decay(ar); })");
-
+    assert(4, ({ struct X *a; struct X { int x; }; sizeof(struct X); }), " ({ struct X *a; struct X { int x; }; sizeof(struct X); })");
+    assert(42, ({ struct X { struct X* next; int x; } a; struct X b; b.x = 42; a.next = &b; a.next->x; }), "({ struct X { struct X* next; int x; } a; struct X b; b.x = 42; a.next = &b; a.next->x; })");
     printf(">> All tests passed <<\n");
 
     return 0;
