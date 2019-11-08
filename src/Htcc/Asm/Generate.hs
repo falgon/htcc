@@ -122,7 +122,6 @@ genStmt c lc@(ATNode (ATDefFunc x Nothing) ty st _) = writeIORef (curFunc c) (Ju
 genStmt c lc@(ATNode (ATDefFunc x (Just args)) ty st _) = do -- TODO: supports more than 7 arguments
     writeIORef (curFunc c) $ Just x
     T.putStr $ if CR.isSCStatic ty then I.defLbl x else I.defGLbl x
-    unless (CR.isSCStatic ty) $ T.putStr $ I.defGLbl x
     prologue (stackSize lc)
     flip (`zipWithM_` args) argRegs $ \(ATNode (ATLVar t o) _ _ _) reg -> 
         maybe (err "internal compiler error: there is no register that fits the specified size") (T.putStr . I.mov (Ref $ rbp `osub` o)) $
