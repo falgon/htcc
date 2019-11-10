@@ -56,6 +56,7 @@ data Token i = TKReserved T.Text -- ^ The reserved token
     | TKElse -- ^ The @else@ keyword
     | TKWhile -- ^ The @while@ keyword
     | TKFor -- ^ The @for@ keyword
+    | TKBreak -- ^ The @break@ keyword
     | TKEnum -- ^ The @enum@ keyword
     | TKSizeof -- ^ The @sizeof@ keyword
     | TKAlignof -- ^ The @_Alignof@ keyword
@@ -77,6 +78,7 @@ instance Show i => Show (Token i) where
     show TKElse = "else"
     show TKWhile = "while"
     show TKFor = "for"
+    show TKBreak = "break"
     show TKEnum = "enum"
     show TKStruct = "struct"
     show TKSizeof = "sizeof"
@@ -106,6 +108,7 @@ length TKReturn = 6
 length TKIf = 2
 length TKElse = 4
 length TKWhile = 5
+length TKBreak = 5
 length TKFor = 3
 length TKEnum = 4
 length TKStruct = 6
@@ -124,6 +127,7 @@ lookupKeyword s = find ((==) s . tshow) [
     TKIf, 
     TKElse,
     TKFor,
+    TKBreak,
     TKEnum,
     TKStruct,
     TKSizeof,

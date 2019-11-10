@@ -20,7 +20,7 @@ module Htcc.Asm.Generate (
 -- Imports universal modules
 import Prelude hiding (truncate)
 import Data.Foldable (toList)
-import Control.Exception (finally)
+import Control.Exception (finally, bracket)
 import Control.Monad (zipWithM_, when, unless)
 import qualified Data.ByteString as B
 import Data.List (find)
@@ -51,6 +51,7 @@ import qualified Htcc.CRules.Types as CR
 data GenStatus = GenStatus -- The constructor of `Htcc.Asm.Generate.GenStatus`
     {
         labelNumber :: IO Int, -- The label number. `labelNumber` is incremented each time it is read
+        breakNumber :: IORef (Maybe Int), -- The breack label number.
         curFunc :: IORef (Maybe T.Text) -- `curFunc` stores the name of the function being processed
     }
 
@@ -145,24 +146,27 @@ genStmt c (ATNode (ATCallFunc x (Just args)) t _ _) = let (n', toReg, _) = split
     T.putStr $ I.push rax
 genStmt c (ATNode (ATBlock stmts) _ _ _) = mapM_ (genStmt c) stmts
 genStmt c (ATNode (ATStmtExpr stmts) _ _ _) = mapM_ (genStmt c) stmts
-genStmt c (ATNode (ATFor exps) _ _ _) = do
+genStmt c (ATNode ATBreak _ _ _) = readIORef (breakNumber c) >>= maybe (err "stray break") (T.putStr . I.jmp . I.refBreak)
+genStmt c (ATNode (ATFor exps) _ _ _) = bracket (readIORef $ breakNumber c) (writeIORef (breakNumber c)) $ const $ do
     n <- labelNumber c
+    writeIORef (breakNumber c) $ Just n
     maybe (return ()) (genStmt c . fromATKindFor) $ find isATForInit exps
     T.putStr $ I.defBegin n
     maybe (return ()) (genStmt c . fromATKindFor) $ find isATForCond exps
-    T.putStr $ I.pop rax <> I.cmp rax (0 :: Int) <> I.je (I.refEnd n)
+    T.putStr $ I.pop rax <> I.cmp rax (0 :: Int) <> I.je (I.refBreak n)
     maybe (return ()) (genStmt c . fromATKindFor) $ find isATForStmt exps
     maybe (return ()) (genStmt c . fromATKindFor) $ find isATForIncr exps
     T.putStr $ I.jmp $ I.refBegin n
-    T.putStr $ I.defEnd n 
-genStmt c (ATNode ATWhile _ lhs rhs) = do
+    T.putStr $ I.defBreak n
+genStmt c (ATNode ATWhile _ lhs rhs) = bracket (readIORef $ breakNumber c) (writeIORef (breakNumber c)) $ const $ do
     n <- labelNumber c
+    writeIORef (breakNumber c) $ Just n
     T.putStr $ I.defBegin n
     genStmt c lhs
-    T.putStr $ I.pop rax <> I.cmp rax (0 :: Int) <> I.je (I.refEnd n)
+    T.putStr $ I.pop rax <> I.cmp rax (0 :: Int) <> I.je (I.refBreak n)
     genStmt c rhs
     T.putStr $ I.jmp $ I.refBegin n
-    T.putStr $ I.defEnd n
+    T.putStr $ I.defBreak n
 genStmt c (ATNode ATIf _ lhs rhs) = do
     genStmt c lhs
     n <- labelNumber c
@@ -306,9 +310,10 @@ dataSection gvars lits = do
 
 textSection :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstruction i) => [ATree i] -> IO ()
 textSection tk = do
-    inc <- counter 0
+    incLabel <- counter 0
+    incBreak <- newIORef Nothing
     fname <- newIORef Nothing
-    T.putStrLn ".text" >> mapM_ (genStmt $ GenStatus inc fname) tk
+    T.putStrLn ".text" >> mapM_ (genStmt $ GenStatus incLabel incBreak fname) tk
 
 -- | Generate full assembly code from C language program
 casm :: Bool -> InputCCode -> IO ()
