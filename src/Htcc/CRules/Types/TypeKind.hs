@@ -245,7 +245,7 @@ instance Ord i => CType (TypeKind i) where
                         | otherwise = Nothing
     
     {-# INLINE isFundamental #-}
-    isFundamental = flip elem [CTChar, CTInt] . removeAllQualified
+    isFundamental = flip elem [CTChar, CTInt, CTBool] . removeAllQualified
 
     sizeof CTInt = 4 
     sizeof CTChar = 1
