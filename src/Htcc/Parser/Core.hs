@@ -404,6 +404,9 @@ stmt xxs@(cur@(_, HT.TKReserved "{"):_) _ !scp = maybe' (Left (internalCE, cur))
             either (\err -> Nothing <$ writeSTRef eri (Just err)) (\(ert', erat', erscp') -> Just (erat', ert') <$ writeSTRef v erscp') $ stmt ert ATEmpty erscp
         (>>=) (readSTRef eri) $ flip maybe (return . Left) $ Right . (ds, ATNode (ATBlock mk) (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty,) . fallBack scp <$> readSTRef v
 stmt ((_, HT.TKReserved ";"):xs) atn !scp = Right (xs, atn, scp) -- for only @;@
+stmt (cur@(_, HT.TKBreak):xs) _ scp = case xs of -- for @break@
+    (_, HT.TKReserved ";"):ds -> Right (ds, ATNode ATBreak (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty, scp)
+    _ -> Left ("expected ';' token after 'break' token", cur)
 stmt xs@((_, HT.TKTypedef):_) _ scp = defTypedef xs scp -- for local @typedef@
 stmt tk atn !scp
     | not (null tk) && isTypeName (head tk) scp = varDecl tk atn scp -- for a local variable declaration

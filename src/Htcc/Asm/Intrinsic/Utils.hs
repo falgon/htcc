@@ -18,8 +18,10 @@ module Htcc.Asm.Intrinsic.Utils (
     defLbl,
     defBegin,
     defEnd,
+    defBreak,
     refBegin,
     refEnd,
+    refBreak,
     declIS
 ) where
 
@@ -47,25 +49,35 @@ defGLbl = uncurry T.append . first (flip T.append "\n" . T.append ".global ") . 
 defLbl :: T.Text -> T.Text
 defLbl x = x <> ":\n"
 
--- | Define the .Lbeginx local label
+-- | Define the .Lbegin.x local label
 {-# INLINE defBegin #-}
 defBegin :: (Show i, Integral i) => i -> T.Text
 defBegin = defLLbl ".begin."
 
--- | Define the .Lendx local label
+-- | Define the .Lend.x local label
 {-# INLINE defEnd #-}
 defEnd :: (Show i, Integral i) => i -> T.Text
 defEnd = defLLbl ".end."
 
--- | Refer the .Lbeginx label
+-- | Define the .Lbreak.x local label
+{-# INLINE defBreak #-}
+defBreak :: (Show i, Integral i) => i -> T.Text
+defBreak = defLLbl ".break."
+
+-- | Refer the .Lbegin.x label
 {-# INLINE refBegin #-}
 refBegin :: (Show i, Integral i) => i -> T.Text
 refBegin = refLLbl ".begin."
 
--- | Refer the .Lendx label
+-- | Refer the .Lend.x label
 {-# INLINE refEnd #-}
 refEnd :: (Show i, Integral i) => i -> T.Text
 refEnd = refLLbl ".end."
+
+-- | Refer the .L.break.x
+{-# INLINE refBreak #-}
+refBreak :: (Show i, Integral i) => i -> T.Text
+refBreak = refLLbl ".break."
 
 -- | Declare intel syntax
 {-# INLINE declIS #-}
