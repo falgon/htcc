@@ -133,7 +133,7 @@ genStmt c (ATNode (ATCallFunc x (Just args)) t _ _) = let (n', toReg, _) = split
     mapM_ (genStmt c) toReg
     mapM_ (T.putStr . I.pop) $ popRegs n'
     -- unless (null toStack) $ forM_ (reverse toStack) $ genStmt c
-    n <- labelNumber c -- <- c
+    n <- labelNumber c
     T.putStr $ I.mov rax rsp <> I.and rax (0x0f :: Int)
     T.putStr $ I.jnz $ I.refLLbl ".call." n
     T.putStr $ I.mov rax (0 :: Int) <> I.call x
@@ -195,6 +195,11 @@ genStmt c (ATNode ATLOr _ lhs rhs) = do
     genStmt c lhs >> T.putStr (I.pop rax <> I.cmp rax (0 :: Int) <> I.jne (I.refLLbl ".true." n))
     genStmt c rhs >> T.putStr (I.pop rax <> I.cmp rax (0 :: Int) <> I.jne (I.refLLbl ".true." n))
     T.putStr $ I.push (0 :: Int) <> I.jmp (I.refLLbl ".end." n) <> I.defLLbl ".true." n <> I.push (1 :: Int) <> I.defLLbl ".end." n
+genStmt c (ATNode (ATConditional cn ATEmpty el) _ _ _) = do
+    n <- labelNumber c
+    genStmt c cn >> T.putStr (I.pop rax <> I.mov rdi rax <> I.push rdi <> I.cmp rax (0 :: Int) <> I.je (I.refLLbl ".else." n))
+    T.putStr (I.jmp (I.refLLbl ".end." n) <> I.defLLbl ".else." n)
+    T.putStr (I.pop rax) >> genStmt c el >> T.putStr (I.defLLbl ".end." n)
 genStmt c (ATNode (ATConditional cn th el) _ _ _) = do
     n <- labelNumber c
     genStmt c cn >> T.putStr (I.pop rax <> I.cmp rax (0 :: Int) <> I.je (I.refLLbl ".else." n))

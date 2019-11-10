@@ -441,6 +441,8 @@ assign xs atn scp = (>>=) (conditional xs atn scp) $ \(ert, erat, erscp) -> case
 -- | `conditional` indicates \(\eqref{eq:seventeenth}\) among the comments of `inners`.
 conditional :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
 conditional xs atn scp = (>>=) (logicalOr xs atn scp) $ \(ert, cond, erscp) -> case ert of
+    -- GNU extension (Conditionals with Omitted Operands, see also: https://gcc.gnu.org/onlinedocs/gcc/Conditionals.html)
+    (_, HT.TKReserved "?"):(_, HT.TKReserved ":"):ds -> second3 (flip (flip (flip ATNode (atype cond)) ATEmpty) ATEmpty . ATConditional cond ATEmpty) <$> conditional ds cond erscp 
     cur@(_, HT.TKReserved "?"):ds -> (>>=) (expr ds cond erscp) $ \(ert', thn, erscp') -> case ert' of
         (_, HT.TKReserved ":"):ds' -> second3 (flip (flip (flip ATNode (atype thn)) ATEmpty) ATEmpty . ATConditional cond thn) <$> conditional ds' thn erscp'
         ds' -> if null ds' then Left ("expected ':' token for this '?'", cur) else Left ("expected ':' before '" <> tshow (snd (head ds')) <> "' token", head ds')
