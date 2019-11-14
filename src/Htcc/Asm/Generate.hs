@@ -19,14 +19,15 @@ module Htcc.Asm.Generate (
 
 -- Imports universal modules
 import Prelude hiding (truncate)
-import Data.Foldable (toList)
 import Control.Exception (finally, bracket)
-import Control.Monad (zipWithM_, when, unless)
+import Control.Monad (zipWithM_, when, unless, void)
 import qualified Data.ByteString as B
 import Data.List (find)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef) 
 import Data.Either (either)
 import Data.Int (Int32)
+import Data.Foldable (toList)
+import Data.Tuple.Extra ((&&&), dupe)
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -34,7 +35,7 @@ import qualified Data.Sequence as S
 import System.Exit (exitFailure)
 
 -- Imports Tokenizer and parser
-import Htcc.Utils (err, putStrLnErr, putStrErr, counter, tshow, toInts, splitAtLen, maybe')
+import Htcc.Utils (err, putStrLnErr, putStrErr, counter, tshow, toInts, splitAtLen, maybe', bothM, (*^*))
 import qualified Htcc.Tokenizer as HT
 import Htcc.Parser (ATKind (..), ATree (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, isComplexAssign, parse, stackSize)
 import Htcc.Parser.AST.Scope.Var (GVar (..), Literal (..))
@@ -52,6 +53,7 @@ data GenStatus = GenStatus -- The constructor of `Htcc.Asm.Generate.GenStatus`
     {
         labelNumber :: IO Int, -- The label number. `labelNumber` is incremented each time it is read
         breakNumber :: IORef (Maybe Int), -- The breack label number.
+        continueNumber :: IORef (Maybe Int), -- The continue label number.
         curFunc :: IORef (Maybe T.Text) -- `curFunc` stores the name of the function being processed
     }
 
@@ -147,25 +149,27 @@ genStmt c (ATNode (ATCallFunc x (Just args)) t _ _) = let (n', toReg, _) = split
 genStmt c (ATNode (ATBlock stmts) _ _ _) = mapM_ (genStmt c) stmts
 genStmt c (ATNode (ATStmtExpr stmts) _ _ _) = mapM_ (genStmt c) stmts
 genStmt c (ATNode ATBreak _ _ _) = readIORef (breakNumber c) >>= maybe (err "stray break") (T.putStr . I.jmp . I.refBreak)
-genStmt c (ATNode (ATFor exps) _ _ _) = bracket (readIORef $ breakNumber c) (writeIORef (breakNumber c)) $ const $ do
+genStmt c (ATNode ATContinue _ _ _) = readIORef (continueNumber c) >>= maybe (err "stray continue") (T.putStr . I.jmp . I.refContinue)
+genStmt c (ATNode (ATFor exps) _ _ _) = bracket (bothM readIORef $ (breakNumber &&& continueNumber) c) (writeIORef (breakNumber c) *^* writeIORef (continueNumber c)) $ const $ do
     n <- labelNumber c
-    writeIORef (breakNumber c) $ Just n
+    void $ writeIORef (breakNumber c) *^* writeIORef (continueNumber c) $ dupe $ Just n
     maybe (return ()) (genStmt c . fromATKindFor) $ find isATForInit exps
     T.putStr $ I.defBegin n
     maybe (return ()) (genStmt c . fromATKindFor) $ find isATForCond exps
     T.putStr $ I.pop rax <> I.cmp rax (0 :: Int) <> I.je (I.refBreak n)
     maybe (return ()) (genStmt c . fromATKindFor) $ find isATForStmt exps
+    T.putStr $ I.defContinue n
     maybe (return ()) (genStmt c . fromATKindFor) $ find isATForIncr exps
     T.putStr $ I.jmp $ I.refBegin n
     T.putStr $ I.defBreak n
-genStmt c (ATNode ATWhile _ lhs rhs) = bracket (readIORef $ breakNumber c) (writeIORef (breakNumber c)) $ const $ do
+genStmt c (ATNode ATWhile _ lhs rhs) = bracket (bothM readIORef $ (breakNumber &&& continueNumber) c) (writeIORef (breakNumber c) *^* writeIORef (continueNumber c)) $ const $ do
     n <- labelNumber c
-    writeIORef (breakNumber c) $ Just n
-    T.putStr $ I.defBegin n
+    void $ writeIORef (breakNumber c) *^* writeIORef (continueNumber c) $ dupe $ Just n
+    T.putStr $ I.defContinue n
     genStmt c lhs
     T.putStr $ I.pop rax <> I.cmp rax (0 :: Int) <> I.je (I.refBreak n)
     genStmt c rhs
-    T.putStr $ I.jmp $ I.refBegin n
+    T.putStr $ I.jmp $ I.refContinue n
     T.putStr $ I.defBreak n
 genStmt c (ATNode ATIf _ lhs rhs) = do
     genStmt c lhs
@@ -312,8 +316,9 @@ textSection :: (Integral i, IsOperand i, I.UnaryInstruction i, I.BinaryInstructi
 textSection tk = do
     incLabel <- counter 0
     incBreak <- newIORef Nothing
+    incContinue <- newIORef Nothing
     fname <- newIORef Nothing
-    T.putStrLn ".text" >> mapM_ (genStmt $ GenStatus incLabel incBreak fname) tk
+    T.putStrLn ".text" >> mapM_ (genStmt $ GenStatus incLabel incBreak incContinue fname) tk
 
 -- | Generate full assembly code from C language program
 casm :: Bool -> InputCCode -> IO ()

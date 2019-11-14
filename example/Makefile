@@ -1,5 +1,8 @@
+DIST_DIR=dist
+
 define compile
-	stack exec htcc -- $1 | gcc -xassembler -no-pie -o $2 -
+	mkdir -p $(DIST_DIR)
+	stack exec htcc -- $1 | gcc -xassembler -no-pie -o $(DIST_DIR)/$2 -
 endef
 
 all: knapsack shuffle_and_sort merge_sort_linked_list lifegame
@@ -17,6 +20,6 @@ lifegame:
 	@$(call compile,"./lifegame.c","lifegame")
 
 clean:
-	$(RM) knapsack shuffle_and_sort merge_sorting_linked_list lifegame
+	$(RM) -r $(DIST_DIR)
 
 .PHONY: knapsack shuffle_and_sort merge_sort_linked_list lifegame clean

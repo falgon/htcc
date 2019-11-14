@@ -407,6 +407,9 @@ stmt ((_, HT.TKReserved ";"):xs) atn !scp = Right (xs, atn, scp) -- for only @;@
 stmt (cur@(_, HT.TKBreak):xs) _ scp = case xs of -- for @break@
     (_, HT.TKReserved ";"):ds -> Right (ds, ATNode ATBreak (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty, scp)
     _ -> Left ("expected ';' token after 'break' token", cur)
+stmt (cur@(_, HT.TKContinue):xs) _ scp = case xs of -- for @continue@
+    (_, HT.TKReserved ";"):ds -> Right (ds, ATNode ATContinue (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty, scp)
+    _ -> Left ("expected ';' token after 'continue' token", cur)
 stmt xs@((_, HT.TKTypedef):_) _ scp = defTypedef xs scp -- for local @typedef@
 stmt tk atn !scp
     | not (null tk) && isTypeName (head tk) scp = varDecl tk atn scp -- for a local variable declaration
