@@ -2,3 +2,4 @@
 *.swp
 bench_report.html
 docs/
+example/dist

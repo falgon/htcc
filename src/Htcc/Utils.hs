@@ -9,13 +9,16 @@ Portability : POSIX
 
 General-purpose utilities
 -}
-{-# LANGUAGE ScopedTypeVariables, BangPatterns #-}
+{-# LANGUAGE ScopedTypeVariables, BangPatterns, TupleSections #-}
 module Htcc.Utils (
     -- * Extra functions for lists
     takeWhileLen,
     splitAtLen,
     spanLen,
     lastInit,
+    -- * For Monad
+    bothM,
+    (*^*),
     -- * For Data.Maybe
     maybe',
     -- * For Char
@@ -323,3 +326,29 @@ subTextIndex :: T.Text -> T.Text -> Maybe Int
 subTextIndex s t = case T.indices s t of
     (i:_) -> Just i
     _ -> Nothing
+
+-- | The monadic `Data.Tuple.Extra.both`.
+-- e.g.:
+-- 
+-- >>> a <- newIORef (42 :: Int)
+-- >>> b <- newIORef (53 :: Int)
+-- >>> bothM readIORef (a, b) >>= print
+-- (42,53)
+bothM :: Monad m => (a -> m b) -> (a, a) -> m (b, b)
+bothM f (x, y) = do
+    x' <- f x
+    (x',) <$> f y
+
+infixr 3 *^*
+
+-- | The monadic `Data.Tuple.Extra.(***)`.
+-- e.g.:
+--
+-- >>> a <- newIORef 1
+-- >>> b <- newIORef 2
+-- >>> (writeIORef a *^* writeIORef b) (42, 53) >> bothM readIORef (a, b) >>= print
+-- (42,53)
+(*^*) :: Monad m => (a -> m c) -> (b -> m d) -> (a, b) -> m (c, d)
+(*^*) f g (x, y) = do
+    x' <- f x
+    (x',) <$> g y

@@ -19,9 +19,11 @@ module Htcc.Asm.Intrinsic.Utils (
     defBegin,
     defEnd,
     defBreak,
+    defContinue,
     refBegin,
     refEnd,
     refBreak,
+    refContinue,
     declIS
 ) where
 
@@ -59,17 +61,22 @@ defBegin = defLLbl ".begin."
 defEnd :: (Show i, Integral i) => i -> T.Text
 defEnd = defLLbl ".end."
 
--- | Define the .Lbreak.x local label
+-- | Define the .L.break.x local label
 {-# INLINE defBreak #-}
 defBreak :: (Show i, Integral i) => i -> T.Text
 defBreak = defLLbl ".break."
 
--- | Refer the .Lbegin.x label
+-- | Define the .L.continue.x local label
+{-# INLINE defContinue #-}
+defContinue :: (Show i, Integral i) => i -> T.Text
+defContinue = defLLbl ".continue."
+
+-- | Refer the .L.begin.x label
 {-# INLINE refBegin #-}
 refBegin :: (Show i, Integral i) => i -> T.Text
 refBegin = refLLbl ".begin."
 
--- | Refer the .Lend.x label
+-- | Refer the .L.end.x label
 {-# INLINE refEnd #-}
 refEnd :: (Show i, Integral i) => i -> T.Text
 refEnd = refLLbl ".end."
@@ -78,6 +85,11 @@ refEnd = refLLbl ".end."
 {-# INLINE refBreak #-}
 refBreak :: (Show i, Integral i) => i -> T.Text
 refBreak = refLLbl ".break."
+
+-- | Refer the .L.continue.x
+{-# INLINE refContinue #-}
+refContinue :: (Show i, Integral i) => i -> T.Text
+refContinue = refLLbl ".continue."
 
 -- | Declare intel syntax
 {-# INLINE declIS #-}
