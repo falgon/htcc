@@ -410,6 +410,11 @@ stmt (cur@(_, HT.TKBreak):xs) _ scp = case xs of -- for @break@
 stmt (cur@(_, HT.TKContinue):xs) _ scp = case xs of -- for @continue@
     (_, HT.TKReserved ";"):ds -> Right (ds, ATNode ATContinue (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty, scp)
     _ -> Left ("expected ';' token after 'continue' token", cur)
+stmt (cur@(_, HT.TKGoto):xs) _ scp = case xs of -- for @goto@
+    (_, HT.TKIdent ident):(_, HT.TKReserved ";"):ds -> Right (ds, ATNode (ATGoto ident) (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty, scp)
+    (_, HT.TKIdent ident):_ -> Left ("expected ';' token after the identifier '" <> ident <> "'", cur)  
+    _ -> Left ("expected identifier after the 'goto' token", cur)
+stmt ((_, HT.TKIdent ident):(_, HT.TKReserved ":"):xs) _ scp = Right (xs, ATNode (ATLabel ident) (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty, scp) -- for local label
 stmt xs@((_, HT.TKTypedef):_) _ scp = defTypedef xs scp -- for local @typedef@
 stmt tk atn !scp
     | not (null tk) && isTypeName (head tk) scp = varDecl tk atn scp -- for a local variable declaration
@@ -662,7 +667,7 @@ factor (cur@(_, HT.TKIdent ident):xs) _ !scp = case lookupVar ident scp of
     FoundGVar (PV.GVar t) -> Right (xs, ATNode (ATGVar t ident) t ATEmpty ATEmpty, scp) -- for declared global variable
     FoundLVar (PV.LVar t o _) -> Right (xs, ATNode (ATLVar t o) t ATEmpty ATEmpty, scp) -- for declared local variable
     FoundEnum (SE.Enumerator val _) -> Right (xs, ATNode (ATNum val) (CT.SCAuto $ CT.CTLong CT.CTInt) ATEmpty ATEmpty, scp) -- for declared enumerator
-    NotFound -> Left ("The '" <> ident <> "' is undefined variable", cur)
+    NotFound -> Left ("The '" <> ident <> "' is not defined variable", cur)
 factor ert _ _ = Left (if null ert then "unexpected token in program" else "unexpected token '" <> tshow (snd (head ert)) <> "' in program", if null ert then HT.emptyToken else head ert)
 
 {-# INLINE parse #-}

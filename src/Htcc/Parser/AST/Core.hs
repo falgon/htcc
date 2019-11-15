@@ -125,6 +125,8 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATFor [ATKindFor a] -- ^ the @for@ keyword
     | ATBreak -- ^ the @break@ keyword
     | ATContinue -- ^ the @continue@ keyword
+    | ATGoto  T.Text -- ^ the @goto@ keyword, it has name of the target label
+    | ATLabel T.Text -- ^ the label, it has name of label.
     | ATBlock [ATree a] -- ^ the compound statement
     | ATLVar (CT.StorageClass a) a -- ^ the local variable. It has a type information (as `CT.StorageClass`) and an offset value
     | ATGVar (CT.StorageClass a) T.Text -- ^ the global variable. It has a type information (as `CT.StorageClass`) and an name
