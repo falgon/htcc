@@ -4,6 +4,8 @@ import qualified Data.Sequence as SQ
 import Data.Either
 import Data.Maybe
 import Numeric.Natural
+import Control.Exception
+import Control.Monad
 
 :set -XOverloadedStrings
 

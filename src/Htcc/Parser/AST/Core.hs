@@ -121,6 +121,9 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATReturn -- ^ the @return@ keyword
     | ATIf -- ^ the @if@ keyword
     | ATElse -- ^ the @else@ keyword
+    | ATSwitch (ATree a) [ATree a] -- ^ the @switch@ keyword, it has the conditional expression and compound statement by @case@s or @default@s
+    | ATCase a a -- ^ the @case@ keyword, it has the value of label number and a constant value
+    | ATDefault a -- ^ the @default@ keyword
     | ATWhile -- ^ the @while@ keyword
     | ATFor [ATKindFor a] -- ^ the @for@ keyword
     | ATBreak -- ^ the @break@ keyword

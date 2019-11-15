@@ -410,6 +410,22 @@ stmt (cur@(_, HT.TKBreak):xs) _ scp = case xs of -- for @break@
 stmt (cur@(_, HT.TKContinue):xs) _ scp = case xs of -- for @continue@
     (_, HT.TKReserved ";"):ds -> Right (ds, ATNode ATContinue (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty, scp)
     _ -> Left ("expected ';' token after 'continue' token", cur)
+stmt (cur@(_, HT.TKSwitch):xs) atn scp = case xs of -- for @switch@
+    (_, HT.TKReserved "("):xs' -> (>>=) (expr xs' atn scp) $ \case
+        (cur1@(_, HT.TKReserved ")"):xs'', cond, scp') ->
+            (>>=) (stmt xs'' ATEmpty (scp' { isSwitchStmt = True })) $ \case
+                (xs''', ATNode (ATBlock ats) t _ _, scp'') -> Right (xs''', ATNode (ATSwitch cond ats) t ATEmpty ATEmpty, scp'' { isSwitchStmt = False })
+                _ -> Left ("expected compound statement after the token ')'", cur1)
+        (xs'', _, _) -> Left $ if not (null xs'') then ("expected token ')' before '" <> tshow (snd $ head xs') <> "' token", head xs') else ("expected ')' token", HT.emptyToken)
+    _ -> Left ("expected token '(' after the token 'switch'", cur)
+stmt (cur@(_, HT.TKCase):xs) atn scp -- for @case@
+    | isSwitchStmt scp = flip (either (Left . fromMaybe ("expected constant expression after 'case' token", cur))) (constantExp xs) $ \case
+        ((_, HT.TKReserved ":"):ds, val) -> second3 (flip (ATNode (ATCase 0 val) (CT.SCUndef CT.CTUndef)) ATEmpty) <$> stmt ds atn scp
+        (ds, _) -> Left $ if not (null ds) then ("expected ':' token before '" <>  tshow (snd $ head ds) <> "'", head ds) else ("expected ':' token", head ds)
+    | otherwise = Left ("stray 'case'", cur)
+stmt (cur@(_, HT.TKDefault):(_, HT.TKReserved ":"):xs) atn scp -- for @default@
+    | isSwitchStmt scp = second3 (flip (ATNode (ATDefault 0) (CT.SCUndef CT.CTUndef)) ATEmpty) <$> stmt xs atn scp
+    | otherwise = Left ("stray 'default'", cur)
 stmt (cur@(_, HT.TKGoto):xs) _ scp = case xs of -- for @goto@
     (_, HT.TKIdent ident):(_, HT.TKReserved ";"):ds -> Right (ds, ATNode (ATGoto ident) (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty, scp)
     (_, HT.TKIdent ident):_ -> Left ("expected ';' token after the identifier '" <> ident <> "'", cur)  
