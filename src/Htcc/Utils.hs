@@ -341,7 +341,7 @@ bothM f (x, y) = do
 
 infixr 3 *^*
 
--- | The monadic `Data.Tuple.Extra.(***)`.
+-- | The monadic `Data.Tuple.Extra.***`.
 -- e.g.:
 --
 -- >>> a <- newIORef 1

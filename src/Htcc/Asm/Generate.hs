@@ -150,6 +150,8 @@ genStmt c (ATNode (ATBlock stmts) _ _ _) = mapM_ (genStmt c) stmts
 genStmt c (ATNode (ATStmtExpr stmts) _ _ _) = mapM_ (genStmt c) stmts
 genStmt c (ATNode ATBreak _ _ _) = readIORef (breakNumber c) >>= maybe (err "stray break") (T.putStr . I.jmp . I.refBreak)
 genStmt c (ATNode ATContinue _ _ _) = readIORef (continueNumber c) >>= maybe (err "stray continue") (T.putStr . I.jmp . I.refContinue)
+genStmt c (ATNode (ATGoto ident) _ _ _) = readIORef (curFunc c) >>= maybe (err "internal compiler error: the function name cannot be tracked.") (\x -> T.putStr $ I.jmp $ T.append (T.append ".L.label." x) (T.append "." ident))
+genStmt c (ATNode (ATLabel ident) _ _ _) = readIORef (curFunc c) >>= maybe (err "internal compiler error: the function name cannot be tracked.") (\x -> T.putStr $ I.defLbl $ T.append (T.append ".L.label." x) (T.append "." ident))
 genStmt c (ATNode (ATFor exps) _ _ _) = bracket (bothM readIORef $ (breakNumber &&& continueNumber) c) (writeIORef (breakNumber c) *^* writeIORef (continueNumber c)) $ const $ do
     n <- labelNumber c
     void $ writeIORef (breakNumber c) *^* writeIORef (continueNumber c) $ dupe $ Just n
@@ -189,7 +191,7 @@ genStmt c (ATNode ATElse _ (ATNode ATIf _ llhs rrhs) rhs) = do
 genStmt _ (ATNode ATElse _ _ _) = error "Asm code generator shold not reached here. Maybe abstract tree is broken it cause (bug)."
 genStmt c (ATNode ATReturn t ATEmpty r) = genStmt c (ATNode ATReturn t (ATNode (ATNum 0) (CR.SCAuto CR.CTInt) ATEmpty ATEmpty) r) -- for return;
 genStmt c (ATNode ATReturn _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax) >> 
-    readIORef (curFunc c) >>= maybe (err "The function name cannot be tracked.") (T.putStr . (\f -> I.jmp (I.refLLbl (".return." <> f <> ".") (0 :: Int))))
+    readIORef (curFunc c) >>= maybe (err "internal compiler error: the function name cannot be tracked.") (T.putStr . (\f -> I.jmp (I.refLLbl (".return." <> f <> ".") (0 :: Int))))
 genStmt c (ATNode ATCast t lhs _) = genStmt c lhs >> T.putStr (truncate t)
 genStmt c (ATNode ATExprStmt _ lhs _) = genStmt c lhs >> T.putStr (I.add rsp (8 :: Int))
 genStmt c (ATNode ATBitNot _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax <> I.not rax <> I.push rax)

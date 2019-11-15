@@ -62,6 +62,7 @@ data Token i = TKReserved T.Text -- ^ The reserved token
     | TKSizeof -- ^ The @sizeof@ keyword
     | TKAlignof -- ^ The @_Alignof@ keyword
     | TKStruct -- ^ The @struct@ keyword
+    | TKGoto -- ^ THe @goto@ keyword
     | TKType (CR.StorageClass i) -- ^ Types
     | TKTypedef -- ^ The @typedef@ keyword
     | TKString B.ByteString -- ^ The string literal
@@ -84,6 +85,7 @@ instance Show i => Show (Token i) where
     show TKEnum = "enum"
     show TKStruct = "struct"
     show TKSizeof = "sizeof"
+    show TKGoto = "goto"
     show TKAlignof = "_Alignof"
     show TKTypedef = "typedef"
     show (TKType x) = show x
@@ -118,6 +120,7 @@ length TKStruct = 6
 length TKSizeof = 6
 length TKAlignof = 8
 length TKTypedef = 7
+length TKGoto = 4
 length (TKType tk) = P.length $ show tk
 length (TKString s) = B.length s
 length TKEmpty = 0
@@ -135,6 +138,7 @@ lookupKeyword s = find ((==) s . tshow) [
     TKEnum,
     TKStruct,
     TKSizeof,
+    TKGoto,
     TKAlignof, 
     TKTypedef, 
     TKType $ CR.SCUndef CR.CTInt,
