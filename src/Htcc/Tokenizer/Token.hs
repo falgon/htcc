@@ -53,6 +53,9 @@ data Token i = TKReserved T.Text -- ^ The reserved token
     | TKIdent T.Text -- ^ The identifier
     | TKReturn -- ^ The @return@ keyword
     | TKIf -- ^ The @if@ keyword
+    | TKSwitch -- ^ The @switch@ keyword
+    | TKCase -- ^ The @case@ keyword
+    | TKDefault -- ^ The @default@ keyword
     | TKElse -- ^ The @else@ keyword
     | TKWhile -- ^ The @while@ keyword
     | TKFor -- ^ The @for@ keyword
@@ -77,6 +80,9 @@ instance Show i => Show (Token i) where
     show (TKIdent s) = T.unpack s
     show TKReturn = "return"
     show TKIf = "if"
+    show TKSwitch = "switch"
+    show TKCase = "case"
+    show TKDefault = "default"
     show TKElse = "else"
     show TKWhile = "while"
     show TKFor = "for"
@@ -110,6 +116,9 @@ length (TKNum i) = P.length $ show i
 length (TKIdent i) = T.length i
 length TKReturn = 6
 length TKIf = 2
+length TKSwitch = 6
+length TKCase = 4
+length TKDefault = 7
 length TKElse = 4
 length TKWhile = 5
 length TKBreak = 5
@@ -131,6 +140,9 @@ lookupKeyword s = find ((==) s . tshow) [
     TKReturn, 
     TKWhile,
     TKIf, 
+    TKSwitch,
+    TKCase,
+    TKDefault,
     TKElse,
     TKFor,
     TKBreak,

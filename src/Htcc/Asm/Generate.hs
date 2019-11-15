@@ -9,7 +9,7 @@ Portability : POSIX
 
 Assembly code generator
 -}
-{-# LANGUAGE ScopedTypeVariables, OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables, OverloadedStrings, LambdaCase #-}
 module Htcc.Asm.Generate (
     -- * Type
     InputCCode,
@@ -20,7 +20,7 @@ module Htcc.Asm.Generate (
 -- Imports universal modules
 import Prelude hiding (truncate)
 import Control.Exception (finally, bracket)
-import Control.Monad (zipWithM_, when, unless, void)
+import Control.Monad (zipWithM_, when, unless, void, forM)
 import qualified Data.ByteString as B
 import Data.List (find)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef) 
@@ -188,7 +188,24 @@ genStmt c (ATNode ATElse _ (ATNode ATIf _ llhs rrhs) rhs) = do
     T.putStr $ I.defLLbl ".else." n
     genStmt c rhs
     T.putStr $ I.defEnd n
-genStmt _ (ATNode ATElse _ _ _) = error "Asm code generator shold not reached here. Maybe abstract tree is broken it cause (bug)."
+genStmt _ (ATNode ATElse _ _ _) = err "internal compiler error: asm code generator shold not reached here. Maybe abstract tree is broken it cause (bug)."
+genStmt c (ATNode (ATSwitch cond cases) _ _ _) = bracket (readIORef $ breakNumber c) (writeIORef (breakNumber c)) $ const $ do
+    n <- labelNumber c
+    writeIORef (breakNumber c) $ Just n
+    genStmt c cond >> T.putStr (I.pop rax)
+    ntr <- forM cases $ \case
+        (ATNode (ATCase _ cn) t lhs rhs) -> do
+            n' <- labelNumber c
+            ATNode (ATCase (fromIntegral n') cn) t lhs rhs <$ T.putStr (I.cmp rax cn <> I.je (I.refLLbl ".case." n'))
+        (ATNode (ATDefault _) t lhs rhs) -> do
+            n' <- labelNumber c
+            ATNode (ATDefault $ fromIntegral n') t lhs rhs <$ T.putStr (I.jmp (I.refLLbl ".case." n'))
+        at -> return at
+    T.putStr $ I.jmp $ I.refBreak n
+    mapM_ (genStmt c) ntr
+    T.putStr $ I.defBreak n
+genStmt c (ATNode (ATCase n _) _ lhs _) = T.putStr (I.defLLbl ".case." n) >> genStmt c lhs
+genStmt c (ATNode (ATDefault n) _ lhs _) = T.putStr (I.defLLbl ".case." n) >> genStmt c lhs
 genStmt c (ATNode ATReturn t ATEmpty r) = genStmt c (ATNode ATReturn t (ATNode (ATNum 0) (CR.SCAuto CR.CTInt) ATEmpty ATEmpty) r) -- for return;
 genStmt c (ATNode ATReturn _ lhs _) = genStmt c lhs >> T.putStr (I.pop rax) >> 
     readIORef (curFunc c) >>= maybe (err "internal compiler error: the function name cannot be tracked.") (T.putStr . (\f -> I.jmp (I.refLLbl (".return." <> f <> ".") (0 :: Int))))

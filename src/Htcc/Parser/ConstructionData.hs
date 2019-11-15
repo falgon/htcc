@@ -61,7 +61,8 @@ import qualified Htcc.Tokenizer.Token as HT
 data ConstructionData i = ConstructionData -- ^ The constructor of ConstructionData
     {
         warns :: S.Seq (T.Text, TokenLC i), -- ^ The warning messages 
-        scope :: AS.Scoped i -- ^ scope type
+        scope :: AS.Scoped i, -- ^ Scope type
+        isSwitchStmt :: Bool -- ^ When the statement is @switch@, this flag will be `True`, otherwise will be `False`.
     } deriving Show
 
 {-# INLINE addVar #-}
@@ -188,7 +189,7 @@ addEnumerator ty tkn n cd = (\x -> cd { scope = x }) <$> AS.addEnumerator ty tkn
 -- | Shortcut to the initial state of `ConstructionData`.
 {-# INLINE initConstructionData #-}
 initConstructionData :: ConstructionData i
-initConstructionData = ConstructionData S.empty AS.initScope
+initConstructionData = ConstructionData S.empty AS.initScope False
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.resetLocal` for variable @x@ of type `ConstructionData`. 
 -- This function is equivalent to 
