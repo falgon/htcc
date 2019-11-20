@@ -44,10 +44,10 @@ class TypeKindBase a where
     -- | `isCTArray` returns `True` when the given argument is `Htcc.CRules.Types.Core.CTArray`.
     -- Otherwise, returns `False`
     isCTArray :: a i -> Bool
-    -- | `isCTArray` returns `True` when the given argument is `Htcc.CRules.Types.Core.CTStruct`.
+    -- | `isCTStruct` returns `True` when the given argument is `Htcc.CRules.Types.Core.CTStruct`.
     -- Otherwise, returns `False`
     isCTStruct :: a i -> Bool
-    -- | `isCTArray` returns `True` when the given argument is `Htcc.CRules.Types.Core.CTUndef`.
+    -- | `isCTUndef` returns `True` when the given argument is `Htcc.CRules.Types.Core.CTUndef`.
     -- Otherwise, returns `False`
     isCTUndef :: a i -> Bool
     -- | `isCTIncomplete` returns `True` when the given argument is `Htcc.CRules.Types.CType.CTIncomplete`.

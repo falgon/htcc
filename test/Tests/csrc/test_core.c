@@ -420,7 +420,14 @@ int main()
     assert(0, ({ int i = 0; switch (3) { case 0: 0; case 1: 0; case 2: 0; i = 42; } i; }), "({ int i = 0; switch (3) { case 0: 0; case 1: 0; case 2: 0; i = 42; } i; })");
     assert(42, ({ int i = 40; switch (0) { case 0: ++i; case 1: ++i; } i; }), "({ int i = 40; switch (0) { case 0: ++i; case 1: ++i; } i; })");
     assert(41, ({ int i = 40; switch (i) { case 20 * 2: ++i; } i; }), "({ int i = 40; switch (i) { case 20 * 2: ++i; } i; })");
-
+    assert(1, ({ int ar[3] = { 1, 2, 3 }; ar[0]; }), "({ int ar[2] = { 1, 2, 3 }; ar[0]; })");
+    assert(2, ({ int ar[3] = { 1, 2, 3 }; ar[1]; }), "({ int ar[2] = { 1, 2, 3 }; ar[1]; })");
+    assert(3, ({ int ar[3] = { 1, 2, 3 }; ar[2]; }), "({ int ar[2] = { 1, 2, 3 }; ar[2]; })");
+    assert(2, ({ int ar[2][3] = { { 1, 2, 3 }, { 4, 5, 6 }}; ar[0][1]; }), "({ int ar[2][3] = { { 1, 2, 3 }, { 4, 5, 6 }}; ar[0][1]; })");
+    assert(4, ({ int ar[2][3] = { { 1, 2, 3 }, { 4, 5, 6 }}; ar[1][0]; }), "({ int ar[2][3] = { { 1, 2, 3 }, { 4, 5, 6 }}; ar[1][0]; })");
+    assert(6, ({ int ar[2][3] = { { 1, 2, 3 }, { 4, 5, 6 }}; ar[1][2]; }), "({ int ar[2][3] = { { 1, 2, 3 }, { 4, 5, 6 }}; ar[1][2]; })");
+    assert(1, ({ int a = 0; int ar[2] = { a = 1 }; ar[0]; }), "({ int a = 0; int ar[2] = { a = 1 }; ar[0]; })");
+    assert(1, ({ int a = 0; int ar[2] = { a = 1 }; a; }), "({ int a = 0; int ar[2] = { a = 1 }; a; })");
 
     printf("All tests are passed!\n");
 

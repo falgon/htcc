@@ -26,8 +26,9 @@ module Htcc.Tokenizer.Token (
     isTKReserved,
     spanStrLiteral,
     spanCharLiteral,
+    spanIntLit,
     lookupKeyword,
-    spanIntLit
+    altEmptyToken
 ) where
 
 import Prelude hiding (length)
@@ -258,9 +259,6 @@ spanStrLiteral = spanLiteral '"'
 spanCharLiteral :: T.Text -> Maybe (T.Text, T.Text)
 spanCharLiteral = spanLiteral '\''
 
--- | `emptyToken` is used when it cannot be referenced
-emptyToken :: Num i => TokenLC i
-emptyToken = (TokenLCNums 0 0, TKEmpty)
 
 -- | Take the integer literal from given text.
 spanIntLit :: (Eq i, Num i, Read i) => T.Text -> Maybe (Natural, Token i, T.Text)
@@ -277,3 +275,12 @@ spanIntLit ts = case T.uncons ts of
     where
         readBin = readInt 2 (lor [(=='0'), (=='1')]) $ (+) (negate (ord '0')) . ord
         sh ys | null ys = Nothing | otherwise = Just $ fst $ head ys
+
+-- | `emptyToken` is used when it cannot be referenced
+emptyToken :: Num i => TokenLC i
+emptyToken = (TokenLCNums 0 0, TKEmpty)
+
+-- | `altEmptyToken` returns `emptyToken` if the first token is empty. Otherwise, returns the first token in the token sequence.
+altEmptyToken :: Num i => [TokenLC i] -> TokenLC i
+altEmptyToken [] = emptyToken
+altEmptyToken (x:_) = x
