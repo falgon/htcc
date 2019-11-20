@@ -70,7 +70,7 @@ readFn = readFn' 0 (0 :: Int)
 -- | Get arguments from list of `Htcc.Tokenizer.Token` (e.g: Given the token of @f(f(g(a, b)), 42);@, 
 -- return expressions that are the token of "f(g(a, b))" and the token of "42".
 takeExps :: Eq i => [HT.TokenLC i] -> Maybe [[HT.TokenLC i]]
-takeExps ((_, HT.TKIdent _):(_, HT.TKReserved "("):xs) = maybe' Nothing (lastInit ((==HT.TKReserved ")") . snd) xs) $ fmap (filter (not . null)) . f
+takeExps ((_, HT.TKReserved "("):xs) = maybe' Nothing (lastInit ((==HT.TKReserved ")") . snd) xs) $ fmap (filter (not . null)) . f
     where
         f [] = Just []
         f args = maybe Nothing (\(ex, ds) -> (ex:) <$> f ds) $ readFn args
