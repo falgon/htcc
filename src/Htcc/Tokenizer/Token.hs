@@ -24,6 +24,7 @@ module Htcc.Tokenizer.Token (
     isTKEnum,
     isTKIdent,
     isTKReserved,
+    isTKMacro,
     spanStrLiteral,
     spanCharLiteral,
     spanIntLit,
@@ -46,6 +47,7 @@ import Numeric (readOct, readHex, readDec, readInt)
 import Numeric.Natural
 
 import qualified Htcc.CRules as CR
+import qualified Htcc.CRules.Preprocessor.Punctuators as CP
 import Htcc.Utils (spanLen, dropFst3, tshow, maybe', lor)
 
 -- | Token type
@@ -70,6 +72,7 @@ data Token i = TKReserved T.Text -- ^ The reserved token
     | TKType (CR.StorageClass i) -- ^ Types
     | TKTypedef -- ^ The @typedef@ keyword
     | TKString B.ByteString -- ^ The string literal
+    | TKMacro CP.Macros T.Text -- ^ The C macro
     | TKEmpty -- ^ The empty token (This is not used by `Htcc.Tokenizer.Core.tokenize`, but when errors are detected during parsing, the token at error locations cannot be specified)
     deriving (Eq, Generic)
 
@@ -95,6 +98,7 @@ instance Show i => Show (Token i) where
     show TKGoto = "goto"
     show TKAlignof = "_Alignof"
     show TKTypedef = "typedef"
+    show (TKMacro m st) = ('#' : show m) ++ T.unpack st
     show (TKType x) = show x
     show (TKString s) = "\"" ++ T.unpack (T.decodeUtf8 s) ++ "\""
     show TKEmpty = ""
@@ -133,6 +137,7 @@ length TKTypedef = 7
 length TKGoto = 4
 length (TKType tk) = P.length $ show tk
 length (TKString s) = B.length s
+length (TKMacro m t) = CP.length m + T.length t
 length TKEmpty = 0
 
 -- | Lookup keyword from `T.Text`. If the specified `T.Text` is not keyword as C language, `lookupKeyword` returns `Nothing`.
@@ -217,6 +222,12 @@ isTKStruct _ = False
 isTKEnum :: Token i -> Bool
 isTKEnum TKEnum = True
 isTKEnum _ = False
+
+{-# INLINE isTKMacro #-}
+-- | Utility for `TKMacro`. When the argument is `TKMacro`, it returns `True`, otherwise `False`.
+isTKMacro :: Token i -> Bool
+isTKMacro (TKMacro _ _) = True
+isTKMacro _ = False
 
 -- `Htcc.Tokenizer.Token.escapeChar` converts escape characters in the input `T.Text` to correct escape characters
 escapeChar :: T.Text -> T.Text

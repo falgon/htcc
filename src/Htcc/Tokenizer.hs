@@ -10,9 +10,18 @@ Portability : POSIX
 The tokenizer
 -}
 module Htcc.Tokenizer (
-    module Htcc.Tokenizer.Core,
-    module Htcc.Tokenizer.Token
+    module Htcc.Tokenizer.Token,
+    tokenize
 ) where
 
-import Htcc.Tokenizer.Core
+import qualified Data.Text as T
+import Control.Monad ((>=>))
+
+import Htcc.Tokenizer.Core (tokenize')
 import Htcc.Tokenizer.Token
+import Htcc.CRules.Preprocessor as CP
+
+-- | Tokenize the `T.Text`. If an invalid chraracter matches as C language, the part and the character are returned.
+-- Otherwise, @[TokenIdx i]@ is returned.
+tokenize :: (Integral i, Read i, Show i) => T.Text -> Either (TokenLCNums i, T.Text) [TokenLC i]
+tokenize = tokenize' (TokenLCNums 1 1) >=> CP.preprocess
