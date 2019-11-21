@@ -246,6 +246,7 @@ varInit t lat xs scp'
     where
         arInit ai desg t' xs' scp'' 
             | CT.isCTArray t' = case xs' of
+                -- (_, HT.TKReserved "{"):(_HT.TKReserved "}"):ds -> 
                 c@(_, HT.TKReserved "{"):ds -> (>>=) (arInit ai (0:desg) (fromJust $ CT.deref t') ds scp'') $ \(ds', ai', scp''') -> 
                     (>>=) (loop 1 ai' ds' scp''') $ \(ds'', ai'', sc) -> case ds'' of
                         (_, HT.TKReserved "}"):ds''' -> Right (ds''', ai'', sc)
