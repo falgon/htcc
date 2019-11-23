@@ -21,7 +21,8 @@ module Htcc.CRules.Types.TypeKind (
     -- * Lookup functions
     lookupMember,
     -- * Utilities of C type
-    alignas
+    alignas,
+    accessibleIndices
 ) where
 
 import Prelude hiding (toInteger)
@@ -31,7 +32,10 @@ import Control.DeepSeq (NFData (..))
 import Numeric.Natural
 import Data.Tuple.Extra (first, second)
 import Data.List (foldl', maximumBy, find, intercalate)
+import Data.List.Split (chunksOf)
 import Data.Bits ((.&.), complement, Bits (..))
+import Data.Tree (Tree (..))
+import Data.Foldable (Foldable (..))
 import qualified Data.Map as M
 import qualified Data.Text as T
 
@@ -185,6 +189,36 @@ combTable (CTSigned x) = (shiftL 1 6 .|.) <$> combTable x
 combTable (CTLong x) = (shiftL 1 7 .|.) <$> combTable x
 combTable (CTShort x) = (shiftL 1 8 .|.) <$> combTable x
 combTable _ = Nothing
+
+{-# INLINE arSizes #-}
+arSizes :: (Num i, Enum i) => TypeKind i -> (i, [[i]])
+arSizes = arSizes' 0
+    where
+        arSizes' !dp (CTArray v t) = second ([0..pred $ fromIntegral v]:) $ arSizes' (succ dp) t 
+        arSizes' !dp _ = (dp, [])
+
+-- | If the given argument is `CTArray`, it returns a list of accessible indexes of the array.
+-- Othrewise returns empty list.
+-- e.g.:
+--
+-- >>> arIndices $ makeCTArray [1,2] CTInt
+-- [[0,0],[1,0]]
+-- >>> arIndices $ makeCTArray [2,3,5] CTInt
+-- [[0,0,0],[0,0,1],[0,1,0],[0,1,1],[0,2,0],[0,2,1],[1,0,0],[1,0,1],[1,1,0],[1,1,1],[1,2,0],[1,2,1],[2,0,0],[2,0,1],[2,1,0],[2,1,1],[2,2,0],[2,2,1],[3,0,0],[3,0,1],[3,1,0],[3,1,1],[3,2,0],[3,2,1],[4,0,0],[4,0,1],[4,1,0],[4,1,1],[4,2,0],[4,2,1]]
+-- >>> arIndices CTInt
+-- []
+accessibleIndices :: Integral i => TypeKind i -> [[i]]
+accessibleIndices = uncurry (concatMap . chunksOf) . first fromIntegral . second (concatMap (map (iNode' id) . iNode id) . arIndices') . arSizes 
+    where
+        arIndices' [] = []
+        arIndices' (x:xs) = map (flip ($) (arIndices' xs) . Node) x
+
+        iNode f x@(Node _ []) = [f x]
+        iNode f (Node v xs@(Node _ []:_)) = [Node v $ map f xs]
+        iNode f (Node v (x:xs)) = iNode (Node v . (:[]) . f) x ++ concatMap (iNode (Node v . (:[]) . f)) xs
+
+        iNode' f (Node v []) = f [v]
+        iNode' f (Node v t) = concatMap (iNode' ((v:) . f)) t
 
 instance Eq i => Eq (TypeKind i) where
     (==) CTInt CTInt = True
