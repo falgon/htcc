@@ -244,30 +244,31 @@ varInit t lat xs scp'
     | otherwise = (>>=) (assign xs ATEmpty scp') $ \(ert, erat, ervar) -> (>>=) (validAssign (HT.altEmptyToken ert) erat) $ \erat' ->
         Right (ert, ATNode ATExprStmt (CT.SCUndef CT.CTUndef) (ATNode ATAssign (atype lat) lat erat') ATEmpty, ervar)
     where
-        arInit ai desg t' xs' scp'' 
+        {-# INLINE arNodes #-}
+        arNodes rhs desg' sc = first (\lhs -> ATNode ATExprStmt (CT.SCUndef CT.CTUndef) (ATNode ATAssign (atype lhs) lhs rhs) ATEmpty) <$> arNodes' rhs desg' sc
+       
+        arNodes' _ [] sc = Right (lat, sc) 
+        arNodes' rhs (idx:idxs) sc = (>>=) (arNodes' rhs idxs sc) $ \(at, sc') -> 
+            maybe' (Left ("invalid initializer-list", HT.emptyToken)) (addKind at $ atNumLit idx) $ \nd ->
+                maybe' (Left ("invalid initializer-list", HT.emptyToken)) (CT.deref (atype nd)) $ \ty -> Right (ATNode ATDeref ty nd ATEmpty, sc') -- !
+        
+        arInit ai desg t' xs' scp''
             | CT.isCTArray t' = case xs' of
-                -- (_, HT.TKReserved "{"):(_HT.TKReserved "}"):ds -> 
+                (_, HT.TKReserved "{"):(_, HT.TKReserved "}"):ds -> mapEither (flip (arNodes $ atNumLit 0) scp') 
+                    (CT.accessibleIndices $ CT.toTypeKind t) >>= \x -> Right (ds, SQ.fromList $ map fst x, scp'')
                 c@(_, HT.TKReserved "{"):ds -> (>>=) (arInit ai (0:desg) (fromJust $ CT.deref t') ds scp'') $ \(ds', ai', scp''') -> 
-                    (>>=) (loop 1 ai' ds' scp''') $ \(ds'', ai'', sc) -> case ds'' of
+                    (>>=) (arInitLoop 1 ai' ds' scp''') $ \(ds'', ai'', sc) -> case ds'' of
                         (_, HT.TKReserved "}"):ds''' -> Right (ds''', ai'', sc)
                         _ -> Left ("expected '}' token for '{'", c)
                 _ -> Left ("expected { initializer-list } or { initializer-list , }", if not (null xs') then head xs' else HT.altEmptyToken xs)
             | otherwise = (>>=) (assign xs' lat scp'') $ \(ds, at, scp''') -> uncurry (ds,,) . first (ai SQ.|>) <$> arNodes at desg scp'''
             where
-                loop _ ai' ds'@((_, HT.TKReserved ","):(_, HT.TKReserved "}"):_) sc = Right (ds', ai', sc)
-                loop _ ai' ds'@((_, HT.TKReserved "}"):_) sc = Right (ds', ai', sc)
-                loop !idx ai' ((_, HT.TKReserved ","):ds') sc = (>>=) (arInit ai' (idx:desg) (fromJust $ CT.deref t') ds' sc) $ \(ds'', ai'', sc') ->
-                    loop (succ idx) ai'' ds'' sc'
-                loop _ _ ds _ = Left $ if null ds then ("unexpected token in initializer-list", HT.emptyToken) else 
+                arInitLoop _ ai' ds'@((_, HT.TKReserved ","):(_, HT.TKReserved "}"):_) sc = Right (ds', ai', sc)
+                arInitLoop _ ai' ds'@((_, HT.TKReserved "}"):_) sc = Right (ds', ai', sc)
+                arInitLoop !idx ai' ((_, HT.TKReserved ","):ds') sc = (>>=) (arInit ai' (idx:desg) (fromJust $ CT.deref t') ds' sc) $ \(ds'', ai'', sc') -> arInitLoop (succ idx) ai'' ds'' sc'
+                arInitLoop _ _ ds _ = Left $ if null ds then ("unexpected token in initializer-list", HT.emptyToken) else
                     ("unexpected token '" <> tshow (snd $ head ds) <> "' in initializer-list", head ds)
-
-                {-# INLINE arNodes #-}
-                arNodes rhs desg' sc = first (\lhs -> ATNode ATExprStmt (CT.SCUndef CT.CTUndef) (ATNode ATAssign (atype lhs) lhs rhs) ATEmpty) <$> arNodes' rhs desg' sc
-
-                arNodes' _ [] sc = Right (lat, sc) 
-                arNodes' rhs (idx:idxs) sc = (>>=) (arNodes' rhs idxs sc) $ \(at, sc') -> 
-                    maybe' (Left ("invalid initializer-list", HT.emptyToken)) (addKind at (ATNode (ATNum idx) (CT.SCAuto $ CT.CTLong CT.CTInt) ATEmpty ATEmpty)) $ \nd -> -- !
-                        maybe' (Left ("invalid initializer-list", HT.emptyToken)) (CT.deref (atype nd)) $ \ty -> Right (ATNode ATDeref ty nd ATEmpty, sc') -- !
+        
 
 {-# INLINE varDecl #-}
 varDecl :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ConstructionData i -> ASTConstruction i
@@ -408,7 +409,7 @@ stmt xxs@(cur@(_, HT.TKFor):(_, HT.TKReserved "("):_) _ !scp = maybe' (Left (int
         (>>=) (condSect fxs fscp') $ \(fxs', fcond, fscp'') -> (>>=) (incrSect fxs' fscp'') $ \case
             ([], fincr, fscp''') -> 
                 let fnd = filter (\x' -> case fromATKindFor x' of ATEmpty -> False; x'' -> not $ isEmptyExprStmt x'') [ATForInit finit, ATForCond fcond, ATForIncr fincr]
-                    mkk = maybe (ATForCond (ATNode (ATNum 1) (CT.SCAuto CT.CTInt) ATEmpty ATEmpty) : fnd) (const fnd) $ find isATForCond fnd in case ds of
+                    mkk = maybe (ATForCond (atNumLit 1) : fnd) (const fnd) $ find isATForCond fnd in case ds of
                         ((_, HT.TKReserved ";"):ys) -> Right (ys, ATNode (ATFor mkk) (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty, fallBack scp fscp''')
                         _ -> third3 (fallBack scp) . second3 (flip (flip (flip ATNode $ CT.SCUndef CT.CTUndef) ATEmpty) ATEmpty . ATFor . (mkk ++) . (:[]) . ATForStmt) <$> stmt ds ATEmpty fscp'''
             _ -> Left ("unexpected end of for statement", cur)
@@ -627,7 +628,7 @@ cast xs at scp = unary xs at scp
 -- | `unary` indicates \(\eqref{eq:fourth}\) amount the comments of `inners`.
 unary :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
 unary ((_, HT.TKReserved "+"):xs) at scp = cast xs at scp
-unary ((_, HT.TKReserved "-"):xs) at scp = second3 (ATNode ATSub (CT.SCAuto CT.CTInt) (ATNode (ATNum 0) (CT.SCAuto CT.CTInt) ATEmpty ATEmpty)) <$> cast xs at scp
+unary ((_, HT.TKReserved "-"):xs) at scp = second3 (ATNode ATSub (CT.SCAuto CT.CTInt) (atNumLit 0)) <$> cast xs at scp
 unary ((_, HT.TKReserved "!"):xs) at scp = second3 (flip (ATNode ATNot $ CT.SCAuto CT.CTInt) ATEmpty) <$> cast xs at scp
 unary ((_, HT.TKReserved "~"):xs) at scp = second3 (flip (ATNode ATBitNot $ CT.SCAuto CT.CTInt) ATEmpty) <$> cast xs at scp
 unary ((_, HT.TKReserved "&"):xs) at scp = flip fmap (cast xs at scp) $ second3 $ \x -> let ty = if CT.isCTArray (atype x) then fromJust $ CT.deref (atype x) else atype x in 
@@ -687,7 +688,7 @@ factor ((_, HT.TKReserved "("):xs@((_, HT.TKReserved "{"):_)) _ !scp = maybe' (L
 factor (cur@(_, HT.TKReserved "("):xs) atn !scp = (>>=) (expr xs atn scp) $ \(ert, erat, erscp) -> case ert of -- for (expr)
     (_, HT.TKReserved ")"):ys -> Right (ys, erat, erscp)
     ert' -> Left $ expectedMessage ")" cur ert'
-factor ((_, HT.TKNum n):xs) _ !scp = Right (xs, ATNode (ATNum n) (CT.SCAuto $ CT.CTLong CT.CTInt) ATEmpty ATEmpty, scp) -- for numbers
+factor ((_, HT.TKNum n):xs) _ !scp = Right (xs, atNumLit n, scp) -- for numbers
 factor (cur@(_, HT.TKIdent v):(_, HT.TKReserved "("):(_, HT.TKReserved ")"):xs) _ !scp = case lookupFunction v scp of -- for no arguments function call
     Nothing -> Right (xs, ATNode (ATCallFunc v Nothing) (CT.SCAuto CT.CTInt) ATEmpty ATEmpty, pushWarn ("the function '" <> v <> "' is not declared.") cur scp)
     Just fn -> Right (xs, ATNode (ATCallFunc v Nothing) (PSF.fntype fn) ATEmpty ATEmpty, scp)
@@ -703,18 +704,18 @@ factor (cur1@(_, HT.TKIdent v):cur2@(_, HT.TKReserved "("):xs) _ scp = maybe' (L
                 scp'' <- readSTRef mk
                 return $ Right (ds, ATNode (ATCallFunc v (Just $ rights expl)) t ATEmpty ATEmpty, scp'')
 factor (cur0@(_, HT.TKSizeof):cur@(_, HT.TKReserved "("):xs) atn scp = case takeTypeName xs scp of
-    Left _ -> second3 (\x -> ATNode (ATNum (fromIntegral $ CT.sizeof $ atype x)) (CT.SCAuto CT.CTInt) ATEmpty ATEmpty) <$> unary (cur:xs) atn scp -- for `sizeof(variable)`
+    Left _ -> second3 (\x -> atNumLit $ fromIntegral $ CT.sizeof $ atype x) <$> unary (cur:xs) atn scp -- for `sizeof(variable)`
     Right (t, (_, HT.TKReserved ")"):ds) -> maybe' (Left ("invalid application of 'sizeof' to incomplete type '" <> tshow (CT.toTypeKind t) <> "'", cur0)) (incomplete t scp) $ \t' ->
-        Right (ds, ATNode (ATNum (fromIntegral $ CT.sizeof t')) (CT.SCAuto CT.CTInt) ATEmpty ATEmpty, scp) -- for `sizeof(type)`
+        Right (ds, atNumLit $ fromIntegral $ CT.sizeof t', scp) -- for `sizeof(type)`
     Right _ -> Left ("The token ')' corresponding to '(' is expected", cur) 
-factor ((_, HT.TKSizeof):xs) atn !scp = second3 (\x -> ATNode (ATNum (fromIntegral $ CT.sizeof $ atype x)) (CT.SCAuto CT.CTInt) ATEmpty ATEmpty) <$> unary xs atn scp -- for `sizeof variable` -- TODO: the type of sizeof must be @size_t@
+factor ((_, HT.TKSizeof):xs) atn !scp = second3 (\x -> atNumLit $ fromIntegral $ CT.sizeof $ atype x) <$> unary xs atn scp -- for `sizeof variable` -- TODO: the type of sizeof must be @size_t@
 factor (cur@(_, HT.TKAlignof):xs) atn !scp = (>>=) (unary xs atn scp) $ \(ert, erat, erscp) -> 
-    if CT.isCTUndef (atype erat) then Left ("_Alignof must be an expression or type", cur) else Right (ert, ATNode (ATNum (fromIntegral $ CT.alignof $ atype erat)) (CT.SCAuto CT.CTInt) ATEmpty ATEmpty, erscp) -- Note: Using alignof for expressions is a non-standard feature of C11
+    if CT.isCTUndef (atype erat) then Left ("_Alignof must be an expression or type", cur) else Right (ert, atNumLit $ fromIntegral $ CT.alignof $ atype erat, erscp) -- Note: Using alignof for expressions is a non-standard feature of C11
 factor (cur@(_, HT.TKString slit):xs) _ !scp = uncurry (xs,,) <$> addLiteral (CT.SCAuto $ CT.CTArray (fromIntegral $ B.length slit) CT.CTChar) cur scp -- for literals
 factor (cur@(_, HT.TKIdent ident):xs) _ !scp = case lookupVar ident scp of
     FoundGVar (PV.GVar t) -> Right (xs, ATNode (ATGVar t ident) t ATEmpty ATEmpty, scp) -- for declared global variable
     FoundLVar (PV.LVar t o _) -> Right (xs, ATNode (ATLVar t o) t ATEmpty ATEmpty, scp) -- for declared local variable
-    FoundEnum (SE.Enumerator val _) -> Right (xs, ATNode (ATNum val) (CT.SCAuto $ CT.CTLong CT.CTInt) ATEmpty ATEmpty, scp) -- for declared enumerator
+    FoundEnum (SE.Enumerator val _) -> Right (xs, atNumLit val, scp) -- for declared enumerator
     NotFound -> Left ("The '" <> ident <> "' is not defined variable", cur)
 factor ert _ _ = Left (if null ert then "unexpected token in program" else "unexpected token '" <> tshow (snd (head ert)) <> "' in program", HT.altEmptyToken ert)
 

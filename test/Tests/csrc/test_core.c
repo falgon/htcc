@@ -428,6 +428,13 @@ int main()
     assert(6, ({ int ar[2][3] = { { 1, 2, 3 }, { 4, 5, 6 }}; ar[1][2]; }), "({ int ar[2][3] = { { 1, 2, 3 }, { 4, 5, 6 }}; ar[1][2]; })");
     assert(1, ({ int a = 0; int ar[2] = { a = 1 }; ar[0]; }), "({ int a = 0; int ar[2] = { a = 1 }; ar[0]; })");
     assert(1, ({ int a = 0; int ar[2] = { a = 1 }; a; }), "({ int a = 0; int ar[2] = { a = 1 }; a; })");
+    assert(0, ({ int ar[3] = {}; ar[0]; }), "({ int ar[3] = {}; ar[0]; })");
+    assert(0, ({ int ar[3] = {}; ar[1]; }), "({ int ar[3] = {}; ar[1]; })");
+    assert(0, ({ int ar[3] = {}; ar[2]; }), "({ int ar[3] = {}; ar[2]; })");
+    assert(2, ({ int ar[2][3] = { { 1, 2 }}; ar[0][1]; }), "({ int ar[2][3] = { { 1, 2 }}; ar[0][1]; })");
+    assert(0, ({ int ar[2][3] = { { 1, 2 }}; ar[1][0]; }), "({ int ar[2][3] = { { 1, 2 }}; ar[1][0]; })");
+    assert(0, ({ int ar[2][3] = { { 1, 2 }}; ar[1][2]; }), "({ int ar[2][3] = { { 1, 2 }}; ar[1][2]; })");
+
 
     printf("All tests are passed!\n");
 

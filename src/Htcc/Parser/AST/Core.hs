@@ -15,6 +15,8 @@ module Htcc.Parser.AST.Core (
     ATKindFor (..),
     ATKind (..),
     ATree (..),
+    -- * Constructor
+    atNumLit,
     -- * Utilities
     isATForInit,
     isATForCond,
@@ -187,3 +189,8 @@ isNonEmptyReturn _ = False
 isEmptyReturn :: ATree a -> Bool
 isEmptyReturn (ATNode ATReturn _ ATEmpty _) = True
 isEmptyReturn _ = False
+
+{-# INLINE atNumLit #-}
+-- | `atNumLit` is a shortcut for constructing a numeric literal node
+atNumLit :: i -> ATree i
+atNumLit = flip (flip (flip ATNode (CT.SCAuto $ CT.CTLong CT.CTInt)) ATEmpty) ATEmpty . ATNum

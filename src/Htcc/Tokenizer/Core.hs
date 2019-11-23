@@ -73,10 +73,3 @@ tokenize' n xs = f n $ first fromIntegral $ dropSnd3 $ spanLenT isStrictSpace xs
                     if len == 0 then Left (cur, T.takeWhile (not . CR.isValidChar) ds) else let next = n' { tkCn = tkCn cur + fromIntegral len } in
                         maybe (((cur, TKIdent tk):) <$> tokenize' next ds) (\tkn -> ((cur, tkn):) <$> tokenize' next ds) $ lookupKeyword tk
             _ -> Right []
-
-{-
--- | Tokenize the `T.Text`. If an invalid chraracter matches as C language, the part and the character are returned.
--- Otherwise, @[TokenIdx i]@ is returned.
-tokenize :: (Integral i, Read i, Show i) => T.Text -> Either (TokenLCNums i, T.Text) [TokenLC i]
-tokenize = tokenize' (TokenLCNums 1 1) >=> CP.preprocess
--}
