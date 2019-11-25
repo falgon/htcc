@@ -5,6 +5,13 @@ define compile
 	stack exec htcc -- $1 | gcc -xassembler -no-pie -o $(DIST_DIR)/$2 -
 endef
 
+define compile_docker_and_run
+	mkdir -p /tmp/htcc
+	stack exec htcc -- $1 > /tmp/htcc/spec.s
+	docker-compose -f ../docker/example.yml up
+	rm -r /tmp/htcc
+endef
+
 all: knapsack shuffle_and_sort merge_sort_linked_list lifegame
 
 knapsack:
@@ -19,7 +26,21 @@ merge_sort_linked_list:
 lifegame:
 	@$(call compile,"./lifegame.c","lifegame")
 
+docker: docker_knapsack docker_shuffle_and_sort docker_merge_sort_linked_list
+
+docker_knapsack:
+	@$(call compile_docker_and_run,"./knapsack.c")
+
+docker_shuffle_and_sort:
+	@$(call compile_docker_and_run,"./shuffle_and_sort.c")
+
+docker_merge_sort_linked_list:
+	@$(call compile_docker_and_run,"./merge_sorting_linked_list.c")
+
 clean:
 	$(RM) -r $(DIST_DIR)
 
-.PHONY: knapsack shuffle_and_sort merge_sort_linked_list lifegame clean
+clean_docker:
+	docker-compose -f ../docker/example.yml down --rmi all
+
+.PHONY: knapsack shuffle_and_sort merge_sort_linked_list lifegame docker_knapsack docker_shuffle_and_sort docker_merge_sort_linked_list docker clean
