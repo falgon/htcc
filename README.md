@@ -92,15 +92,22 @@ Examples are shown in the following table.
 </tr>
 </table>
 
-## Test
+## Tests and run examples
+
+If you want to run outside the Linux environment, 
+if [docker](https://www.docker.com/)
+and [docker-compose](https://github.com/docker/compose) are installed, 
+you can run tests inside the docker container by specifying docker as an argument.
 
 ```sh
 $ stack test --test-arguments help
 htcc> test (suite: htcc-test, args: help)
 
 --test-arguments are available by:
-        inc     : Test itself with test code written in C (default, more faster).
-        subp    : Given C codes as input, run HUnit tests.
+ 		inc             : Test itself with test code written in C (default, more faster).
+        subp            : Given C codes as input, run HUnit tests.
+        docker          : Build the test using the environment inside the Linux container (This is useful when running tests in a development environment other than Linux).
+        cleanDocker     : Erases containers and images built with the docker option.
 
 htcc> Test suite htcc-test failed
 Test suite failure for package htcc-0.0.0.1
@@ -110,6 +117,28 @@ Logs printed to console
 $ stack test
 $ stack test --test-arguments inc
 $ stack test --test-arguments subp
+$ stack test --test-arguments docker # For running outside the linux environment. It requires docker and docker-compose.
+```
+
+If you want to delete the created test container and its image, execute as follows:
+
+```sh
+$ stack test --test-arguments cleanDocker
+```
+
+Source files that can be compiled by htcc are placed under the `examples/`.
+
+```sh
+$ cd examples
+$ make
+```
+
+For the same reason, when running in docker (lifegame is not supported):
+
+```sh
+$ cd examples
+$ make docker
+$ make clean_docker # Stop and delete docker container, and delete image
 ```
 
 ## Benchmark

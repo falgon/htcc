@@ -21,7 +21,7 @@ specPath = workDir ++ "spec.s"
 
 {-# INLINE dockerComposePath #-}
 dockerComposePath :: FilePath
-dockerComposePath = "./docker/docker-compose.yml"
+dockerComposePath = "./docker/test.yml"
 
 genTestAsm :: IO ()
 genTestAsm = do
@@ -34,9 +34,12 @@ inc = flip finally (clean [workDir, "spec"]) $ do
     execErrFin $ "gcc -no-pie -o spec " <> T.pack specPath
     execErrFin "./spec"
 
-docker :: IO ()
-docker = flip finally (clean [workDir]) $
+data DockerFlag = DkBuild | DkClean
+
+docker :: DockerFlag -> IO ()
+docker DkBuild = flip finally (clean [workDir]) $
     genTestAsm >> execErrFin ("docker-compose -f " <> T.pack dockerComposePath <> " up --build")
+docker DkClean = execErrFin $ "docker-compose -f " <> T.pack dockerComposePath <> " down --rmi all"
 
 main :: IO ()
 main = do
@@ -44,10 +47,13 @@ main = do
     case args of
         "subp":[] -> SubProcTests.exec 
         "inc":[] -> inc
-        "docker":[] -> docker
+        "docker":[] -> docker DkBuild
+        "cleanDocker":[] -> docker DkClean
         [] -> inc
         _ -> do
             putStrLnErr "--test-arguments are available by:"
-            putStrLnErr "\tinc\t: Test itself with test code written in C (default, more faster)."
-            putStrLnErr "\tsubp\t: Given C codes as input, run HUnit tests."
+            putStrLnErr "\tinc\t\t: Test itself with test code written in C (default, more faster)."
+            putStrLnErr "\tsubp\t\t: Given C codes as input, run HUnit tests."
+            putStrLnErr "\tdocker\t\t: Build the test using the environment inside the Linux container (This is useful when running tests in a development environment other than Linux)."
+            putStrLnErr "\tcleanDocker\t: Erases containers and images built with the docker option."
             exitFailure

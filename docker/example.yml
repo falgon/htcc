@@ -1,7 +1,7 @@
 version: '3'
 services:
     htcc:
-        image: roki/htcc:1.0.0
+        image: roki/htcc_example:1.0.0
         command: /bin/sh -c 'gcc -no-pie -o spec /htcc_work/spec.s && ./spec'
         volumes:
             - /tmp/htcc:/htcc_work
