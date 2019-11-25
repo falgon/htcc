@@ -16,7 +16,7 @@ import Control.Monad (void, zipWithM)
 import qualified Control.Foldl as F
 import Data.Bool (bool)
 import qualified Data.Text as DT
-import System.Directory (doesFileExist, removeFile)
+import System.Directory (doesFileExist, removeFile, doesDirectoryExist, removeDirectoryRecursive)
 import Test.HUnit (Test (..), (~:), (~?=))
 import Test.Hspec (parallel)
 import Test.Hspec.Core.Runner (runSpec, Config (..), evaluateSummary, defaultConfig)
@@ -48,5 +48,6 @@ runTestsEx ts = putStrLn "\n\n== Unit Tests started ==" >> zipWithM (\(t, e) i -
     where
         ms = take (length ts) $ iterate (+1) (1 :: Int)
 
-clean :: [String] -> IO ()
-clean = mapM_ (\x -> doesFileExist x >>= bool (return ()) (removeFile x))
+clean :: [FilePath] -> IO ()
+clean = mapM_ $ \x -> (>>=) (doesFileExist x) $ flip bool (removeFile x) $ 
+    doesDirectoryExist x >>= bool (return()) (removeDirectoryRecursive x)
