@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7cabeed9cf27d8c6f09a03c0f49fc0e75158b9d4cf1c07322cbc794869e496cc
+-- hash: 8512ddeb6758dafaf4ccc2a1d172c6a95b7dfaa7f529ee5dd65178c592d3c227
 
 name:           htcc
 version:        0.0.0.1
@@ -85,6 +85,7 @@ library
     , deepseq
     , extra
     , monad-loops
+    , safe
     , split
     , text
   default-language: Haskell2010
@@ -105,6 +106,7 @@ executable htcc
     , extra
     , htcc
     , monad-loops
+    , safe
     , split
     , text
   default-language: Haskell2010
@@ -133,6 +135,7 @@ test-suite htcc-test
     , foldl
     , htcc
     , monad-loops
+    , safe
     , split
     , text
     , time
@@ -154,6 +157,7 @@ benchmark criterion
     , extra
     , htcc
     , monad-loops
+    , safe
     , split
     , text
   default-language: Haskell2010

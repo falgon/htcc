@@ -18,6 +18,6 @@ import qualified Data.Text as T
 import qualified Htcc.Tokenizer.Token as HT
 
 -- | The function that executes a proprocess. 
--- **NOTE**: This is not yet implemented.
+-- __NOTE__: This is not yet implemented.
 preprocess :: [HT.TokenLC i] -> Either (HT.TokenLCNums i, T.Text) [HT.TokenLC i]
 preprocess = Right . filter (not . HT.isTKMacro . snd)
