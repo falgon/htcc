@@ -48,7 +48,7 @@ import Data.Bool (bool)
 import qualified Data.ByteString as B
 import Data.Foldable (Foldable (..))
 import Data.Tuple.Extra (first, second, uncurry3, snd3, dupe)
-import Data.List (find, foldl')
+import Data.List (find, foldl', sortBy)
 import Data.List.Split (linesBy)
 import Data.Either (isLeft, lefts, rights)
 import Data.Maybe (isJust, fromJust, fromMaybe)
@@ -61,6 +61,7 @@ import Control.Monad (forM, when)
 import Control.Monad.ST (runST)
 import Control.Monad.Loops (unfoldrM)
 import Numeric.Natural
+import Safe (headMay)
 
 import Htcc.Utils (
     first3, 
@@ -237,35 +238,47 @@ validAssign errPlaceholder x@(ATNode _ t _ _)
     | otherwise = Right x
 validAssign errPlaceholder _ = Left ("Expected to assign", errPlaceholder)
         
--- The declaration @int x[2][2] = { { 1, 2 }, { 3, 4 } };@ is converted to @x[2][2]; x[0][0] = 1; x[0][1] = 2; x[1][0] = 3; x[1][1] = 4;@.
+-- Initializing local variables
 varInit :: (Read i, Show i, Integral i, Bits i) => CT.StorageClass i -> ATree i -> [HT.TokenLC i] -> ConstructionData i -> ASTConstruction i
 varInit t lat xs scp'
     | CT.isCTArray t = second3 (\st -> ATNode (ATBlock $ toList st) (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty) <$> arInit SQ.empty [] t xs scp'
-    | otherwise = (>>=) (assign xs ATEmpty scp') $ \(ert, erat, ervar) -> (>>=) (validAssign (HT.altEmptyToken ert) erat) $ \erat' ->
+    | otherwise = assign xs ATEmpty scp' >>= \(ert, erat, ervar) -> validAssign (HT.altEmptyToken ert) erat >>= \erat' ->
         Right (ert, ATNode ATExprStmt (CT.SCUndef CT.CTUndef) (ATNode ATAssign (atype lat) lat erat') ATEmpty, ervar)
     where
         {-# INLINE arNodes #-}
         arNodes rhs desg' sc = first (\lhs -> ATNode ATExprStmt (CT.SCUndef CT.CTUndef) (ATNode ATAssign (atype lhs) lhs rhs) ATEmpty) <$> arNodes' rhs desg' sc
        
         arNodes' _ [] sc = Right (lat, sc) 
-        arNodes' rhs (idx:idxs) sc = (>>=) (arNodes' rhs idxs sc) $ \(at, sc') -> 
+        arNodes' rhs (idx:idxs) sc = arNodes' rhs idxs sc >>= \(at, sc') -> 
             maybe' (Left ("invalid initializer-list", HT.emptyToken)) (addKind at $ atNumLit idx) $ \nd ->
-                maybe' (Left ("invalid initializer-list", HT.emptyToken)) (CT.deref (atype nd)) $ \ty -> Right (ATNode ATDeref ty nd ATEmpty, sc') -- !
+                maybe' (Left ("invalid initializer-list", HT.emptyToken)) (CT.deref (atype nd)) $ \ty -> Right (ATNode ATDeref ty nd ATEmpty, sc')
         
+        -- For initializer-list.
+        -- For example, the declaration @int x[2][2] = { { 1, 2 }, { 3, 4 } };@ is converted to @x[2][2]; x[0][0] = 1; x[0][1] = 2; x[1][0] = 3; x[1][1] = 4;@.
         arInit ai desg t' xs' scp''
+            -- initializer-string
+            | CT.isCTArray t' && maybe False ((==CT.CTChar) . CT.toTypeKind) (CT.deref t') && maybe False (HT.isTKString . snd) (headMay xs') = case (snd (head xs'), CT.toTypeKind t') of
+                (HT.TKString s, CT.CTArray n _) -> let s' = s `B.append` B.pack (replicate (fromIntegral n - pred (B.length s)) $ toEnum 0) in 
+                    fmap ((tail xs',, if fromIntegral n < pred (B.length s) then pushWarn "initializer-string for char array is too long" (head xs') scp'' else scp'') . (ai SQ.><) . SQ.fromList) $
+                        mapEither (fmap fst . flip id scp' . uncurry arNodes) $ zipWith (flip (.) (++desg) . (,) . atNumLit . fromIntegral) (B.unpack s') $
+                            sortBy (flip (.) reverse . compare . reverse) $ CT.accessibleIndices (CT.toTypeKind t')
+                _ -> Left (internalCE, HT.emptyToken) -- should not reach here
+            -- Non-string initializer-list
             | CT.isCTArray t' = case xs' of
-                (_, HT.TKReserved "{"):(_, HT.TKReserved "}"):ds -> mapEither (flip (arNodes $ atNumLit 0) scp') 
-                    (CT.accessibleIndices $ CT.toTypeKind t) >>= \x -> Right (ds, SQ.fromList $ map fst x, scp'')
-                c@(_, HT.TKReserved "{"):ds -> (>>=) (arInit ai (0:desg) (fromJust $ CT.deref t') ds scp'') $ \(ds', ai', scp''') -> 
-                    (>>=) (arInitLoop 1 ai' ds' scp''') $ \(ds'', ai'', sc) -> case ds'' of
+                -- Zero initialization
+                (_, HT.TKReserved "{"):(_, HT.TKReserved "}"):ds -> fmap ((ds,, scp'') . (ai SQ.><) . SQ.fromList) $ 
+                    mapEither (fmap fst . flip (arNodes $ atNumLit 0) scp' . (++desg)) $ CT.accessibleIndices $ CT.toTypeKind t'
+                -- The specified initializer-list of initialization elements
+                c@(_, HT.TKReserved "{"):ds -> arInit ai (0:desg) (fromJust $ CT.deref t') ds scp'' >>= \(ds', ai', scp''') -> 
+                    arInitLoop 1 ai' ds' scp''' >>= \(ds'', ai'', sc) -> case ds'' of
                         (_, HT.TKReserved "}"):ds''' -> Right (ds''', ai'', sc)
                         _ -> Left ("expected '}' token for '{'", c)
                 _ -> Left ("expected { initializer-list } or { initializer-list , }", if not (null xs') then head xs' else HT.altEmptyToken xs)
-            | otherwise = (>>=) (assign xs' lat scp'') $ \(ds, at, scp''') -> uncurry (ds,,) . first (ai SQ.|>) <$> arNodes at desg scp'''
+            | otherwise = assign xs' lat scp'' >>= \(ds, at, scp''') -> uncurry (ds,,) . first (ai SQ.|>) <$> arNodes at desg scp'''
             where
                 arInitLoop _ ai' ds'@((_, HT.TKReserved ","):(_, HT.TKReserved "}"):_) sc = Right (ds', ai', sc)
                 arInitLoop _ ai' ds'@((_, HT.TKReserved "}"):_) sc = Right (ds', ai', sc)
-                arInitLoop !idx ai' ((_, HT.TKReserved ","):ds') sc = (>>=) (arInit ai' (idx:desg) (fromJust $ CT.deref t') ds' sc) $ \(ds'', ai'', sc') -> arInitLoop (succ idx) ai'' ds'' sc'
+                arInitLoop !idx ai' ((_, HT.TKReserved ","):ds') sc = arInit ai' (idx:desg) (fromJust $ CT.deref t') ds' sc >>= uncurry3 (flip (arInitLoop (succ idx)))
                 arInitLoop _ _ ds _ = Left $ if null ds then ("unexpected token in initializer-list", HT.emptyToken) else
                     ("unexpected token '" <> tshow (snd $ head ds) <> "' in initializer-list", head ds)
         

@@ -25,6 +25,7 @@ module Htcc.Tokenizer.Token (
     isTKIdent,
     isTKReserved,
     isTKMacro,
+    isTKString,
     spanStrLiteral,
     spanCharLiteral,
     spanIntLit,
@@ -228,6 +229,12 @@ isTKEnum _ = False
 isTKMacro :: Token i -> Bool
 isTKMacro (TKMacro _ _) = True
 isTKMacro _ = False
+
+{-# INLINE isTKString #-}
+-- | Utility for `TKString`. When the argument is `TKString`, it returns `True`, otherwise `False`.
+isTKString :: Token i -> Bool
+isTKString (TKString _) = True
+isTKString _ = False
 
 -- `Htcc.Tokenizer.Token.escapeChar` converts escape characters in the input `T.Text` to correct escape characters
 escapeChar :: T.Text -> T.Text
