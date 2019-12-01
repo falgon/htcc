@@ -41,13 +41,16 @@ import qualified Data.Text as T
 
 import Htcc.CRules.Char
 import Htcc.CRules.Types.CType
-import Htcc.Utils (toNatural, toInteger, dropFst3, spanLen, maybe', dropSnd3)
+import Htcc.Utils (toNatural, toInteger, dropFst3, spanLen, maybe', dropSnd3, lor)
 
 -- | Class to a type based on `TypeKind`.
 class TypeKindBase a where
     -- | `isCTArray` returns `True` when the given argument is `Htcc.CRules.Types.Core.CTArray`.
     -- Otherwise, returns `False`
     isCTArray :: a i -> Bool
+    -- | `isArray` return `True` when the given argument is `Htcc.CRules.Types.Core.CTArray` or `IncompleteArray`
+    -- Otherwise, returns `False`
+    isArray :: a i -> Bool
     -- | `isCTStruct` returns `True` when the given argument is `Htcc.CRules.Types.Core.CTStruct`.
     -- Otherwise, returns `False`
     isCTStruct :: a i -> Bool
@@ -93,7 +96,12 @@ class IncompleteBase a where
     isIncompleteArray :: a i -> Bool
     -- | When the given argument is incmoplete struct, `isIncompleteStruct` returns `True`, otherwise `False`.
     isIncompleteStruct :: a i -> Bool
+    -- | Extract the tag name from `IncompleteStruct`. If not `IncompleteStruct`, `Nothing` is retunred.
     fromIncompleteStruct :: a i -> Maybe T.Text
+    -- | Extract the type of array from `IncompleteArray`. If not `IncompleteArray`, `Nothing` is retunred.
+    fromIncompleteArray :: a i -> Maybe (TypeKind i)
+    -- | Returns True if the incomplete type is temporarily valid at the time of declaration. Otherwise returns `False`.
+    isValidIncomplete :: Ord i => a i -> Bool
 
 -- | The type representing an incomplete type
 data Incomplete i = IncompleteArray (TypeKind i) -- ^ incomplete array, it has a base type.
@@ -107,6 +115,10 @@ instance IncompleteBase Incomplete where
     isIncompleteStruct _ = False
     fromIncompleteStruct (IncompleteStruct t) = Just t
     fromIncompleteStruct _ = Nothing
+    fromIncompleteArray (IncompleteArray t) = Just t
+    fromIncompleteArray _ = Nothing
+    isValidIncomplete (IncompleteArray t) = isFundamental t
+    isValidIncomplete _ = True
 
 instance Show i => Show (Incomplete i) where
     show (IncompleteArray t) = show t ++ "[]"
@@ -294,12 +306,12 @@ instance Ord i => CType (TypeKind i) where
     sizeof (CTPtr _) = 8
     sizeof (CTArray v t) = v * sizeof t
     sizeof (CTEnum t _) = sizeof t
-    sizeof (CTIncomplete _) = 0
     sizeof t@(CTStruct m) 
         | M.null m = 1
         | otherwise = let sn = maximumBy (flip (.) smOffset . compare . smOffset) $ M.elems m in
             toNatural $ alignas (toInteger $ smOffset sn + sizeof (smType sn)) (toInteger $ alignof t)
     sizeof CTUndef = 0
+    sizeof (CTIncomplete _) = 0
     sizeof _ = error "sizeof: sould not reach here"
     
     alignof CTInt = 4
@@ -315,6 +327,9 @@ instance Ord i => CType (TypeKind i) where
     alignof (CTPtr _) = 8
     alignof (CTArray _ t) = alignof $ removeAllExtents t
     alignof (CTEnum t _) = alignof t
+    alignof (CTIncomplete (IncompleteArray t)) 
+        | isFundamental t = alignof t
+        | otherwise = 0
     alignof (CTIncomplete _) = 1
     alignof (CTStruct m)
         | M.null m = 1
@@ -328,6 +343,8 @@ instance Ord i => CType (TypeKind i) where
             f (CTArray n c@(CTArray _ _)) = CTArray n (f c)
             f (CTArray _ t) = t
             f t = t
+    deref (CTIncomplete (IncompleteArray (CTArray _ _))) = Nothing
+    deref (CTIncomplete (IncompleteArray t)) = Just t
     deref _ = Nothing
 
     ctorPtr n = foldr (.) id $ replicate (fromIntegral n) CTPtr
@@ -335,7 +352,11 @@ instance Ord i => CType (TypeKind i) where
     dctorPtr (CTPtr x) = second (CTPtr .) $ dctorPtr x
     dctorPtr x = (x, id)
 
+    dctorArray (CTArray n x) = second (CTArray n .) $ dctorArray x
+    dctorArray x = (x, id)
+
     removeAllExtents (CTArray _ t) = removeAllExtents t
+    removeAllExtents (CTIncomplete (IncompleteArray t)) = removeAllExtents t
     removeAllExtents x = x
 
     conversion l r
@@ -354,6 +375,9 @@ instance TypeKindBase TypeKind where
     {-# INLINE isCTArray #-}
     isCTArray (CTArray _ _) = True
     isCTArray _ = False
+
+    {-# INLINE isArray #-}
+    isArray = lor [isCTArray, isIncompleteArray] 
     
     {-# INLINE isCTStruct #-}
     isCTStruct (CTStruct _) = True
@@ -376,6 +400,12 @@ instance TypeKindBase TypeKind where
         where
             f l'@(CTArray _ _) (CTArray n'' r'') = CTArray n'' $ f l' r''
             f l' _ = l'
+    concatCTArray l@(CTIncomplete (IncompleteArray _)) r@(CTArray n r')
+        | removeAllExtents l == removeAllExtents r = Just $ CTArray n $ f l r'
+        | otherwise = Nothing
+        where
+            f l'@(CTIncomplete (IncompleteArray _)) (CTArray n' r'') = CTArray n' $ f l' r''
+            f l' _ = l'
     concatCTArray _ _ = Nothing
 
     {-# INLINE toTypeKind #-}
@@ -387,6 +417,7 @@ instance TypeKindBase TypeKind where
 instance IncompleteBase TypeKind where
     {-# INLINE isIncompleteArray #-}
     isIncompleteArray (CTIncomplete x) = isIncompleteArray x
+    isIncompleteArray (CTArray _ x) = isIncompleteArray x
     isIncompleteArray _ = False
     {-# INLINE isIncompleteStruct #-}
     isIncompleteStruct (CTIncomplete x) = isIncompleteStruct x
@@ -394,6 +425,14 @@ instance IncompleteBase TypeKind where
     {-# INLINE fromIncompleteStruct #-}
     fromIncompleteStruct (CTIncomplete x) = fromIncompleteStruct x
     fromIncompleteStruct _ = Nothing
+    {-# INLINE fromIncompleteArray #-}
+    fromIncompleteArray (CTIncomplete x) = fromIncompleteArray x
+    fromIncompleteArray (CTArray _ x) = fromIncompleteArray x
+    fromIncompleteArray _ = Nothing
+    {-# INLINE isValidIncomplete #-}
+    isValidIncomplete (CTIncomplete x) = isValidIncomplete x
+    isValidIncomplete (CTArray _ x) = isValidIncomplete x
+    isValidIncomplete _ = True
 
 {-# INLINE alignas #-}
 -- | `alignas` align to @n@.

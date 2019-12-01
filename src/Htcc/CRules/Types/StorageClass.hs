@@ -81,7 +81,8 @@ instance Ord i => CType (StorageClass i) where
     alignof = alignof . toTypeKind
     deref x = picksc x <$> deref (toTypeKind x)
     ctorPtr n = mapTypeKind (ctorPtr n)
-    dctorPtr x = first (picksc x) $ second (\f y -> picksc y $ f $ toTypeKind y) $ dctorPtr (toTypeKind x)
+    dctorPtr x = first (picksc x) $ second (\f y -> picksc y $ f $ toTypeKind y) $ dctorPtr $ toTypeKind x
+    dctorArray x = first (picksc x) $ second (\f y -> picksc y $ f $ toTypeKind y) $ dctorArray $ toTypeKind x
     removeAllExtents = mapTypeKind removeAllExtents
     conversion x y = SCAuto $ conversion (toTypeKind x) (toTypeKind y)
     implicitInt = mapTypeKind implicitInt
@@ -89,6 +90,9 @@ instance Ord i => CType (StorageClass i) where
 instance TypeKindBase StorageClass where
     {-# INLINE isCTArray #-}
     isCTArray = isCTArray . toTypeKind
+
+    {-# INLINE isArray #-}
+    isArray = isArray . toTypeKind
     
     {-# INLINE isCTStruct #-}
     isCTStruct = isCTStruct . toTypeKind
@@ -119,6 +123,10 @@ instance IncompleteBase StorageClass where
     isIncompleteStruct = isIncompleteStruct . toTypeKind
     {-# INLINE fromIncompleteStruct #-}
     fromIncompleteStruct = fromIncompleteStruct . toTypeKind
+    {-# INLINE fromIncompleteArray #-}
+    fromIncompleteArray = fromIncompleteArray . toTypeKind
+    {-# INLINE isValidIncomplete #-}
+    isValidIncomplete = isValidIncomplete . toTypeKind
 
 instance StorageClassBase StorageClass where
     {-# INLINE isSCStatic #-}

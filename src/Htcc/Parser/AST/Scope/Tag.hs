@@ -53,7 +53,6 @@ add cnd t cur@(_, HT.TKIdent ident) sts = case M.lookup ident sts of
     Just foundedTag
         | stNestDepth foundedTag /= cnd -> stnat
         | CT.isCTIncomplete (sttype foundedTag) -> stnat
-        | CT.isCTIncomplete t && not (CT.isCTIncomplete $ sttype foundedTag) -> Right sts
         | otherwise -> Left ("redefinition of 'struct " <> ident <> "'", cur) -- ODR
     Nothing -> stnat
     where
