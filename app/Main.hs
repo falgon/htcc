@@ -11,6 +11,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Map as M
 import Data.Tuple.Extra (first, second)
+import Diagrams.TwoD.Size (mkSizeSpec2D)
 
 import Htcc.Utils (putStrLnErr, tshow)
 import Htcc.Asm (casm)
@@ -26,10 +27,12 @@ data Options = SupressAllWarnings
 instance Show Options where
     show SupressAllWarnings = "-w"
     show VisualizeAST = "--visualize-ast"
+    show Output = "-o"
 
 instance HelpMessage Options where
     helpm SupressAllWarnings = "Disable all warning messages."
     helpm VisualizeAST = "Visualize an AST built from source code. The code is not compiled."
+    help Output = "Specify the output destination."
 
 options :: M.Map String Options
 options = M.fromList [(show x, x) | x <- [toEnum 0 ..]]
@@ -48,4 +51,6 @@ main = do
         invalid <- filterM (fmap not . doesFileExist) fpath
         if not (null invalid) then putStrLnErr $ "htcc: error: " <> T.pack (intercalate ", " invalid) <> ": No such file or directory\ncompilation terminated." else 
             T.readFile (head fpath) >>=
-                if VisualizeAST `elem` ops then visualize (SupressAllWarnings `elem` ops) else casm (SupressAllWarnings `elem` ops)
+                if VisualizeAST `elem` ops then 
+                    visualize (SupressAllWarnings `elem` ops) (mkSizeSpec2D (Just 640) (Just 480)) "/vagrant/out.svg" 
+                else casm (SupressAllWarnings `elem` ops)
