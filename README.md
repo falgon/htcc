@@ -85,7 +85,7 @@ $ stack bench
 To generate ([Graphviz](https://www.graphviz.org/) is required),
 
 ```sh
-$ stack dot --no-include-base --external | dot -Tpng -o out.png
+$ stack dot --no-include-base --external --prune diagrams-lib,diagrams-svg,diagrams-contrib | dot -Tpng -o out.png
 ```
 
 ## About emoji of commit messages
