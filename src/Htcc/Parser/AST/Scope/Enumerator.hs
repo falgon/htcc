@@ -23,6 +23,7 @@ import Control.DeepSeq (NFData (..))
 
 import Htcc.Parser.AST.Scope.ManagedScope
 import Htcc.Parser.AST.Scope.Utils (internalCE)
+import Htcc.Parser.AST.Core (atNumLit, Treealizable (..))
 import qualified Htcc.CRules.Types as CT
 import qualified Htcc.Tokenizer.Token as HT
 
@@ -34,6 +35,9 @@ data Enumerator i = Enumerator
     } deriving (Eq, Ord, Show, Generic)
 
 instance NFData i => NFData (Enumerator i)
+
+instance Treealizable Enumerator where
+    treealize (Enumerator val _) = atNumLit val
 
 instance ManagedScope (Enumerator i) where
     lookup = M.lookup

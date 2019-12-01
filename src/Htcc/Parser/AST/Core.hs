@@ -11,10 +11,11 @@ Portability : POSIX
 The AST data type and its utilities
 -}
 module Htcc.Parser.AST.Core (
-    -- * Abstract tree types
+    -- * Abstract tree types and its relational type class
     ATKindFor (..),
     ATKind (..),
     ATree (..),
+    Treealizable (..),
     -- * Constructor
     atNumLit,
     -- * Utilities
@@ -26,10 +27,13 @@ module Htcc.Parser.AST.Core (
     isComplexAssign,
     isEmptyExprStmt,
     isEmptyReturn,
-    isNonEmptyReturn
+    isNonEmptyReturn,
+    mapATKind,
+    modifyTypeATKind
 ) where
 
 import qualified Data.Text as T
+import Control.Monad ((>=>))
 import Htcc.CRules.Types as CT
 
 -- | Specially @for@ syntax tree type
@@ -142,6 +146,20 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATNull (ATree a) -- ^ indicates nothing to do
     deriving Show
 
+{-# INLINE fromATVar #-}
+-- | Take its type when it is ATIVar or ATIVar.
+fromATVar :: ATKind i -> Maybe (CT.StorageClass i)
+fromATVar (ATLVar s _) = Just s
+fromATVar (ATGVar s _) = Just s
+fromATVar _ = Nothing
+
+instance IncompleteBase ATKind where
+    isIncompleteArray = maybe False isIncompleteArray . fromATVar
+    isIncompleteStruct = maybe False isIncompleteStruct . fromATVar
+    fromIncompleteArray = fromATVar >=> fromIncompleteArray
+    fromIncompleteStruct = fromATVar >=> fromIncompleteStruct
+    isValidIncomplete = maybe False isValidIncomplete . fromATVar 
+
 {-# INLINE isComplexAssign #-}
 -- | Returns True if the given `ATKind` is an assignment operator other than simple assignment. 
 -- Otherwise, returns `False`.
@@ -169,6 +187,11 @@ data ATree a = ATEmpty -- ^ The empty node
     } -- ^ `ATKind` representing the kind of node and the two branches `ATree` it has
     deriving Show
 
+-- | A class whose type can be converted to ATree
+class Treealizable a where
+    -- | Convert to `ATree`
+    treealize :: a i -> ATree i
+
 {-# INLINE isEmptyExprStmt #-}
 -- | `isEmptyExprStmt` returns `True` only if both sides of `ATExprStmt` are `ATEmpty`. Otherwise, returns `False`.
 isEmptyExprStmt :: ATree a -> Bool
@@ -194,3 +217,14 @@ isEmptyReturn _ = False
 -- | `atNumLit` is a shortcut for constructing a numeric literal node
 atNumLit :: i -> ATree i
 atNumLit = flip (flip (flip ATNode (CT.SCAuto $ CT.CTLong CT.CTInt)) ATEmpty) ATEmpty . ATNum
+
+-- | mapping for `ATKind`
+mapATKind :: (ATKind i -> ATKind i) -> ATree i -> ATree i
+mapATKind f (ATNode atk t l r) = ATNode (f atk) t (mapATKind f l) (mapATKind f r)
+mapATKind _ ATEmpty = ATEmpty
+
+-- | applying for `Htcc.CRules.Types.StorageClass.StorageClass` of `ATLVar` or `ATGVar`
+modifyTypeATKind :: (CT.StorageClass i -> CT.StorageClass i) -> ATKind i -> ATKind i
+modifyTypeATKind f (ATLVar t o) = ATLVar (f t) o
+modifyTypeATKind f (ATGVar t o) = ATGVar (f t) o
+modifyTypeATKind _ _ = ATNull ATEmpty

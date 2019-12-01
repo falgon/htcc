@@ -458,6 +458,11 @@ int main()
     assert('e', ({ char str[2][4] = { "abc", "def" }; str[1][1]; }), "({ char str[2][4] = { \"abc\", \"def\" }; str[1][1]; })");
     assert('f', ({ char str[2][4] = { "abc", "def" }; str[1][2]; }), "({ char str[2][4] = { \"abc\", \"def\" }; str[1][2]; })");
     assert(0, ({ char str[2][4] = { "abc", "def" }; str[1][3]; }), "({ char str[2][4] = { \"abc\", \"def\" }; str[1][3]; })");
+    assert(3, ({ int ar[] = { 0, 1, 2, 3 }; ar[3]; }), "({ int ar[] = { 0, 1, 2, 3 }; ar[3]; })");
+    assert(16, ({ int ar[] = { 0, 1, 2, 3 }; sizeof ar; }), "({ int ar[] = { 0, 1, 2, 3 }; sizeof ar; })");
+    assert(4, ({ char str[] = "foo"; sizeof str; }), "({ char str[] = \"foo\"; sizeof str; })");
+    assert('d', ({ char str[] = "abcd"; str[3]; }), "({ char str[] = \"abcd\"; str[3]; })");
+    assert(0, ({ char str[] = "abcd"; str[4]; }), "({ char str[] = \"abcd\"; str[4]; })");
 
     printf("All tests are passed!\n");
 

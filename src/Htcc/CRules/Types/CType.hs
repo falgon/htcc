@@ -35,6 +35,9 @@ class CType a where
     -- | `dctorPtr` deconstructs the nested structure of `Htcc.CRules.Types.Core.CTPtr` and returns the convolution function
     -- of the original type and `Htcc.CRules.Types.Core.CTPtr`
     dctorPtr :: a -> (a, a -> a)
+    -- | `dctorArray` deconstructs the nested structure of `Htcc.CRules.Types.Core.CTArray` and returns the convolution function
+    -- of the original type and `Htcc.CRules.Types.Core.CTArray`
+    dctorArray :: a -> (a, a -> a)
     -- | `removeAllExtents` is the same as @std::remove_all_extents@ defined in C++11 @\<type_traits\>@ 
     -- (See also: <http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2012/n3337.pdf N3337>/§ 20.9.7.4) header.
     -- If type @T@ is a multidimensional array of type @X@, type @X@ is returned.

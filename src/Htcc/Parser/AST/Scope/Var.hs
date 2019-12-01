@@ -40,7 +40,7 @@ import Control.DeepSeq (NFData (..))
 import qualified Htcc.Parser.AST.Scope.ManagedScope as SM
 import qualified Htcc.Tokenizer.Token as HT
 import qualified Htcc.CRules.Types as CT
-import Htcc.Parser.AST.Core (ATree (..), ATKind (..))
+import Htcc.Parser.AST.Core (ATree (..), ATKind (..), Treealizable (..))
 import Htcc.Parser.AST.Scope.Utils (internalCE)
 import Htcc.Utils (tshow)
 
@@ -66,6 +66,10 @@ data LVar a = LVar -- ^ The constructor of local variable
     } deriving (Eq, Ord, Show, Generic)
 
 instance NFData a => NFData (LVar a)
+
+instance Treealizable LVar where
+    {-# INLINE treealize #-}
+    treealize (LVar t o _) = ATNode (ATLVar t o) t ATEmpty ATEmpty
 
 instance SM.ManagedScope (LVar a) where
     lookup = M.lookup
@@ -134,13 +138,15 @@ addLVar :: (Integral i, Bits i) => Natural -> CT.StorageClass i -> HT.TokenLC i 
 addLVar cnd t cur@(_, HT.TKIdent ident) vars = case lookupLVar ident vars of
     Just foundedVar 
         | nestDepth foundedVar /= cnd -> varnat
+        | CT.isIncompleteArray (lvtype foundedVar) -> varnat
         | otherwise -> Left ("redeclaration of '" <> ident <> "' with no linkage", cur) -- ODR
     Nothing -> varnat
     where
         ofs = (+) (fromIntegral $ CT.sizeof t) $ CT.alignas (maximumOffset $ locals vars) $ fromIntegral $ CT.alignof t
         varnat = let lvar = LVar t ofs cnd in 
             Right (ATNode (ATLVar (lvtype lvar) (rbpOffset lvar)) t ATEmpty ATEmpty, vars { locals = M.insert ident lvar $ locals vars })
-addLVar _ _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
+addLVar _ _ _ _ = Left (internalCE, HT.emptyToken)
+
 
 -- | If the specified token is `HT.TKIdent` and the global variable does not exist in the list, `addLVar` adds a new global variable to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
