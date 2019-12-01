@@ -14,17 +14,22 @@ import Data.Tuple.Extra (first, second)
 
 import Htcc.Utils (putStrLnErr, tshow)
 import Htcc.Asm (casm)
+import Htcc.Visualizer (visualize)
 
 class HelpMessage a where
     helpm :: a -> T.Text
 
-data Options = SupressAllWarnings deriving (Eq, Ord, Enum)
+data Options = SupressAllWarnings 
+    | VisualizeAST
+    deriving (Eq, Ord, Enum)
 
 instance Show Options where
     show SupressAllWarnings = "-w"
+    show VisualizeAST = "--visualize-ast"
 
 instance HelpMessage Options where
     helpm SupressAllWarnings = "Disable all warning messages."
+    helpm VisualizeAST = "Visualize an AST built from source code. The code is not compiled."
 
 options :: M.Map String Options
 options = M.fromList [(show x, x) | x <- [toEnum 0 ..]]
@@ -41,5 +46,6 @@ main = do
     (fpath, ops) <- splitArgs <$> getArgs
     if null fpath then help >> exitFailure else do
         invalid <- filterM (fmap not . doesFileExist) fpath
-        if not (null invalid) then putStrLnErr $ "htcc: error: " <> T.pack (intercalate ", " invalid) <> ": No such file or directory\ncompilation terminated." else
-            T.readFile (head fpath) >>= casm (not (null ops) && head ops == SupressAllWarnings)
+        if not (null invalid) then putStrLnErr $ "htcc: error: " <> T.pack (intercalate ", " invalid) <> ": No such file or directory\ncompilation terminated." else 
+            T.readFile (head fpath) >>=
+                if VisualizeAST `elem` ops then visualize (SupressAllWarnings `elem` ops) else casm (SupressAllWarnings `elem` ops)
