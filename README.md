@@ -46,6 +46,12 @@ For one liner...
 $ echo 'int printf(); int main() { printf("hello world!\n"); }' | stack exec htcc -- /dev/stdin | gcc -xassembler -no-pie -o out -  
 ```
 
+## AST diagram generation
+
+```sh
+$ echo 'int printf(); int main() { printf("hello world!\n"); }' | stack exec htcc -- /dev/stdin --visualize-ast
+```
+
 ## Test
 
 ```sh
