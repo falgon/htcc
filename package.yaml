@@ -38,9 +38,6 @@ dependencies:
 - mtl
 - monad-finally
 - transformers
-- diagrams-svg
-- diagrams-contrib
-- diagrams-lib
 
 library:
   source-dirs: src

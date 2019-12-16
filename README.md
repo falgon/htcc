@@ -46,12 +46,6 @@ For one liner...
 $ echo 'int printf(); int main() { printf("hello world!\n"); }' | stack exec htcc -- /dev/stdin | gcc -xassembler -no-pie -o out -  
 ```
 
-## AST diagram generation
-
-```sh
-$ echo 'int printf(); int main() { printf("hello world!\n"); }' | stack exec htcc -- /dev/stdin --visualize-ast
-```
-
 ## Test
 
 ```sh
@@ -85,7 +79,7 @@ $ stack bench
 To generate ([Graphviz](https://www.graphviz.org/) is required),
 
 ```sh
-$ stack dot --no-include-base --external --prune diagrams-lib,diagrams-svg,diagrams-contrib | dot -Tpng -o out.png
+$ stack dot --no-include-base --external | dot -Tpng -o out.png
 ```
 
 ## About emoji of commit messages
