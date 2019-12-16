@@ -32,7 +32,26 @@ $ stack build
 $ stack build --fast # no optimized
 ```
 
-## Execute
+## Usage
+
+```sh
+$ stack exec htcc -- -h
+Usage: htcc [--visualize-ast] [--img-resolution RESOLUTION] file [-o|--out file]
+            [-w|--supress-warns]
+
+Available options:
+  -h,--help                Show this help text
+  --visualize-ast          Visualize an AST built from source code
+  --img-resolution RESOLUTION
+                           Specify the resolution of the AST graph to be
+                           generated (default: 640x480)
+  file                     Specify the input file name
+  -o,--out file            Specify the output destination file name, supported
+                           only svg (default: ./out.svg)
+  -w,--supress-warns       Disable all warning messages
+```
+
+Simple compilation
 
 ```sh
 $ echo 'int printf(); int main() { printf("hello world!\n"); }' > t.c
@@ -48,9 +67,26 @@ $ echo 'int printf(); int main() { printf("hello world!\n"); }' | stack exec htc
 
 ## AST diagram generation
 
+The following command
+
 ```sh
-$ echo 'int printf(); int main() { printf("hello world!\n"); }' | stack exec htcc -- /dev/stdin --visualize-ast
+$ echo 'int main() { return 1 * 2 + 4; }' | stack exec htcc -- /dev/stdin --visualize-ast
 ```
+
+is given the following AST graph.
+
+![](./assets/example_ast/calc.png)
+
+This option allows to specify the resolution and output file
+
+```sh
+$ echo 'int printf(); void fizzbuzz(int n) { for (int i = 1; i < n; ++i) { if (!(i % 15)) printf("fizzbuzz\n"); else if (!(i % 5)) printf("fizz\n"); else if (!(i % 3)) printf("buzz\n"); else print    f("%d\n", i); } } int main() { fizzbuzz(50); }' | \
+    stack exec htcc -- /dev/stdin --visualize-ast --img-resolution 1280x720 --out fizzbuzz.svg
+```
+
+The above command is given the following AST graph.
+
+![](./assets/example_ast/fizzbuzz.png)
 
 ## Test
 
