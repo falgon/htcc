@@ -126,17 +126,17 @@ If you want to delete the created test container and its image, execute as follo
 $ stack test --test-arguments cleanDocker
 ```
 
-Source files that can be compiled by htcc are placed under the `examples/`.
+Source files that can be compiled by htcc are placed under the `example/`.
 
 ```sh
-$ cd examples
+$ cd example
 $ make
 ```
 
 For the same reason, when running in docker (lifegame is not supported):
 
 ```sh
-$ cd examples
+$ cd example
 $ make docker
 $ make clean_docker # Stop and delete docker container, and delete image
 ```
