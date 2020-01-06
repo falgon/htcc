@@ -55,13 +55,6 @@ format errMesPre e xs = do
     putStrLnErr (T.lines xs !! max 0 (fromIntegral e))
     putStrErr $ T.replicate (T.length errMesPre) " " <> " | "
 
-tokenizeErrExit :: (Integral i, Show i) => InputCCode -> (HT.TokenLCNums i, T.Text) -> IO ()
-tokenizeErrExit xs e = do
-    putStrLnErr (tshow (fst e) <> ": error: stray '" <> snd e <> "' in program")
-    format (T.replicate 4 " " <> tshow (HT.tkLn (fst e))) (pred $ fromIntegral $ HT.tkLn $ fst e) xs
-    repSpace (HT.tkCn $ fst e) >> putStrLnErr ""
-    exitFailure
-
 parsedMessage :: (Integral i, Show i) => MessageType -> InputCCode -> ASTError i -> IO ()
 parsedMessage mest xs (s, (i, etk)) = do
     putStrLnErr (tshow i <> ": " <> tshow mest <> ": " <> s)
