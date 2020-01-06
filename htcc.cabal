@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.31.2.
+-- This file has been generated from package.yaml by hpack version 0.31.1.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 8512ddeb6758dafaf4ccc2a1d172c6a95b7dfaa7f529ee5dd65178c592d3c227
+-- hash: e6e695eb640b266d6fb7c4f9c5c36379831d347854951091a9d6a2a8602753b9
 
 name:           htcc
 version:        0.0.0.1
@@ -40,12 +40,19 @@ source-repository head
 
 library
   exposed-modules:
+      Htcc.Asm
       Htcc.Asm.Generate
+      Htcc.Asm.Generate.Core
       Htcc.Asm.Intrinsic
-      Htcc.Asm.Intrinsic.Instruction
       Htcc.Asm.Intrinsic.Operand
       Htcc.Asm.Intrinsic.Register
-      Htcc.Asm.Intrinsic.Utils
+      Htcc.Asm.Intrinsic.Structure
+      Htcc.Asm.Intrinsic.Structure.Internal
+      Htcc.Asm.Intrinsic.Structure.Section.Data
+      Htcc.Asm.Intrinsic.Structure.Section.Text
+      Htcc.Asm.Intrinsic.Structure.Section.Text.Directive
+      Htcc.Asm.Intrinsic.Structure.Section.Text.Instruction
+      Htcc.Asm.Intrinsic.Structure.Section.Text.Operations
       Htcc.CRules
       Htcc.CRules.Char
       Htcc.CRules.LexicalElements
@@ -84,10 +91,13 @@ library
     , containers
     , deepseq
     , extra
+    , monad-finally
     , monad-loops
+    , mtl
     , safe
     , split
     , text
+    , transformers
   default-language: Haskell2010
 
 executable htcc
@@ -105,10 +115,13 @@ executable htcc
     , directory
     , extra
     , htcc
+    , monad-finally
     , monad-loops
+    , mtl
     , safe
     , split
     , text
+    , transformers
   default-language: Haskell2010
 
 test-suite htcc-test
@@ -134,11 +147,14 @@ test-suite htcc-test
     , extra
     , foldl
     , htcc
+    , monad-finally
     , monad-loops
+    , mtl
     , safe
     , split
     , text
     , time
+    , transformers
     , turtle
   default-language: Haskell2010
 
@@ -156,8 +172,11 @@ benchmark criterion
     , deepseq
     , extra
     , htcc
+    , monad-finally
     , monad-loops
+    , mtl
     , safe
     , split
     , text
+    , transformers
   default-language: Haskell2010

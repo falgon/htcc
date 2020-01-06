@@ -17,7 +17,10 @@ packages:
 # Dependency packages to be pulled from upstream that are not in the resolver
 # using the same syntax as the packages field.
 # (e.g., acme-missiles-0.3)
-# extra-deps: []
+extra-deps:
+- monad-finally-0.1.2@sha256:7f2c860c39d0a00908d83ddaf9cd232d09c19934381b011ed361335715b4e52e
+- monad-abort-fd-0.7@sha256:dc917e7ee2ec0b4f20d6e1cc323bef03adf5b2067619b6e7f4f324a50ae6e870
+- transformers-abort-0.6.0.1@sha256:2502f690904cfa55bd99d4af2647c9f25b30b16b14494fcca909d4b1fbbc25c9
 
 # Override default flag values for local packages and extra-deps
 # flags: {}

@@ -1,5 +1,5 @@
 {-|
-Module      : Htcc.Asm.Intrinsic
+Module      : Htcc.Asm.Intrinsic.Structure
 Description : The modules of intrinsic (x86_64) assembly
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -9,11 +9,6 @@ Portability : POSIX
 
 The modules of intrinsic (x86_64) assembly
 -}
-module Htcc.Asm.Intrinsic (
-    -- * Export modules
-    module Htcc.Asm.Intrinsic.Register,
-    module Htcc.Asm.Intrinsic.Operand
+module Htcc.Asm.Intrinsic.Structure (
 ) where
 
-import Htcc.Asm.Intrinsic.Register
-import Htcc.Asm.Intrinsic.Operand

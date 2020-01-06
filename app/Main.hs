@@ -13,7 +13,7 @@ import qualified Data.Map as M
 import Data.Tuple.Extra (first, second)
 
 import Htcc.Utils (putStrLnErr, tshow)
-import Htcc.Asm.Generate (casm)
+import Htcc.Asm (casm)
 
 class HelpMessage a where
     helpm :: a -> T.Text

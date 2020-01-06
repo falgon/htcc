@@ -390,7 +390,7 @@ globalDef (cur@(_, HT.TKReserved "auto"):_) _ _ = Left ("illegal storage class o
 globalDef xs@((_, HT.TKTypedef):_) _ sc = defTypedef xs sc -- for global @typedef@
 globalDef tks at !va = (>>=) (takeType tks va) $ \case
     (_, Nothing, (_, HT.TKReserved ";"):ds', scp) -> Right (ds', ATEmpty, scp) -- e.g., @int;@ is legal in C11 (See N1570/section 6.7 Declarations)
-    (funcType, Just (cur@(_, HT.TKIdent fname)), tk@((_, HT.TKReserved "("):_), !sc) -> let scp = resetLocal sc in -- for a function declaration or definition
+    (funcType, Just cur@(_, HT.TKIdent fname), tk@((_, HT.TKReserved "("):_), !sc) -> let scp = resetLocal sc in -- for a function declaration or definition
         maybe' (Left (internalCE, cur)) (takeBrace "(" ")" $ tail (cur:tk)) $
             either (Left . ("invalid function declaration/definition",)) $ \(fndec, st) -> case st of
                 ((_, HT.TKReserved ";"):ds'') -> addFunction False funcType cur scp >>= globalDef ds'' at -- for a function declaration -- TODO: read types of parameters and register them
@@ -414,7 +414,7 @@ globalDef tks at !va = (>>=) (takeType tks va) $ \case
                                     Right (ert, fnode, pushWarn ("The return type of function '" <> fname <> "' is " <> tshow (CT.toTypeKind funcType) <> ", but the statement returns no value") cur erscp)
                         _ -> Left (internalCE, HT.emptyToken)
                 _ -> stmt tk at scp
-    (ty, Just (cur@(_, HT.TKIdent _)), xs, !scp) -> case xs of -- for global variables -- TODO: support initialize by global variables
+    (ty, Just cur@(_, HT.TKIdent _), xs, !scp) -> case xs of -- for global variables -- TODO: support initialize by global variables
         (_, HT.TKReserved ";"):ds -> maybe' (Left ("defining global variables with a incomplete type", cur)) (incomplete ty scp) $ \ty' ->
             flip fmap (addGVar ty' cur scp) $ \(_, scp') -> (ds, ATEmpty, scp')
         _ -> Left ("expected ';' token after '" <> tshow (snd cur) <> "' token", cur)
