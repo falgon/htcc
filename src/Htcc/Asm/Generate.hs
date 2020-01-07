@@ -20,18 +20,14 @@ module Htcc.Asm.Generate (
     parsedErrExit
 ) where
 
--- Imports universal modules
-import Control.Monad (unless, (>=>))
+import Control.Monad ((>=>))
 import Data.Foldable (toList)
-import Data.Tuple.Extra (uncurry3)
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Sequence as S
 import System.Exit (exitFailure)
 
 import Htcc.Parser (parse, ATree (..))
--- Imports Tokenizer and parser
-import Htcc.Utils (err, putStrLnErr, putStrErr, counter, tshow, toInts, splitAtLen, maybe', bothM, (*^*))
 import qualified Htcc.Tokenizer as HT
 import Htcc.Parser.AST.Scope.Var (GVar (..), Literal (..))
 import Htcc.Parser.AST.Scope.ManagedScope (ASTError)
@@ -41,8 +37,7 @@ import Htcc.Asm.Intrinsic.Operand
 import qualified Htcc.Asm.Intrinsic.Structure.Section.Text as IT    
 import qualified Htcc.Asm.Intrinsic.Structure.Internal as SI
 
-import qualified Htcc.Tokenizer as HT
-import Htcc.Utils (fst4, dropFst4, putStrErr, putStrLnErr, tshow, toInts)
+import Htcc.Utils (putStrLnErr, putStrErr, putStrLnErr, tshow, toInts)
 
 -- | input string, C source code
 type InputCCode = T.Text
