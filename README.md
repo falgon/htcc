@@ -53,8 +53,8 @@ Examples are shown in the following table.
 
 | Command | Output |
 | ------- | ------ |
-| `echo 'int main() { return 1 * 2 + 4; }' | stack exec htcc -- /dev/stdin --visualize-ast` | ![](./assets/example_ast/calc.png) |
-| `$ echo 'int printf(); void fizzbuzz(int n) { for (int i = 1; i < n; ++i) { if (!(i % 15)) printf("fizzbuzz\n"); else if (!(i % 5)) printf("fizz\n"); else if (!(i % 3)) printf("buzz\n"); else printf("%d\n", i); } } int main() { fizzbuzz(50); }' | stack exec htcc -- /dev/stdin --visualize-ast --img-resolution 1280x720 --out fizzbuzz.svg` | ![](./assets/example_ast/fizzbuzz.png) |
+| `echo 'int main() { return 1 * 2 + 4; }' &#124; stack exec htcc -- /dev/stdin --visualize-ast` | ![](./assets/example_ast/calc.png) |
+| `$ echo 'int printf(); void fizzbuzz(int n) { for (int i = 1; i < n; ++i) { if (!(i % 15)) printf("fizzbuzz\n"); else if (!(i % 5)) printf("fizz\n"); else if (!(i % 3)) printf("buzz\n"); else printf("%d\n", i); } } int main() { fizzbuzz(50); }' &#124; stack exec htcc -- /dev/stdin --visualize-ast --img-resolution 1280x720 --out fizzbuzz.svg` | ![](./assets/example_ast/fizzbuzz.png) |
 
 ## Test
 
