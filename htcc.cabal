@@ -1,0 +1,182 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.1.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: e6e695eb640b266d6fb7c4f9c5c36379831d347854951091a9d6a2a8602753b9
+
+name:           htcc
+version:        0.0.0.1
+synopsis:       The full scratch implementation of tiny C compiler (x86_64)
+description:    The full scratch implementation of tiny C compiler (x86_64).
+                This compiler outputs x86_64 assembly code from "general" C code.
+                .
+                It consists of:
+                .
+                * the lexical analyzer
+                * the parser that performs parsing with recursive descent and construction of abstract syntax trees (ASTs)
+                * the method that outputs x86_64 assembly code from ASTs
+                .
+                __This compiler is not practical purposes__, but focuses on implementation experiments.
+                .
+                For more information, please see the README on GitHub at <https://github.com/falgon/htcc#readme>.
+category:       Compiler
+homepage:       https://github.com/falgon/htcc#readme
+bug-reports:    https://github.com/falgon/htcc/issues
+author:         roki
+maintainer:     falgon53@yahoo.co.jp
+copyright:      2019 roki
+license:        MIT
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/falgon/htcc
+
+library
+  exposed-modules:
+      Htcc.Asm
+      Htcc.Asm.Generate
+      Htcc.Asm.Generate.Core
+      Htcc.Asm.Intrinsic
+      Htcc.Asm.Intrinsic.Operand
+      Htcc.Asm.Intrinsic.Register
+      Htcc.Asm.Intrinsic.Structure
+      Htcc.Asm.Intrinsic.Structure.Internal
+      Htcc.Asm.Intrinsic.Structure.Section.Data
+      Htcc.Asm.Intrinsic.Structure.Section.Text
+      Htcc.Asm.Intrinsic.Structure.Section.Text.Directive
+      Htcc.Asm.Intrinsic.Structure.Section.Text.Instruction
+      Htcc.Asm.Intrinsic.Structure.Section.Text.Operations
+      Htcc.CRules
+      Htcc.CRules.Char
+      Htcc.CRules.LexicalElements
+      Htcc.CRules.Preprocessor
+      Htcc.CRules.Preprocessor.Core
+      Htcc.CRules.Preprocessor.Punctuators
+      Htcc.CRules.Types
+      Htcc.CRules.Types.CType
+      Htcc.CRules.Types.StorageClass
+      Htcc.CRules.Types.TypeKind
+      Htcc.Parser
+      Htcc.Parser.AST
+      Htcc.Parser.AST.Core
+      Htcc.Parser.AST.Scope
+      Htcc.Parser.AST.Scope.Enumerator
+      Htcc.Parser.AST.Scope.Function
+      Htcc.Parser.AST.Scope.ManagedScope
+      Htcc.Parser.AST.Scope.Tag
+      Htcc.Parser.AST.Scope.Typedef
+      Htcc.Parser.AST.Scope.Utils
+      Htcc.Parser.AST.Scope.Var
+      Htcc.Parser.ConstructionData
+      Htcc.Parser.Core
+      Htcc.Parser.Utils
+      Htcc.Tokenizer
+      Htcc.Tokenizer.Core
+      Htcc.Tokenizer.Token
+      Htcc.Utils
+  other-modules:
+      Paths_htcc
+  hs-source-dirs:
+      src
+  build-depends:
+      base >=4.7 && <5
+    , bytestring
+    , containers
+    , deepseq
+    , extra
+    , monad-finally
+    , monad-loops
+    , mtl
+    , safe
+    , split
+    , text
+    , transformers
+  default-language: Haskell2010
+
+executable htcc
+  main-is: Main.hs
+  other-modules:
+      Paths_htcc
+  hs-source-dirs:
+      app
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall -Werror -O2
+  build-depends:
+      base >=4.7 && <5
+    , bytestring
+    , containers
+    , deepseq
+    , directory
+    , extra
+    , htcc
+    , monad-finally
+    , monad-loops
+    , mtl
+    , safe
+    , split
+    , text
+    , transformers
+  default-language: Haskell2010
+
+test-suite htcc-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Tests.SubProcTests
+      Tests.Test1
+      Tests.Test2
+      Tests.Test3
+      Tests.Utils
+      Paths_htcc
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall -O2
+  build-depends:
+      HUnit
+    , base >=4.7 && <5
+    , bytestring
+    , containers
+    , deepseq
+    , directory
+    , extra
+    , foldl
+    , htcc
+    , monad-finally
+    , monad-loops
+    , mtl
+    , safe
+    , split
+    , text
+    , time
+    , transformers
+    , turtle
+  default-language: Haskell2010
+
+benchmark criterion
+  type: exitcode-stdio-1.0
+  main-is: bench/Criterion.hs
+  other-modules:
+      Paths_htcc
+  ghc-options: -O2
+  build-depends:
+      base >=4.7 && <5
+    , bytestring
+    , containers
+    , criterion
+    , deepseq
+    , extra
+    , htcc
+    , monad-finally
+    , monad-loops
+    , mtl
+    , safe
+    , split
+    , text
+    , transformers
+  default-language: Haskell2010
