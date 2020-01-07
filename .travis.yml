@@ -1,0 +1,39 @@
+sudo: false
+language: generic
+cache:
+    directories:
+        - "$HOME/.stack/"
+        - "$HOME/.local/bin/"
+        - ".stack-work/"
+addons:
+    apt:
+        update: true
+        packages:
+            - imagemagick
+
+before_install:
+    - mkdir -p ~/.local/bin
+    - export PATH=$HOME/.local/bin:$PATH
+    - travis_retry curl -L https://get.haskellstack.org/stable/linux-x86_64.tar.gz | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
+install:
+    - stack --no-terminal test --only-dependencies
+jobs:
+    include:
+        - stage: Run build
+          script: stack build
+        - stage: Run compiling test
+          script: 
+            - stack test
+            - stack test --test-arguments subp
+        - stage: Run generating AST graphs
+          script:
+            - echo 'int main() { return 1 * 2 + 4; }' | stack exec htcc -- /dev/stdin --visualize-ast 
+            - echo 'int printf(); void fizzbuzz(int n) { for (int i = 1; i < n; ++i) { if (!(i % 15)) printf("fizzbuzz\n"); else if (!(i % 5)) printf("fizz\n"); else if (!(i % 3)) printf("buzz\n"); else printf("%d\n", i); } } int main() { fizzbuzz(50); }' | stack exec htcc -- /dev/stdin --visualize-ast --img-resolution 1280x720 --out fizzbuzz.svg
+            - if [ ! -f ./out.svg ] || [ ! -f ./fizzbuzz.svg ] ; then exit 1; fi
+            - if [ "640" != "$(identify -format '%w' out.svg)" ]; then exit 1; fi
+            - if [ "480" != "$(identify -format '%h' out.svg)" ]; then exit 1; fi
+            - if [ "1280" != "$(identify -format '%w' fizzbuzz.svg)" ]; then exit 1; fi
+            - if [ "720" != "$(identify -format '%h' fizzbuzz.svg)" ]; then exit 1; fi
+
+notifications:
+    email: false

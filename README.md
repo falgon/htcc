@@ -1,4 +1,5 @@
 # htcc
+[![Build Status](https://travis-ci.org/falgon/htcc.svg?branch=test/travis)](https://travis-ci.org/falgon/htcc)
 
 A tiny C language compiler (x86-64).
 
