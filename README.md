@@ -6,7 +6,7 @@
 
 <div align="center">
 <a href="https://travis-ci.org/falgon/htcc">
-    <img src="https://travis-ci.org/falgon/htcc.svg?branch=test/travis" alt="Build Status" />
+    <img src="https://travis-ci.org/falgon/htcc.svg?branch=master" alt="Build Status" />
 </a>
 <img src="https://img.shields.io/badge/architecture-amd64-blue.svg" alt="Architecture" />
 <a href="./LICENSE">
