@@ -32,7 +32,7 @@ isNewLine :: Char -> Bool
 isNewLine = lor [(=='\n'), (=='\r')]
 
 -- | The core function of `Htcc.Tokenizer.tokenize`
-tokenize' :: (Integral i, Read i, Show i) => TokenLCNums i -> T.Text -> Either (ASTError i) [TokenLC i] --(TokenLCNums i, T.Text) [TokenLC i]
+tokenize' :: (Integral i, Read i, Show i) => TokenLCNums i -> T.Text -> Either (ASTError i) [TokenLC i]
 tokenize' n xs = f n $ first fromIntegral $ dropSnd3 $ spanLenT isStrictSpace xs
     where
         f n' (rssize, xxs) = case T.uncons xxs of

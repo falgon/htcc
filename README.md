@@ -1,12 +1,12 @@
 <h1><p align="center">htcc</a></h1>
 
 <p align="center">
-:baby_chick: A tiny C language compiler (x86-64)
+:baby_chick: A tiny C language compiler (x86-64) (WIP)
 </p>
 
 <div align="center">
 <a href="https://travis-ci.org/falgon/htcc">
-    <img src="https://travis-ci.org/falgon/htcc.svg?branch=test/travis" alt="Build Status" />
+    <img src="https://travis-ci.org/falgon/htcc.svg?branch=master" alt="Build Status" />
 </a>
 <img src="https://img.shields.io/badge/architecture-amd64-blue.svg" alt="Architecture" />
 <a href="./LICENSE">

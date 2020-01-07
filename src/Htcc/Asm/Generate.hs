@@ -35,7 +35,7 @@ import Htcc.Parser.AST.Scope.ManagedScope (ASTError)
 import Htcc.Asm.Generate.Core
 import Htcc.Asm.Intrinsic.Operand
 import qualified Htcc.Asm.Intrinsic.Structure.Section.Text as IT    
-import qualified Htcc.Asm.Intrinsic.Structure.Internal as SI
+import qualified Htcc.Asm.Intrinsic.Structure as SI
 
 import Htcc.Utils (putStrLnErr, putStrErr, putStrLnErr, tshow, toInts)
 

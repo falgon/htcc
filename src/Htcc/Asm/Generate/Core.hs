@@ -30,7 +30,7 @@ import qualified Data.Map as M
 import Htcc.Parser (ATree (..), ATKind (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, isComplexAssign, stackSize)
 import Htcc.Parser.AST.Scope.Var (GVar (..), Literal (..))
 
-import qualified Htcc.Asm.Intrinsic.Structure.Internal as SI
+import qualified Htcc.Asm.Intrinsic.Structure as SI
 import qualified Htcc.Asm.Intrinsic.Structure.Section.Data as ID    
 import qualified Htcc.Asm.Intrinsic.Structure.Section.Text as IT 
 import Htcc.Asm.Intrinsic.Register
@@ -111,16 +111,6 @@ decrement :: Ord i => CR.StorageClass i -> SI.Asm IT.TextLabelCtx e ()
 decrement t = IT.pop rax >> IT.sub rax (maybe 1 CR.sizeof $ CR.deref t) >> IT.push rax
 
 genStmt :: (Show e, Show i, Integral i, Ord i, IsOperand i, IT.UnaryInstruction i, IT.BinaryInstruction i) => ATree i -> SI.Asm IT.TextLabelCtx e ()
-{-genStmt lc@(ATNode (ATDefFunc fn margs) ty st _) = do
-    unless (CR.isSCStatic ty) $ IT.global fn
-    IT.fn fn $ do
-        prologue (stackSize lc)
-        when (isJust margs) $ flip (`zipWithM_` fromJust margs) argRegs $ \(ATNode (ATLVar t o) _ _ _) reg ->
-            maybe (SI.errCtx "internal compiler error: there is no register that fits the specified size") 
-                (IT.mov (Ref $ rbp `osub` o)) $ find ((== CR.sizeof t) . byteWidth) reg
-        genStmt st
-        epilogue
-        -}
 genStmt (ATNode (ATCallFunc x Nothing) _ _ _) = IT.call x >> IT.push rax
 genStmt (ATNode (ATCallFunc x (Just args)) t _ _) = let (n', toReg, _) = splitAtLen 6 args in do
     mapM_ genStmt toReg
