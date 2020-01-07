@@ -75,8 +75,8 @@ Examples are shown in the following table.
     void fizzbuzz(int n) { 
         for (int i = 1; i < n; ++i) { 
             if (!(i % 15)) printf("fizzbuzz\n"); 
-            else if (!(i % 5)) printf("fizz\n"); 
-            else if (!(i % 3)) printf("buzz\n"); 
+            else if (!(i % 3)) printf("fizz\n"); 
+            else if (!(i % 5)) printf("buzz\n"); 
             else printf("%d\n", i); 
         } 
     } 
