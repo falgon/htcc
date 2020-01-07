@@ -10,21 +10,26 @@ addons:
         update: true
         packages:
             - imagemagick
+            - gcc
 
 before_install:
     - mkdir -p ~/.local/bin
     - export PATH=$HOME/.local/bin:$PATH
     - travis_retry curl -L https://get.haskellstack.org/stable/linux-x86_64.tar.gz | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
+
 install:
     - stack --no-terminal test --only-dependencies
 jobs:
     include:
         - stage: Run build
           script: stack build
-        - stage: Run compiling test
+        - stage: Run compiler test
           script: 
             - stack test
             - stack test --test-arguments subp
+        - stage: Run compiling and executing example C codes
+          script:
+            - cd example && make && ./knapsack && ./merge_sorting_linked_list && ./shuffle_and_sort
         - stage: Run generating AST graphs
           script:
             - echo 'int main() { return 1 * 2 + 4; }' | stack exec htcc -- /dev/stdin --visualize-ast 

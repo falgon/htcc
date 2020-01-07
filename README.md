@@ -1,7 +1,9 @@
-# htcc
-[![Build Status](https://travis-ci.org/falgon/htcc.svg?branch=test/travis)](https://travis-ci.org/falgon/htcc)
+<h1><p align="center">htcc</a></h1>
 
-A tiny C language compiler (x86-64).
+[![Build Status](https://travis-ci.org/falgon/htcc.svg?branch=test/travis)](https://travis-ci.org/falgon/htcc)
+[![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
+
+:baby_chick: A tiny C language compiler (x86-64).
 
 ## Build
 
@@ -45,26 +47,14 @@ $ echo 'int printf(); int main() { printf("hello world!\n"); }' | stack exec htc
 
 ## AST diagram generation
 
-The following command is given the following AST graph.
+htcc has the ability to visualize ASTs built from loaded C code.
+This option allows to specify the resolution and output file.
+Examples are shown in the following table.
 
-```sh
-$ echo 'int main() { return 1 * 2 + 4; }' | stack exec htcc -- /dev/stdin --visualize-ast
-```
-
-is given the following AST graph.
-
-![](./assets/example_ast/calc.png)
-
-This option allows to specify the resolution and output file and
-the following command is given the following AST graph.
-
-```sh
-$ echo 'int printf(); void fizzbuzz(int n) { for (int i = 1; i < n; ++i) { if (!(i % 15)) printf("fizzbuzz\n"); else if (!(i % 5)) printf("fizz\n"); else if (!(i % 3)) printf("buzz\n"); else print    f("%d\n", i); } } int main() { fizzbuzz(50); }' | \
-    stack exec htcc -- /dev/stdin --visualize-ast --img-resolution 1280x720 --out fizzbuzz.svg
-```
-
-
-![](./assets/example_ast/fizzbuzz.png)
+| Command | Output |
+| ------- | ------ |
+| `echo 'int main() { return 1 * 2 + 4; }' | stack exec htcc -- /dev/stdin --visualize-ast` | ![](./assets/example_ast/calc.png) |
+| `$ echo 'int printf(); void fizzbuzz(int n) { for (int i = 1; i < n; ++i) { if (!(i % 15)) printf("fizzbuzz\n"); else if (!(i % 5)) printf("fizz\n"); else if (!(i % 3)) printf("buzz\n"); else printf("%d\n", i); } } int main() { fizzbuzz(50); }' | stack exec htcc -- /dev/stdin --visualize-ast --img-resolution 1280x720 --out fizzbuzz.svg` | ![](./assets/example_ast/fizzbuzz.png) |
 
 ## Test
 
@@ -90,16 +80,6 @@ $ stack test --test-arguments subp
 
 ```sh
 $ stack bench
-```
-
-## Dependencies
-
-![htcc Dependencies graph](./assets/htcc_depend.png)
-
-To generate ([Graphviz](https://www.graphviz.org/) is required),
-
-```sh
-$ stack dot --no-include-base --external --prune diagrams-lib,diagrams-svg,diagrams-contrib | dot -Tpng -o out.png
 ```
 
 ## About emoji of commit messages
