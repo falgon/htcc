@@ -30,7 +30,7 @@ jobs:
             - stack test --test-arguments subp
         - stage: Run compiling and executing example C codes
           script:
-            - cd example && make && ./knapsack && ./merge_sorting_linked_list && ./shuffle_and_sort
+            - cd example && make && cd dist && ./knapsack && ./merge_sorting_linked_list && ./shuffle_and_sort
         - stage: Run generating AST graphs
           script:
             - echo 'int main() { return 1 * 2 + 4; }' | stack exec htcc -- /dev/stdin --visualize-ast 
