@@ -11,7 +11,6 @@ Build AST from C source code
 -}
 {-# LANGUAGE OverloadedStrings, FlexibleContexts #-}
 module Htcc.Visualizer.Core (
-    encodeTree,
     visualize
 ) where
 
@@ -27,6 +26,7 @@ import Htcc.CRules.Types as CT
 import Htcc.Parser.AST.Core (ATree (..), ATKind (..), fromATKindFor)
 import Htcc.Utils (putStrLnErr)
 
+-- | the function to convert `ATree` to `Data.Tree`
 encodeTree :: Show i => ATree i -> Tree String
 encodeTree ATEmpty = Node "Null" []
 encodeTree (ATNode ATAdd _ l r) = Node "+" [encodeTree l, encodeTree r]

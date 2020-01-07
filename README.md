@@ -2,29 +2,6 @@
 
 A tiny C language compiler (x86-64).
 
-## currently features
-
-- [x] numerical calculation
-- [ ] statements
-    - [x] return statement
-    - [x] `if` statement
-    - [x] `else` statement
-    - [x] `while` statement
-    - [x] `for` statement
-    - [ ] `do` statement
-    - [ ] `continue` statement
-- [x] block scope
-- [x] array (multidimensional array)
-- [x] function call/definition (up to 6 parameters)
-- [ ] types
-    - [x] `int`
-    - [x] pointer
-    - [x] `char`
-    - [ ] `float`
-- [x] struct (with tag)
-
-and will add more some features...
-
 ## Build
 
 ```sh
@@ -51,7 +28,7 @@ Available options:
   -w,--supress-warns       Disable all warning messages
 ```
 
-Simple compilation
+Simple compilation:
 
 ```sh
 $ echo 'int printf(); int main() { printf("hello world!\n"); }' > t.c
@@ -59,7 +36,7 @@ $ stack exec htcc -- t.c > t.s
 $ gcc -no-pie t.c -o out
 ```
 
-For one liner...
+For one liner:
 
 ```sh
 $ echo 'int printf(); int main() { printf("hello world!\n"); }' | stack exec htcc -- /dev/stdin | gcc -xassembler -no-pie -o out -  
@@ -67,7 +44,7 @@ $ echo 'int printf(); int main() { printf("hello world!\n"); }' | stack exec htc
 
 ## AST diagram generation
 
-The following command
+The following command is given the following AST graph.
 
 ```sh
 $ echo 'int main() { return 1 * 2 + 4; }' | stack exec htcc -- /dev/stdin --visualize-ast
@@ -77,14 +54,14 @@ is given the following AST graph.
 
 ![](./assets/example_ast/calc.png)
 
-This option allows to specify the resolution and output file
+This option allows to specify the resolution and output file and
+the following command is given the following AST graph.
 
 ```sh
 $ echo 'int printf(); void fizzbuzz(int n) { for (int i = 1; i < n; ++i) { if (!(i % 15)) printf("fizzbuzz\n"); else if (!(i % 5)) printf("fizz\n"); else if (!(i % 3)) printf("buzz\n"); else print    f("%d\n", i); } } int main() { fizzbuzz(50); }' | \
     stack exec htcc -- /dev/stdin --visualize-ast --img-resolution 1280x720 --out fizzbuzz.svg
 ```
 
-The above command is given the following AST graph.
 
 ![](./assets/example_ast/fizzbuzz.png)
 
