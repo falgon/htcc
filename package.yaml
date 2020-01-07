@@ -1,8 +1,8 @@
 name:                htcc
 version:             0.0.0.1
-synopsis:            The full scratch implementation of tiny C compiler (amd64)
+synopsis:            The full scratch implementation of tiny C compiler (x86_64)
 description: |
-    The full scratch implementation of tiny C compiler (amd64).
+    The full scratch implementation of tiny C compiler (x86_64).
     This compiler outputs x86_64 assembly code from "general" C code.
     .
     It consists of:

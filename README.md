@@ -1,6 +1,18 @@
-# htcc
+<h1><p align="center">htcc</a></h1>
 
-A tiny C language compiler (x86-64).
+<p align="center">
+:baby_chick: A tiny C language compiler (x86-64)
+</p>
+
+<div align="center">
+<a href="https://travis-ci.org/falgon/htcc">
+    <img src="https://travis-ci.org/falgon/htcc.svg?branch=test/travis" alt="Build Status" />
+</a>
+<img src="https://img.shields.io/badge/architecture-amd64-blue.svg" alt="Architecture" />
+<a href="./LICENSE">
+<img src="https://img.shields.io/badge/License-BSD%203--Clause-blue.svg" alt="License" />
+</a>
+</div>
 
 ## Build
 
@@ -44,26 +56,38 @@ $ echo 'int printf(); int main() { printf("hello world!\n"); }' | stack exec htc
 
 ## AST diagram generation
 
-The following command is given the following AST graph.
+htcc has the ability to visualize ASTs built from loaded C code.
+This option allows to specify the resolution and output file.
+Examples are shown in the following table.
 
-```sh
-$ echo 'int main() { return 1 * 2 + 4; }' | stack exec htcc -- /dev/stdin --visualize-ast
-```
-
-is given the following AST graph.
-
-![](./assets/example_ast/calc.png)
-
-This option allows to specify the resolution and output file and
-the following command is given the following AST graph.
-
-```sh
-$ echo 'int printf(); void fizzbuzz(int n) { for (int i = 1; i < n; ++i) { if (!(i % 15)) printf("fizzbuzz\n"); else if (!(i % 5)) printf("fizz\n"); else if (!(i % 3)) printf("buzz\n"); else print    f("%d\n", i); } } int main() { fizzbuzz(50); }' | \
-    stack exec htcc -- /dev/stdin --visualize-ast --img-resolution 1280x720 --out fizzbuzz.svg
-```
-
-
-![](./assets/example_ast/fizzbuzz.png)
+<table>
+<tr>
+<th>Command</th>
+<th>Output</th>
+</tr>
+<tr>
+    <td><pre>$ echo 'int main() { return 1 * 2 + 4; }' &#124;\
+    stack exec htcc -- /dev/stdin --visualize-ast</pre></td>
+    <td><img src="./assets/example_ast/calc.png" alt="AST graph of the some calculation"></td>
+</tr>
+<tr>
+    <td><pre>$ echo 'int printf();
+    void fizzbuzz(int n) { 
+        for (int i = 1; i < n; ++i) { 
+            if (!(i % 15)) printf("fizzbuzz\n"); 
+            else if (!(i % 3)) printf("fizz\n"); 
+            else if (!(i % 5)) printf("buzz\n"); 
+            else printf("%d\n", i); 
+        } 
+    } 
+    int main() { fizzbuzz(50); }' &#124;\
+    stack exec htcc -- /dev/stdin\
+        --visualize-ast\
+        --img-resolution 1280x720\
+        --out fizzbuzz.svg</pre></td>
+    <td><img src="./assets/example_ast/fizzbuzz.png" alt="AST graph of FizzBuzz"></td>
+</tr>
+</table>
 
 ## Test
 
@@ -91,16 +115,6 @@ $ stack test --test-arguments subp
 $ stack bench
 ```
 
-## Dependencies
-
-![htcc Dependencies graph](./assets/htcc_depend.png)
-
-To generate ([Graphviz](https://www.graphviz.org/) is required),
-
-```sh
-$ stack dot --no-include-base --external --prune diagrams-lib,diagrams-svg,diagrams-contrib | dot -Tpng -o out.png
-```
-
 ## About emoji of commit messages
 
 The emoji included in the commit message is used according to [gitmoji](https://gitmoji.carloscuesta.me/).
@@ -109,9 +123,10 @@ The emoji included in the commit message is used according to [gitmoji](https://
 
 ### Your compiler is inefficient :)
 
-I know. 
-This is a compiler made for research, not for practical purposes.
-And the author also developed the compiler for the first time.
+I know :confused:
+
+This is a compiler made for research, not for practical purposes
+and the author also developed the compiler for the first time.
 If you can suggest improvements, please submit issues or send PRs.
 Thanks in advance for all the improvements.
 
