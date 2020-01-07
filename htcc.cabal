@@ -4,12 +4,12 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e6e695eb640b266d6fb7c4f9c5c36379831d347854951091a9d6a2a8602753b9
+-- hash: 76bcff522801e40bff0ce523f50052512d015316b21d9072f5e9d9c3fce9bc47
 
 name:           htcc
 version:        0.0.0.1
-synopsis:       The full scratch implementation of tiny C compiler (x86_64)
-description:    The full scratch implementation of tiny C compiler (x86_64).
+synopsis:       The full scratch implementation of tiny C compiler (amd64)
+description:    The full scratch implementation of tiny C compiler (amd64).
                 This compiler outputs x86_64 assembly code from "general" C code.
                 .
                 It consists of:
@@ -81,6 +81,8 @@ library
       Htcc.Tokenizer.Core
       Htcc.Tokenizer.Token
       Htcc.Utils
+      Htcc.Visualizer
+      Htcc.Visualizer.Core
   other-modules:
       Paths_htcc
   hs-source-dirs:
@@ -90,6 +92,9 @@ library
     , bytestring
     , containers
     , deepseq
+    , diagrams-contrib
+    , diagrams-lib
+    , diagrams-svg
     , extra
     , monad-finally
     , monad-loops
@@ -112,12 +117,16 @@ executable htcc
     , bytestring
     , containers
     , deepseq
+    , diagrams-contrib
+    , diagrams-lib
+    , diagrams-svg
     , directory
     , extra
     , htcc
     , monad-finally
     , monad-loops
     , mtl
+    , optparse-applicative
     , safe
     , split
     , text
@@ -143,6 +152,9 @@ test-suite htcc-test
     , bytestring
     , containers
     , deepseq
+    , diagrams-contrib
+    , diagrams-lib
+    , diagrams-svg
     , directory
     , extra
     , foldl
@@ -170,6 +182,9 @@ benchmark criterion
     , containers
     , criterion
     , deepseq
+    , diagrams-contrib
+    , diagrams-lib
+    , diagrams-svg
     , extra
     , htcc
     , monad-finally
