@@ -65,12 +65,16 @@ parsedMessage mest xs (s, (i, etk)) = do
     format (T.replicate 4 " " <> tshow (HT.tkLn i)) (pred $ fromIntegral $ HT.tkLn i) xs
     repSpace (HT.tkCn i) >> putStrLnErr (T.replicate (pred $ HT.length etk) "~")
 
+-- | the function to output error message
 parsedErrExit :: (Integral i, Show i) => InputCCode -> ASTError i -> IO ()
 parsedErrExit = (.) (>> exitFailure) . parsedMessage ErrorMessage
 
+-- | the function to output warning message
 parsedWarn :: (Integral i, Show i) => InputCCode -> S.Seq (ASTError i) -> IO ()
 parsedWarn xs warns = mapM_ (parsedMessage WarningMessage xs) (toList warns)
 
+-- | Executor that receives information about the constructed AST, 
+-- global variables, and literals and composes assembly code
 casm' :: (Integral i, IsOperand i, IT.UnaryInstruction i, IT.BinaryInstruction i, Show e) => [ATree i] -> M.Map T.Text (GVar i) -> [Literal i] -> SI.Asm SI.AsmCodeCtx e ()
 casm' atl gvars lits = dataSection gvars lits >> textSection atl
 
