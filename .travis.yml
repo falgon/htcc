@@ -1,5 +1,5 @@
-os:
-    - linux
+os: linux
+arch: amd64
 language: generic
 cache:
     directories:
