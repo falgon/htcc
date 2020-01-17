@@ -66,7 +66,7 @@ truncate ty = do
             | CR.sizeof t == 4 = IT.movsxd rax eax
             | otherwise = return ()
 
-genAddr :: (IsOperand i, Integral i, Ord i, Show e, IT.UnaryInstruction i, IT.BinaryInstruction i) => ATree i -> SI.Asm IT.TextLabelCtx e ()
+genAddr :: (Integral e, Show e, IsOperand i, Integral i, Ord i, IT.UnaryInstruction i, IT.BinaryInstruction i) => ATree i -> SI.Asm IT.TextLabelCtx e ()
 genAddr (ATNode (ATLVar _ v) _ _ _) = IT.lea rax (Ref $ rbp `osub` v) >> IT.push rax
 genAddr (ATNode (ATGVar _ n) _ _ _) = IT.push (IT.Offset n)
 genAddr (ATNode ATDeref _ lhs _) = genStmt lhs
@@ -77,7 +77,7 @@ genAddr (ATNode (ATMemberAcc m) _ lhs _) = do
     IT.push rax
 genAddr _ = SI.errCtx "lvalue required as left operand of assignment"
 
-genLVal :: (IsOperand i, Integral i, Ord i, IT.UnaryInstruction i, IT.BinaryInstruction i, Show e) => ATree i -> SI.Asm IT.TextLabelCtx e ()
+genLVal :: (Integral e, Show e, IsOperand i, Integral i, Ord i, IT.UnaryInstruction i, IT.BinaryInstruction i) => ATree i -> SI.Asm IT.TextLabelCtx e ()
 genLVal xs@(ATNode _ t _ _)
     | CR.isCTArray t = SI.errCtx "lvalue required as left operand of assignment"
     | otherwise = genAddr xs
@@ -110,7 +110,7 @@ increment t = IT.pop rax >> IT.add rax (maybe 1 CR.sizeof $ CR.deref t) >> IT.pu
 decrement :: Ord i => CR.StorageClass i -> SI.Asm IT.TextLabelCtx e ()
 decrement t = IT.pop rax >> IT.sub rax (maybe 1 CR.sizeof $ CR.deref t) >> IT.push rax
 
-genStmt :: (Show e, Show i, Integral i, Ord i, IsOperand i, IT.UnaryInstruction i, IT.BinaryInstruction i) => ATree i -> SI.Asm IT.TextLabelCtx e ()
+genStmt :: (Show e, Integral e, Show i, Integral i, Ord i, IsOperand i, IT.UnaryInstruction i, IT.BinaryInstruction i) => ATree i -> SI.Asm IT.TextLabelCtx e ()
 genStmt (ATNode (ATCallFunc x Nothing) _ _ _) = IT.call x >> IT.push rax
 genStmt (ATNode (ATCallFunc x (Just args)) t _ _) = let (n', toReg, _) = splitAtLen 6 args in do
     mapM_ genStmt toReg
@@ -346,7 +346,7 @@ genStmt (ATNode kd ty lhs rhs)
             _ -> SI.errCtx "internal compiler error: asm code generator should not reach here (binOp). Maybe abstract tree is broken it cause (bug)."
 genStmt _ = return ()
 
-textSection' :: (Integral i, IsOperand i, Show e, IT.UnaryInstruction i, IT.BinaryInstruction i) => ATree i -> SI.Asm IT.TextSectionCtx e ()
+textSection' :: (Integral e, Show e, Integral i, IsOperand i, IT.UnaryInstruction i, IT.BinaryInstruction i) => ATree i -> SI.Asm IT.TextSectionCtx e ()
 textSection' lc@(ATNode (ATDefFunc fn margs) ty st _) = do
     unless (CR.isSCStatic ty) $ IT.global fn
     IT.fn fn $ do
@@ -366,5 +366,5 @@ dataSection gvars lits = ID.dAta $ do
     forM_ (M.toList gvars) $ \(var, GVar t) -> ID.label var $ ID.zero (CR.sizeof t)
 
 -- | text section of assembly code
-textSection :: (IsOperand i, Integral i, Show i, Show e, IT.UnaryInstruction i, IT.BinaryInstruction i) => [ATree i] -> SI.Asm SI.AsmCodeCtx e ()
+textSection :: (Integral e, Show e, IsOperand i, Integral i, Show i, IT.UnaryInstruction i, IT.BinaryInstruction i) => [ATree i] -> SI.Asm SI.AsmCodeCtx e ()
 textSection atl = IT.text $ forM_ atl $ textSection' -- genStmt -- textSection'

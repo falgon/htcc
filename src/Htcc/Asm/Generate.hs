@@ -75,7 +75,7 @@ parsedWarn xs warns = mapM_ (parsedMessage WarningMessage xs) (toList warns)
 
 -- | Executor that receives information about the constructed AST, 
 -- global variables, and literals and composes assembly code
-casm' :: (Integral i, IsOperand i, IT.UnaryInstruction i, IT.BinaryInstruction i, Show e) => [ATree i] -> M.Map T.Text (GVar i) -> [Literal i] -> SI.Asm SI.AsmCodeCtx e ()
+casm' :: (Integral e, Show e, Integral i, IsOperand i, IT.UnaryInstruction i, IT.BinaryInstruction i) => [ATree i] -> M.Map T.Text (GVar i) -> [Literal i] -> SI.Asm SI.AsmCodeCtx e ()
 casm' atl gvars lits = dataSection gvars lits >> textSection atl
 
 -- | Build AST from string of C source code

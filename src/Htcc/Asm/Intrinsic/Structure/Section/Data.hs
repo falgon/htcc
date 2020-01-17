@@ -16,6 +16,8 @@ module Htcc.Asm.Intrinsic.Structure.Section.Data (
     dAta,
     label,
     byte,
+    ascii,
+    asciiz,
     zero
 ) where
 
@@ -43,6 +45,14 @@ label lbl asm = C.putStrLnWithIndent (lbl <> ":") *> C.unCtx (C.labeled asm)
 -- | @byte@ in data section
 byte :: B.ByteString -> C.Asm DataLabelCtx e ()
 byte = C.putStrLnWithIndent . T.append ".byte " . T.intercalate ", " . map tshow . B.unpack
+
+-- | @ascii@ in data section
+ascii :: B.ByteString -> C.Asm DataLabelCtx e ()
+ascii = C.putStrLnWithIndent . T.append ".ascii " . tshow
+
+-- | @asciiz@ in data section
+asciiz :: B.ByteString -> C.Asm DataLabelCtx e ()
+asciiz = byte . (`B.append` "\0")
 
 -- | @zero@ in data section
 zero :: Natural -> C.Asm DataLabelCtx e ()

@@ -36,9 +36,9 @@ import Htcc.Utils (err)
 data AsmInfo e = AsmInfo
     {
         inLabel :: Bool, -- ^ the flag that indicates whether it is inside the label. If True, indent by single tab,
-        lblCnt :: IORef Int, -- ^ the label counter
-        brkCnt :: IORef (Maybe Int), -- ^ the @break@ label counter
-        cntCnt :: IORef (Maybe Int), -- ^ the @continue@ label counter
+        lblCnt :: IORef e, -- ^ the label counter
+        brkCnt :: IORef (Maybe e), -- ^ the @break@ label counter
+        cntCnt :: IORef (Maybe e), -- ^ the @continue@ label counter
         curFn :: IORef (Maybe T.Text) -- ^ the function being processed
     }
 

@@ -176,7 +176,7 @@ ref lbl n = C.Asm $ \x -> do
     T.putStrLn $ ".L." <> lbl <> "." <> fromJust cf <> "." <> tshow n
 
 -- | generate cases and return abstract tree
-makeCases :: (Show e, Show i, Num i) => [ATree i] -> C.Asm TextLabelCtx e [ATree i]
+makeCases :: (Show e, Enum e, Integral e, Show i, Num i) => [ATree i] -> C.Asm TextLabelCtx e [ATree i]
 makeCases cases = C.Asm $ \x -> do
     cf <- readIORef (C.curFn x)
     forM cases $ \case
