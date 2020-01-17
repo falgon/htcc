@@ -182,6 +182,7 @@ instance BinaryInstruction Integer
 instance BinaryInstruction Int
 instance BinaryInstruction Natural
 instance BinaryInstruction Register
+instance BinaryInstruction Offset
 instance (IsOperand a, BinaryInstruction a) => BinaryInstruction (Ptr a)
 instance IsOperand a => BinaryInstruction (Ref a)
 

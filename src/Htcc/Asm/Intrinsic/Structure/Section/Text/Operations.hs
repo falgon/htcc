@@ -25,7 +25,7 @@ import Htcc.Utils (bothM, (*^*))
 import Control.Monad.Finally (MonadFinally (..))
 
 -- | count up the internal label counter
-incrLbl :: C.Asm TextLabelCtx e Int
+incrLbl :: Enum e => C.Asm TextLabelCtx e e
 incrLbl = C.Asm $ \x -> modifyIORef (C.lblCnt x) succ >> readIORef (C.lblCnt x)
 
 -- | apply value to cntCnt from the current label number
