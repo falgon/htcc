@@ -79,6 +79,9 @@ tests:
     - directory
     - time
     - foldl
+    - hspec
+    - hspec-core
+    - hspec-contrib
 
 benchmarks:
     criterion:

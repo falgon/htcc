@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ac97df255e77606a39cb9c01058c4b9f72fe8f7af31d3986791465a474cefa92
+-- hash: 56cf124d5c6cd5aba61fa5ece895ea2671489270a51dc8dfa6af23f508d73d78
 
 name:           htcc
 version:        0.0.0.1
@@ -158,6 +158,9 @@ test-suite htcc-test
     , directory
     , extra
     , foldl
+    , hspec
+    , hspec-contrib
+    , hspec-core
     , htcc
     , monad-finally
     , monad-loops
