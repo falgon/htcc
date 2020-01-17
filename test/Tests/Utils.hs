@@ -13,18 +13,22 @@ module Tests.Utils (
 ) where
 
 import Control.Monad (void, zipWithM)
-import Control.Exception (bracket)
 import qualified Control.Foldl as F
 import Data.Bool (bool)
-import Data.Time (getCurrentTime, diffUTCTime)
 import qualified Data.Text as DT
-import System.IO (stderr)
 import System.Directory (doesFileExist, removeFile)
-import Test.HUnit (Test (..), runTestText, putTextToHandle, (~:), (~?=))
+import Test.HUnit (Test (..), (~:), (~?=))
+import Test.Hspec (parallel)
+import Test.Hspec.Core.Runner (runSpec, Config (..), evaluateSummary, defaultConfig)
+import Test.Hspec.Contrib.HUnit (fromHUnitTest)
 import qualified Turtle as T
 
+{-# INLINE cfg #-}
+cfg :: Config
+cfg = defaultConfig { configPrintCpuTime = True }
+
 runTests :: Test -> IO ()
-runTests ts = bracket getCurrentTime (\st -> getCurrentTime >>= putStrLn . ("Process time: " ++) . show . flip diffUTCTime st) $ const $ void $ runTestText (putTextToHandle stderr False) ts
+runTests ts = runSpec (parallel $ fromHUnitTest ts) cfg >>= evaluateSummary
 
 exitCode :: (Int -> a) -> a -> T.ExitCode -> a
 exitCode _ x T.ExitSuccess = x
