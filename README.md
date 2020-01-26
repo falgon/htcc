@@ -8,6 +8,9 @@
 <a href="https://travis-ci.org/falgon/htcc">
     <img src="https://travis-ci.org/falgon/htcc.svg?branch=master" alt="Build Status" />
 </a>
+<a href="https://github.com/falgon/htcc/actions?query=workflow%3ACI">
+    <img alt="CI" src="https://github.com/falgon/htcc/workflows/CI/badge.svg" />
+</a>
 <img src="https://img.shields.io/badge/architecture-amd64-blue.svg" alt="Architecture" />
 <a href="./LICENSE">
 <img src="https://img.shields.io/badge/License-BSD%203--Clause-blue.svg" alt="License" />
