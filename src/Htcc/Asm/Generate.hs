@@ -15,21 +15,19 @@ module Htcc.Asm.Generate (
     -- * Generator
     casm',
     buildAST,
-    -- * Utilities about error
-    parsedWarn,
-    parsedErrExit
+    execAST
 ) where
 
-import Control.Monad ((>=>))
+import Control.Monad ((>=>), unless)
+import Data.Bits (Bits)
 import Data.Foldable (toList)
-import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Data.Sequence as S
 import System.Exit (exitFailure)
 
-import Htcc.Parser (parse, ATree (..))
+import Htcc.Parser (parse, ASTResult, ASTs)
 import qualified Htcc.Tokenizer as HT
-import Htcc.Parser.AST.Scope.Var (GVar (..), Literal (..))
+import Htcc.Parser.AST.Scope.Var (GlobalVars, Literals)
 import Htcc.Parser.AST.Scope.ManagedScope (ASTError)
 
 import Htcc.Asm.Generate.Core
@@ -37,7 +35,7 @@ import Htcc.Asm.Intrinsic.Operand
 import qualified Htcc.Asm.Intrinsic.Structure.Section.Text as IT    
 import qualified Htcc.Asm.Intrinsic.Structure as SI
 
-import Htcc.Utils (putStrLnErr, putStrErr, putStrLnErr, tshow, toInts)
+import Htcc.Utils (putStrLnErr, putStrErr, putStrLnErr, tshow, toInts, dropFst4)
 
 -- | input string, C source code
 type InputCCode = T.Text
@@ -75,10 +73,14 @@ parsedWarn xs warns = mapM_ (parsedMessage WarningMessage xs) (toList warns)
 
 -- | Executor that receives information about the constructed AST, 
 -- global variables, and literals and composes assembly code
-casm' :: (Integral e, Show e, Integral i, IsOperand i, IT.UnaryInstruction i, IT.BinaryInstruction i) => [ATree i] -> M.Map T.Text (GVar i) -> [Literal i] -> SI.Asm SI.AsmCodeCtx e ()
+casm' :: (Integral e, Show e, Integral i, IsOperand i, IT.UnaryInstruction i, IT.BinaryInstruction i) => ASTs i -> GlobalVars i -> Literals i -> SI.Asm SI.AsmCodeCtx e ()
 casm' atl gvars lits = dataSection gvars lits >> textSection atl
 
 -- | Build AST from string of C source code
-buildAST :: T.Text -> Either (ASTError Integer) (S.Seq (ASTError Integer), [ATree Integer], M.Map T.Text (GVar Integer), [Literal Integer])
+buildAST :: (Integral i, Read i, Show i, Bits i) => InputCCode -> ASTResult i
 buildAST = HT.tokenize >=> parse
 
+-- | Print warning or error message if building AST from string of C source code has some problems
+execAST :: (Integral i, Read i, Show i, Bits i) => Bool -> InputCCode -> IO (Maybe (ASTs i, GlobalVars i, Literals i))
+execAST supWarns ccode = flip (either ((<$) Nothing . parsedErrExit ccode)) (buildAST ccode) $ \xs@(warns, _, _, _) -> 
+    Just (dropFst4 xs) <$ unless supWarns (parsedWarn ccode warns)

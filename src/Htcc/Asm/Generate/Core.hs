@@ -367,4 +367,4 @@ dataSection gvars lits = ID.dAta $ do
 
 -- | text section of assembly code
 textSection :: (Integral e, Show e, IsOperand i, Integral i, Show i, IT.UnaryInstruction i, IT.BinaryInstruction i) => [ATree i] -> SI.Asm SI.AsmCodeCtx e ()
-textSection atl = IT.text $ forM_ atl $ textSection' -- genStmt -- textSection'
+textSection atl = IT.text $ forM_ atl textSection' 
