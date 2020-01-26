@@ -12,6 +12,7 @@ Data types and type synonyms used during AST construction
 module Htcc.Parser.ConstructionData (
     -- * Main type
     ConstructionData (..),
+    Warnings,
     -- * Adding funcitons
     addLVar,
     addGVar,
@@ -56,11 +57,14 @@ import Htcc.Parser.AST.Scope.ManagedScope (ASTError)
 import Htcc.Tokenizer.Token (TokenLC)
 import qualified Htcc.Tokenizer.Token as HT
 
+-- | The warning messages type
+type Warnings i = S.Seq (T.Text, TokenLC i)
+
 -- | `ConstructionData` is a set of "things" used during the construction of the AST. 
 -- Contains error messages and scope information.
 data ConstructionData i = ConstructionData -- ^ The constructor of ConstructionData
     {
-        warns :: S.Seq (T.Text, TokenLC i), -- ^ The warning messages 
+        warns :: Warnings i, -- ^ The warning messages 
         scope :: AS.Scoped i, -- ^ Scope type
         isSwitchStmt :: Bool -- ^ When the statement is @switch@, this flag will be `True`, otherwise will be `False`.
     } deriving Show

@@ -1,10 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import Control.Monad (void)
+import Data.Bool (bool)
 import Data.Maybe (isJust, isNothing)
 import Data.List.Split (splitOn)
-import Data.Tuple.Extra (both, dupe)
+import Data.Tuple.Extra (both, dupe, fst3)
 import qualified Data.Text.IO as T
 import Text.Read (readMaybe)
 import System.Exit (exitFailure)
@@ -12,7 +12,9 @@ import System.Directory (doesFileExist)
 import Options.Applicative
 import Diagrams.TwoD.Size (mkSizeSpec2D)
 
-import Htcc.Asm (casm)
+import Htcc.Asm (casm, execAST, InputCCode)
+import Htcc.Parser (ASTs)
+import Htcc.Parser.AST.Scope.Var (GlobalVars, Literals)
 import Htcc.Utils (putStrLnErr, tshow)
 import Htcc.Visualizer (visualize)
 
@@ -71,28 +73,18 @@ parseResolution :: (Num a, Read a) => String -> (Maybe a, Maybe a)
 parseResolution xs = let rs = splitOn "x" xs in if length rs /= 2 then dupe Nothing else
     let rs' = map readMaybe rs in if any isNothing rs' then dupe Nothing else (head rs', rs' !! 1)
 
-unlessVis :: Monad m => Options -> m Options -> m Options
-unlessVis ops f
-    | visualizeAST ops = return ops
-    | otherwise = f
-
-whenVis :: Monad m => Options -> m Options -> m Options
-whenVis ops f
-    | visualizeAST ops = f
-    | otherwise = return ops
-
-execVisualize :: Options -> IO Options
-execVisualize ops = whenVis ops $ let rlt = parseResolution $ resolution ops in do
+execVisualize :: Show i => Options -> ASTs i -> IO ()
+execVisualize ops ast = let rlt = parseResolution $ resolution ops in do
     rs <- if uncurry (&&) (both isJust rlt) then return rlt else
         (Just 640, Just 480) <$ putStrLnErr "warning: the specified resolution is invalid, so using default resolution."
-    ops <$ (T.readFile (inputFName ops) >>= visualize (supressWarn ops) (uncurry mkSizeSpec2D rs) (outputFName ops))
-
-execCompile :: Options -> IO Options
-execCompile ops = unlessVis ops $ do
-    b <- doesFileExist (inputFName ops)
-    (<$) ops $ if b then T.readFile (inputFName ops) >>= casm (supressWarn ops) else
-        putStrLnErr ("error: " <> tshow (inputFName ops) <> ": No such file or directory.\ncompilation terminated.") >> 
-            exitFailure
+    visualize ast (uncurry mkSizeSpec2D rs) (outputFName ops)
 
 main :: IO ()
-main = execParser (info optionsP fullDesc) >>= execVisualize >>= void . execCompile
+main = do
+    ops <- execParser $ info optionsP fullDesc
+    b <- doesFileExist $ inputFName ops
+    if not b then putStrLnErr ("error: " <> tshow (inputFName ops) <> ": No such file or directory.\ncompilation terminated.") >> exitFailure else
+        T.readFile (inputFName ops) >>= execAST' (supressWarn ops) >>= maybe (return ()) (bool casm (execVisualize ops . fst3) (visualizeAST ops)) 
+    where
+        execAST' :: Bool -> InputCCode -> IO (Maybe (ASTs Integer, GlobalVars Integer, Literals Integer))
+        execAST' = execAST

@@ -9,7 +9,7 @@ Portability : POSIX
 
 Types and classes of the x86_64 operands
 -}
-{-# LANGUAGE DeriveDataTypeable, DeriveGeneric, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveGeneric, GeneralizedNewtypeDeriving #-}
 
 module Htcc.Asm.Intrinsic.Operand (
     -- * The operand classes and types.

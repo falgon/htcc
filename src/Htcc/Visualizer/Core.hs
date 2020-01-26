@@ -16,12 +16,11 @@ module Htcc.Visualizer.Core (
 
 import qualified Data.Text as T
 import Data.Tree (Tree (..))
-import Control.Monad (unless)
 import Diagrams.Prelude
 import Diagrams.TwoD.Layout.Tree (renderTree, symmLayout', slHSep, slVSep)
 import Diagrams.Backend.SVG (SVG, renderPretty)
 
-import Htcc.Asm.Generate (buildAST, parsedErrExit, parsedWarn)
+import Htcc.Parser (ASTs)
 import Htcc.CRules.Types as CT
 import Htcc.Parser.AST.Core (ATree (..), ATKind (..), fromATKindFor)
 import Htcc.Utils (putStrLnErr)
@@ -107,8 +106,7 @@ renderNTree nt = renderTree
         letter a = text a # font "monospace" # fontSize (local 0.7)
 
 -- | Build AST from C source code
-visualize :: Bool -> SizeSpec V2 Double -> FilePath -> T.Text -> IO ()
-visualize supWarns ss fpath xs = flip (either (parsedErrExit xs)) (buildAST xs) $ \(warns, tk, _, _) ->
-    unless supWarns (parsedWarn xs warns) >> let et = map encodeTree tk in if not (null et) then 
-        renderPretty fpath ss (foldr ((|||) . renderNTree) (renderNTree $ head et) $ tail et) else
-            putStrLnErr "There is nothing to describe"
+visualize :: Show i => ASTs i -> SizeSpec V2 Double -> FilePath -> IO ()
+visualize ast ss fpath = let et = map encodeTree ast in if not (null et) then
+    renderPretty fpath ss (foldr ((|||) . renderNTree) (renderNTree $ head et) $ tail et) else
+        putStrLnErr "There is nothing to describe"

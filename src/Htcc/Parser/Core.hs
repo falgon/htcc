@@ -35,6 +35,7 @@ module Htcc.Parser.Core (
     -- * Parser
     parse,
     -- * Types and synonyms
+    ASTs,
     ASTSuccess,
     ASTConstruction,
     ASTResult,
@@ -362,8 +363,11 @@ type ASTSuccess i = ([HT.TokenLC i], ATree i, ConstructionData i)
 -- | Types used during AST construction
 type ASTConstruction i = Either (ASTError i) (ASTSuccess i)
 
+-- | The type of AST list
+type ASTs i = [ATree i]
+
 -- | A type that represents the result after AST construction. Quadraple of warning list, constructed abstract syntax tree list, global variable map, literal list.
-type ASTResult i = Either (ASTError i) (SQ.Seq (ASTError i), [ATree i], M.Map T.Text (PV.GVar i), [PV.Literal i])
+type ASTResult i = Either (ASTError i) (Warnings i, ASTs i, PV.GlobalVars i, PV.Literals i)
 
 -- | Perform type definition from token string starting from @typedef@ token
 defTypedef :: (Integral i, Show i, Read i, Bits i) => [(HT.TokenLCNums i, HT.Token i)] -> ConstructionData i -> Either (ASTError i) ([HT.TokenLC i], ATree a, ConstructionData i)
@@ -379,7 +383,7 @@ defTypedef (cur@(_, HT.TKTypedef):xs) !scp = case takeType xs scp of
 defTypedef _ _ = Left (internalCE, HT.emptyToken)
 
 -- | `program` indicates \(\eqref{eq:eigth}\) among the comments of `inners`.
-program :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ConstructionData i -> Either (ASTError i) ([ATree i], ConstructionData i)
+program :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ConstructionData i -> Either (ASTError i) (ASTs i, ConstructionData i)
 program [] !scp = Right ([], scp)
 program xs !scp = either Left (\(ys, atn, !scp') -> first (atn:) <$> program ys scp') $ globalDef xs ATEmpty scp
 

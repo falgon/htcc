@@ -15,6 +15,9 @@ module Htcc.Parser.AST.Scope.Var (
     GVar (..),
     LVar (..),
     Literal (..),
+    GlobalVars,
+    LocalVars,
+    Literals,
     Vars (..),
     -- * Functions for adding and searching for variables and literals
     lookupLVar,
@@ -86,12 +89,24 @@ data Literal a = Literal -- ^ The literal constructor
 
 instance NFData a => NFData (Literal a)
 
+-- The type of variables
+type SomeVars v = M.Map T.Text v
+
+-- | The type of global variables
+type GlobalVars a = SomeVars (GVar a)
+
+-- | The type of global variables
+type LocalVars a = SomeVars (LVar a)
+
+-- | The type of literals
+type Literals a = [Literal a]
+
 -- | The data type of local variables
 data Vars a = Vars -- ^ The constructor of variables
     { 
-        globals :: M.Map T.Text (GVar a), -- ^ The global variables
-        locals :: M.Map T.Text (LVar a), -- ^ The local variables
-        literals :: [Literal a] -- ^ Literals
+        globals :: GlobalVars a, -- ^ The global variables
+        locals :: LocalVars a, -- ^ The local variables
+        literals :: Literals a -- ^ Literals
     } deriving (Show, Generic, Generic1)
     
 instance NFData a => NFData (Vars a)

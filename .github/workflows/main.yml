@@ -1,0 +1,51 @@
+name: CI
+on: push
+
+jobs:
+    test:
+        name: htcc test
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                os: [ubuntu-18.04, ubuntu-16.04]
+                ghc: ["8.6.5"]
+                cabal: ["3.0"]
+                cache-version: ["v1"]
+        steps:
+            - uses: actions/checkout@v1
+              with:
+                  fetch-depth: 1
+            
+            - name: Cache .stack
+              id: cache-stack
+              uses: actions/cache@v1
+              with:
+                  path: ~/.stack
+                  key: ${{ runner.os }}-stack-${{ hashFiles('**/stack.yaml.lock') }}
+                  restore-keys: ${{ runner.os }}-stack-
+            
+            - name: Setup Haskell to ${{ matrix.os }} (GHC ${{ matrix.ghc }})
+              uses: actions/setup-haskell@v1
+              with:
+                  ghc-version: ${{ matrix.ghc }}
+                  cabal-version: ${{ matrix.cabal }}
+            
+            - uses: mstksg/setup-stack@v1
+            
+            - name: Install dependencies to ${{ matrix.os }}
+              run: stack --system-ghc build --only-dependencies
+            
+            - name: Build htcc to ${{ matrix.os }}
+              run: stack --system-ghc install
+            
+            - name: Test htcc on ${{ matrix.os }}
+              run: |
+                  stack --system-ghc test
+                  stack --system-ghc test --test-arguments subp
+            
+            - name: Compile and execute example C codes on ${{ matrix.os }}
+              run: |
+                  cd example
+                  make
+                  cd dist
+                  ./knapsack && ./merge_sorting_linked_list && ./shuffle_and_sort
