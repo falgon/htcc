@@ -48,7 +48,7 @@ jobs:
           script:
               - stack test --test-arguments docker
               - stack test --test-arguments cleanDocker
-        - stage: Run compiling and executing example C codes
+        - stage: Run compiling and executing example C codes on Docker
           script:
               - cd example && make docker && make clean_docker
 
