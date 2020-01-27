@@ -7,7 +7,11 @@ jobs:
         runs-on: ${{ matrix.os }}
         strategy:
             matrix:
-                os: [ubuntu-18.04, ubuntu-16.04, windows-latest, macos-latest]
+                os: 
+                    - ubuntu-18.04
+                    - ubuntu-16.04
+                # - windows-latest
+                # - macos-latest
                 ghc: ["8.6.5"]
                 cabal: ["3.0"]
                 cache-version: ["v1"]
@@ -38,11 +42,11 @@ jobs:
             - name: Build htcc to ${{ matrix.os }}
               run: stack --system-ghc install
             
-            - name: Test htcc on ${{ matrix.os }}
-              if: runner.os == 'Windows' || runner.os == 'macOS'
-              run: |
-                  stack --system-ghc test --test-arguments docker
-                  stack --system-ghc test --test-arguments cleanDocker
+            #- name: Test htcc on ${{ matrix.os }}
+            #  if: runner.os == 'Windows' || runner.os == 'macOS'
+            #  run: |
+            #      stack --system-ghc test --test-arguments docker
+            #      stack --system-ghc test --test-arguments cleanDocker
               
             - name: Test htcc on ${{ matrix.os }}
               if: runner.os == 'Linux'
@@ -50,12 +54,12 @@ jobs:
                   stack --system-ghc test
                   stack --system-ghc test --test-arguments subp
             
-            - name: Compile and execute example C codes on ${{ matrix.os }}
-              if: runner.os == 'Window' || runner.os == 'macOS'
-              run: |
-                  make docker
-                  make clean_docker
-              working-directory: ./example
+            #- name: Compile and execute example C codes on ${{ matrix.os }}
+            #  if: runner.os == 'Window' || runner.os == 'macOS'
+            #  run: |
+            #      make docker
+            #      make clean_docker
+            #  working-directory: ./example
 
             - name:  Compile and execute example C codes on ${{ matrix.os }}
               if: runner.os == 'Linux'
