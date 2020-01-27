@@ -12,7 +12,7 @@ module Tests.Utils (
     clean
 ) where
 
-import Control.Monad (void, zipWithM)
+import Control.Monad (void, when, zipWithM)
 import qualified Control.Foldl as F
 import Data.Bool (bool)
 import qualified Data.Text as DT
@@ -50,4 +50,4 @@ runTestsEx ts = putStrLn "\n\n== Unit Tests started ==" >> zipWithM (\(t, e) i -
 
 clean :: [FilePath] -> IO ()
 clean = mapM_ $ \x -> (>>=) (doesFileExist x) $ flip bool (removeFile x) $ 
-    doesDirectoryExist x >>= bool (return()) (removeDirectoryRecursive x)
+    doesDirectoryExist x >>= flip when (removeDirectoryRecursive x)
