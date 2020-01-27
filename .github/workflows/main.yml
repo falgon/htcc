@@ -42,29 +42,27 @@ jobs:
             - name: Build htcc to ${{ matrix.os }}
               run: stack --system-ghc install
             
-            #- name: Test htcc on ${{ matrix.os }}
-            #  if: runner.os == 'Windows' || runner.os == 'macOS'
-            #  run: |
-            #      stack --system-ghc test --test-arguments docker
-            #      stack --system-ghc test --test-arguments cleanDocker
-              
             - name: Test htcc on ${{ matrix.os }}
               if: runner.os == 'Linux'
               run: |
                   stack --system-ghc test
                   stack --system-ghc test --test-arguments subp
             
-            #- name: Compile and execute example C codes on ${{ matrix.os }}
-            #  if: runner.os == 'Window' || runner.os == 'macOS'
-            #  run: |
-            #      make docker
-            #      make clean_docker
-            #  working-directory: ./example
-
-            - name:  Compile and execute example C codes on ${{ matrix.os }}
+            - name: Compile and execute example C codes on ${{ matrix.os }}
               if: runner.os == 'Linux'
               run: |
                   make
                   cd dist
                   ./knapsack && ./merge_sorting_linked_list && ./shuffle_and_sort
+              working-directory: ./example
+
+            - name: Test htcc on ${{ matrix.os }} with Docker
+              run: |
+                  stack --system-ghc test --test-arguments docker
+                  stack --system-ghc test --test-arguments cleanDocker
+
+            - name: Compile and execute example C codes on ${{ matrix.os }} with Docker
+              run: |
+                  make docker
+                  make clean_docker
               working-directory: ./example

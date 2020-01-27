@@ -6,12 +6,16 @@ cache:
         - "$HOME/.stack/"
         - "$HOME/.local/bin/"
         - ".stack-work/"
+
 addons:
     apt:
         update: true
         packages:
             - imagemagick
             - gcc
+
+services:
+    - docker
 
 before_install:
     - mkdir -p ~/.local/bin
@@ -40,6 +44,13 @@ jobs:
             - if [ "480" != "$(identify -format '%h' out.svg)" ]; then exit 1; fi
             - if [ "1280" != "$(identify -format '%w' fizzbuzz.svg)" ]; then exit 1; fi
             - if [ "720" != "$(identify -format '%h' fizzbuzz.svg)" ]; then exit 1; fi
+        - stage: Run compiler test on Docker
+          script:
+              - stack test --test-arguments docker
+              - stack test --test-arguments cleanDocker
+        - stage: Run compiling and executing example C codes
+          script:
+              - cd example && make docker && make clean_docker
 
 notifications:
     email: false
