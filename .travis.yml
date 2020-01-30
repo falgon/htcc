@@ -1,8 +1,9 @@
-os: 
+os:
     - linux
     - osx
 
 arch: amd64
+dist: bionic
 language: generic
 cache:
     apt: true
@@ -24,9 +25,12 @@ addons:
             - gcc
 
 before_install:
-    - mkdir -p ~/.local/bin
-    - export PATH=$HOME/.local/bin:$PATH
-    - ./.travis/install-stack.sh
+    - |
+        if [ "$TRAVIS_OS_NAME" == "linux" ] || [ "$TRAVIS_OS_NAME" == "osx" ]; then
+            mkdir -p ~/.local/bin
+            export PATH=$HOME/.local/bin:$PATH
+            ./.travis/install-stack.sh
+        fi
 
 install:
     - stack --no-terminal test --only-dependencies
@@ -36,39 +40,32 @@ jobs:
         - stage: Run build
           os: linux
           script: stack build
-        
         - stage: Run build
           os: osx
           script: stack build --ghc-options="-optP-Wno-nonportable-include-path"
-        
         - stage: Run compiler test
           os: linux
-          script: 
+          script:
             - stack test
             - stack test --test-arguments subp
-              
         - stage: Run compiling and executing example C codes
           os: linux
           script:
             - cd example && make && cd dist && ./knapsack && ./merge_sorting_linked_list && ./shuffle_and_sort
-        
         - stage: Run generating AST graphs
           os: linux
           script:
             - ./.travis/visualize-test.sh
-        
         - stage: Run generating AST graphs
           os: osx
           script:
             - ./.travis/visualize-test.sh
-        
         - stage: Run compiler test on Docker
           os: linux
           services: docker
           script:
               - stack test --test-arguments docker
               - stack test --test-arguments cleanDocker
-
         - stage: Run compiling and executing example C codes on Docker
           os: linux
           services: docker
