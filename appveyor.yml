@@ -21,5 +21,6 @@ environment:
 test_script:
     - stack setup > nul
     - chcp 65001
-    - echo "" | stack --no-terminal test %ARGS%
-    - echo "" | stack test --no-terminal --test-arguments cleanDocker
+    - echo "" | stack --no-terminal test --only-dependencies
+    - echo "" | stack test %ARGS%
+    - echo "" | stack test --test-arguments cleanDocker
