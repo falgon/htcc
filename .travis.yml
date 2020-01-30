@@ -39,7 +39,7 @@ jobs:
         
         - stage: Run build on macOS
           os: osx
-          script: stack build
+          script: stack build --ghc-options="-optP-Wno-nonportable-include-path"
         
         - stage: Run compiler test
           os: linux
