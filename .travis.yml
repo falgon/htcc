@@ -33,11 +33,11 @@ install:
 
 jobs:
     include:
-        - stage: Run build on Linux
+        - stage: Run build
           os: linux
           script: stack build
         
-        - stage: Run build on macOS
+        - stage: Run build
           os: osx
           script: stack build --ghc-options="-optP-Wno-nonportable-include-path"
         
@@ -52,15 +52,15 @@ jobs:
           script:
             - cd example && make && cd dist && ./knapsack && ./merge_sorting_linked_list && ./shuffle_and_sort
         
-        - stage: Run generating AST graphs on Linux
+        - stage: Run generating AST graphs
           os: linux
           script:
-            - ./travis/visualize-test.sh
+            - ./.travis/visualize-test.sh
         
-        - stage: Run generating AST graphs on macOS
+        - stage: Run generating AST graphs
           os: osx
           script:
-            - ./travis/visualize-test.sh
+            - ./.travis/visualize-test.sh
         
         - stage: Run compiler test on Docker
           os: linux
