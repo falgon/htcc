@@ -14,9 +14,9 @@ environment:
         STACK_ROOT: "c:\\sr"
         TMP: "c:\\tmp"
 
-matrix:
-    - ARGS: ""
-    - ARGS: "--test-arguments docker"
+    matrix:
+        - ARGS: ""
+        - ARGS: "--test-arguments docker"
 
 test_script:
     - stack setup > nul
