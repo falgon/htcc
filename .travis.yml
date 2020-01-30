@@ -6,7 +6,6 @@ arch: amd64
 language: generic
 cache:
     apt: true
-    homebrew: true
     directories:
         - "$HOME/.stack/"
         - "$HOME/.local/bin/"
@@ -34,10 +33,12 @@ install:
 
 jobs:
     include:
-        - stage: Run build
-          os: 
-            - linux
-            - osx
+        - stage: Run build on Linux
+          os: linux
+          script: stack build
+        
+        - stage: Run build on macOS
+          os: osx
           script: stack build
         
         - stage: Run compiler test
@@ -51,18 +52,15 @@ jobs:
           script:
             - cd example && make && cd dist && ./knapsack && ./merge_sorting_linked_list && ./shuffle_and_sort
         
-        - stage: Run generating AST graphs
-          os: 
-            - linux
-            - osx
+        - stage: Run generating AST graphs on Linux
+          os: linux
           script:
-            - echo 'int main() { return 1 * 2 + 4; }' | stack exec htcc -- /dev/stdin --visualize-ast 
-            - echo 'int printf(); void fizzbuzz(int n) { for (int i = 1; i < n; ++i) { if (!(i % 15)) printf("fizzbuzz\n"); else if (!(i % 5)) printf("fizz\n"); else if (!(i % 3)) printf("buzz\n"); else printf("%d\n", i); } } int main() { fizzbuzz(50); }' | stack exec htcc -- /dev/stdin --visualize-ast --img-resolution 1280x720 --out fizzbuzz.svg
-            - if [ ! -f ./out.svg ] || [ ! -f ./fizzbuzz.svg ] ; then exit 1; fi
-            - if [ "640" != "$(identify -format '%w' out.svg)" ]; then exit 1; fi
-            - if [ "480" != "$(identify -format '%h' out.svg)" ]; then exit 1; fi
-            - if [ "1280" != "$(identify -format '%w' fizzbuzz.svg)" ]; then exit 1; fi
-            - if [ "720" != "$(identify -format '%h' fizzbuzz.svg)" ]; then exit 1; fi
+            - ./travis/visualize-test.sh
+        
+        - stage: Run generating AST graphs on macOS
+          os: osx
+          script:
+            - ./travis/visualize-test.sh
         
         - stage: Run compiler test on Docker
           os: linux
