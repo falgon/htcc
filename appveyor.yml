@@ -4,9 +4,8 @@ platform: Any CPU
 
 before_test:
     - set PATH=C:\Program Files\Git\mingw64\bin;%PATH%
-    - curl -sS -ostack.zip -L --insecure http://www.stackage.org/stack/windows-i386
+    - curl -sS -ostack.zip -L --insecure https://get.haskellstack.org/stable/windows-x86_64.zip
     - 7z x stack.zip stack.exe
-    - chcp 65001
 
 clone_folder: "c:\\stack"
 
@@ -15,8 +14,12 @@ environment:
         STACK_ROOT: "c:\\sr"
         TMP: "c:\\tmp"
 
+matrix:
+    - ARGS: ""
+    - ARGS: "--test-arguments docker"
+
 test_script:
     - stack setup > nul
-    - echo "" | stack --no-terminal test
-    - echo "" | stack test --no-terminal --test-arguments docker
+    - chcp 65001
+    - echo "" | stack --no-terminal test %ARGS%
     - echo "" | stack test --no-terminal --test-arguments cleanDocker
