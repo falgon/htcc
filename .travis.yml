@@ -24,9 +24,6 @@ addons:
             - imagemagick
             - gcc
 
-services:
-    - docker
-
 before_install:
     - mkdir -p ~/.local/bin
     - export PATH=$HOME/.local/bin:$PATH
@@ -38,15 +35,26 @@ install:
 jobs:
     include:
         - stage: Run build
+          os: 
+            - linux
+            - osx
           script: stack build
+        
         - stage: Run compiler test
+          os: linux
           script: 
-            - if [ "$TRAVIS_OS_NAME" == "linux" ]; then stack test; fi
-            - if [ "$TRAVIS_OS_NAME" == "linux" ]; then stack test --test-arguments subp; fi
+            - stack test
+            - stack test --test-arguments subp
+              
         - stage: Run compiling and executing example C codes
+          os: linux
           script:
-            - if [ "$TRAVIS_OS_NAME" == "linux" ]; then cd example && make && cd dist && ./knapsack && ./merge_sorting_linked_list && ./shuffle_and_sort; fi
+            - cd example && make && cd dist && ./knapsack && ./merge_sorting_linked_list && ./shuffle_and_sort
+        
         - stage: Run generating AST graphs
+          os: 
+            - linux
+            - osx
           script:
             - echo 'int main() { return 1 * 2 + 4; }' | stack exec htcc -- /dev/stdin --visualize-ast 
             - echo 'int printf(); void fizzbuzz(int n) { for (int i = 1; i < n; ++i) { if (!(i % 15)) printf("fizzbuzz\n"); else if (!(i % 5)) printf("fizz\n"); else if (!(i % 3)) printf("buzz\n"); else printf("%d\n", i); } } int main() { fizzbuzz(50); }' | stack exec htcc -- /dev/stdin --visualize-ast --img-resolution 1280x720 --out fizzbuzz.svg
@@ -55,11 +63,17 @@ jobs:
             - if [ "480" != "$(identify -format '%h' out.svg)" ]; then exit 1; fi
             - if [ "1280" != "$(identify -format '%w' fizzbuzz.svg)" ]; then exit 1; fi
             - if [ "720" != "$(identify -format '%h' fizzbuzz.svg)" ]; then exit 1; fi
+        
         - stage: Run compiler test on Docker
+          os: linux
+          services: docker
           script:
               - stack test --test-arguments docker
               - stack test --test-arguments cleanDocker
+
         - stage: Run compiling and executing example C codes on Docker
+          os: linux
+          services: docker
           script:
               - cd example && make docker && make clean_docker
 
