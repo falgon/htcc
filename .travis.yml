@@ -24,9 +24,13 @@ addons:
             - gcc
 
 before_install:
-    - mkdir -p ~/.local/bin
-    - export PATH=$HOME/.local/bin:$PATH
-    - ./.travis/install-stack.sh
+    - |
+        if [ "$TRAVIS_OS_NAME" == "linux" ] || [ "$TRAVIS_OS_NAME" == "osx" ]; then
+            mkdir -p ~/.local/bin
+            export PATH=$HOME/.local/bin:$PATH
+            ./.travis/install-stack.sh
+        fi
+
 
 install:
     - stack --no-terminal test --only-dependencies
