@@ -11,6 +11,9 @@
 <a href="https://github.com/falgon/htcc/actions?query=workflow%3ACI">
     <img alt="CI" src="https://github.com/falgon/htcc/workflows/CI/badge.svg" />
 </a>
+<a href="https://www.codefactor.io/repository/github/falgon/htcc">
+    <img src="https://www.codefactor.io/repository/github/falgon/htcc/badge" alt="CodeFactor" />
+</a>
 <img src="https://img.shields.io/badge/architecture-amd64-blue.svg" alt="Architecture" />
 <a href="./LICENSE">
 <img src="https://img.shields.io/badge/License-BSD%203--Clause-blue.svg" alt="License" />
@@ -149,8 +152,8 @@ $ stack bench
 
 ## Specification and Requirements
 
-htcc outputs x86_64 assembly according to system V ABI [[2]](#ref2).
-GCC 7.4.0 is used for assemble. 
+htcc outputs x86_64 assembly according to System V ABI [[2]](#cite2) and
+[GCC 7.4.0](https://gcc.gnu.org/onlinedocs/7.4.0/) is used for assemble. 
 Perhaps a newer version of GCC will work, but not checked currently.
 
 ## About emoji of commit messages
@@ -176,8 +179,8 @@ The answer on [stack overflow](https://stackoverflow.com/questions/24665531/ghci
 ## References
 
 <ol>
-<li>JTC1/SC22/WG14. (2011). <i>N1570 Commitee Draft</i> [online]. Available from: [PDF](http://open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf), [HTML](https://port70.net/~nsz/c/c11/n1570.html).</li>
-<li id="ref2">H.J. Lu, Michael Matz, Milind Girkar, Jan Hubicka, Andreas Jaeger and Mark Mitchell. (2018). <i>System V Application Binary Interface AMD64 Architecture Processor Supplement (With LP64 and ILP32 Programming Models) Version 1.0</i> [online]. Available from: [PDF](https://github.com/hjl-tools/x86-psABI/wiki/x86-64-psABI-1.0.pdf).</li>
-<li>Rui Ueyama. (2019). <i>低レイヤを知りたい人のためのCコンパイラ作成入門</i> [online]. Available from: <https://www.sigbus.info/compilerbook>.</li>
+<li>JTC1/SC22/WG14. (2011). <i>N1570 Commitee Draft</i> [online]. Available from: <a href="http://open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf">PDF</a>, <a href="https://port70.net/~nsz/c/c11/n1570.html">HTML</a>.</li>
+<li id="cite2">H.J. Lu, Michael Matz, Milind Girkar, Jan Hubicka, Andreas Jaeger and Mark Mitchell. (2018). <i>System V Application Binary Interface AMD64 Architecture Processor Supplement (With LP64 and ILP32 Programming Models) Version 1.0</i> [online]. Available from: <a href="https://github.com/hjl-tools/x86-psABI/wiki/x86-64-psABI-1.0.pdf">PDF</a>.</li>
+<li>Rui Ueyama. (2019). <i>低レイヤを知りたい人のためのCコンパイラ作成入門</i> [online]. Available from: <a href="https://www.sigbus.info/compilerbook">https://www.sigbus.info/compilerbook</a>.</li>
 <li>前橋和弥. (2009). <i>プログラミング言語を作る</i>. 技術評論社.</li>
 </ol>
