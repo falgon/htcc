@@ -147,6 +147,12 @@ $ make clean_docker # Stop and delete docker container, and delete image
 $ stack bench
 ```
 
+## Specification and Requirements
+
+htcc outputs x86_64 assembly according to system V ABI [[2]](#ref2).
+GCC 7.4.0 is used for assemble. 
+Perhaps a newer version of GCC will work, but not checked currently.
+
 ## About emoji of commit messages
 
 The emoji included in the commit message is used according to [gitmoji](https://gitmoji.carloscuesta.me/).
@@ -169,5 +175,9 @@ The answer on [stack overflow](https://stackoverflow.com/questions/24665531/ghci
 
 ## References
 
-* [N1570 - JTC1/SC22/WG14](http://open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf): C11 working draft (PDF)
-* [N1570 - JTC1/SC22/WG14](https://port70.net/~nsz/c/c11/n1570.html): C11 working draft (HTML)
+<ol>
+<li>JTC1/SC22/WG14. (2011). <i>N1570 Commitee Draft</i> [online]. Available from: [PDF](http://open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf), [HTML](https://port70.net/~nsz/c/c11/n1570.html).</li>
+<li id="ref2">H.J. Lu, Michael Matz, Milind Girkar, Jan Hubicka, Andreas Jaeger and Mark Mitchell. (2018). <i>System V Application Binary Interface AMD64 Architecture Processor Supplement (With LP64 and ILP32 Programming Models) Version 1.0</i> [online]. Available from: [PDF](https://github.com/hjl-tools/x86-psABI/wiki/x86-64-psABI-1.0.pdf).</li>
+<li>Rui Ueyama. (2019). <i>低レイヤを知りたい人のためのCコンパイラ作成入門</i> [online]. Available from: <https://www.sigbus.info/compilerbook>.</li>
+<li>前橋和弥. (2009). <i>プログラミング言語を作る</i>. 技術評論社.</li>
+</ol>

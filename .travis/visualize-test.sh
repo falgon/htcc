@@ -3,7 +3,7 @@
 set -eux
 
 echo 'int main() { return 1 * 2 + 4; }' | stack exec htcc -- /dev/stdin --visualize-ast 
-echo 'int printf(); 
+printf 'int printf(); 
     void fizzbuzz(int n) { 
         for (int i = 1; i < n; ++i) { 
             if (!(i % 15)) printf("fizzbuzz\n");
