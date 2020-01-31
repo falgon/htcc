@@ -11,6 +11,9 @@
 <a href="https://github.com/falgon/htcc/actions?query=workflow%3ACI">
     <img alt="CI" src="https://github.com/falgon/htcc/workflows/CI/badge.svg" />
 </a>
+<a href="https://www.codefactor.io/repository/github/falgon/htcc">
+    <img src="https://www.codefactor.io/repository/github/falgon/htcc/badge" alt="CodeFactor" />
+</a>
 <img src="https://img.shields.io/badge/architecture-amd64-blue.svg" alt="Architecture" />
 <a href="./LICENSE">
 <img src="https://img.shields.io/badge/License-BSD%203--Clause-blue.svg" alt="License" />
@@ -92,15 +95,22 @@ Examples are shown in the following table.
 </tr>
 </table>
 
-## Test
+## Tests and run examples
+
+If you want to run outside the Linux environment, 
+if [docker](https://www.docker.com/)
+and [docker-compose](https://github.com/docker/compose) are installed, 
+you can run tests inside the docker container by specifying docker as an argument.
 
 ```sh
 $ stack test --test-arguments help
 htcc> test (suite: htcc-test, args: help)
 
 --test-arguments are available by:
-        inc     : Test itself with test code written in C (default, more faster).
-        subp    : Given C codes as input, run HUnit tests.
+ 		inc             : Test itself with test code written in C (default, more faster).
+        subp            : Given C codes as input, run HUnit tests.
+        docker          : Build the test using the environment inside the Linux container (This is useful when running tests in a development environment other than Linux).
+        cleanDocker     : Erases containers and images built with the docker option.
 
 htcc> Test suite htcc-test failed
 Test suite failure for package htcc-0.0.0.1
@@ -110,6 +120,28 @@ Logs printed to console
 $ stack test
 $ stack test --test-arguments inc
 $ stack test --test-arguments subp
+$ stack test --test-arguments docker # For running outside the linux environment. It requires docker and docker-compose.
+```
+
+If you want to delete the created test container and its image, execute as follows:
+
+```sh
+$ stack test --test-arguments cleanDocker
+```
+
+Source files that can be compiled by htcc are placed under the `example/`.
+
+```sh
+$ cd example
+$ make
+```
+
+For the same reason, when running in docker (lifegame is not supported):
+
+```sh
+$ cd example
+$ make docker
+$ make clean_docker # Stop and delete docker container, and delete image
 ```
 
 ## Benchmark
@@ -117,6 +149,12 @@ $ stack test --test-arguments subp
 ```sh
 $ stack bench
 ```
+
+## Specification and Requirements
+
+htcc outputs x86_64 assembly according to System V ABI [[2]](#cite2) and
+[GCC 7.4.0](https://gcc.gnu.org/onlinedocs/7.4.0/) is used for assemble. 
+Perhaps a newer version of GCC will work, but not checked currently.
 
 ## About emoji of commit messages
 
@@ -140,5 +178,9 @@ The answer on [stack overflow](https://stackoverflow.com/questions/24665531/ghci
 
 ## References
 
-* [N1570 - JTC1/SC22/WG14](http://open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf): C11 working draft (PDF)
-* [N1570 - JTC1/SC22/WG14](https://port70.net/~nsz/c/c11/n1570.html): C11 working draft (HTML)
+<ol>
+<li>JTC1/SC22/WG14. (2011). <i>N1570 Commitee Draft</i> [online]. Available from: <a href="http://open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf">PDF</a>, <a href="https://port70.net/~nsz/c/c11/n1570.html">HTML</a>.</li>
+<li id="cite2">H.J. Lu, Michael Matz, Milind Girkar, Jan Hubicka, Andreas Jaeger and Mark Mitchell. (2018). <i>System V Application Binary Interface AMD64 Architecture Processor Supplement (With LP64 and ILP32 Programming Models) Version 1.0</i> [online]. Available from: <a href="https://github.com/hjl-tools/x86-psABI/wiki/x86-64-psABI-1.0.pdf">PDF</a>.</li>
+<li>Rui Ueyama. (2019). <i>低レイヤを知りたい人のためのCコンパイラ作成入門</i> [online]. Available from: <a href="https://www.sigbus.info/compilerbook">https://www.sigbus.info/compilerbook</a>.</li>
+<li>前橋和弥. (2009). <i>プログラミング言語を作る</i>. 技術評論社.</li>
+</ol>
