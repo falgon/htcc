@@ -19,7 +19,6 @@ jobs:
             - uses: actions/checkout@v1
               with:
                   fetch-depth: 1
-            
             - name: Cache .stack
               id: cache-stack
               uses: actions/cache@v1
@@ -27,27 +26,21 @@ jobs:
                   path: ~/.stack
                   key: ${{ runner.os }}-stack-${{ hashFiles('**/stack.yaml.lock') }}
                   restore-keys: ${{ runner.os }}-stack-
-            
             - name: Setup Haskell to ${{ matrix.os }} (GHC ${{ matrix.ghc }})
               uses: actions/setup-haskell@v1
               with:
                   ghc-version: ${{ matrix.ghc }}
                   cabal-version: ${{ matrix.cabal }}
-            
             - uses: mstksg/setup-stack@v1
-            
             - name: Install dependencies to ${{ matrix.os }}
               run: stack --system-ghc build --only-dependencies
-            
             - name: Build htcc to ${{ matrix.os }}
               run: stack --system-ghc install
-            
             - name: Test htcc on ${{ matrix.os }}
               if: runner.os == 'Linux'
               run: |
                   stack --system-ghc test
                   stack --system-ghc test --test-arguments subp
-            
             - name: Compile and execute example C codes on ${{ matrix.os }}
               if: runner.os == 'Linux'
               run: |
@@ -55,12 +48,10 @@ jobs:
                   cd dist
                   ./knapsack && ./merge_sorting_linked_list && ./shuffle_and_sort
               working-directory: ./example
-
             - name: Test htcc on ${{ matrix.os }} with Docker
               run: |
                   stack --system-ghc test --test-arguments docker
                   stack --system-ghc test --test-arguments cleanDocker
-
             - name: Compile and execute example C codes on ${{ matrix.os }} with Docker
               run: |
                   make docker

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 56cf124d5c6cd5aba61fa5ece895ea2671489270a51dc8dfa6af23f508d73d78
+-- hash: 750f5dd2b42df76a8be9039fb456dd22aee61095f152e1e7bd2666913228cd9c
 
 name:           htcc
 version:        0.0.0.1
@@ -90,6 +90,7 @@ library
   build-depends:
       base >=4.7 && <5
     , bytestring
+    , cond
     , containers
     , deepseq
     , diagrams-contrib
@@ -115,6 +116,7 @@ executable htcc
   build-depends:
       base >=4.7 && <5
     , bytestring
+    , cond
     , containers
     , deepseq
     , diagrams-contrib
@@ -150,6 +152,7 @@ test-suite htcc-test
       HUnit
     , base >=4.7 && <5
     , bytestring
+    , cond
     , containers
     , deepseq
     , diagrams-contrib
@@ -182,6 +185,7 @@ benchmark criterion
   build-depends:
       base >=4.7 && <5
     , bytestring
+    , cond
     , containers
     , criterion
     , deepseq

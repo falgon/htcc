@@ -107,7 +107,7 @@ $ stack test --test-arguments help
 htcc> test (suite: htcc-test, args: help)
 
 --test-arguments are available by:
- 		inc             : Test itself with test code written in C (default, more faster).
+        inc             : Test itself with test code written in C (default, more faster).
         subp            : Given C codes as input, run HUnit tests.
         docker          : Build the test using the environment inside the Linux container (This is useful when running tests in a development environment other than Linux).
         cleanDocker     : Erases containers and images built with the docker option.
@@ -129,14 +129,14 @@ If you want to delete the created test container and its image, execute as follo
 $ stack test --test-arguments cleanDocker
 ```
 
-Source files that can be compiled by htcc are placed under the `example/`.
+Source files that can be compiled by htcc are placed under the [example/](https://github.com/falgon/htcc/tree/master/example).
 
 ```sh
 $ cd example
 $ make
 ```
 
-For the same reason, when running in docker (lifegame is not supported):
+For the same reason, when running in docker ([lifegame](https://github.com/falgon/htcc/blob/master/example/lifegame.c) is not supported because it need to clear standard output):
 
 ```sh
 $ cd example

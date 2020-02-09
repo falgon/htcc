@@ -45,7 +45,7 @@ jobs:
           script: stack build --ghc-options="-optP-Wno-nonportable-include-path"
         - stage: Run compiler test
           os: linux
-          script: 
+          script:
             - stack test
             - stack test --test-arguments subp
         - stage: Run compiling and executing example C codes
