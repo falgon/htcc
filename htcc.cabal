@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 750f5dd2b42df76a8be9039fb456dd22aee61095f152e1e7bd2666913228cd9c
+-- hash: 39fc4cd47634400c9f12583a1aa325566e402f5327d91713547f2e28e700d0a0
 
 name:           htcc
 version:        0.0.0.1
@@ -88,7 +88,8 @@ library
   hs-source-dirs:
       src
   build-depends:
-      base >=4.7 && <5
+      ansi-wl-pprint
+    , base >=4.7 && <5
     , bytestring
     , cond
     , containers
@@ -114,7 +115,8 @@ executable htcc
       app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall -Werror -O2
   build-depends:
-      base >=4.7 && <5
+      ansi-wl-pprint
+    , base >=4.7 && <5
     , bytestring
     , cond
     , containers
@@ -150,6 +152,7 @@ test-suite htcc-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall -O2
   build-depends:
       HUnit
+    , ansi-wl-pprint
     , base >=4.7 && <5
     , bytestring
     , cond
@@ -183,7 +186,8 @@ benchmark criterion
       Paths_htcc
   ghc-options: -O2
   build-depends:
-      base >=4.7 && <5
+      ansi-wl-pprint
+    , base >=4.7 && <5
     , bytestring
     , cond
     , containers

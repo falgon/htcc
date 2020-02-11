@@ -24,6 +24,8 @@ import Data.Foldable (toList)
 import qualified Data.Text as T
 import qualified Data.Sequence as S
 import System.Exit (exitFailure)
+import System.IO (stderr)
+import Text.PrettyPrint.ANSI.Leijen (Doc, text, char, blue, red, magenta, hPutDoc, bold, linebreak, empty, (<+>))
 
 import Htcc.Parser (parse, ASTResult, ASTs)
 import qualified Htcc.Tokenizer as HT
@@ -46,22 +48,37 @@ instance Show MessageType where
     show ErrorMessage = "error"
     show WarningMessage = "warning"
 
+{-# INLINE messageColor #-}
+messageColor :: MessageType -> Doc -> Doc
+messageColor ErrorMessage = red
+messageColor WarningMessage = magenta
+
 {-# INLINE repSpace #-}
-repSpace :: Integral i => i -> IO ()
-repSpace = flip (>>) (putStrErr (T.singleton '^')) . mapM_ (putStrErr . T.pack . flip replicate ' ' . pred) . toInts
+repSpace :: Integral i => i -> MessageType -> IO ()
+repSpace i mest = do
+    mapM_ (putStrErr . T.pack . flip replicate ' ' . pred) $ toInts i
+    hPutDoc stderr $ messageColor mest $ char '^'
 
 {-# INLINE format #-}
 format :: T.Text -> Int -> InputCCode -> IO ()
 format errMesPre e xs = do
-    putStrErr $ errMesPre <> " | "
+    hPutDoc stderr $ blue (text $ T.unpack errMesPre) <+> blue (char '|') <+> empty
     putStrLnErr (T.lines xs !! max 0 (fromIntegral e))
-    putStrErr $ T.replicate (T.length errMesPre) " " <> " | "
+    putStrErr $ T.replicate (T.length errMesPre) " "
+    hPutDoc stderr $ empty <+> blue (char '|') <+> empty
 
 parsedMessage :: (Integral i, Show i) => MessageType -> InputCCode -> ASTError i -> IO ()
 parsedMessage mest xs (s, (i, etk)) = do
-    putStrLnErr (tshow i <> ": " <> tshow mest <> ": " <> s)
+    hPutDoc stderr $ 
+        bold (text (show i)) <> 
+        bold (char ':') <+> 
+        messageColor mest (text $ show mest) <> 
+        messageColor mest (char ':') <+> 
+        text (T.unpack s) <>
+        linebreak
     format (T.replicate 4 " " <> tshow (HT.tkLn i)) (pred $ fromIntegral $ HT.tkLn i) xs
-    repSpace (HT.tkCn i) >> putStrLnErr (T.replicate (pred $ HT.length etk) "~")
+    repSpace (HT.tkCn i) mest
+    hPutDoc stderr $ messageColor mest (text $ replicate (pred $ HT.length etk) '~') <> linebreak
 
 -- | the function to output error message
 parsedErrExit :: (Integral i, Show i) => InputCCode -> ASTError i -> IO ()

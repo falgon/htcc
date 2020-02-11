@@ -45,10 +45,10 @@ main :: IO ()
 main = do
     args <- getArgs
     case args of
-        "subp":[] -> SubProcTests.exec 
-        "inc":[] -> inc
-        "docker":[] -> docker DkBuild
-        "cleanDocker":[] -> docker DkClean
+        ["subp"] -> SubProcTests.exec 
+        ["inc"] -> inc
+        ["docker"] -> docker DkBuild
+        ["cleanDocker"] -> docker DkClean
         [] -> inc
         _ -> do
             putStrLnErr "--test-arguments are available by:"
