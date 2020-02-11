@@ -167,7 +167,7 @@ tokenize' :: forall i. (Enum i, Num i, Eq i, Read i, Show i) => T.Text -> Either
 tokenize' = evalStateT runTokenizer' . (TokenLCNums 1 1,)
     where
         next = get >>= lift . evalStateT runTokenizer'
-        runTokenizer' = ifM consumeSpace next $ ifM consumeNewLine next $ ifM consumeComment next $ do
+        runTokenizer' = foldr ((.) . (flip ifM next)) id [consumeSpace, consumeNewLine, consumeComment] $ do
             cur <- curLC
             ifM (isNothing <$> itemP) (lift $ Right []) $ 
                 firstJustM id [macro, natLit, strLit, charLit, operators, keyWordOrIdent] >>= maybe (lift $ Right []) (\tk -> ((cur, tk):) <$> next)
