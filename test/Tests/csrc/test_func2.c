@@ -16,7 +16,7 @@ int test_func2(int n)
             for (size_t j = i + 1; j < size; ++j) {
                 if (!((j + 2) % (i + 2))) p[j] = true;
             }
-            printf("%ld ", i + 2);
+            printf("%lu ", i + 2);
         }
     }
     

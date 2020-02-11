@@ -20,7 +20,7 @@ void swap(int* a, int* b)
 
 void shuffle(int* first, int* last)
 {
-    if (first == last) first;
+    if (first == last) return;
     int distance = last - first;
     srand(time(0));
     for (--last, --distance; first < last; ++first, --distance) 
@@ -48,7 +48,7 @@ int* min(int* a, int* b)
     return max(a, b) == a ? b : a;
 }
 
-int med3(int* a, int* b, int* c)
+int* med3(int* a, int* b, int* c)
 {
     return max(min(a, b), min(max(a, b), c));
 }

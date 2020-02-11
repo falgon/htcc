@@ -14,6 +14,9 @@
 <a href="https://www.codefactor.io/repository/github/falgon/htcc">
     <img src="https://www.codefactor.io/repository/github/falgon/htcc/badge" alt="CodeFactor" />
 </a>
+<a href="https://www.codacy.com/manual/falgon/htcc?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=falgon/htcc&amp;utm_campaign=Badge_Grade">
+    <img src="https://api.codacy.com/project/badge/Grade/ad81967222a745c7ba631f26c3ff2936"/>
+</a>
 <img src="https://img.shields.io/badge/architecture-amd64-blue.svg" alt="Architecture" />
 <a href="./LICENSE">
 <img src="https://img.shields.io/badge/License-BSD%203--Clause-blue.svg" alt="License" />
@@ -171,7 +174,7 @@ and the author also developed the compiler for the first time.
 If you can suggest improvements, please submit issues or send PRs.
 Thanks in advance for all the improvements.
 
-### When I try to play with ghci, I get a warning "WARNING:. is owned by someone else, IGNORING!".
+### When I try to play with ghci, I get a warning "WARNING:. is owned by someone else, IGNORING!"
 
 Check your permissions. 
 The answer on [stack overflow](https://stackoverflow.com/questions/24665531/ghci-haskell-compiler-error-home-user-ghci-is-owned-by-someone-else-ignor) may be useful.
