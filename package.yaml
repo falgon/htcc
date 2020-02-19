@@ -39,10 +39,12 @@ dependencies:
 - safe
 - mtl
 - monad-finally
+- mono-traversable
 - transformers
 - diagrams-svg
 - diagrams-contrib
 - diagrams-lib
+- natural-transformation
 
 library:
   source-dirs: src

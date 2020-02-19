@@ -1,12 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
+import Control.Conditional (ifM)
 import Data.Bool (bool)
 import Data.Maybe (isJust, isNothing)
 import Data.List.Split (splitOn)
 import Data.Tuple.Extra (both, dupe, fst3)
 import qualified Data.Text.IO as T
 import Text.Read (readMaybe)
+import Text.PrettyPrint.ANSI.Leijen (text, char, (<+>), linebreak)
 import System.Exit (exitFailure)
 import System.Directory (doesFileExist)
 import Options.Applicative
@@ -15,7 +17,7 @@ import Diagrams.TwoD.Size (mkSizeSpec2D)
 import Htcc.Asm (casm, execAST, InputCCode)
 import Htcc.Parser (ASTs)
 import Htcc.Parser.AST.Scope.Var (GlobalVars, Literals)
-import Htcc.Utils (putStrLnErr, tshow)
+import Htcc.Utils (putStrLnErr, putDocLnErr, errTxtDoc, locTxtDoc)
 import Htcc.Visualizer (visualize)
 
 data Options = Options 
@@ -82,9 +84,14 @@ execVisualize ops ast = let rlt = parseResolution $ resolution ops in do
 main :: IO ()
 main = do
     ops <- execParser $ info optionsP fullDesc
-    b <- doesFileExist $ inputFName ops
-    if not b then putStrLnErr ("error: " <> tshow (inputFName ops) <> ": No such file or directory.\ncompilation terminated.") >> exitFailure else
-        T.readFile (inputFName ops) >>= execAST' (supressWarn ops) >>= maybe (return ()) (bool casm (execVisualize ops . fst3) (visualizeAST ops)) 
+    ifM (not <$> doesFileExist (inputFName ops)) (notFould (inputFName ops) >> exitFailure) $
+        T.readFile (inputFName ops) >>= execAST' (supressWarn ops) (inputFName ops) >>= maybe (return ()) (bool casm (execVisualize ops . fst3) (visualizeAST ops)) 
     where
-        execAST' :: Bool -> InputCCode -> IO (Maybe (ASTs Integer, GlobalVars Integer, Literals Integer))
+        execAST' :: Bool -> FilePath -> InputCCode -> IO (Maybe (ASTs Integer, GlobalVars Integer, Literals Integer))
         execAST' = execAST
+        notFould fpath = putDocLnErr $ 
+            locTxtDoc "htcc:" <+>
+            errTxtDoc "error:" <+>
+            text fpath <> char ':' <+>
+            text "no such file" <> linebreak <>
+            text "compilation terminated."

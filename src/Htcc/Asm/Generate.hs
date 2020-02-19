@@ -24,8 +24,7 @@ import Data.Foldable (toList)
 import qualified Data.Text as T
 import qualified Data.Sequence as S
 import System.Exit (exitFailure)
-import System.IO (stderr)
-import Text.PrettyPrint.ANSI.Leijen (Doc, text, char, blue, red, magenta, hPutDoc, bold, linebreak, empty, (<+>))
+import Text.PrettyPrint.ANSI.Leijen (Doc, text, char, blue, red, magenta, bold, empty, (<+>))
 
 import Htcc.Parser (parse, ASTResult, ASTs)
 import qualified Htcc.Tokenizer as HT
@@ -37,12 +36,13 @@ import Htcc.Asm.Intrinsic.Operand
 import qualified Htcc.Asm.Intrinsic.Structure.Section.Text as IT    
 import qualified Htcc.Asm.Intrinsic.Structure as SI
 
-import Htcc.Utils (putStrLnErr, putStrErr, putStrLnErr, tshow, toInts, dropFst4)
+import Htcc.Utils (putDocErr, putDocLnErr, putStrLnErr, putStrErr, putStrLnErr, tshow, toInts, dropFst4)
 
 -- | input string, C source code
 type InputCCode = T.Text
 
-data MessageType = ErrorMessage | WarningMessage deriving (Eq, Ord, Enum, Bounded)
+data MessageType = ErrorMessage | WarningMessage 
+    deriving (Eq, Ord, Enum, Bounded)
 
 instance Show MessageType where
     show ErrorMessage = "error"
@@ -57,36 +57,34 @@ messageColor WarningMessage = magenta
 repSpace :: Integral i => i -> MessageType -> IO ()
 repSpace i mest = do
     mapM_ (putStrErr . T.pack . flip replicate ' ' . pred) $ toInts i
-    hPutDoc stderr $ messageColor mest $ char '^'
+    putDocErr $ messageColor mest $ char '^'
 
 {-# INLINE format #-}
 format :: T.Text -> Int -> InputCCode -> IO ()
 format errMesPre e xs = do
-    hPutDoc stderr $ blue (text $ T.unpack errMesPre) <+> blue (char '|') <+> empty
+    putDocErr $ blue (text $ T.unpack errMesPre) <+> blue (char '|') <+> empty
     putStrLnErr (T.lines xs !! max 0 (fromIntegral e))
     putStrErr $ T.replicate (T.length errMesPre) " "
-    hPutDoc stderr $ empty <+> blue (char '|') <+> empty
+    putDocErr $ empty <+> blue (char '|') <+> empty
 
-parsedMessage :: (Integral i, Show i) => MessageType -> InputCCode -> ASTError i -> IO ()
-parsedMessage mest xs (s, (i, etk)) = do
-    hPutDoc stderr $ 
-        bold (text (show i)) <> 
-        bold (char ':') <+> 
-        messageColor mest (text $ show mest) <> 
-        messageColor mest (char ':') <+> 
-        text (T.unpack s) <>
-        linebreak
+parsedMessage :: (Integral i, Show i) => MessageType -> FilePath -> InputCCode -> ASTError i -> IO ()
+parsedMessage mest fpath xs (s, (i, etk)) = do
+    putDocLnErr $ 
+        bold (text fpath) <> bold (char ':') <>
+        bold (text (show i)) <> bold (char ':') <+> 
+        messageColor mest (text $ show mest) <> messageColor mest (char ':') <+> 
+        text (T.unpack s)
     format (T.replicate 4 " " <> tshow (HT.tkLn i)) (pred $ fromIntegral $ HT.tkLn i) xs
     repSpace (HT.tkCn i) mest
-    hPutDoc stderr $ messageColor mest (text $ replicate (pred $ HT.length etk) '~') <> linebreak
+    putDocLnErr $ messageColor mest (text $ replicate (pred $ HT.length etk) '~')
 
 -- | the function to output error message
-parsedErrExit :: (Integral i, Show i) => InputCCode -> ASTError i -> IO ()
-parsedErrExit = (.) (>> exitFailure) . parsedMessage ErrorMessage
+parsedErrExit :: (Integral i, Show i) => FilePath -> InputCCode -> ASTError i -> IO ()
+parsedErrExit fpath ccode err = parsedMessage ErrorMessage fpath ccode err >> exitFailure
 
 -- | the function to output warning message
-parsedWarn :: (Integral i, Show i) => InputCCode -> S.Seq (ASTError i) -> IO ()
-parsedWarn xs warns = mapM_ (parsedMessage WarningMessage xs) (toList warns)
+parsedWarn :: (Integral i, Show i) => FilePath -> InputCCode -> S.Seq (ASTError i) -> IO ()
+parsedWarn fpath xs warns = mapM_ (parsedMessage WarningMessage fpath xs) (toList warns)
 
 -- | Executor that receives information about the constructed AST, 
 -- global variables, and literals and composes assembly code
@@ -98,6 +96,6 @@ buildAST :: (Integral i, Read i, Show i, Bits i) => InputCCode -> ASTResult i
 buildAST = HT.tokenize >=> parse
 
 -- | Print warning or error message if building AST from string of C source code has some problems
-execAST :: (Integral i, Read i, Show i, Bits i) => Bool -> InputCCode -> IO (Maybe (ASTs i, GlobalVars i, Literals i))
-execAST supWarns ccode = flip (either ((<$) Nothing . parsedErrExit ccode)) (buildAST ccode) $ \xs@(warns, _, _, _) -> 
-    Just (dropFst4 xs) <$ unless supWarns (parsedWarn ccode warns)
+execAST :: (Integral i, Read i, Show i, Bits i) => Bool -> FilePath -> InputCCode -> IO (Maybe (ASTs i, GlobalVars i, Literals i))
+execAST supWarns fpath ccode = flip (either ((<$) Nothing . parsedErrExit fpath ccode)) (buildAST ccode) $ \xs@(warns, _, _, _) -> 
+    Just (dropFst4 xs) <$ unless supWarns (parsedWarn fpath ccode warns)

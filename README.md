@@ -54,7 +54,7 @@ Simple compilation:
 ```sh
 $ echo 'int printf(); int main() { printf("hello world!\n"); }' > t.c
 $ stack exec htcc -- t.c > t.s
-$ gcc -no-pie t.c -o out
+$ gcc -no-pie t.s -o out
 ```
 
 For one liner:

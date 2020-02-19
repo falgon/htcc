@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 39fc4cd47634400c9f12583a1aa325566e402f5327d91713547f2e28e700d0a0
+-- hash: 587f6e83b5467823524e984554079699d720dcebffb67602077a99cc275d2bbb
 
 name:           htcc
 version:        0.0.0.1
@@ -81,6 +81,13 @@ library
       Htcc.Tokenizer.Core
       Htcc.Tokenizer.Token
       Htcc.Utils
+      Htcc.Utils.Bool
+      Htcc.Utils.CompilationState
+      Htcc.Utils.List
+      Htcc.Utils.NaturalTransformations
+      Htcc.Utils.Print
+      Htcc.Utils.Text
+      Htcc.Utils.Tuple
       Htcc.Visualizer
       Htcc.Visualizer.Core
   other-modules:
@@ -100,7 +107,9 @@ library
     , extra
     , monad-finally
     , monad-loops
+    , mono-traversable
     , mtl
+    , natural-transformation
     , safe
     , split
     , text
@@ -129,7 +138,9 @@ executable htcc
     , htcc
     , monad-finally
     , monad-loops
+    , mono-traversable
     , mtl
+    , natural-transformation
     , optparse-applicative
     , safe
     , split
@@ -170,7 +181,9 @@ test-suite htcc-test
     , htcc
     , monad-finally
     , monad-loops
+    , mono-traversable
     , mtl
+    , natural-transformation
     , safe
     , split
     , text
@@ -200,7 +213,9 @@ benchmark criterion
     , htcc
     , monad-finally
     , monad-loops
+    , mono-traversable
     , mtl
+    , natural-transformation
     , safe
     , split
     , text

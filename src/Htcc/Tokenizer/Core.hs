@@ -9,7 +9,7 @@ Portability : POSIX
 
 The tokenizer
 -}
-{-# LANGUAGE ScopedTypeVariables, OverloadedStrings, LambdaCase, TupleSections, MultiWayIf #-}
+{-# LANGUAGE OverloadedStrings, LambdaCase, TupleSections, MultiWayIf #-}
 module Htcc.Tokenizer.Core (
     -- * Tokenizer
     tokenize'
@@ -18,15 +18,12 @@ module Htcc.Tokenizer.Core (
 import Control.Applicative (Alternative (..))
 import Control.Conditional (ifM)
 import Control.Monad.Extra (firstJustM)
-import Control.Monad.Loops (unfoldM)
 import Control.Monad.Trans (lift)
 import Control.Monad.State 
 
-import Data.Bool (bool)
 import Data.Char (isDigit, digitToInt, ord)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import Data.Tuple.Extra (first, second)
 import Data.List (find)
 import Data.Maybe (isJust, isNothing, fromJust)
 
@@ -36,57 +33,52 @@ import qualified Htcc.CRules as CR
 import qualified Htcc.CRules.Preprocessor.Punctuators as CP
 import Htcc.Tokenizer.Token
 import Htcc.Utils (spanLenT, subTextIndex, isStrictSpace, lor, maybe', tshow)
+import qualified Htcc.Utils.CompilationState as C
 import Htcc.Parser.AST.Scope.ManagedScope (ASTError)
+
 
 {-# INLINE isNewLine #-}
 isNewLine :: Char -> Bool
 isNewLine = lor [(=='\n'), (=='\r')]
 
 {-# INLINE headToken #-}
-headToken :: (Char -> Token i) ->  T.Text -> Token i
+headToken :: (Char -> Token i) -> T.Text -> Token i
 headToken f txt
     | T.null txt = TKEmpty
     | otherwise = f $ T.head txt
 
-type Tokenizer i a = StateT (TokenLCNums i, T.Text) (Either (ASTError i)) a 
+type Tokenizer i a = C.CompilationState (TokenLCNums i) T.Text i a
+
+{-# INLINE advanceLC #-}
+advanceLC :: (Enum i, Num i) => TokenLCNums i -> Char -> TokenLCNums i
+advanceLC lc e 
+    | isNewLine e = lc { tkCn = 1, tkLn = succ $ tkLn lc }
+    | otherwise = lc { tkCn = succ $ tkCn lc }
 
 {-# INLINE itemP #-}
 itemP :: Tokenizer i (Maybe Char)
-itemP = do
-    x <- gets snd
-    return $ if T.null x then Nothing else Just $ T.head x
+itemP = C.itemP
 
 {-# INLINE itemC #-}
 itemC :: (Enum i, Num i) => Tokenizer i (Maybe Char)
-itemC = do
-    res <- itemP
-    maybe' (return Nothing) res $ \res' ->
-        res <$ (get >>= put . first (\lc -> if isNewLine res' then lc { tkCn = 1, tkLn = succ $ tkLn lc } else lc { tkCn = succ $ tkCn lc }) . second T.tail)
-
-{-# INLINE takeP #-}
-takeP :: Int -> Tokenizer i T.Text
-takeP n = gets (T.take n . snd) 
+itemC = C.itemC advanceLC
 
 {-# INLINE itemsP #-}
 itemsP :: Int -> Tokenizer i (Maybe T.Text)
-itemsP n = do
-    tp <- takeP n
-    return $ if T.length tp == n then Just tp else Nothing
+itemsP = C.itemsP
 
 {-# INLINE curLC #-}
 curLC :: Tokenizer i (TokenLCNums i)
-curLC = gets fst 
+curLC = C.curCD
 
 char :: (Enum i, Num i) => (Char -> Bool) -> Tokenizer i (Maybe Char)
-char f = do
-    x <- itemP
-    maybe' (return Nothing) x $ bool (return Nothing) (x <$ void itemC) . f
+char = C.itemCWhen advanceLC
 
 string :: (Enum i, Num i) => (Char -> Bool) -> Tokenizer i T.Text
-string = fmap T.pack . unfoldM . char
+string = C.itemsCWhen advanceLC 
 
 isPrefixOf :: Enum i => T.Text -> Tokenizer i Bool
-isPrefixOf txt = gets (T.isPrefixOf txt . snd) 
+isPrefixOf = C.isSatisfied . T.isPrefixOf 
 
 consumeSpace :: (Enum i, Num i) => Tokenizer i Bool
 consumeSpace = not . T.null <$> string isStrictSpace
@@ -99,7 +91,7 @@ consumeComment = ifM (isPrefixOf "//") (True <$ line) $ flip (ifM (isPrefixOf "/
     cur <- curLC
     replicateM_ 2 itemC
     ind <- gets (subTextIndex "*/" . snd)
-    True <$ maybe' (lift $ Left ("*/", (cur, TKReserved "/"))) ind (flip replicateM_ itemC . (+2))
+    True <$ maybe' (lift $ Left ("unterminated comment, expected to '*/'", (cur, TKReserved "/"))) ind (flip replicateM_ itemC . (+2))
 
 line :: (Enum i, Num i) => Tokenizer i T.Text
 line = string (not . isNewLine)
@@ -163,7 +155,7 @@ keyWordOrIdent = do
         return $ lookupKeyword s <|> Just (TKIdent s)
 
 -- | The core function of `Htcc.Tokenizer.tokenize`
-tokenize' :: forall i. (Enum i, Num i, Eq i, Read i, Show i) => T.Text -> Either (ASTError i) [TokenLC i]
+tokenize' :: (Enum i, Num i, Eq i, Read i, Show i) => T.Text -> Either (ASTError i) [TokenLC i]
 tokenize' = evalStateT runTokenizer' . (TokenLCNums 1 1,)
     where
         next = get >>= lift . evalStateT runTokenizer'
