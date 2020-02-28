@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 587f6e83b5467823524e984554079699d720dcebffb67602077a99cc275d2bbb
+-- hash: f250e48022834f6a051a91fb3212b4375a1534a8f03fd7660fb8189c9f7ad0b4
 
 name:           htcc
 version:        0.0.0.1
@@ -66,17 +66,23 @@ library
       Htcc.Parser
       Htcc.Parser.AST
       Htcc.Parser.AST.Core
-      Htcc.Parser.AST.Scope
-      Htcc.Parser.AST.Scope.Enumerator
-      Htcc.Parser.AST.Scope.Function
-      Htcc.Parser.AST.Scope.ManagedScope
-      Htcc.Parser.AST.Scope.Tag
-      Htcc.Parser.AST.Scope.Typedef
-      Htcc.Parser.AST.Scope.Utils
-      Htcc.Parser.AST.Scope.Var
+      Htcc.Parser.AST.DeduceKind
+      Htcc.Parser.AST.Type
+      Htcc.Parser.AST.Var
+      Htcc.Parser.AST.Var.Init
       Htcc.Parser.ConstructionData
+      Htcc.Parser.ConstructionData.Core
+      Htcc.Parser.ConstructionData.Scope
+      Htcc.Parser.ConstructionData.Scope.Enumerator
+      Htcc.Parser.ConstructionData.Scope.Function
+      Htcc.Parser.ConstructionData.Scope.ManagedScope
+      Htcc.Parser.ConstructionData.Scope.Tag
+      Htcc.Parser.ConstructionData.Scope.Typedef
+      Htcc.Parser.ConstructionData.Scope.Utils
+      Htcc.Parser.ConstructionData.Scope.Var
       Htcc.Parser.Core
       Htcc.Parser.Utils
+      Htcc.Parser.Utils.Core
       Htcc.Tokenizer
       Htcc.Tokenizer.Core
       Htcc.Tokenizer.Token

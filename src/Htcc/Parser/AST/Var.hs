@@ -1,5 +1,5 @@
 {-|
-Module      : Htcc.Parser.Utils
+Module      : Htcc.Parser.AST.Var
 Description : Data types and type synonyms used during AST construction
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -9,8 +9,8 @@ Portability : POSIX
 
 Data types and type synonyms used during AST construction
 -}
-module Htcc.Parser.Utils (
-    module Htcc.Parser.Utils.Core
+module Htcc.Parser.AST.Var (
+    module Htcc.Parser.AST.Var.Init
 ) where
 
-import Htcc.Parser.Utils.Core
+import Htcc.Parser.AST.Var.Init

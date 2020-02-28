@@ -28,8 +28,8 @@ import Text.PrettyPrint.ANSI.Leijen (Doc, text, char, blue, red, magenta, bold, 
 
 import Htcc.Parser (parse, ASTResult, ASTs)
 import qualified Htcc.Tokenizer as HT
-import Htcc.Parser.AST.Scope.Var (GlobalVars, Literals)
-import Htcc.Parser.AST.Scope.ManagedScope (ASTError)
+import Htcc.Parser.ConstructionData.Scope.Var (GlobalVars, Literals)
+import Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
 
 import Htcc.Asm.Generate.Core
 import Htcc.Asm.Intrinsic.Operand

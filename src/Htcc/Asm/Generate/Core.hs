@@ -28,7 +28,7 @@ import qualified Data.Text.IO as T
 import qualified Data.Map as M
 
 import Htcc.Parser (ATree (..), ATKind (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, isComplexAssign, stackSize)
-import Htcc.Parser.AST.Scope.Var (GVar (..), Literal (..))
+import Htcc.Parser.ConstructionData.Scope.Var (GVar (..), Literal (..))
 
 import qualified Htcc.Asm.Intrinsic.Structure as SI
 import qualified Htcc.Asm.Intrinsic.Structure.Section.Data as ID    

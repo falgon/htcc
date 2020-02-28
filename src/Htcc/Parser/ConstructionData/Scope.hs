@@ -1,5 +1,5 @@
 {-|
-Module      : Htcc.Parser.AST.Scope
+Module      : Htcc.Parser.ConstructionData.Scope
 Description : The Data type of scope and its utilities used in parsing
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -10,7 +10,7 @@ Portability : POSIX
 The Data type of variables and its utilities used in parsing
 -}
 {-# LANGUAGE DeriveGeneric #-}
-module Htcc.Parser.AST.Scope (
+module Htcc.Parser.ConstructionData.Scope (
     -- * The types
     Scoped (..),
     LookupVarResult (..),
@@ -44,12 +44,12 @@ import Control.DeepSeq (NFData (..))
 
 import qualified Htcc.CRules.Types as CT
 import Htcc.Parser.AST.Core (ATree (..))
-import qualified Htcc.Parser.AST.Scope.ManagedScope as SM
-import qualified Htcc.Parser.AST.Scope.Var as PV
-import qualified Htcc.Parser.AST.Scope.Tag as PS
-import qualified Htcc.Parser.AST.Scope.Typedef as PT
-import qualified Htcc.Parser.AST.Scope.Function as PF
-import qualified Htcc.Parser.AST.Scope.Enumerator as SE
+import qualified Htcc.Parser.ConstructionData.Scope.ManagedScope as SM
+import qualified Htcc.Parser.ConstructionData.Scope.Var as PV
+import qualified Htcc.Parser.ConstructionData.Scope.Tag as PS
+import qualified Htcc.Parser.ConstructionData.Scope.Typedef as PT
+import qualified Htcc.Parser.ConstructionData.Scope.Function as PF
+import qualified Htcc.Parser.ConstructionData.Scope.Enumerator as SE
 import qualified Htcc.Tokenizer.Token as HT
 
 -- | The data type of a struct tag

@@ -20,7 +20,7 @@ import Control.Monad ((>=>))
 import Htcc.Tokenizer.Core (tokenize')
 import Htcc.Tokenizer.Token
 import Htcc.CRules.Preprocessor as CP
-import Htcc.Parser.AST.Scope.ManagedScope (ASTError)
+import Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
 
 -- | Tokenize the `T.Text`. If an invalid chraracter matches as C language, the part and the character are returned.
 -- Otherwise, @[TokenIdx i]@ is returned.

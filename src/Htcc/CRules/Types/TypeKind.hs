@@ -22,7 +22,8 @@ module Htcc.CRules.Types.TypeKind (
     lookupMember,
     -- * Utilities of C type
     alignas,
-    accessibleIndices
+    Desg (..),
+    accessibleIndices,
 ) where
 
 import Prelude hiding (toInteger)
@@ -209,17 +210,24 @@ arSizes = arSizes' 0
         arSizes' !dp (CTArray v t) = second ([0..pred $ fromIntegral v]:) $ arSizes' (succ dp) t 
         arSizes' !dp _ = (dp, [])
 
+-- | The type of designator
+data Desg i = DesgIdx i -- ^ index type 
+    | DesgMem (StructMember i) -- ^ struct member type
+    deriving Eq
+
+instance (Eq i, Ord i, Integral i) => Ord (Desg i) where
+    compare (DesgIdx x) (DesgIdx y) = compare x y
+    compare (DesgMem mem) y = compare (DesgIdx $ fromIntegral $ smOffset mem) y
+    compare x (DesgMem mem) = compare x (DesgIdx $ fromIntegral $ smOffset mem)
+
+instance (Enum i, Integral i) => Enum (Desg i) where
+    toEnum = DesgIdx . fromIntegral
+    fromEnum (DesgIdx x) = fromIntegral x
+    fromEnum (DesgMem mem) = fromIntegral $ smOffset mem
+
 -- | If the given argument is `CTArray`, it returns a list of accessible indexes of the array.
 -- Othrewise returns empty list.
--- e.g.:
---
--- >>> arIndices $ makeCTArray [1,2] CTInt
--- [[0,0],[1,0]]
--- >>> arIndices $ makeCTArray [2,3,5] CTInt
--- [[0,0,0],[0,0,1],[0,1,0],[0,1,1],[0,2,0],[0,2,1],[1,0,0],[1,0,1],[1,1,0],[1,1,1],[1,2,0],[1,2,1],[2,0,0],[2,0,1],[2,1,0],[2,1,1],[2,2,0],[2,2,1],[3,0,0],[3,0,1],[3,1,0],[3,1,1],[3,2,0],[3,2,1],[4,0,0],[4,0,1],[4,1,0],[4,1,1],[4,2,0],[4,2,1]]
--- >>> arIndices CTInt
--- []
-accessibleIndices :: Integral i => TypeKind i -> [[i]]
+accessibleIndices :: Integral i => TypeKind i -> [[Desg i]]
 accessibleIndices = uncurry (concatMap . chunksOf) . first fromIntegral . second (concatMap (map (iNode' id) . iNode id) . arIndices') . arSizes 
     where
         arIndices' [] = []
@@ -229,8 +237,8 @@ accessibleIndices = uncurry (concatMap . chunksOf) . first fromIntegral . second
         iNode f (Node v xs@(Node _ []:_)) = [Node v $ map f xs]
         iNode f (Node v (x:xs)) = iNode (Node v . (:[]) . f) x ++ concatMap (iNode (Node v . (:[]) . f)) xs
 
-        iNode' f (Node v []) = f [v]
-        iNode' f (Node v t) = concatMap (iNode' ((v:) . f)) t
+        iNode' f (Node v []) = f [DesgIdx v]
+        iNode' f (Node v t) = concatMap (iNode' ((DesgIdx v:) . f)) t
 
 instance Eq i => Eq (TypeKind i) where
     (==) CTInt CTInt = True

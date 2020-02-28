@@ -1,5 +1,5 @@
 {-|
-Module      : Htcc.Parser.AST.Scope.ManagedScope
+Module      : Htcc.Parser.ConstructionData.Scope.ManagedScope
 Description : The Data type of typedef and its utilities used in parsing
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -9,7 +9,7 @@ Portability : POSIX
 
 The Data type of variables and its utilities used in parsing
 -}
-module Htcc.Parser.AST.Scope.ManagedScope (
+module Htcc.Parser.ConstructionData.Scope.ManagedScope (
     ManagedScope (..),
     ASTError
 ) where

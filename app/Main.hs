@@ -16,7 +16,7 @@ import Diagrams.TwoD.Size (mkSizeSpec2D)
 
 import Htcc.Asm (casm, execAST, InputCCode)
 import Htcc.Parser (ASTs)
-import Htcc.Parser.AST.Scope.Var (GlobalVars, Literals)
+import Htcc.Parser.ConstructionData.Scope.Var (GlobalVars, Literals)
 import Htcc.Utils (putStrLnErr, putDocLnErr, errTxtDoc, locTxtDoc)
 import Htcc.Visualizer (visualize)
 

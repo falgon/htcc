@@ -463,6 +463,20 @@ int main()
     assert(4, ({ char str[] = "foo"; sizeof str; }), "({ char str[] = \"foo\"; sizeof str; })");
     assert('d', ({ char str[] = "abcd"; str[3]; }), "({ char str[] = \"abcd\"; str[3]; })");
     assert(0, ({ char str[] = "abcd"; str[4]; }), "({ char str[] = \"abcd\"; str[4]; })");
+    assert(1, ({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.a; }), "({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.a; })");
+    assert(2, ({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.b; }), "({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.b; })");
+    assert(3, ({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.c; }), "({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.c; })");
+    assert(1, ({ struct { int a; int b; int c; } x = { 1 }; x.a; }), "({ struct { int a; int b; int c; } x = { 1 }; x.a; })");
+    assert(0, ({ struct { int a; int b; int c; } x = { 1 }; x.b; }), "({ struct { int a; int b; int c; } x = { 1 }; x.b; })");
+    assert(0, ({ struct { int a; int b; int c; } x = { 1 }; x.c; }), "({ struct { int a; int b; int c; } x = { 1 }; x.c; })");
+    assert(1, ({ struct { int a; int b; } x[2] = { { 1, 2 }, { 3, 4 } }; x[0].a; }), "({ struct { int a; int b; } x[2] = { { 1, 2 }, { 3, 4 } }; x[0].a; })");
+    assert(2, ({ struct { int a; int b; } x[2] = { { 1, 2 }, { 3, 4 } }; x[0].b; }), "({ struct { int a; int b; } x[2] = { { 1, 2 }, { 3, 4 } }; x[0].b; })");
+    assert(3, ({ struct { int a; int b; } x[2] = { { 1, 2 }, { 3, 4 } }; x[1].a; }), "({ struct { int a; int b; } x[2] = { { 1, 2 }, { 3, 4 } }; x[1].a; })");
+    assert(4, ({ struct { int a; int b; } x[2] = { { 1, 2 }, { 3, 4 } }; x[1].b; }), "({ struct { int a; int b; } x[2] = { { 1, 2 }, { 3, 4 } }; x[1].b; })");
+    assert(0, ({ struct { int a; int b; } x[2] = { { 1, 2 } }; x[1].a; }), "({ struct { int a; int b; } x[2] = { { 1, 2 } }; x[1].a; })");
+    assert(0, ({ struct { int a; int b; } x[2] = { { 1, 2 } }; x[1].b; }), "({ struct { int a; int b; } x[2] = { { 1, 2 } }; x[1].b; })");
+    assert(0, ({ struct { int a; int b; } x = {}; x.a; }), "({ struct { int a; int b; } x = {}; x.a; })");
+    assert(0, ({ struct { int a; int b; } x = {}; x.b; }), "({ struct { int a; int b; } x = {}; x.b; })");
 
     printf("All tests are passed!\n");
 

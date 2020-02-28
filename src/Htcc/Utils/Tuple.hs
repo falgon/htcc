@@ -11,6 +11,8 @@ Utilities of tuple
 -}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Htcc.Utils.Tuple (
+    -- * For double
+    swap,
     -- * For triples
     first3,
     second3,
@@ -34,6 +36,13 @@ module Htcc.Utils.Tuple (
     curry4,
     uncurry4,
 ) where
+
+import Data.Tuple.Extra (first, second, dupe)
+
+{-# INLINE swap #-}
+-- | Swap a first element and second element
+swap :: (a, b) -> (b, a)
+swap = first snd . second fst . dupe
 
 {-# INLINE first3 #-}
 -- | Update the first component of triple.

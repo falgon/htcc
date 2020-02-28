@@ -17,7 +17,16 @@ module Htcc.Parser.AST.Core (
     ATree (..),
     Treealizable (..),
     -- * Constructor
+    atBinary,
+    atUnary,
+    atNoLeaf,
+    atLVar,
+    atGVar,
+    atAssign,
     atNumLit,
+    atMemberAcc,
+    atExprStmt,
+    atBlock,
     -- * Utilities
     isATForInit,
     isATForCond,
@@ -213,10 +222,55 @@ isEmptyReturn :: ATree a -> Bool
 isEmptyReturn (ATNode ATReturn _ ATEmpty _) = True
 isEmptyReturn _ = False
 
+{-# INLINE atBinary #-}
+-- | `atBinary` is equivalent to `ATNode`
+atBinary :: ATKind i -> CT.StorageClass i -> ATree i -> ATree i -> ATree i
+atBinary = ATNode
+
+{-# INLINE atUnary #-}
+-- | `atUnary` is a shortcut for unary node
+atUnary :: ATKind i -> CT.StorageClass i -> ATree i -> ATree i
+atUnary k t n = atBinary k t n ATEmpty
+
+{-# INLINE atNoLeaf #-}
+-- | `atNoLeaf` is equivalent to @ATNode k t ATEmpty ATEmpty@
+atNoLeaf :: ATKind i -> CT.StorageClass i -> ATree i
+atNoLeaf k t = ATNode k t ATEmpty ATEmpty
+
+{-# INLINE atLVar #-}
+-- | `atLVar` is a shortcut for local variable node
+atLVar :: CT.StorageClass i -> i -> ATree i
+atLVar t rbpO = atNoLeaf (ATLVar t rbpO) t
+
+{-# INLINE atGVar #-}
+-- | `atGVar` is a shortcut for global variable node
+atGVar :: CT.StorageClass i -> T.Text -> ATree i
+atGVar t ident = atNoLeaf (ATGVar t ident) t
+
 {-# INLINE atNumLit #-}
 -- | `atNumLit` is a shortcut for constructing a numeric literal node
 atNumLit :: i -> ATree i
-atNumLit = flip (flip (flip ATNode (CT.SCAuto $ CT.CTLong CT.CTInt)) ATEmpty) ATEmpty . ATNum
+atNumLit = flip atNoLeaf (CT.SCAuto $ CT.CTLong CT.CTInt) . ATNum
+
+{-# INLINE atAssign #-}
+-- | `atAssign` is a shortcut for constructing a assign node
+atAssign :: ATree i -> ATree i -> ATree i
+atAssign lhs = atBinary ATAssign (atype lhs) lhs
+
+{-# INLINE atMemberAcc #-}
+-- | `atMemberAcc` is a shortcut for constructing a `ATMemberAcc` node
+atMemberAcc :: CT.StructMember i -> ATree i -> ATree i
+atMemberAcc sm = atUnary (ATMemberAcc sm) (CT.SCAuto $ CT.smType sm)
+
+{-# INLINE atExprStmt #-}
+-- | `atExprStmt` is a shortcut for constructing a expression statement node
+atExprStmt :: ATree i -> ATree i
+atExprStmt = atUnary ATExprStmt (CT.SCUndef CT.CTUndef)
+
+{-# INLINE atBlock #-}
+-- | `atBlock` is a shortcut for constructing a block node
+atBlock :: [ATree i] -> ATree i
+atBlock atl = ATNode (ATBlock atl) (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty
 
 -- | mapping for `ATKind`
 mapATKind :: (ATKind i -> ATKind i) -> ATree i -> ATree i

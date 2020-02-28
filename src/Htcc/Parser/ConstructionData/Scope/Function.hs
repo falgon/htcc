@@ -1,5 +1,5 @@
 {-|
-Module      : Htcc.Parser.AST.Scope.Function
+Module      : Htcc.Parser.ConstructionData.Scope.Function
 Description : The Data type of typedef and its utilities used in parsing
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -10,7 +10,7 @@ Portability : POSIX
 The Data type of variables and its utilities used in parsing
 -}
 {-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
-module Htcc.Parser.AST.Scope.Function (
+module Htcc.Parser.ConstructionData.Scope.Function (
     Function (..),
     Functions,
     add
@@ -21,8 +21,8 @@ import qualified Data.Map as M
 import qualified Data.Text as T
 import Control.DeepSeq (NFData (..))
 
-import Htcc.Parser.AST.Scope.ManagedScope
-import Htcc.Parser.AST.Scope.Utils (internalCE)
+import Htcc.Parser.ConstructionData.Scope.ManagedScope
+import Htcc.Parser.ConstructionData.Scope.Utils (internalCE)
 import qualified Htcc.CRules.Types as CT
 import qualified Htcc.Tokenizer.Token as HT
 

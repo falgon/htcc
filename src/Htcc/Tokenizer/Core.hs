@@ -34,7 +34,7 @@ import qualified Htcc.CRules.Preprocessor.Punctuators as CP
 import Htcc.Tokenizer.Token
 import Htcc.Utils (spanLenT, subTextIndex, isStrictSpace, lor, maybe', tshow)
 import qualified Htcc.Utils.CompilationState as C
-import Htcc.Parser.AST.Scope.ManagedScope (ASTError)
+import Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
 
 
 {-# INLINE isNewLine #-}

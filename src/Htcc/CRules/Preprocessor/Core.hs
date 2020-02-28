@@ -14,7 +14,7 @@ module Htcc.CRules.Preprocessor.Core (
 ) where
 
 import qualified Htcc.Tokenizer.Token as HT
-import Htcc.Parser.AST.Scope.ManagedScope (ASTError)
+import Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
 
 -- | The function that executes a proprocess. 
 -- __NOTE__: This is not yet implemented.

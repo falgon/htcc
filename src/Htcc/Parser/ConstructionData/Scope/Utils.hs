@@ -1,5 +1,5 @@
 {-|
-Module      : Htcc.Parser.AST.Scope.Utils
+Module      : Htcc.Parser.ConstructionData.Scope.Utils
 Description : Utilities used to handle scopes
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -10,7 +10,7 @@ Portability : POSIX
 Utilities used to handle scopes
 -}
 {-# LANGUAGE OverloadedStrings #-}
-module Htcc.Parser.AST.Scope.Utils (
+module Htcc.Parser.ConstructionData.Scope.Utils (
     internalCE
 ) where
 

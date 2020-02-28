@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
 {-|
-Module      : Htcc.Parser.AST.Scope.Var
+Module      : Htcc.Parser.ConstructionData.Scope.Var
 Description : The Data type of variables and its utilities used in parsing
 Copyright   : (c) roki, 2019
 License     : MIT
@@ -10,7 +10,7 @@ Portability : POSIX
 
 The Data type of variables and its utilities used in parsing
 -}
-module Htcc.Parser.AST.Scope.Var (
+module Htcc.Parser.ConstructionData.Scope.Var (
     -- * The data type
     GVar (..),
     LVar (..),
@@ -40,11 +40,11 @@ import Numeric.Natural
 import GHC.Generics (Generic, Generic1)
 import Control.DeepSeq (NFData (..))
 
-import qualified Htcc.Parser.AST.Scope.ManagedScope as SM
+import qualified Htcc.Parser.ConstructionData.Scope.ManagedScope as SM
 import qualified Htcc.Tokenizer.Token as HT
 import qualified Htcc.CRules.Types as CT
-import Htcc.Parser.AST.Core (ATree (..), ATKind (..), Treealizable (..))
-import Htcc.Parser.AST.Scope.Utils (internalCE)
+import Htcc.Parser.AST.Core (ATree (..), ATKind (..), Treealizable (..), atLVar, atGVar)
+import Htcc.Parser.ConstructionData.Scope.Utils (internalCE)
 import Htcc.Utils (tshow)
 
 -- | The data type of global variable
@@ -72,7 +72,7 @@ instance NFData a => NFData (LVar a)
 
 instance Treealizable LVar where
     {-# INLINE treealize #-}
-    treealize (LVar t o _) = ATNode (ATLVar t o) t ATEmpty ATEmpty
+    treealize (LVar t o _) = atLVar t o 
 
 instance SM.ManagedScope (LVar a) where
     lookup = M.lookup
@@ -159,7 +159,7 @@ addLVar cnd t cur@(_, HT.TKIdent ident) vars = case lookupLVar ident vars of
     where
         ofs = (+) (fromIntegral $ CT.sizeof t) $ CT.alignas (maximumOffset $ locals vars) $ fromIntegral $ CT.alignof t
         varnat = let lvar = LVar t ofs cnd in 
-            Right (ATNode (ATLVar (lvtype lvar) (rbpOffset lvar)) t ATEmpty ATEmpty, vars { locals = M.insert ident lvar $ locals vars })
+            Right (atLVar (lvtype lvar) (rbpOffset lvar), vars { locals = M.insert ident lvar $ locals vars })
 addLVar _ _ _ _ = Left (internalCE, HT.emptyToken)
 
 
@@ -167,8 +167,8 @@ addLVar _ _ _ _ = Left (internalCE, HT.emptyToken)
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
 addGVar :: Num i => CT.StorageClass i -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
 addGVar t cur@(_, HT.TKIdent ident) vars = flip (flip maybe $ const $ Left ("redeclaration of '" <> ident <> "' with no linkage", cur)) (lookupGVar ident vars) $ -- ODR
-    let gvar = GVar t; nat = ATNode (ATGVar (gvtype gvar) ident) t ATEmpty ATEmpty in
-            Right (nat, vars { globals = M.insert ident gvar $ globals vars })
+    let gvar = GVar t in
+        Right (atGVar (gvtype gvar) ident, vars { globals = M.insert ident gvar $ globals vars })
 addGVar _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
 
 -- | If the specified token is `HT.TKString`, `addLiteral` adds a new literal to the list,

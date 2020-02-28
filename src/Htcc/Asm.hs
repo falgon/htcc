@@ -19,7 +19,7 @@ import Data.Tuple.Extra (uncurry3)
 
 import Htcc.Asm.Generate 
 import Htcc.Parser (ASTs)
-import Htcc.Parser.AST.Scope.Var (GlobalVars, Literals)
+import Htcc.Parser.ConstructionData.Scope.Var (GlobalVars, Literals)
 import qualified Htcc.Asm.Intrinsic.Structure.Internal as SI
 import qualified Htcc.Asm.Intrinsic.Structure.Section.Text.Instruction as TI
 import qualified Htcc.Asm.Intrinsic.Operand as O

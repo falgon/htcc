@@ -30,7 +30,7 @@ import Data.Maybe (catMaybes)
 import Data.MonoTraversable (Element, headMay, MonoFoldable (..))
 import qualified Data.Sequences as S
 
-import Htcc.Parser.AST.Scope.ManagedScope (ASTError)
+import Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
 
 -- | The state type handled during compilation.
 -- It has informations required during the compilation process and input data consumed.

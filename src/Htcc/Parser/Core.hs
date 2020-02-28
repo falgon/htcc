@@ -48,46 +48,35 @@ import Data.Bits hiding (shift)
 import Data.Bool (bool)
 import qualified Data.ByteString as B
 import Data.Foldable (Foldable (..))
-import Data.Tuple.Extra (first, second, uncurry3, fst3, snd3, dupe)
-import Data.List (find, foldl', sortBy)
+import Data.Tuple.Extra (first, second, uncurry3, snd3, dupe)
+import Data.List (find, foldl')
 import Data.List.Split (linesBy)
 import Data.Either (isLeft, lefts, rights)
 import Data.Maybe (isJust, fromJust, fromMaybe)
 import Data.STRef (newSTRef, readSTRef, writeSTRef)
 import qualified Data.Set as S
-import qualified Data.Sequence as SQ
 import qualified Data.Map.Strict as M
 import qualified Data.Text as T
 import Control.Monad (forM, when)
 import Control.Monad.ST (runST)
 import Control.Monad.Loops (unfoldrM)
 import Numeric.Natural
-import Safe (headMay)
 
 import Htcc.Utils (
-    first3, 
-    second3,
-    third3,
-    tshow, 
-    toNatural,
-    toInteger,
-    spanLen,
-    first4,
-    dropFst3,
-    dropFst4,
-    dropSnd3,
-    maybeToRight,
-    maybe')
+    first3, second3, third3, first4,
+    dropFst3, dropFst4, dropSnd3,
+    tshow, toNatural, toInteger,
+    spanLen, maybeToRight, maybe')
 import qualified Htcc.Tokenizer as HT
 import qualified Htcc.CRules.Types as CT
-import qualified Htcc.Parser.AST.Scope.Var as PV
+import qualified Htcc.Parser.ConstructionData.Scope.Var as PV
 import Htcc.Parser.AST
-import qualified Htcc.Parser.AST.Scope.Tag as PST
-import qualified Htcc.Parser.AST.Scope.Typedef as PSD
-import qualified Htcc.Parser.AST.Scope.Function as PSF
-import Htcc.Parser.AST.Scope (Scoped (..), LookupVarResult (..))
-import Htcc.Parser.AST.Scope.Utils (internalCE)
-import Htcc.Parser.AST.Scope.ManagedScope (ASTError)
+import qualified Htcc.Parser.ConstructionData.Scope.Tag as PST
+import qualified Htcc.Parser.ConstructionData.Scope.Typedef as PSD
+import qualified Htcc.Parser.ConstructionData.Scope.Function as PSF
+import Htcc.Parser.ConstructionData.Scope (Scoped (..), LookupVarResult (..))
+import Htcc.Parser.ConstructionData.Scope.Utils (internalCE)
+import Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
 import Htcc.Parser.ConstructionData
 import Htcc.Parser.Utils
 
@@ -232,78 +221,6 @@ isTypeName (_, HT.TKReserved "register") _ = True
 isTypeName (_, HT.TKIdent ident) scp = isJust $ lookupTypedef ident scp
 isTypeName _ _ = False
 
-{-# INLINE validAssign #-}
-validAssign :: Eq i => HT.TokenLC i -> ATree i -> Either (ASTError i) (ATree i)
-validAssign errPlaceholder x@(ATNode _ t _ _) 
-    | CT.toTypeKind t == CT.CTVoid = Left ("void value not ignored as it ought to be", errPlaceholder)
-    | otherwise = Right x
-validAssign errPlaceholder _ = Left ("Expected to assign", errPlaceholder)
-        
--- Initializing local variables
-varInit :: (Read i, Show i, Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> [HT.TokenLC i] -> ConstructionData i -> ASTConstruction i
-varInit t ident xs scp = addLVar (fromMaybe t $ incomplete t scp) ident scp >>= uncurry varInit'
-    where
-        varInit' lat scp'
-            | CT.isArray t = second3 (\st -> ATNode (ATBlock $ toList st) (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty) <$> arInit SQ.empty [] t xs scp'
-            | otherwise = assign xs ATEmpty scp' >>= \(ert, erat, ervar) -> validAssign (HT.altEmptyToken ert) erat >>= \erat' ->
-                Right (ert, ATNode ATExprStmt (CT.SCUndef CT.CTUndef) (ATNode ATAssign (atype lat) lat erat') ATEmpty, ervar)
-            where
-                {-# INLINE arNodes #-}
-                arNodes rhs desg' sc = (\lhs -> ATNode ATExprStmt (CT.SCUndef CT.CTUndef) (ATNode ATAssign (atype lhs) lhs rhs) ATEmpty) <$> arNodes' desg'
-                    where
-                        arNodes' = flip foldr (treealize <$> maybeToRight (internalCE, HT.emptyToken) (lookupLVar (tshow $ snd ident) sc)) $ \idx acc -> do
-                            at <- acc
-                            nd <- maybeToRight ("invalid initializer-list", HT.emptyToken) (addKind at $ atNumLit idx)
-                            flip (flip (ATNode ATDeref) nd) ATEmpty <$> maybeToRight ("invalid initializer-list", HT.emptyToken) (CT.deref (atype nd))
-
-                -- For initializer-list.
-                -- For example, the declaration @int x[2][2] = { { 1, 2 }, { 3, 4 } };@ is converted to @x[2][2]; x[0][0] = 1; x[0][1] = 2; x[1][0] = 3; x[1][1] = 4;@.
-                arInit ai desg t' xs' scp''
-                    -- initializer-string
-                    | CT.isArray t' && maybe False ((==CT.CTChar) . CT.toTypeKind) (CT.deref t') && maybe False (HT.isTKString . snd) (headMay xs') = if CT.isIncompleteArray t' then 
-                        case snd (head xs') of
-                            (HT.TKString s) -> let newt = arTypeFromLen (B.length s) in addLVar newt ident scp'' >>= arInit ai desg newt xs' . snd
-                            _ -> Left (internalCE, HT.emptyToken) -- should not reach here
-                        else case (snd (head xs'), CT.toTypeKind t') of
-                            (HT.TKString s, CT.CTArray n _) -> let s' = s `B.append` B.pack (replicate (fromIntegral n - pred (B.length s)) $ toEnum 0) in 
-                                fmap ((tail xs',, if fromIntegral n < pred (B.length s) then pushWarn "initializer-string for char array is too long" (head xs') scp'' else scp'') . 
-                                    (ai SQ.><) . SQ.fromList) $ mapM (flip id scp'' . uncurry arNodes) $ zipWith (flip (.) (++desg) . (,) . atNumLit . fromIntegral) (B.unpack s') $
-                                        sortBy (flip (.) reverse . compare . reverse) $ CT.accessibleIndices $ CT.toTypeKind t'
-                            _ -> Left (internalCE, HT.emptyToken) -- should not reach here
-                    -- Non-string initializer-list
-                    | CT.isArray t' = case xs' of -- incomplete dattara takeExps de kazeru
-                        -- Zero initialization
-                        (_, HT.TKReserved "{"):(_, HT.TKReserved "}"):ds -> fmap ((ds,, scp'') . (ai SQ.><) . SQ.fromList) $ 
-                            mapM (flip (arNodes $ atNumLit 0) scp'' . (++desg)) $ CT.accessibleIndices $ CT.toTypeKind t'
-                        -- The specified initializer-list of initialization elements
-                        c@(_, HT.TKReserved "{"):ds 
-                            | CT.isIncompleteArray t' -> toComplete (c:ds) >>= \newt -> addLVar newt ident scp'' >>= arInit ai desg newt xs' . snd
-                            | otherwise -> iterateIL c ds
-                        _ -> expectedIL
-                    -- For a element
-                    | otherwise = assign xs' ATEmpty scp'' >>= \(ds, at, scp''') -> (ds,,scp''') . (ai SQ.|>) <$> arNodes at desg scp'''
-                    where
-                        {-# INLINE expectedIL #-}
-                        expectedIL = Left ("expected { initializer-list } or { initializer-list , }", if not (null xs') then head xs' else HT.altEmptyToken xs)
-
-                        toComplete ds' = (>>=) 
-                            (maybeToRight ("expected { initializer-list } or { initializer-list , }", if not (null xs') then head xs' else HT.altEmptyToken xs) (takeBrace "{" "}" ds')) $
-                                either (Left . ("expected { initializer-list } or { initializer-list , }",)) $ \(br, _) -> arTypeFromLen . length <$> 
-                                    maybeToRight (internalCE, HT.emptyToken) (takeExps $ [(HT.TokenLCNums 0 0, HT.TKReserved "(")] ++ init (tail br) ++ [(HT.TokenLCNums 0 0, HT.TKReserved ")")])
-
-                        {-# INLINE arTypeFromLen #-}
-                        arTypeFromLen len = snd (CT.dctorArray t') $ CT.mapTypeKind (CT.CTArray (fromIntegral len) . fromJust . CT.fromIncompleteArray) t'
-                            
-                        iterateIL c ds = arInit ai (0:desg) (fromJust $ CT.deref t') ds scp'' >>= \(ds', ai', scp''') -> 
-                            arInitLoop 1 ai' ds' scp''' >>= \rs -> case fst3 rs of
-                                (_, HT.TKReserved "}"):ds''' -> Right $ first3 (const ds''') rs
-                                _ -> Left ("expected '}' token for '{'", c)
-                            where
-                                arInitLoop _ ai' ds'@((_, HT.TKReserved ","):(_, HT.TKReserved "}"):_) sc = Right (ds', ai', sc)
-                                arInitLoop _ ai' ds'@((_, HT.TKReserved "}"):_) sc = Right (ds', ai', sc)
-                                arInitLoop !idx ai' ((_, HT.TKReserved ","):ds') sc = arInit ai' (idx:desg) (fromJust $ CT.deref t') ds' sc >>= uncurry3 (flip (arInitLoop (succ idx)))
-                                arInitLoop _ _ ds' _ = Left $ if null ds then ("unexpected token in initializer-list", HT.emptyToken) else
-                                    ("unexpected token '" <> tshow (snd $ head ds) <> "' in initializer-list", head ds')
 
 {-# INLINE varDecl #-}
 varDecl :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ConstructionData i -> ASTConstruction i
@@ -312,7 +229,7 @@ varDecl tk scp = takeType tk scp >>= validDecl (HT.altEmptyToken tk) >>= varDecl
         varDecl' (_, Nothing, (_, HT.TKReserved ";"):ds, scp') = Right (ds, ATEmpty, scp')
         varDecl' (t, Just ident, (_, HT.TKReserved ";"):ds, scp') = maybeToRight ("declaration with incomplete type", ident) (incomplete t scp) >>= \t' ->
             addLVar t' ident scp' >>= \(lat, scp'') -> Right (ds, ATNode (ATNull lat) (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty, scp'')
-        varDecl' (t, Just ident, (_, HT.TKReserved "="):ds, scp') = (>>=) (varInit t ident ds scp') $ \case
+        varDecl' (t, Just ident, (_, HT.TKReserved "="):ds, scp') = (>>=) (varInit assign t ident ds scp') $ \case
             ((_, HT.TKReserved ";"):ds', at, sc) -> Right (ds', at, sc)
             _ -> Left ("expected ';' token, the subject iteration statement starts here:", head tk)
         varDecl' (_, _, ds, _) = Left $ if null ds then ("expected unqualified-id", head tk) else ("expected unqualified-id before '" <> tshow (snd (head ds)) <> T.singleton '\'', head ds)
@@ -359,17 +276,6 @@ constantExp tk = flip (either (Left . Just)) (conditional tk ATEmpty initConstru
                 castBool x | x == 0 = False | otherwise = True
         evalConstantExp ATEmpty = Nothing
 
--- | The type to be used when the AST construction is successful
-type ASTSuccess i = ([HT.TokenLC i], ATree i, ConstructionData i)
-
--- | Types used during AST construction
-type ASTConstruction i = Either (ASTError i) (ASTSuccess i)
-
--- | The type of AST list
-type ASTs i = [ATree i]
-
--- | A type that represents the result after AST construction. Quadraple of warning list, constructed abstract syntax tree list, global variable map, literal list.
-type ASTResult i = Either (ASTError i) (Warnings i, ASTs i, PV.GlobalVars i, PV.Literals i)
 
 -- | Perform type definition from token string starting from @typedef@ token
 defTypedef :: (Integral i, Show i, Read i, Bits i) => [(HT.TokenLCNums i, HT.Token i)] -> ConstructionData i -> Either (ASTError i) ([HT.TokenLC i], ATree a, ConstructionData i)
@@ -631,22 +537,6 @@ relational = inners shift [("<", ATLT), ("<=", ATLEQ), (">", ATGT), (">=", ATGEQ
 shift :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
 shift = inners add [("<<", ATShl), (">>", ATShr)]
         
-{-# INLINE addKind #-}
-addKind :: (Eq i, Ord i, Show i) => ATree i -> ATree i -> Maybe (ATree i)
-addKind lhs rhs
-    | all (CT.isFundamental . atype) [lhs, rhs] = Just $ ATNode ATAdd (CT.conversion (atype lhs) (atype rhs)) lhs rhs
-    | isJust (CT.deref $ atype lhs) && CT.isFundamental (atype rhs) = Just $ ATNode ATAddPtr (atype lhs) lhs rhs
-    | CT.isFundamental (atype lhs) && isJust (CT.deref $ atype rhs) = Just $ ATNode ATAddPtr (atype rhs) rhs lhs
-    | otherwise = Nothing
-
-{-# INLINE subKind #-}
-subKind :: (Eq i, Ord i) => ATree i -> ATree i -> Maybe (ATree i)
-subKind lhs rhs
-    | all (CT.isFundamental . atype) [lhs, rhs] = Just $ ATNode ATSub (CT.conversion (atype lhs) (atype rhs)) lhs rhs
-    | isJust (CT.deref $ atype lhs) && CT.isFundamental (atype rhs) = Just $ ATNode ATSubPtr (atype lhs) lhs rhs
-    | all (isJust . CT.deref . atype) [lhs, rhs] = Just $ ATNode ATPtrDis (atype lhs) lhs rhs
-    | otherwise = Nothing
-
 -- | `add` indicates \(\eqref{eq:first}\) among the comments of `inners`.
 add :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
 add xs atn scp = (>>=) (term xs atn scp) $ uncurry3 add'
@@ -693,7 +583,7 @@ unary xs at scp = either Left (uncurry3 f) $ factor xs at scp
             | CT.isCTStruct (atype erat) || CT.isIncompleteStruct (atype erat) = if null xs' then Left ("expected identifier at end of input", cur) else case head xs' of
                 (_, HT.TKIdent ident) -> maybeToRight ("incomplete type '" <> tshow (atype erat) <> "'", cur) (incomplete (atype erat) erscp) >>= \t ->
                     maybeToRight ("no such member", cur) (CT.lookupMember ident (CT.toTypeKind t)) >>= \mem ->
-                        f (tail xs') (ATNode (ATMemberAcc mem) (CT.SCAuto $ CT.smType mem) erat ATEmpty) erscp
+                        f (tail xs') (atMemberAcc mem erat) erscp
                 _ -> Left ("expected identifier after '.' token", cur)
             | otherwise = Left ("request for a member in something not a structure or union", cur)
         f (cur@(_, HT.TKReserved "->"):xs') erat !erscp
@@ -701,7 +591,7 @@ unary xs at scp = either Left (uncurry3 f) $ factor xs at scp
                 case head xs' of
                     (_, HT.TKIdent ident) -> maybeToRight ("incomplete type '" <> tshow (atype erat) <> "'", cur) (incomplete (fromJust (CT.deref $ atype erat)) erscp) >>= \t ->
                         maybeToRight ("no such member", cur) (CT.lookupMember ident (CT.toTypeKind t)) >>= \mem ->
-                            f (tail xs') (ATNode (ATMemberAcc mem) (CT.SCAuto $ CT.smType mem) (ATNode ATDeref (CT.SCAuto $ CT.smType mem) erat ATEmpty) ATEmpty) erscp
+                            f (tail xs') (atMemberAcc mem (atUnary ATDeref (CT.SCAuto $ CT.smType mem) erat)) erscp
                     _ -> Left ("expected identifier after '->' token", cur)
             | otherwise = Left ("invalid type argument of '->'" <> if CT.isCTUndef (atype erat) then "" else " (have '" <> tshow (atype erat) <> "')", cur)
         f ((_, HT.TKReserved "++"):xs') erat !erscp = f xs' (ATNode ATPostInc (atype erat) erat ATEmpty) erscp
