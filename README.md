@@ -98,6 +98,12 @@ Examples are shown in the following table.
 </tr>
 </table>
 
+## Appearance of operations
+
+<p align="center">
+<img src="assets/some_operation.gif" alt="an gif animation image of operations" />
+</p>
+
 ## Tests and run examples
 
 If you want to run outside the Linux environment, 
@@ -146,12 +152,6 @@ $ cd example
 $ make docker
 $ make clean_docker # Stop and delete docker container, and delete image
 ```
-
-## Appearance of operations
-
-<p align="center">
-<img src="assets/some_operation.gif" alt="an gif animation image of operations" />
-</p>
 
 ## Benchmark
 
