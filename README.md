@@ -147,6 +147,12 @@ $ make docker
 $ make clean_docker # Stop and delete docker container, and delete image
 ```
 
+## Appearance of operations
+
+<p style="text-align: center;">
+<img src="assets/some_operation.gif" alt="an gif animation image of operations" />
+</p>
+
 ## Benchmark
 
 ```sh

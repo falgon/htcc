@@ -17,16 +17,14 @@ module Htcc.Parser.AST.Core (
     ATree (..),
     Treealizable (..),
     -- * Constructor
-    atBinary,
-    atUnary,
-    atNoLeaf,
-    atLVar,
-    atGVar,
-    atAssign,
-    atNumLit,
-    atMemberAcc,
-    atExprStmt,
-    atBlock,
+    atBinary, atUnary, atNoLeaf,
+    atLVar, atGVar,
+    atAssign, atNumLit, atMemberAcc, atExprStmt,
+    atBlock, atNull, atDefFunc, atReturn,
+    atIf, atElse, atWhile, atFor,
+    atBreak, atContinue, atSwitch, atCase, 
+    atDefault, atGoto, atLabel, atComma,
+    atConditional, atCast,
     -- * Utilities
     isATForInit,
     isATForCond,
@@ -43,7 +41,7 @@ module Htcc.Parser.AST.Core (
 
 import qualified Data.Text as T
 import Control.Monad ((>=>))
-import Htcc.CRules.Types as CT
+import qualified Htcc.CRules.Types as CT
 
 -- | Specially @for@ syntax tree type
 data ATKindFor a = ATForkw -- ^ The @for@ keyword
@@ -162,12 +160,12 @@ fromATVar (ATLVar s _) = Just s
 fromATVar (ATGVar s _) = Just s
 fromATVar _ = Nothing
 
-instance IncompleteBase ATKind where
-    isIncompleteArray = maybe False isIncompleteArray . fromATVar
-    isIncompleteStruct = maybe False isIncompleteStruct . fromATVar
-    fromIncompleteArray = fromATVar >=> fromIncompleteArray
-    fromIncompleteStruct = fromATVar >=> fromIncompleteStruct
-    isValidIncomplete = maybe False isValidIncomplete . fromATVar 
+instance CT.IncompleteBase ATKind where
+    isIncompleteArray = maybe False CT.isIncompleteArray . fromATVar
+    isIncompleteStruct = maybe False CT.isIncompleteStruct . fromATVar
+    fromIncompleteArray = fromATVar >=> CT.fromIncompleteArray
+    fromIncompleteStruct = fromATVar >=> CT.fromIncompleteStruct
+    isValidIncomplete = maybe False CT.isValidIncomplete . fromATVar 
 
 {-# INLINE isComplexAssign #-}
 -- | Returns True if the given `ATKind` is an assignment operator other than simple assignment. 
@@ -271,6 +269,91 @@ atExprStmt = atUnary ATExprStmt (CT.SCUndef CT.CTUndef)
 -- | `atBlock` is a shortcut for constructing a block node
 atBlock :: [ATree i] -> ATree i
 atBlock atl = ATNode (ATBlock atl) (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty
+
+{-# INLINE atNull #-}
+-- | `atNull` is a shortcut for constructing a null node
+atNull :: ATree i -> ATree i
+atNull at = atNoLeaf (ATNull at) (CT.SCUndef CT.CTUndef)
+
+{-# INLINE atDefFunc #-}
+-- | `atDefFunc` is a shortcut for constructing a function node
+atDefFunc :: T.Text -> Maybe [ATree i] -> CT.StorageClass i -> ATree i -> ATree i
+atDefFunc = (.) atUnary . ATDefFunc
+
+{-# INLINE atReturn #-}
+-- | `atReturn` is a shortcut for constructing a @return@ node
+atReturn :: CT.StorageClass i -> ATree i -> ATree i
+atReturn = atUnary ATReturn
+
+{-# INLINE atIf #-}
+-- | `atIf` is a shortcut for constructing a @if@ node
+atIf :: ATree i -> ATree i -> ATree i
+atIf = atBinary ATIf (CT.SCUndef CT.CTUndef)
+
+{-# INLINE atElse #-}
+-- | `atElse` is a shortcut for constructing a @else@ node
+atElse :: ATree i -> ATree i -> ATree i
+atElse = atBinary ATElse (CT.SCUndef CT.CTUndef)
+
+{-# INLINE atWhile #-}
+-- | `atWhile` is a shortcut for constructing a @while@ node
+atWhile :: ATree i -> ATree i -> ATree i
+atWhile = atBinary ATWhile (CT.SCUndef CT.CTUndef)
+
+{-# INLINE atFor #-}
+-- | `atFor` is a shortcut for constructing a @for@ node
+atFor :: [ATKindFor i] -> ATree i
+atFor = flip atNoLeaf (CT.SCUndef CT.CTUndef) . ATFor
+
+{-# INLINE atBreak #-}
+-- | `atBreak` is a shortcut for constructing a @break@ node
+atBreak :: ATree i
+atBreak = atNoLeaf ATBreak (CT.SCUndef CT.CTUndef)
+
+{-# INLINE atContinue #-}
+-- | `atContinue` is a shortcut for constructing a @continue@ node
+atContinue :: ATree i
+atContinue = atNoLeaf ATContinue (CT.SCUndef CT.CTUndef)
+
+{-# INLINE atSwitch #-}
+-- | `atSwitch` is a shortcut for constructing a @switch@ node
+atSwitch :: ATree i -> [ATree i] -> CT.StorageClass i -> ATree i
+atSwitch = (.) atNoLeaf . ATSwitch
+
+{-# INLINE atCase #-}
+-- | `atCase` is a shortcut for constructing a @case@ node
+atCase :: i -> i -> ATree i -> ATree i
+atCase = (.) (flip atUnary (CT.SCUndef CT.CTUndef)) . ATCase
+
+{-# INLINE atDefault #-}
+-- | `atDefault` is a shortcut for constructing a @default@ node
+atDefault :: i -> ATree i -> ATree i
+atDefault = flip atUnary (CT.SCUndef CT.CTUndef) . ATDefault
+
+{-# INLINE atGoto #-}
+-- | `atGoto` is a shortcut for constructing a @goto@ node
+atGoto :: T.Text -> ATree i
+atGoto = flip atNoLeaf (CT.SCUndef CT.CTUndef) . ATGoto
+
+{-# INLINE atLabel #-}
+-- | `atLabel` is a shortcut for constructing a @label@ node
+atLabel :: T.Text -> ATree i
+atLabel = flip atNoLeaf (CT.SCUndef CT.CTUndef) . ATLabel
+
+{-# INLINE atComma #-}
+-- | `atComma` is a shortcut for constructing a @,@ node
+atComma :: CT.StorageClass i -> ATree i -> ATree i -> ATree i
+atComma = atBinary ATComma
+
+{-# INLINE atConditional #-}
+-- | `atConditional` is a shortcut for constructing a @?:@ node
+atConditional :: CT.StorageClass i -> ATree i -> ATree i -> ATree i -> ATree i
+atConditional ty c t f = atNoLeaf (ATConditional c t f) ty
+
+{-# INLINE atCast #-}
+-- | `atCast` is a shortcut for constructing a cast node
+atCast :: CT.StorageClass i -> ATree i -> ATree i
+atCast = atUnary ATCast
 
 -- | mapping for `ATKind`
 mapATKind :: (ATKind i -> ATKind i) -> ATree i -> ATree i
