@@ -11,8 +11,8 @@ Parsing and constructing AST from string
 -}
 module Htcc.Parser (
     module Htcc.Parser.AST,
-    module Htcc.Parser.Core
+    module Htcc.Parser.Parsing
 ) where
 
 import Htcc.Parser.AST
-import Htcc.Parser.Core
+import Htcc.Parser.Parsing

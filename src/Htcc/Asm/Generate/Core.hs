@@ -27,6 +27,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Map as M
 
+import Htcc.Parser.ConstructionData.Scope.Var as PV
 import Htcc.Parser (ATree (..), ATKind (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, isComplexAssign, stackSize)
 import Htcc.Parser.ConstructionData.Scope.Var (GVar (..), Literal (..))
 
@@ -360,10 +361,13 @@ textSection' ATEmpty = return ()
 textSection' _ = SI.errCtx "internal compiler error: all abstract tree should start from some functions"
 
 -- | data section of assembly code
-dataSection :: Ord i => M.Map T.Text (GVar i) -> [Literal i] -> SI.Asm SI.AsmCodeCtx e ()
+dataSection :: (Show i, Ord i, Num i) => M.Map T.Text (GVar i) -> [Literal i] -> SI.Asm SI.AsmCodeCtx e ()
 dataSection gvars lits = ID.dAta $ do
     forM_ lits $ \(Literal _ n cnt) -> ID.label (".L.data." <> tshow n) $ ID.byte cnt
-    forM_ (M.toList gvars) $ \(var, GVar t) -> ID.label var $ ID.zero (CR.sizeof t)
+    forM_ (M.toList gvars) $ \(var, GVar t ginit) -> case ginit of
+        PV.GVarInitWithZero -> ID.label var $ ID.zero (CR.sizeof t)
+        PV.GVarInitWithOG ref -> ID.label var $ ID.quad ref
+        PV.GVarInitWithVal val -> ID.label var $ ID.sbyte (CR.sizeof t) val
 
 -- | text section of assembly code
 textSection :: (Integral e, Show e, IsOperand i, Integral i, Show i, IT.UnaryInstruction i, IT.BinaryInstruction i) => [ATree i] -> SI.Asm SI.AsmCodeCtx e ()

@@ -12,6 +12,8 @@ The Data type of variables and its utilities used in parsing
 -}
 module Htcc.Parser.ConstructionData.Scope.Var (
     -- * The data type
+    SomeVars,
+    GVarInitWith (..),
     GVar (..),
     LVar (..),
     Literal (..),
@@ -24,6 +26,7 @@ module Htcc.Parser.ConstructionData.Scope.Var (
     lookupGVar,
     lookupVar,
     addLVar,
+    addGVarWith,
     addGVar,
     addLiteral,
     -- * Utilities
@@ -47,10 +50,17 @@ import Htcc.Parser.AST.Core (ATree (..), ATKind (..), Treealizable (..), atLVar,
 import Htcc.Parser.ConstructionData.Scope.Utils (internalCE)
 import Htcc.Utils (tshow)
 
--- | The data type of global variable
-newtype GVar i = GVar -- ^ The constructor of global variable
+-- | The informations type about initial value of the global variable
+data GVarInitWith i = GVarInitWithZero | GVarInitWithOG T.Text | GVarInitWithVal i
+    deriving (Eq, Ord, Show, Generic)
+
+instance NFData i => NFData (GVarInitWith i)
+
+-- | The data type of the global variable
+data GVar i = GVar -- ^ The constructor of the global variable
     {
-        gvtype :: CT.StorageClass i -- ^ The type of the global variable
+        gvtype :: CT.StorageClass i, -- ^ The type of the global variable
+        initWith :: GVarInitWith i -- ^ The informations about initial value of the global variable
     } deriving (Eq, Ord, Show, Generic)
 
 instance NFData i => NFData (GVar i)
@@ -89,7 +99,7 @@ data Literal a = Literal -- ^ The literal constructor
 
 instance NFData a => NFData (Literal a)
 
--- The type of variables
+-- | The type of variables
 type SomeVars v = M.Map T.Text v
 
 -- | The type of global variables
@@ -165,11 +175,17 @@ addLVar _ _ _ _ = Left (internalCE, HT.emptyToken)
 
 -- | If the specified token is `HT.TKIdent` and the global variable does not exist in the list, `addLVar` adds a new global variable to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
+addGVarWith :: Num i => CT.StorageClass i -> HT.TokenLC i -> GVarInitWith i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
+addGVarWith t cur@(_, HT.TKIdent ident) iw vars = flip (flip maybe $ const $ Left ("redeclaration of '" <> ident <> "' with no linkage", cur)) (lookupGVar ident vars) $ -- ODR
+    Right (atGVar (gvtype gvar) ident, vars { globals = M.insert ident gvar $ globals vars })
+    where
+        gvar = GVar t iw
+addGVarWith _ _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
+
+-- | If the specified token is `HT.TKIdent` and the global variable does not exist in the list, `addLVar` adds a new global variable that will be initialized by zero to the list,
+-- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
 addGVar :: Num i => CT.StorageClass i -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
-addGVar t cur@(_, HT.TKIdent ident) vars = flip (flip maybe $ const $ Left ("redeclaration of '" <> ident <> "' with no linkage", cur)) (lookupGVar ident vars) $ -- ODR
-    let gvar = GVar t in
-        Right (atGVar (gvtype gvar) ident, vars { globals = M.insert ident gvar $ globals vars })
-addGVar _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
+addGVar t ident vars = addGVarWith t ident GVarInitWithZero vars
 
 -- | If the specified token is `HT.TKString`, `addLiteral` adds a new literal to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.

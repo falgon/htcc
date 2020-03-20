@@ -17,6 +17,7 @@ module Htcc.Parser.ConstructionData.Scope (
     -- * Operations for scope
     addLVar,
     addGVar,
+    addGVarWith,
     addLiteral,
     addTag,
     addTypedef,
@@ -85,6 +86,11 @@ addLVar ty tkn scp = addVar (PV.addLVar $ curNestDepth scp) ty tkn scp
 {-# INLINE addGVar #-}
 addGVar :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
 addGVar = addVar PV.addGVar
+
+-- | `addGVarWith` has a scoped type argument and is the same function as `PV.addLiteral` internally.
+{-# INLINE addGVarWith #-}
+addGVarWith :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> PV.GVarInitWith i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
+addGVarWith ty tkn iw sc = second (\x -> sc { vars = x }) <$> PV.addGVarWith ty tkn iw (vars sc)
 
 -- | `addLiteral` has a scoped type argument and is the same function as `PV.addLiteral` internally.
 {-# INLINE addLiteral #-}

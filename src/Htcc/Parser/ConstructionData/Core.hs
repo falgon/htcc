@@ -16,6 +16,7 @@ module Htcc.Parser.ConstructionData.Core (
     -- * Adding funcitons
     addLVar,
     addGVar,
+    addGVarWith,
     addLiteral,
     addTag,
     addTypedef,
@@ -86,6 +87,10 @@ addLVar = addVar AS.addLVar
 -- >>> second (\x -> y { scope = x }) <$> Htcc.Parser.AST.Scope.addGVar ty tkn (scope x)
 addGVar :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ATree i, ConstructionData i)
 addGVar = addVar AS.addGVar
+
+-- | Shortcut to function `Htcc.Parser.AST.Scope.addGVarWith` for variable @x@ of tye `ConstructionData`.
+addGVarWith :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> PV.GVarInitWith i -> ConstructionData i -> Either (ASTError i) (ATree i, ConstructionData i)
+addGVarWith ty tkn iw cd = second (\x -> cd { scope = x }) <$> AS.addGVarWith ty tkn iw (scope cd)
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.addLiteral` for variable @x@ of type `ConstructionData`. 
 -- This function is equivalent to

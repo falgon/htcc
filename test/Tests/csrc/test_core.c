@@ -5,11 +5,19 @@
 
 int printf();
 int exit();
+int strcmp(char* p, char* q);
 
 int test_num;
 int g;
 int gr[3];
 int (*gpa)[3];
+
+char gc = 1;
+short gsh = 2;
+int gi = 3;
+long gl = 4;
+int* gp = &gi;
+char* gstr = "abc";
 
 int assert(long expected, long actual, char* code)
 {
@@ -477,6 +485,12 @@ int main()
     assert(0, ({ struct { int a; int b; } x[2] = { { 1, 2 } }; x[1].b; }), "({ struct { int a; int b; } x[2] = { { 1, 2 } }; x[1].b; })");
     assert(0, ({ struct { int a; int b; } x = {}; x.a; }), "({ struct { int a; int b; } x = {}; x.a; })");
     assert(0, ({ struct { int a; int b; } x = {}; x.b; }), "({ struct { int a; int b; } x = {}; x.b; })");
+    assert(1, gc, "gc");
+    assert(2, gsh, "gsh");
+    assert(3, gi, "gi");
+    assert(4, gl, "gl");
+    assert(3, *gp, "*gp");
+    assert(0, strcmp(gstr, "abc"), "strcmp(gstr, \"abc\")");
 
     printf("All tests are passed!\n");
 

@@ -11,6 +11,7 @@ Portability : POSIX
 The C languge parser and AST constructor
 -}
 module Htcc.Parser.AST.Var.Init (
+    Assign,
     validAssign,
     varInit
 ) where
@@ -71,7 +72,8 @@ desgNode ident rhs desg sc = fmap (atExprStmt . flip atAssign rhs) $ flip (`fold
 initZero :: (Num i, Ord i, Show i, Enum i) => CT.TypeKind i -> HT.TokenLC i -> [CT.Desg i] -> ConstructionData i -> Either (ASTError i) [ATree i]
 initZero (CT.CTArray n t) ident desg sc = fmap concat $ forM [0..fromIntegral (pred n)] $ flip (initZero t ident) sc . (:desg) . CT.DesgIdx
 initZero _ ident desg sc = (:[]) <$> desgNode ident (atNumLit 0) desg sc
-        
+ 
+-- | needs parameters for Assign
 type Assign i = [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
 
 -- Designator initialization processing loop
@@ -89,12 +91,12 @@ initLoop callback t' ident desg ai c = do
         
         initLoop' ai' = case CT.toTypeKind t' of 
             CT.CTArray _ _ -> ($ (0, ai')) . fix $ \f (!idx, rl) -> do
-                rs <- uncurry (arInit callback ident rl (CT.DesgIdx idx:desg) $ fromJust $ CT.deref t') <$> gets swap
+                rs <- uncurry (desgInit callback ident rl (CT.DesgIdx idx:desg) $ fromJust $ CT.deref t') <$> gets swap
                 flip (either (lift . Left)) rs $ \rs' -> do
                     put (swap $ dropSnd3 rs')
                     ifM ((||) <$> isSatisfied isEnd <*> (isNothing <$> itemCWhen const ((==HT.TKReserved ",") . snd))) (retCur (snd3 rs') $ succ idx) $ f (succ idx, snd3 rs')
             CT.CTStruct mems -> ($ (M.elems mems, ai', 0)) . fix $ \f (mems', rl, len) -> if null mems' then retCur ai' len else do
-                rs <- uncurry (arInit callback ident rl (CT.DesgMem (head mems'):desg) $ CT.SCAuto $ CT.smType (head mems')) <$> gets swap
+                rs <- uncurry (desgInit callback ident rl (CT.DesgMem (head mems'):desg) $ CT.SCAuto $ CT.smType (head mems')) <$> gets swap
                 flip (either (lift . Left)) rs $ \rs' -> do
                     put (swap $ dropSnd3 rs')
                     ifM ((||) <$> isSatisfied isEnd <*> (isNothing <$> itemCWhen const ((==HT.TKReserved ",") . snd))) (retCur (snd3 rs') $ succ len) $ f (tail mems', snd3 rs', succ len)
@@ -102,14 +104,14 @@ initLoop callback t' ident desg ai c = do
 
 -- For initializer-list.
 -- For example, the declaration @int x[2][2] = { { 1, 2 }, { 3, 4 } };@ is converted to @x[2][2]; x[0][0] = 1; x[0][1] = 2; x[1][0] = 3; x[1][1] = 4;@.
-arInit :: (Bits i, Integral i, Read i, Show i) => 
+desgInit :: (Bits i, Integral i, Read i, Show i) => 
     Assign i -> HT.TokenLC i -> SQ.Seq (ATree i) -> [CT.Desg i] -> CT.StorageClass i -> [HT.TokenLC i] -> ConstructionData i -> 
     Either (ASTError i) ([HT.TokenLC i], SQ.Seq (ATree i), ConstructionData i)
-arInit callback ident ai desg t' xs' scp
+desgInit callback ident ai desg t' xs' scp
     -- initializer-string
     | CT.isArray t' && maybe False ((==CT.CTChar) . CT.toTypeKind) (CT.deref t') && maybe False (HT.isTKString . snd) (headMay xs') = if CT.isIncompleteArray t' then 
         case snd (head xs') of
-            (HT.TKString s) -> let newt = arTypeFromLen (B.length s) in addLVar newt ident scp >>= arInit callback ident ai desg newt xs' . snd
+            (HT.TKString s) -> let newt = arTypeFromLen (B.length s) in addLVar newt ident scp >>= desgInit callback ident ai desg newt xs' . snd
             _ -> Left (internalCE, HT.emptyToken) -- should not reach here
         else case (snd (head xs'), CT.toTypeKind t') of
             (HT.TKString s, CT.CTArray n _) -> let s' = s `B.append` B.pack (replicate (fromIntegral n - pred (B.length s)) $ toEnum 0) in 
@@ -124,7 +126,7 @@ arInit callback ident ai desg t' xs' scp
             mapM (flip (desgNode ident $ atNumLit 0) scp . (++desg)) $ CT.accessibleIndices $ CT.toTypeKind t'
         -- The specified initializer-list of initialization elements
         c@(_, HT.TKReserved "{"):ds 
-            | CT.isIncompleteArray t' -> toComplete (c:ds) >>= \newt -> addLVar newt ident scp >>= arInit callback ident ai desg newt xs' . snd
+            | CT.isIncompleteArray t' -> toComplete (c:ds) >>= \newt -> addLVar newt ident scp >>= desgInit callback ident ai desg newt xs' . snd
             | otherwise -> case CT.toTypeKind t' of
                 CT.CTArray n bt -> do
                     rs <- evalStateT (initLoop callback t' ident desg ai c) (scp, ds)
@@ -156,7 +158,7 @@ arInit callback ident ai desg t' xs' scp
 
 varInit' :: (Read i, Show i, Integral i, Bits i) => Assign i -> CT.StorageClass i -> HT.TokenLC i -> [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
 varInit' callback t ident xs lat scp'
-    | CT.isArray t || CT.isCTStruct t = second3 (\st -> ATNode (ATBlock $ toList st) (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty) <$> arInit callback ident SQ.empty [] t xs scp'
+    | CT.isArray t || CT.isCTStruct t = second3 (\st -> ATNode (ATBlock $ toList st) (CT.SCUndef CT.CTUndef) ATEmpty ATEmpty) <$> desgInit callback ident SQ.empty [] t xs scp'
     | otherwise = do
         (ert, erat, ervar) <- callback xs ATEmpty scp' 
         flip fmap (validAssign (HT.altEmptyToken ert) erat) $ \erat' -> (ert, atExprStmt (ATNode ATAssign (atype lat) lat erat'), ervar)
