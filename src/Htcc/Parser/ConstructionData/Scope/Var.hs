@@ -11,6 +11,8 @@ Portability : POSIX
 The Data type of variables and its utilities used in parsing
 -}
 module Htcc.Parser.ConstructionData.Scope.Var (
+    -- * The classes
+    Var (..),
     -- * The data type
     SomeVars,
     GVarInitWith (..),
@@ -50,6 +52,11 @@ import Htcc.Parser.AST.Core (ATree (..), ATKind (..), Treealizable (..), atLVar,
 import Htcc.Parser.ConstructionData.Scope.Utils (internalCE)
 import Htcc.Utils (tshow)
 
+-- | The type class of the type representing the variable
+class Var a where
+    -- | `vtype` returns the type of the variable
+    vtype :: a i -> CT.StorageClass i
+
 -- | The informations type about initial value of the global variable
 data GVarInitWith i = GVarInitWithZero | GVarInitWithOG T.Text | GVarInitWithVal i
     deriving (Eq, Ord, Show, Generic)
@@ -64,6 +71,9 @@ data GVar i = GVar -- ^ The constructor of the global variable
     } deriving (Eq, Ord, Show, Generic)
 
 instance NFData i => NFData (GVar i)
+
+instance Var GVar where
+    vtype = gvtype
 
 instance SM.ManagedScope (GVar i) where
     lookup = M.lookup
@@ -84,6 +94,9 @@ instance Treealizable LVar where
     {-# INLINE treealize #-}
     treealize (LVar t o _) = atLVar t o 
 
+instance Var LVar where
+    vtype = lvtype
+
 instance SM.ManagedScope (LVar a) where
     lookup = M.lookup
     fallBack = const
@@ -98,6 +111,9 @@ data Literal a = Literal -- ^ The literal constructor
     } deriving (Eq, Show, Generic)
 
 instance NFData a => NFData (Literal a)
+
+instance Var Literal where
+    vtype = litype
 
 -- | The type of variables
 type SomeVars v = M.Map T.Text v

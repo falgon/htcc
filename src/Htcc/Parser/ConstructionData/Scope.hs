@@ -73,9 +73,13 @@ data LookupVarResult i = FoundGVar (PV.GVar i)  -- ^ A type constructor indicati
     | NotFound -- ^ A type constructor indicating that it was not found
     deriving (Show, Eq)
 
+{-# INLINE applyVars #-}
+applyVars :: Scoped i -> (a, PV.Vars i) -> (a, Scoped i)
+applyVars sc = second (\x -> sc { vars = x })
+
 {-# INLINE addVar #-}
 addVar :: (Integral i, Bits i) => (CT.StorageClass i -> HT.TokenLC i -> PV.Vars i -> Either (T.Text, HT.TokenLC i) (ATree i, PV.Vars i)) -> CT.StorageClass i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
-addVar f ty tkn sc = second (\x -> sc { vars = x }) <$> f ty tkn (vars sc)
+addVar f ty tkn sc = applyVars sc <$> f ty tkn (vars sc)
 
 -- | `addLVar` has a scoped type argument and is the same function as `PV.addLVar` internally.
 {-# INLINE addLVar #-}
@@ -90,7 +94,7 @@ addGVar = addVar PV.addGVar
 -- | `addGVarWith` has a scoped type argument and is the same function as `PV.addLiteral` internally.
 {-# INLINE addGVarWith #-}
 addGVarWith :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> PV.GVarInitWith i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
-addGVarWith ty tkn iw sc = second (\x -> sc { vars = x }) <$> PV.addGVarWith ty tkn iw (vars sc)
+addGVarWith ty tkn iw sc = applyVars sc <$> PV.addGVarWith ty tkn iw (vars sc)
 
 -- | `addLiteral` has a scoped type argument and is the same function as `PV.addLiteral` internally.
 {-# INLINE addLiteral #-}

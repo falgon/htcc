@@ -70,9 +70,13 @@ data ConstructionData i = ConstructionData -- ^ The constructor of ConstructionD
         isSwitchStmt :: Bool -- ^ When the statement is @switch@, this flag will be `True`, otherwise will be `False`.
     } deriving Show
 
+{-# INLINE applyScope #-}
+applyScope :: ConstructionData i -> (a, AS.Scoped i) -> (a, ConstructionData i)
+applyScope cd = second (\x -> cd { scope = x })
+
 {-# INLINE addVar #-}
 addVar :: (Integral i, Bits i) => (CT.StorageClass i -> HT.TokenLC i -> AS.Scoped i -> Either (ASTError i) (ATree i, AS.Scoped i)) -> CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ATree i, ConstructionData i)
-addVar f ty tkn cd = second (\x -> cd { scope = x }) <$> f ty tkn (scope cd)
+addVar f ty tkn cd = applyScope cd <$> f ty tkn (scope cd)
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.addLVar` for variable @x@ of type `ConstructionData`. 
 -- This function is equivalent to 
@@ -90,7 +94,7 @@ addGVar = addVar AS.addGVar
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.addGVarWith` for variable @x@ of tye `ConstructionData`.
 addGVarWith :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> PV.GVarInitWith i -> ConstructionData i -> Either (ASTError i) (ATree i, ConstructionData i)
-addGVarWith ty tkn iw cd = second (\x -> cd { scope = x }) <$> AS.addGVarWith ty tkn iw (scope cd)
+addGVarWith ty tkn iw cd = applyScope cd <$> AS.addGVarWith ty tkn iw (scope cd)
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.addLiteral` for variable @x@ of type `ConstructionData`. 
 -- This function is equivalent to
