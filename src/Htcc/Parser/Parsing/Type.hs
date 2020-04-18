@@ -8,12 +8,23 @@ Maintainer  : falgon53@yahoo.co.jp
 Stability   : experimental
 Portability : POSIX
 
-The C languge parser and AST constructor
+The module of the Type parsing
 -}
 module Htcc.Parser.Parsing.Type (
+    -- * Constant
     ConstantResult,
     constantExp,
+    -- * Utilities
     isTypeName,
+    -- * Structure and Enum
+    takeStructFields,
+    takeEnumFiels,
+    -- * Declarations
+    arrayDeclSuffix,
+    absDeclaration,
+    declaration,
+    -- * Type
+    takePreType,
     takeType,
     takeTypeName
 ) where
@@ -43,6 +54,12 @@ import Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
 import Htcc.Parser.ConstructionData
 import Htcc.Parser.Utils
 
+-- | \[
+-- \begin{array}{ccc}
+-- \text{struct-decl}&=&\text{"struct"}\ \text{ident?}\ \left(\text{"\{"}\ \text{struct-member}\ \text{"\}"}\right)\text{?}\\
+-- \text{struct-member}&=&\text{pre-type}\ \text{declaration}\ \text{array-decl-suffix}\ \text{";"}
+-- \end{array}
+-- \]
 takeStructFields :: (Integral i, Show i, Read i, Bits i) => [HT.TokenLC i] -> ConstructionData i -> Either (ASTError i) (M.Map T.Text (CT.StructMember i), ConstructionData i)
 takeStructFields tk sc = takeStructFields' tk sc 0
     where
@@ -57,6 +74,13 @@ takeStructFields tk sc = takeStructFields' tk sc 0
         validDecl errPlaceholder (t, noth, tks, scp) = maybeToRight ("declaration with incomplete type", errPlaceholder) (incomplete t scp) >>= \t' -> if CT.toTypeKind t == CT.CTVoid then
             Left ("declarations of type void is invalid in this context", errPlaceholder) else Right (t', noth, tks, scp)
 
+-- | \[
+-- \begin{array}{ccc}
+-- \text{enum-specifier}&=&\text{"enum"}\ \text{ident}\ \mid\ \text{"enum"}\ \text{ident?}\ \text{"\{"}\ \text{enum-list?}\ \text{"\}"}\\
+-- \text{enum-list}&=&\text{enum-elem}\ \left(\text{","}\ \text{enum-elem}\right)\ast\ \text{","?}\\
+-- \text{enum-elem}&=&\text{ident}\ \left(\text{"="}\ \text{const-expr}\right)\text{?}
+-- \end{array}
+-- \]
 takeEnumFiels :: (Integral i, Show i, Read i, Bits i) => CT.StorageClass i -> [HT.TokenLC i] -> ConstructionData i -> Either (ASTError i) (M.Map T.Text i, ConstructionData i)
 takeEnumFiels = takeEnumFiels' 0
     where
@@ -77,8 +101,14 @@ takeEnumFiels = takeEnumFiels' 0
 takeCtorPtr :: Integral i => [HT.TokenLC i] -> (CT.StorageClass i -> CT.StorageClass i, [HT.TokenLC i])
 takeCtorPtr = first (CT.ctorPtr . toNatural) . dropSnd3 . spanLen ((==HT.TKReserved "*") . snd)
 
--- It is obtained by parsing the front part of the type from the token string. 
--- e.g. @int (*)[4]@ applied to this function yields @int@
+-- | It is obtained by parsing the front part of the type from the token string. 
+-- e.g. @int (*)[4]@ applied to this function yields @int@.
+--
+-- \[\begin{array}{ccc}
+-- \text{pre-type}&=&\text{builtin-type}\ \mid\ \text{struct-decl}\ \mid\ \text{typedef-name}\ \mid\ \text{enum-specifier}\\
+-- \text{builtin-type}&=&\text{"void"}\ \mid\ \text{"_Bool"}\ \mid\ \text{"char"}\ \mid\ \text{"short"}\ \mid\ \text{"int"}\ \mid\ \text{"long"}\ \mid\ \text{"long "long"}
+-- \end{array}
+-- \]
 takePreType :: (Integral i, Show i, Read i, Bits i) => [HT.TokenLC i] -> ConstructionData i -> Either (ASTError i) (CT.StorageClass i, [HT.TokenLC i], ConstructionData i)
 takePreType ((_, HT.TKType ty1):y@(iy, HT.TKType ty2):xs) scp = maybeToRight (T.singleton '\'' <> tshow ty1 <> " " <> tshow ty2 <> "' is invalid.", y) (CT.qualify ty1 ty2) >>= \ty -> -- for a complex type
     takePreType ((iy, HT.TKType ty):xs) scp
@@ -106,6 +136,9 @@ takePreType (x:_) _ = Left ("ISO C forbids declaration with no type", x)
 takePreType _ _ = Left ("ISO C forbids declaration with no type", HT.emptyToken)
 
 {-# INLINE declaration #-}
+-- | \[
+-- \text{declaration} = \text{"*"*}\ \left(\text{"("}\ \text{declaration}\ \text{")"}\ \mid\ \text{ident}\right)\ \text{array-decl-suffix}
+-- \]
 declaration :: (Integral i, Bits i, Show i, Read i) => CT.StorageClass i -> [HT.TokenLC i] -> ConstructionData i -> Either (ASTError i) (CT.StorageClass i, Maybe (HT.TokenLC i), [HT.TokenLC i])
 declaration ty xs scp = case takeCtorPtr xs of 
     (fn, xs'@((_, HT.TKReserved "("):_)) -> dropFst4 <$> declaration' id (fn ty) xs' scp
@@ -128,11 +161,19 @@ declaration ty xs scp = case takeCtorPtr xs of
 -- | `takeType` returns a pair of type (including pointer and array type) and the remaining tokens wrapped in 
 -- `Just` only if the token starts with `HT.TKType`, `HT.TKStruct` or identifier that is declarated by @typedef@.
 -- Otherwise `Nothing` is returned.
+--
+-- \[
+-- \text{type}=\text{pre-type}\ \text{declaration}
+-- \]
 takeType :: (Integral i, Show i, Read i, Bits i) => [HT.TokenLC i] -> ConstructionData i -> Either (ASTError i) (CT.StorageClass i, Maybe (HT.TokenLC i), [HT.TokenLC i], ConstructionData i)
 takeType tk scp = takePreType tk scp >>= (\(x, y, z) -> uncurry3 (,,, z) <$> declaration x y z)
 
 
--- `absDeclaration` parses abstract type declarations
+-- | `absDeclaration` parses abstract type declarations:
+--
+-- \[
+-- \text{abs-declaration} = \text{"*"*}\ \left(\text{"("}\ \text{abs-declaration}\ \text{")"}\right)\text{?}\ \text{array-decl-suffix}
+-- \]
 absDeclaration :: (Integral i, Bits i, Show i, Read i) => CT.StorageClass i -> [HT.TokenLC i] -> ConstructionData i -> Either (ASTError i) (CT.StorageClass i, [HT.TokenLC i])
 absDeclaration ty xs scp = case takeCtorPtr xs of
     (fn, xs'@((_, HT.TKReserved "("):_)) -> dropFst3 <$> absDeclarator' id (fn ty) xs' scp
@@ -148,13 +189,17 @@ absDeclaration ty xs scp = case takeCtorPtr xs of
 takeTypeName :: (Integral i, Show i, Read i, Bits i) => [HT.TokenLC i] -> ConstructionData i -> Either (ASTError i) (CT.StorageClass i, [HT.TokenLC i])
 takeTypeName tk scp = (>>=) (takePreType tk scp) $ \(x, y, z) -> if CT.isSCStatic x then Left ("storage-class specifier is not allowed", head tk) else absDeclaration x y z -- !
 
--- @HT.TKReserved "[", n, HT.TKReserved "]"@ from the beginning of the token sequence.
+-- | @HT.TKReserved "[", n, HT.TKReserved "]"@ from the beginning of the token sequence.
 -- `arrayDeclSuffix` constructs an array type of the given type @t@ based on 
 -- the token sequence if \(k\leq 1\), wraps it in `Right` and `Just` and returns it with the rest of the token sequence.
 -- If the token @HT.TKReserved "["@ exists at the beginning of the token sequence, 
 -- but the subsequent token sequence is invalid as an array declaration in C programming language,
 -- an error mesage and the token at the error location are returned wrapped in
 -- `Left` and `Just`. When \(k=0\), `Nothing` is returned.
+--
+-- \[
+-- \text{array-decl-suffix}=\left(\text{"["}\ \text{const-expr?}\ \text{"]"}\ \text{array-decl-suffix}\right)\text{?}
+-- \]
 arrayDeclSuffix :: forall i. (Integral i, Bits i, Show i, Read i) => CT.StorageClass i -> [HT.TokenLC i] -> ConstructionData i -> Maybe (Either (ASTError i) (CT.StorageClass i, [HT.TokenLC i]))
 arrayDeclSuffix t (cur@(_, HT.TKReserved "["):(_, HT.TKReserved "]"):xs) scp = case arrayDeclSuffix t xs scp of
     Nothing -> Just ((,xs) . CT.mapTypeKind (CT.CTIncomplete . CT.IncompleteArray) <$> maybeToRight (errSt t) (incomplete t scp))
@@ -173,7 +218,7 @@ arrayDeclSuffix t (cur@(_, HT.TKReserved "["):xs) scp = case constantExp xs scp 
 arrayDeclSuffix _ _ _ = Nothing
         
 {-# INLINE isTypeName #-}
--- | `isTypeName` returns True if the token is a type name, False otherwise.
+-- | `isTypeName` returns @True@ if the token is a type name, @False@ otherwise.
 isTypeName :: HT.TokenLC i -> ConstructionData i -> Bool
 isTypeName (_, HT.TKType _) _ = True
 isTypeName (_, HT.TKStruct) _ = True

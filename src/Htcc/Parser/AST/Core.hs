@@ -323,7 +323,7 @@ atSwitch = (.) atNoLeaf . ATSwitch
 {-# INLINE atCase #-}
 -- | `atCase` is a shortcut for constructing a @case@ node
 atCase :: i -> i -> ATree i -> ATree i
-atCase = (.) (flip atUnary (CT.SCUndef CT.CTUndef)) . ATCase
+atCase = (.) (`atUnary` CT.SCUndef CT.CTUndef) . ATCase
 
 {-# INLINE atDefault #-}
 -- | `atDefault` is a shortcut for constructing a @default@ node

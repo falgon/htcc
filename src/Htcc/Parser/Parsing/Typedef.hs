@@ -8,10 +8,9 @@ Maintainer  : falgon53@yahoo.co.jp
 Stability   : experimental
 Portability : POSIX
 
-The C languge parser and AST constructor
+Perspective on @typedef@ declaration
 -}
 module Htcc.Parser.Parsing.Typedef (
-    -- * Recursive descent implementation functions
     typedef
 ) where
 
@@ -26,7 +25,8 @@ import Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
 import Htcc.Parser.ConstructionData
 import Htcc.Parser.Parsing.Type
 
--- | Perform type definition from token string starting from @typedef@ token
+-- | Perform type definition from token string starting from @typedef@ token.
+-- \[\text{typedef-name}=\text{ident}\]
 typedef :: (Integral i, Show i, Read i, Bits i) => [(HT.TokenLCNums i, HT.Token i)] -> ConstructionData i -> Either (ASTError i) ([HT.TokenLC i], ATree a, ConstructionData i)
 typedef ((_, HT.TKTypedef):cur@(_, HT.TKReserved _):_) _ = Left ("storage-class specifier is not allowed in this context", cur)
 typedef (cur@(_, HT.TKTypedef):xs) !scp = case takeType xs scp of

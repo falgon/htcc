@@ -1,76 +1,95 @@
 os:
-    - linux
-    - osx
-
+- linux
+- osx
 arch: amd64
 dist: bionic
 language: generic
 cache:
-    apt: true
-    directories:
-        - "$HOME/.stack/"
-        - "$HOME/.local/bin/"
-        - ".stack-work/"
-
+  apt: true
+  directories:
+  - "$HOME/.stack/"
+  - "$HOME/.local/bin/"
+  - ".stack-work/"
 addons:
-    apt:
-        update: true
-        packages:
-            - imagemagick
-            - gcc
-    homebrew:
-        update: true
-        packages:
-            - imagemagick
-            - gcc
-
+  apt:
+    update: true
+    packages:
+    - imagemagick
+    - gcc
+    - python3-dev
+    - python-dev
+    - python3-pip
+    - python3-setuptools
+  homebrew:
+    update: true
+    packages:
+    - imagemagick
+    - gcc
 before_install:
-    - |
-        if [ "$TRAVIS_OS_NAME" == "linux" ] || [ "$TRAVIS_OS_NAME" == "osx" ]; then
-            mkdir -p ~/.local/bin
-            export PATH=$HOME/.local/bin:$PATH
-            ./.travis/install-stack.sh
-        fi
-
+- |
+  if [ "$TRAVIS_OS_NAME" == "linux" ] || [ "$TRAVIS_OS_NAME" == "osx" ]; then
+      mkdir -p ~/.local/bin
+      export PATH=$HOME/.local/bin:$PATH
+      ./.travis/install-stack.sh
+  fi
+  echo -e "Host github.com\n\tStrictHostKeyChecking no\nIdentityFile ~/.ssh/deploy.key\n" >> ~/.ssh/config
+  openssl aes-256-cbc -pass "pass:$SERVER_KEY" -pbkdf2 -in .travis/deploy_key.enc -d -a -out deploy.key
+  mv deploy.key ~/.ssh/
+  chmod 600 ~/.ssh/deploy.key
+  git config --global user.email "falgon53@yahoo.co.jp"
+  git config --global user.name "falgon"
+  git config --global core.autocrlf "input"
 install:
-    - stack --no-terminal test --only-dependencies
-
+- stack --no-terminal test --only-dependencies
+- pip3 install -r .travis/requirements.txt --user
 jobs:
-    include:
-        - stage: Run build
-          os: linux
-          script: stack build
-        - stage: Run build
-          os: osx
-          script: stack build --ghc-options="-optP-Wno-nonportable-include-path"
-        - stage: Run compiler test
-          os: linux
-          script:
-            - stack test
-            - stack test --test-arguments subp
-        - stage: Run compiling and executing example C codes
-          os: linux
-          script:
-            - cd example && make && cd dist && ./knapsack && ./merge_sorting_linked_list && ./shuffle_and_sort
-        - stage: Run generating AST graphs
-          os: linux
-          script:
-            - ./.travis/visualize-test.sh
-        - stage: Run generating AST graphs
-          os: osx
-          script:
-            - ./.travis/visualize-test.sh
-        - stage: Run compiler test on Docker
-          os: linux
-          services: docker
-          script:
-              - stack test --test-arguments docker
-              - stack test --test-arguments cleanDocker
-        - stage: Run compiling and executing example C codes on Docker
-          os: linux
-          services: docker
-          script:
-              - cd example && make docker && make clean_docker
-
+  include:
+  - stage: Run build
+    os: linux
+    script: stack build
+  - stage: Run build
+    os: osx
+    script: stack build --ghc-options="-optP-Wno-nonportable-include-path"
+  - stage: Run compiler test
+    os: linux
+    script:
+    - stack test
+    - stack test --test-arguments subp
+  - stage: Run compiling and executing example C codes
+    os: linux
+    script:
+    - cd example && make && cd dist && ./knapsack && ./merge_sorting_linked_list &&
+      ./shuffle_and_sort
+  - stage: Run generating AST graphs
+    os: linux
+    script:
+    - "./.travis/visualize-test.sh"
+  - stage: Run generating AST graphs
+    os: osx
+    script:
+    - "./.travis/visualize-test.sh"
+  - stage: Run compiler test on Docker
+    os: linux
+    services: docker
+    script:
+    - stack test --test-arguments docker
+    - stack test --test-arguments cleanDocker
+  - stage: Run compiling and executing example C codes on Docker
+    os: linux
+    services: docker
+    script:
+    - cd example && make docker && make clean_docker
+  - stage: Deploy gh-pages
+    os: linux
+    script:
+        - stack haddock --fast
+        - ghp-import -m "by Travis CI (JOB $TRAVIS_JOB_NUMBER)" -n docs
+        - git push -qf git@github.com:falgon/htcc.git gh-pages
+branches:
+    except:
+        - gh-pages          
 notifications:
-    email: false
+  email: false
+env:
+  global:
+    secure: Noyd9Ggg/V9GwT8Tm8EtKKpESoiYEGz+QG9NyrAGfU2I4Ij5Rry3mxc34uSFD9iZ5eR5HeY17ZwQuRhCAfLNrp1U94qL9zIIHpmSlQ1MVi5d0cgiLdpzGorj2uaBu1BfVoFNFQZXa0N0nrXAo8XONB8i172MsEe8D9FtHo137dYbbB0osaW5Dnm+qQIM5CfXno4a1ofN1nyCCh7dTiutr7JBgpUJjD2bprk+Hy8qCSqvCdO/h6FA36RMriSKAYdTaipd8AfT7GKS2/6aQgN4XtKollDqsksp9h1+txkuM/e52gDIjhxh0gmBBjV3lY2Nxkn7SPuwlWUJoknBnnhzrxOCHluRphvE/zPT0ps7K6LCG4Bl/Pt9kSbWaHODmK39HMd+aij2t7FN7jixxzyTImqWfv9DrHGLr/cTcmh9pjFe/9RgET+K9B/1LeuESev+YxvabIEBBS9KEiXxaO907WXqwKMsPgLEb5WSBGHUibsCE2F/O9JriQNckVPVygffAOyf7VpfGsIg2+guqLkpa/2n2ClfKzrYtcQc2Az85kT4X8/yV6HhLgSvxB1DRq+PGvgaDK6VZiIEkVmxNi+CCjXDXZD2IBwGGjL18w0fltf3yAGLvffjBCSoh23L6P423qyVjbLVNNPz6adkxXs6dQQXnLT7mrq3yfsXUzC1wqc=

@@ -201,7 +201,7 @@ addGVarWith _ _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
 -- | If the specified token is `HT.TKIdent` and the global variable does not exist in the list, `addLVar` adds a new global variable that will be initialized by zero to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
 addGVar :: Num i => CT.StorageClass i -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
-addGVar t ident vars = addGVarWith t ident GVarInitWithZero vars
+addGVar t ident = addGVarWith t ident GVarInitWithZero
 
 -- | If the specified token is `HT.TKString`, `addLiteral` adds a new literal to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.

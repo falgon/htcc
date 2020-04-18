@@ -49,19 +49,18 @@ import qualified Data.ByteString as B
 import Data.Foldable (Foldable (..))
 import Data.Tuple.Extra (first, second, uncurry3, snd3, dupe)
 import Data.List (find, foldl')
-import Data.List.Split (linesBy)
 import Data.Either (isLeft, lefts, rights)
-import Data.Maybe (isJust, fromJust, fromMaybe)
+import Data.Maybe (fromJust, fromMaybe)
 import Data.STRef (newSTRef, readSTRef, writeSTRef)
 import qualified Data.Set as S
 import qualified Data.Text as T
-import Control.Monad (forM, when)
+import Control.Monad (forM)
 import Control.Monad.ST (runST)
 import Control.Monad.Loops (unfoldrM)
 import Numeric.Natural
 
 import Htcc.Utils (
-    first3, second3, third3, first4,
+    first3, second3, third3, first4, uncurry4,
     tshow, toNatural, toInteger,
     maybeToRight, maybe')
 import qualified Htcc.Tokenizer as HT
@@ -76,6 +75,8 @@ import Htcc.Parser.ConstructionData
 import Htcc.Parser.Utils
 import Htcc.Parser.Parsing.Type
 import Htcc.Parser.Parsing.Typedef
+import Htcc.Parser.Parsing.StmtExpr
+import qualified Htcc.Parser.Parsing.Global as PGlobal
 
 {-# INLINE varDecl #-}
 varDecl :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ConstructionData i -> ASTConstruction i
@@ -93,79 +94,24 @@ varDecl tk scp = takeType tk scp >>= validDecl (HT.altEmptyToken tk) >>= varDecl
         validDecl errPlaceholder tnt@(t, _, _, scp') = maybe' (Right tnt) (incomplete t scp') $ \t' -> if CT.toTypeKind t == CT.CTVoid then
             Left ("declarations of type void is invalid in this context", errPlaceholder) else Right $ first4 (const t') tnt
 
-gvarInit :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) ([HT.TokenLC i], ConstructionData i)
-gvarInit xs ty ident sc = do
-    (ds, ast, sc') <- conditional xs ATEmpty sc
-    case (atkind ast, atkind (atL ast)) of
-        (ATAddr, ATGVar _ name) -> (ds,) . snd <$> gvarInitWithOG ty ident name sc'
-        (ATAddr, _) -> Left ("invalid initializer in global variable", HT.altEmptyToken ds)
-        (ATGVar t name, _) 
-            | CT.isCTArray t -> (ds,) . snd <$> gvarInitWithOG ty ident name sc'
-            | otherwise -> gvarInitWithVal ds sc'
-        _ -> gvarInitWithVal ds sc'
-    where
-        gvarInitWithOG ty' from to = addGVarWith ty' from (PV.GVarInitWithOG to)
-        gvarInitWithVal ds sc' = do
-            (ds', cval) <- either (maybe (Left ("initializer element is not constant", HT.altEmptyToken ds)) Left) Right $ constantExp xs sc'
-            (ds',) . snd <$> addGVarWith ty ident (PV.GVarInitWithVal cval) sc'
-
 -- | `program` indicates \(\eqref{eq:eigth}\) among the comments of `inners`.
 program :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ConstructionData i -> Either (ASTError i) (ASTs i, ConstructionData i)
 program [] !scp = Right ([], scp)
 program xs !scp = either Left (\(ys, atn, !scp') -> first (atn:) <$> program ys scp') $ globalDef xs ATEmpty scp
 
 -- | `globalDef` parses global definitions (include functions and global variables)
+-- \[
+-- \text{global-def}=\left(\text{global-var}\ \mid\ \text{function}\right)\text{*}
+-- \]
 globalDef :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
 globalDef (cur@(_, HT.TKReserved "register"):_) _ _ = Left ("illegal storage class on file-scoped identifier", cur)
 globalDef (cur@(_, HT.TKReserved "auto"):_) _ _ = Left ("illegal storage class on file-scoped identifier", cur)
 globalDef xs@((_, HT.TKTypedef):_) _ sc = typedef xs sc -- for global @typedef@
 globalDef tks at !va = (>>=) (takeType tks va) $ \case
     (_, Nothing, (_, HT.TKReserved ";"):ds', scp) -> Right (ds', ATEmpty, scp) -- e.g., @int;@ is legal in C11 (See N1570/section 6.7 Declarations)
-    (funcType, Just cur@(_, HT.TKIdent fname), tk@((_, HT.TKReserved "("):_), !sc) -> let scp = resetLocal sc in -- for a function declaration or definition
-        (>>=) (maybeToRight (internalCE, cur) (takeBrace "(" ")" $ tail (cur:tk))) $
-            either (Left . ("invalid function declaration/definition",)) $ \(fndec, st) -> case st of
-                ((_, HT.TKReserved ";"):ds'') -> addFunction False funcType cur scp >>= globalDef ds'' at -- for a function declaration -- TODO: read types of parameters and register them
-                ((_, HT.TKReserved "{"):_) -> (>>=) (addFunction True funcType cur scp) $ \scp' -> checkErr fndec scp' $ \args -> runST $ do -- for a function definition
-                    eri <- newSTRef Nothing
-                    v <- newSTRef scp'
-                    mk <- flip unfoldrM args $ \args' -> if null args' then return Nothing else let arg = head args' in do
-                        -- About @t'@:
-                        -- An array of type T is equivalent to a pointer of type T in the context of function parameters.
-                        m <- flip fmap (readSTRef v) $ \scp'' -> let (t, mident, _, _) = arg; t' = fromMaybe t $ aboutArray t in case mident of
-                            Nothing -> Left ("anonymouse variable is not implemented yet", cur) -- TODO
-                            Just ident -> addLVar t' ident scp''
-                        flip (either ((<$) Nothing . writeSTRef eri . Just)) m $ \(vat, scp'') -> Just (vat, tail args') <$ writeSTRef v scp''
-                    (>>=) (readSTRef eri) $ flip maybe (return . Left) $ flip fmap (readSTRef v) $ \v' -> (>>=) (stmt st at v') $ \case -- Forbid void to return a value in a return type function.
-                        (ert, erat@(ATNode (ATBlock block) _ _ _), erscp) 
-                            | CT.toTypeKind funcType == CT.CTVoid -> if isJust (find isNonEmptyReturn block) then
-                                Left ("The return type of function '" <> fname <> "' is void, but the statement returns a value", cur) else
-                                    Right (ert, atDefFunc fname (if null mk then Nothing else Just mk) funcType erat, erscp)
-                            | otherwise -> let fnode = atDefFunc fname (if null mk then Nothing else Just mk) funcType erat in
-                                maybe' (Right (ert, fnode, erscp)) (find isEmptyReturn block) $ const $ 
-                                    Right (ert, fnode, pushWarn ("The return type of function '" <> fname <> "' is " <> tshow (CT.toTypeKind funcType) <> ", but the statement returns no value") cur erscp)
-                        _ -> Left (internalCE, HT.emptyToken)
-                _ -> stmt tk at scp
-    (ty, Just cur@(_, HT.TKIdent _), xs, !scp) -> case xs of -- for global variables
-        (_, HT.TKReserved "="):ds -> do -- for initializing
-            ty' <- maybeToRight ("defining global variables with a incomplete type", cur) (incomplete ty scp)
-            (ds', nsc) <- gvarInit ds ty' cur scp
-            case ds' of
-                (_, HT.TKReserved ";"):ds'' -> return (ds'', ATEmpty, nsc)
-                _ -> Left $ if null ds' then 
-                    ("expected ';' token after '" <> tshow (snd cur) <> "' token", HT.altEmptyToken ds') else
-                        ("expected ';' token" <> (if null ds' then "" else " before '" <> tshow (snd $ head ds') <> "' token"), HT.altEmptyToken ds')
-        (_, HT.TKReserved ";"):ds -> do -- for non initializing
-            ty' <- maybeToRight ("defining global variables with a incomplete type", cur) (incomplete ty scp)
-            (ds, ATEmpty,) . snd <$> addGVar ty' cur scp
-        _ -> Left ("expected ';' token after '" <> tshow (snd cur) <> "' token", cur)
+    (funcType, ident@(Just (_, HT.TKIdent _)), tk@((_, HT.TKReserved "("):_), !sc) -> PGlobal.function funcType ident tk at sc
+    p@(_, Just (_, HT.TKIdent _), _, _) -> uncurry4 PGlobal.var p
     _ -> Left ("invalid definition of global identifier", HT.altEmptyToken tks)
-    where
-        checkErr ar !scp' f = let ar' = init $ tail ar in if not (null ar') && snd (head ar') == HT.TKReserved "," then Left ("unexpected ',' token", head ar') else
-            let args = linesBy ((==HT.TKReserved ",") . snd) ar' in mapM (`takeType` scp') args >>= f
-        aboutArray t
-            | CT.isCTArray t = CT.mapTypeKind CT.CTPtr <$> CT.deref t
-            | CT.isIncompleteArray t = Just $ CT.mapTypeKind (\(CT.CTIncomplete (CT.IncompleteArray t')) -> CT.CTPtr t') t
-            | otherwise = Nothing
 
 -- | `stmt` indicates \(\eqref{eq:nineth}\) among the comments of `inners`.
 stmt :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
@@ -289,7 +235,7 @@ conditional xs atn scp = (>>=) (logicalOr xs atn scp) $ \(ert, cond, erscp) -> c
 --
 -- \[
 -- \begin{eqnarray}
--- {\rm program} &=& {\rm stmt}^\ast\label{eq:eigth}\tag{1}\\
+-- {\rm program} &=& \text{global-def*}\label{eq:eigth}\tag{1}\\
 -- {\rm stmt} &=& \begin{array}{l}
 -- {\rm expr}?\ {\rm ";"}\\ 
 -- \mid\ {\rm "\{"\ stmt}^\ast\ {\rm "\}"}\\
@@ -312,8 +258,8 @@ conditional xs atn scp = (>>=) (logicalOr xs atn scp) $ \(ert, cond, erscp) -> c
 -- {\rm add} &=& {\rm term}\ \left("+"\ {\rm term}\ \mid\ "-"\ {\rm term}\right)^\ast\label{eq:first}\tag{13} \\
 -- {\rm term} &=& {\rm factor}\ \left("\ast"\ {\rm factor}\ \mid\ "/"\ {\rm factor}\right)^\ast\label{eq:second}\tag{14} \\
 -- {\rm cast} &=& "(" {\rm type-name} ")"\ {\rm cast}\ \mid\ {\rm unary}\label{eq:fourteenth}\tag{15} \\
--- {\rm unary} &=& \left("+"\ \mid\ "-"\right)?\ {\rm cast}\mid\ \left("!"\ \mid\ "\sim"\ \mid\ "\&"\ \mid\ "\ast"\right)?\ {\rm unary}\label{eq:fourth}\tag{16} \\
--- {\rm factor} &=& {\rm num} \mid\ {\rm ident}\ \left({\rm "(" \left(expr\ \left(\left(","\ expr\right)^\ast\right)?\right)? ")"}\right)?\ \mid\ "(" {\rm expr} ")"\label{eq:third}\tag{17}
+-- {\rm unary} &=& \left(\text{"+"}\ \mid\ \text{"-"}\ \mid\ \text{"*"}\ \mid\ \text{"&"}\ \mid\ \text{"!"}\ \mid\ \text{"-"}\right)\text{?}\ \text{cast}\ \mid\ \left(\text{"++"}\ \mid\ \text{"--"}\right)\ \text{unary}\ \mid\ \text{primary} \left(\text{"["}\ \text{expr}\ \text{"]"}\ \mid\ \text{"."}\ \text{ident}\ \mid\ \text{"->"}\ \text{ident}\ \mid\ \text{"++"}\ \mid\ \text{"--"}\right)\ast\label{eq:fourth}\tag{16} \\
+-- {\rm factor} &=& {\rm num} \mid\ {\rm ident}\ \left({\rm "(" \left(expr\ \left(\left(","\ expr\right)^\ast\right)?\right)? ")"}\right)?\ \mid\ "(" {\rm expr} ")"\ \mid \text{string}\ \mid\ \text{"sizeof"}\ \text{"("}\ \text{type}\ \text{")"}\ \mid\ \text{"sizeof"}\ \text{unary}\ \mid\ \text{stmt-expr}\label{eq:third}\tag{17}
 -- \end{eqnarray}
 -- \]
 inners :: ([HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i) -> [(T.Text, ATKind i)] -> [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
@@ -429,23 +375,7 @@ unary xs at scp = either Left (uncurry3 f) $ factor xs at scp
 -- | `factor` indicates \(\eqref{eq:third}\) amount the comments of `inners`.
 factor :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
 factor [] atn !scp = Right ([], atn, scp)
-factor ((_, HT.TKReserved "("):xs@((_, HT.TKReserved "{"):_)) _ !scp = (>>=) (maybeToRight (internalCE, head xs) (takeBrace "{" "}" xs)) $ -- for statement expression (GNU extension: <https://gcc.gnu.org/onlinedocs/gcc/Statement-Exprs.html>)
-    either (Left . ("the statement expression is not closed",)) $ \(sctk, ds) -> case ds of
-        (_, HT.TKReserved ")"):ds' -> runST $ do
-            eri <- newSTRef Nothing
-            v <- newSTRef $ succNest scp
-            lastA <- newSTRef ATEmpty 
-            mk <- flip unfoldrM (init $ tail sctk) $ \ert -> if null ert then return Nothing else do
-                erscp <- readSTRef v
-                flip (either $ \err -> Nothing <$ writeSTRef eri (Just err)) (stmt ert ATEmpty erscp) $ \(ert', erat', erscp') -> 
-                    Just (erat', ert') <$ (writeSTRef v erscp' >> when (case erat' of ATEmpty -> False; _ -> True) (writeSTRef lastA erat'))
-            (>>=) (readSTRef eri) $ flip maybe (return . Left) $ do
-                v' <- readSTRef v
-                flip fmap (readSTRef lastA) $ \case
-                        (ATNode ATExprStmt _ lhs _) -> Right (ds', atNoLeaf (ATStmtExpr (init mk ++ [lhs])) (atype lhs), fallBack scp v')
-                        _ -> Left ("void value not ignored as it ought to be. the statement expression starts here:", head xs)
-        _ -> Left $ if null sctk then ("expected ')' token. the statement expression starts here: ", head xs) else
-            ("expected ')' token after '" <> tshow (snd $ last sctk) <> "' token", last sctk)
+factor tk@((_, HT.TKReserved "("):((_, HT.TKReserved "{"):_)) at !scp = stmtExpr tk at scp
 factor (cur@(_, HT.TKReserved "("):xs) atn !scp = (>>=) (expr xs atn scp) $ \(ert, erat, erscp) -> case ert of -- for (expr)
     (_, HT.TKReserved ")"):ys -> Right (ys, erat, erscp)
     ert' -> Left $ expectedMessage ")" cur ert'
