@@ -32,7 +32,8 @@ import Htcc.Parser.ConstructionData.Scope.Utils (internalCE)
 import Htcc.Parser.ConstructionData
 import Htcc.Parser.Utils
 import Htcc.Parser.Parsing.Type
-import {-# SOURCE #-} Htcc.Parser.Parsing.Core (stmt, globalDef)
+import {-# SOURCE #-} Htcc.Parser.Parsing.Core (stmt)
+import {-# SOURCE #-} Htcc.Parser.Parsing.Global (globalDef)
 
 -- |
 -- \[

@@ -3,7 +3,28 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages: []
+packages:
+- completed:
+    hackage: monad-finally-0.1.2@sha256:7f2c860c39d0a00908d83ddaf9cd232d09c19934381b011ed361335715b4e52e,1487
+    pantry-tree:
+      size: 347
+      sha256: 24d7ac7af5b7d8c23bfe3eced368c3fe9ae2de5766522605ef963cd2f466dce1
+  original:
+    hackage: monad-finally-0.1.2@sha256:7f2c860c39d0a00908d83ddaf9cd232d09c19934381b011ed361335715b4e52e
+- completed:
+    hackage: monad-abort-fd-0.7@sha256:dc917e7ee2ec0b4f20d6e1cc323bef03adf5b2067619b6e7f4f324a50ae6e870,1340
+    pantry-tree:
+      size: 486
+      sha256: 8aae8657f16cd20d32307b6e815ab3b53bcd6a35e770dbe96064a3b6a5a06b6d
+  original:
+    hackage: monad-abort-fd-0.7@sha256:dc917e7ee2ec0b4f20d6e1cc323bef03adf5b2067619b6e7f4f324a50ae6e870
+- completed:
+    hackage: transformers-abort-0.6.0.1@sha256:2502f690904cfa55bd99d4af2647c9f25b30b16b14494fcca909d4b1fbbc25c9,1034
+    pantry-tree:
+      size: 309
+      sha256: 1dea766af762cd1234521634832d60396de46f0b13f6b565f0fd216f2be60bbe
+  original:
+    hackage: transformers-abort-0.6.0.1@sha256:2502f690904cfa55bd99d4af2647c9f25b30b16b14494fcca909d4b1fbbc25c9
 snapshots:
 - completed:
     size: 500539

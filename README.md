@@ -21,6 +21,7 @@
 <a href="./LICENSE">
 <img src="https://img.shields.io/badge/License-BSD%203--Clause-blue.svg" alt="License" />
 </a>
+<a href="https://app.fossa.com/projects/git%2Bgithub.com%2Ffalgon%2Fhtcc?ref=badge_shield" alt="FOSSA Status"><img src="https://app.fossa.com/api/projects/git%2Bgithub.com%2Ffalgon%2Fhtcc.svg?type=shield"/></a>
 </div>
 
 ## Build

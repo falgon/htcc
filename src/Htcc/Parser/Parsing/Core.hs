@@ -60,7 +60,7 @@ import Control.Monad.Loops (unfoldrM)
 import Numeric.Natural
 
 import Htcc.Utils (
-    first3, second3, third3, first4, uncurry4,
+    first3, second3, third3, first4,
     tshow, toNatural, toInteger,
     maybeToRight, maybe')
 import qualified Htcc.Tokenizer as HT
@@ -76,7 +76,7 @@ import Htcc.Parser.Utils
 import Htcc.Parser.Parsing.Type
 import Htcc.Parser.Parsing.Typedef
 import Htcc.Parser.Parsing.StmtExpr
-import qualified Htcc.Parser.Parsing.Global as PGlobal
+import Htcc.Parser.Parsing.Global
 
 {-# INLINE varDecl #-}
 varDecl :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ConstructionData i -> ASTConstruction i
@@ -98,20 +98,6 @@ varDecl tk scp = takeType tk scp >>= validDecl (HT.altEmptyToken tk) >>= varDecl
 program :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ConstructionData i -> Either (ASTError i) (ASTs i, ConstructionData i)
 program [] !scp = Right ([], scp)
 program xs !scp = either Left (\(ys, atn, !scp') -> first (atn:) <$> program ys scp') $ globalDef xs ATEmpty scp
-
--- | `globalDef` parses global definitions (include functions and global variables)
--- \[
--- \text{global-def}=\left(\text{global-var}\ \mid\ \text{function}\right)\text{*}
--- \]
-globalDef :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
-globalDef (cur@(_, HT.TKReserved "register"):_) _ _ = Left ("illegal storage class on file-scoped identifier", cur)
-globalDef (cur@(_, HT.TKReserved "auto"):_) _ _ = Left ("illegal storage class on file-scoped identifier", cur)
-globalDef xs@((_, HT.TKTypedef):_) _ sc = typedef xs sc -- for global @typedef@
-globalDef tks at !va = (>>=) (takeType tks va) $ \case
-    (_, Nothing, (_, HT.TKReserved ";"):ds', scp) -> Right (ds', ATEmpty, scp) -- e.g., @int;@ is legal in C11 (See N1570/section 6.7 Declarations)
-    (funcType, ident@(Just (_, HT.TKIdent _)), tk@((_, HT.TKReserved "("):_), !sc) -> PGlobal.function funcType ident tk at sc
-    p@(_, Just (_, HT.TKIdent _), _, _) -> uncurry4 PGlobal.var p
-    _ -> Left ("invalid definition of global identifier", HT.altEmptyToken tks)
 
 -- | `stmt` indicates \(\eqref{eq:nineth}\) among the comments of `inners`.
 stmt :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i

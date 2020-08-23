@@ -10,4 +10,4 @@ stmt :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> Con
 
 conditional :: (Show i, Read i, Integral i, Bits i) => [TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
 
-globalDef :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
+-- globalDef :: (Show i, Read i, Integral i, Bits i) => [HT.TokenLC i] -> ATree i -> ConstructionData i -> ASTConstruction i
