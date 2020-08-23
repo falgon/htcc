@@ -190,6 +190,10 @@ Thanks in advance for all the improvements.
 Check your permissions. 
 The answer on [stack overflow](https://stackoverflow.com/questions/24665531/ghci-haskell-compiler-error-home-user-ghci-is-owned-by-someone-else-ignor) may be useful.
 
+## License
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ffalgon%2Fhtcc.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Ffalgon%2Fhtcc?ref=badge_large)
+
 ## References
 
 <ol>
