@@ -17,6 +17,7 @@
 <a href="https://www.codacy.com/manual/falgon/htcc?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=falgon/htcc&amp;utm_campaign=Badge_Grade">
     <img src="https://api.codacy.com/project/badge/Grade/ad81967222a745c7ba631f26c3ff2936"/>
 </a>
+<a href="https://app.fossa.com/projects/git%2Bgithub.com%2Ffalgon%2Fhtcc?ref=badge_shield" alt="FOSSA Status"><img src="https://app.fossa.com/api/projects/git%2Bgithub.com%2Ffalgon%2Fhtcc.svg?type=shield"/></a>
 <img src="https://img.shields.io/badge/architecture-amd64-blue.svg" alt="Architecture" />
 <a href="./LICENSE">
 <img src="https://img.shields.io/badge/License-BSD%203--Clause-blue.svg" alt="License" />
@@ -197,3 +198,7 @@ The answer on [stack overflow](https://stackoverflow.com/questions/24665531/ghci
 <li>Rui Ueyama. (2019). <i>低レイヤを知りたい人のためのCコンパイラ作成入門</i> [online]. Available from: <a href="https://www.sigbus.info/compilerbook">https://www.sigbus.info/compilerbook</a>.</li>
 <li>前橋和弥. (2009). <i>プログラミング言語を作る</i>. 技術評論社.</li>
 </ol>
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ffalgon%2Fhtcc.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Ffalgon%2Fhtcc?ref=badge_large)
