@@ -36,32 +36,33 @@ module Htcc.Parser.ConstructionData.Scope (
     resetLocal
 ) where
 
-import GHC.Generics (Generic (..), Generic1 (..))
-import Data.Bits (Bits (..))
-import Numeric.Natural
-import Data.Tuple.Extra (second)
-import qualified Data.Text as T
-import Control.DeepSeq (NFData (..))
+import           Control.DeepSeq                                 (NFData (..))
+import           Data.Bits                                       (Bits (..))
+import qualified Data.Text                                       as T
+import           Data.Tuple.Extra                                (second)
+import           GHC.Generics                                    (Generic (..),
+                                                                  Generic1 (..))
+import           Numeric.Natural
 
-import qualified Htcc.CRules.Types as CT
-import Htcc.Parser.AST.Core (ATree (..))
+import qualified Htcc.CRules.Types                               as CT
+import           Htcc.Parser.AST.Core                            (ATree (..))
+import qualified Htcc.Parser.ConstructionData.Scope.Enumerator   as SE
+import qualified Htcc.Parser.ConstructionData.Scope.Function     as PF
 import qualified Htcc.Parser.ConstructionData.Scope.ManagedScope as SM
-import qualified Htcc.Parser.ConstructionData.Scope.Var as PV
-import qualified Htcc.Parser.ConstructionData.Scope.Tag as PS
-import qualified Htcc.Parser.ConstructionData.Scope.Typedef as PT
-import qualified Htcc.Parser.ConstructionData.Scope.Function as PF
-import qualified Htcc.Parser.ConstructionData.Scope.Enumerator as SE
-import qualified Htcc.Tokenizer.Token as HT
+import qualified Htcc.Parser.ConstructionData.Scope.Tag          as PS
+import qualified Htcc.Parser.ConstructionData.Scope.Typedef      as PT
+import qualified Htcc.Parser.ConstructionData.Scope.Var          as PV
+import qualified Htcc.Tokenizer.Token                            as HT
 
 -- | The data type of a struct tag
 data Scoped i = Scoped -- ^ The constructor of a struct tag
     {
         curNestDepth :: !Natural, -- ^ The nest depth of the parsing process
-        vars :: PV.Vars i, -- ^ scoped all identifiers of variables (local variables, global variables and literals) visible during processing
-        structs :: PS.Tags i, -- ^ scoped all struct tags
-        typedefs :: PT.Typedefs i, -- ^ scoped all typedefs
-        functions :: PF.Functions i, -- ^ scoped all identifires of functions
-        enumerators :: SE.Enumerators i -- ^ scoped all identifiers of enumerators
+        vars         :: PV.Vars i, -- ^ scoped all identifiers of variables (local variables, global variables and literals) visible during processing
+        structs      :: PS.Tags i, -- ^ scoped all struct tags
+        typedefs     :: PT.Typedefs i, -- ^ scoped all typedefs
+        functions    :: PF.Functions i, -- ^ scoped all identifires of functions
+        enumerators  :: SE.Enumerators i -- ^ scoped all identifiers of enumerators
     } deriving (Show, Generic, Generic1)
 
 instance NFData i => NFData (Scoped i)
@@ -104,19 +105,19 @@ addLiteral = addVar PV.addLiteral
 -- | `succNest` has a scoped type argument and is the same function as `PV.succNest` internally.
 {-# INLINE succNest #-}
 succNest :: Scoped i -> Scoped i
-succNest sc = sc { curNestDepth = succ $ curNestDepth sc } 
+succNest sc = sc { curNestDepth = succ $ curNestDepth sc }
 
 -- | `fallBack` has a scoped type argument and is the same function as `PV.fallBack` internally.
 {-# INLINE fallBack #-}
 fallBack :: Scoped i -> Scoped i -> Scoped i
-fallBack pre post = pre 
-    { 
-        vars = PV.fallBack (vars pre) (vars post), 
-        structs = SM.fallBack (structs pre) (structs post), 
+fallBack pre post = pre
+    {
+        vars = PV.fallBack (vars pre) (vars post),
+        structs = SM.fallBack (structs pre) (structs post),
         typedefs = SM.fallBack (typedefs pre) (typedefs post),
         functions = SM.fallBack (functions pre) (functions post),
         enumerators = SM.fallBack (enumerators pre) (enumerators post)
-    } 
+    }
 
 {-# INLINE lookupVar' #-}
 lookupVar' :: (T.Text -> PV.Vars a -> b) -> T.Text -> Scoped a -> b
@@ -139,7 +140,7 @@ lookupVar ident scp = case lookupLVar ident scp of
     Just local -> FoundLVar local
     _ -> case lookupEnumerator ident scp of
         Just enum -> FoundEnum enum
-        _ -> maybe NotFound FoundGVar $ lookupGVar ident scp
+        _         -> maybe NotFound FoundGVar $ lookupGVar ident scp
 
 -- | `lookupTag` has a scoped type argument and is the same function as `PS.lookupTag` internally.
 {-# INLINE lookupTag #-}

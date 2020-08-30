@@ -13,7 +13,7 @@ module Htcc.CRules.Types.CType (
     CType (..)
 ) where
 
-import Numeric.Natural
+import           Numeric.Natural
 
 -- | A data type representing the type of C language
 class CType a where
@@ -38,7 +38,7 @@ class CType a where
     -- | `dctorArray` deconstructs the nested structure of `Htcc.CRules.Types.Core.CTArray` and returns the convolution function
     -- of the original type and `Htcc.CRules.Types.Core.CTArray`
     dctorArray :: a -> (a, a -> a)
-    -- | `removeAllExtents` is the same as @std::remove_all_extents@ defined in C++11 @\<type_traits\>@ 
+    -- | `removeAllExtents` is the same as @std::remove_all_extents@ defined in C++11 @\<type_traits\>@
     -- (See also: <http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2012/n3337.pdf N3337>/§ 20.9.7.4) header.
     -- If type @T@ is a multidimensional array of type @X@, type @X@ is returned.
     -- Otherwise, it returns type @T@.

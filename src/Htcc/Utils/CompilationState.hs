@@ -21,16 +21,18 @@ module Htcc.Utils.CompilationState (
     isSatisfied
 ) where
 
-import Control.Monad (replicateM)
-import Control.Monad.Loops (unfoldM)
-import Control.Monad.State (StateT, get, put, gets)
-import Data.Bool (bool)
-import Data.Tuple.Extra (first, second)
-import Data.Maybe (catMaybes)
-import Data.MonoTraversable (Element, headMay, MonoFoldable (..))
-import qualified Data.Sequences as S
+import           Control.Monad                                   (replicateM)
+import           Control.Monad.Loops                             (unfoldM)
+import           Control.Monad.State                             (StateT, get,
+                                                                  gets, put)
+import           Data.Bool                                       (bool)
+import           Data.Maybe                                      (catMaybes)
+import           Data.MonoTraversable                            (Element, MonoFoldable (..),
+                                                                  headMay)
+import qualified Data.Sequences                                  as S
+import           Data.Tuple.Extra                                (first, second)
 
-import Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
+import           Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
 
 -- | The state type handled during compilation.
 -- It has informations required during the compilation process and input data consumed.
@@ -38,7 +40,7 @@ type CompilationState cd inp i r = StateT (cd, inp) (Either (ASTError i)) r
 
 {-# INLINE itemP #-}
 -- | `itemP` peeks at one item from input data
-itemP :: MonoFoldable mono => CompilationState cd mono i (Maybe (Element mono)) 
+itemP :: MonoFoldable mono => CompilationState cd mono i (Maybe (Element mono))
 itemP = gets (headMay . snd)
 
 {-# INLINE itemsP #-}
@@ -61,7 +63,7 @@ itemC f = itemP >>= maybe (return Nothing) (\itp -> Just itp <$ (get >>= put . f
 -- accepts the current information and one item to be consumed and returns the information
 itemsC :: S.IsSequence mono => (cd -> Element mono -> cd) -> Int -> CompilationState cd mono i (Maybe mono)
 itemsC f n = do
-    x <- catMaybes <$> replicateM n (itemC f) 
+    x <- catMaybes <$> replicateM n (itemC f)
     return $ if length x == n then Just $ S.pack x else Nothing
 
 {-# INLINE curCD #-}

@@ -14,10 +14,10 @@ module Htcc.Parser.AST.DeduceKind (
     subKind
 ) where
 
-import Data.Maybe (isJust)
+import           Data.Maybe           (isJust)
 
-import qualified Htcc.CRules.Types as CT
-import Htcc.Parser.AST.Core (ATKind (..), ATree (..))
+import qualified Htcc.CRules.Types    as CT
+import           Htcc.Parser.AST.Core (ATKind (..), ATree (..))
 
 {-# INLINE addKind #-}
 -- | Constructs a numeric addition or pointer addition node according to the C language implicit conversion rules

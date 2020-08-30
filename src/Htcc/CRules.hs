@@ -16,6 +16,6 @@ module Htcc.CRules (
     module Htcc.CRules.Types
 ) where
 
-import Htcc.CRules.Char
-import Htcc.CRules.LexicalElements
-import Htcc.CRules.Types
+import           Htcc.CRules.Char
+import           Htcc.CRules.LexicalElements
+import           Htcc.CRules.Types

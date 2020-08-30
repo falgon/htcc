@@ -14,5 +14,5 @@ module Htcc.CRules.Preprocessor (
     module Htcc.CRules.Preprocessor.Punctuators
 ) where
 
-import Htcc.CRules.Preprocessor.Core
-import Htcc.CRules.Preprocessor.Punctuators
+import           Htcc.CRules.Preprocessor.Core
+import           Htcc.CRules.Preprocessor.Punctuators

@@ -14,13 +14,13 @@ module Htcc.Tokenizer (
     tokenize
 ) where
 
-import qualified Data.Text as T
-import Control.Monad ((>=>))
+import           Control.Monad                                   ((>=>))
+import qualified Data.Text                                       as T
 
-import Htcc.Tokenizer.Core (tokenize')
-import Htcc.Tokenizer.Token
-import Htcc.CRules.Preprocessor as CP
-import Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
+import           Htcc.CRules.Preprocessor                        as CP
+import           Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
+import           Htcc.Tokenizer.Core                             (tokenize')
+import           Htcc.Tokenizer.Token
 
 -- | Tokenize the `T.Text`. If an invalid chraracter matches as C language, the part and the character are returned.
 -- Otherwise, @[TokenIdx i]@ is returned.

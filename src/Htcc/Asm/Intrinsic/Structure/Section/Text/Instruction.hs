@@ -18,19 +18,20 @@ module Htcc.Asm.Intrinsic.Structure.Section.Text.Instruction (
     Ptr (..),
     sete, setne, setl, setle, setg, setge,
     byte, word, dword,
-    cqo, ret, leave, 
-    jmp, je, jne, jnz, 
+    cqo, ret, leave,
+    jmp, je, jne, jnz,
     call
 ) where
 
-import qualified Data.Text as T
-import Numeric.Natural
+import qualified Data.Text                                           as T
+import           Numeric.Natural
 
-import Htcc.Asm.Intrinsic.Register (Register (..))
-import Htcc.Asm.Intrinsic.Operand (IsOperand (..), Ref (..))
-import qualified Htcc.Asm.Intrinsic.Structure.Internal as I
-import Htcc.Asm.Intrinsic.Structure.Section.Text.Directive
-import Htcc.Utils (tshow)
+import           Htcc.Asm.Intrinsic.Operand                          (IsOperand (..),
+                                                                      Ref (..))
+import           Htcc.Asm.Intrinsic.Register                         (Register (..))
+import qualified Htcc.Asm.Intrinsic.Structure.Internal               as I
+import           Htcc.Asm.Intrinsic.Structure.Section.Text.Directive
+import           Htcc.Utils                                          (tshow)
 
 {-# INLINE intelSyntaxUnary #-}
 intelSyntaxUnary :: Show a => T.Text -> a -> I.Asm TextLabelCtx e ()
@@ -47,8 +48,8 @@ data SizeUnit = Byte -- ^ 8 bits
     deriving (Eq, Ord, Enum, Bounded)
 
 instance Show SizeUnit where
-    show Byte = "byte"
-    show Word = "word"
+    show Byte  = "byte"
+    show Word  = "word"
     show DWord = "dword"
 
 -- | @offset@ instruction

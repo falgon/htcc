@@ -13,4 +13,4 @@ module Htcc.Visualizer (
     module Htcc.Visualizer.Core
 ) where
 
-import Htcc.Visualizer.Core
+import           Htcc.Visualizer.Core

@@ -1,31 +1,35 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import Control.Conditional (ifM)
-import Data.Bool (bool)
-import Data.Maybe (isJust, isNothing)
-import Data.List.Split (splitOn)
-import Data.Tuple.Extra (both, dupe, fst3)
-import qualified Data.Text.IO as T
-import Text.Read (readMaybe)
-import Text.PrettyPrint.ANSI.Leijen (text, char, (<+>), linebreak)
-import System.Exit (exitFailure)
-import System.Directory (doesFileExist)
-import Options.Applicative
-import Diagrams.TwoD.Size (mkSizeSpec2D)
+import           Control.Conditional                    (ifM)
+import           Data.Bool                              (bool)
+import           Data.List.Split                        (splitOn)
+import           Data.Maybe                             (isJust, isNothing)
+import qualified Data.Text.IO                           as T
+import           Data.Tuple.Extra                       (both, dupe, fst3)
+import           Diagrams.TwoD.Size                     (mkSizeSpec2D)
+import           Options.Applicative
+import           System.Directory                       (doesFileExist)
+import           System.Exit                            (exitFailure)
+import           Text.PrettyPrint.ANSI.Leijen           (char, linebreak, text,
+                                                         (<+>))
+import           Text.Read                              (readMaybe)
 
-import Htcc.Asm (casm, execAST, InputCCode)
-import Htcc.Parser (ASTs)
-import Htcc.Parser.ConstructionData.Scope.Var (GlobalVars, Literals)
-import Htcc.Utils (putStrLnErr, putDocLnErr, errTxtDoc, locTxtDoc)
-import Htcc.Visualizer (visualize)
+import           Htcc.Asm                               (InputCCode, casm,
+                                                         execAST)
+import           Htcc.Parser                            (ASTs)
+import           Htcc.Parser.ConstructionData.Scope.Var (GlobalVars, Literals)
+import           Htcc.Utils                             (errTxtDoc, locTxtDoc,
+                                                         putDocLnErr,
+                                                         putStrLnErr)
+import           Htcc.Visualizer                        (visualize)
 
-data Options = Options 
+data Options = Options
     { visualizeAST :: Bool
-    , resolution :: String
-    , inputFName :: FilePath
-    , outputFName :: FilePath
-    , supressWarn :: Bool
+    , resolution   :: String
+    , inputFName   :: FilePath
+    , outputFName  :: FilePath
+    , supressWarn  :: Bool
     } deriving Show
 
 visualizeASTP :: Parser Bool
@@ -61,7 +65,7 @@ outputFNameP = strOption $ mconcat
     ]
 
 supressWarnP :: Parser Bool
-supressWarnP = switch $ mconcat 
+supressWarnP = switch $ mconcat
     [ short 'w'
     , long "supress-warns"
     , help "Disable all warning messages"
@@ -85,11 +89,11 @@ main :: IO ()
 main = do
     ops <- execParser $ info optionsP fullDesc
     ifM (not <$> doesFileExist (inputFName ops)) (notFould (inputFName ops) >> exitFailure) $
-        T.readFile (inputFName ops) >>= execAST' (supressWarn ops) (inputFName ops) >>= maybe (return ()) (bool casm (execVisualize ops . fst3) (visualizeAST ops)) 
+        T.readFile (inputFName ops) >>= execAST' (supressWarn ops) (inputFName ops) >>= maybe (return ()) (bool casm (execVisualize ops . fst3) (visualizeAST ops))
     where
         execAST' :: Bool -> FilePath -> InputCCode -> IO (Maybe (ASTs Integer, GlobalVars Integer, Literals Integer))
         execAST' = execAST
-        notFould fpath = putDocLnErr $ 
+        notFould fpath = putDocLnErr $
             locTxtDoc "htcc:" <+>
             errTxtDoc "error:" <+>
             text fpath <> char ':' <+>

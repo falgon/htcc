@@ -1,14 +1,15 @@
 module Main (main) where
 
-import Criterion.Main (defaultMainWith, defaultConfig, bgroup, bench, nf, whnf)
-import Criterion.Types (reportFile)
+import           Criterion.Main  (bench, bgroup, defaultConfig, defaultMainWith,
+                                  nf, whnf)
+import           Criterion.Types (reportFile)
 
-import qualified Data.Text as T
-import Data.Either (fromRight)
+import           Data.Either     (fromRight)
+import qualified Data.Text       as T
 
-import Htcc.Utils (tshow)
-import qualified Htcc.Tokenizer as HT
-import Htcc.Parser (parse)
+import           Htcc.Parser     (parse)
+import qualified Htcc.Tokenizer  as HT
+import           Htcc.Utils      (tshow)
 
 tknize :: T.Text -> Either (HT.TokenLCNums Int, T.Text) [HT.TokenLC Int]
 tknize = HT.tokenize

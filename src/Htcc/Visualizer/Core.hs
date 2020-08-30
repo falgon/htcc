@@ -9,21 +9,23 @@ Portability : POSIX
 
 Build AST from C source code
 -}
-{-# LANGUAGE OverloadedStrings, FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts, OverloadedStrings #-}
 module Htcc.Visualizer.Core (
     visualize
 ) where
 
-import qualified Data.Text as T
-import Data.Tree (Tree (..))
-import Diagrams.Prelude
-import Diagrams.TwoD.Layout.Tree (renderTree, symmLayout', slHSep, slVSep)
-import Diagrams.Backend.SVG (SVG, renderPretty)
+import qualified Data.Text                 as T
+import           Data.Tree                 (Tree (..))
+import           Diagrams.Backend.SVG      (SVG, renderPretty)
+import           Diagrams.Prelude
+import           Diagrams.TwoD.Layout.Tree (renderTree, slHSep, slVSep,
+                                            symmLayout')
 
-import Htcc.Parser (ASTs)
-import Htcc.CRules.Types as CT
-import Htcc.Parser.AST.Core (ATree (..), ATKind (..), fromATKindFor)
-import Htcc.Utils (putStrLnErr)
+import           Htcc.CRules.Types         as CT
+import           Htcc.Parser               (ASTs)
+import           Htcc.Parser.AST.Core      (ATKind (..), ATree (..),
+                                            fromATKindFor)
+import           Htcc.Utils                (putStrLnErr)
 
 -- | the function to convert `ATree` to `Data.Tree`
 encodeTree :: Show i => ATree i -> Tree String
@@ -99,8 +101,8 @@ encodeTree (ATNode (ATNull _) _ _ _) = Node "" []
 
 renderNTree :: Tree String -> QDiagram SVG V2 Double Any
 renderNTree nt = renderTree
-    (\a -> letter a `atop` circle 2.5 # fc white) 
-    (~~) 
+    (\a -> letter a `atop` circle 2.5 # fc white)
+    (~~)
     (symmLayout' (with & slHSep .~ 6 & slVSep .~ 6) nt)
     where
         letter a = text a # font "monospace" # fontSize (local 0.7)

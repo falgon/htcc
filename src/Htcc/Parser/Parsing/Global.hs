@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, LambdaCase, BangPatterns #-}
+{-# LANGUAGE BangPatterns, LambdaCase, OverloadedStrings #-}
 {-|
 Module      : Htcc.Parser.Parsing.Global
 Description : The C languge parser and AST constructor
@@ -14,16 +14,16 @@ module Htcc.Parser.Parsing.Global (
     globalDef
 ) where
 
-import Data.Bits
+import           Data.Bits
 
-import Htcc.Utils (uncurry4)
-import Htcc.Parser.AST
-import Htcc.Parser.ConstructionData
-import Htcc.Parser.Parsing.Type (takeType)
-import Htcc.Parser.Parsing.Global.Var
-import Htcc.Parser.Parsing.Global.Function
-import Htcc.Parser.Parsing.Typedef
-import qualified Htcc.Tokenizer as HT
+import           Htcc.Parser.AST
+import           Htcc.Parser.ConstructionData
+import           Htcc.Parser.Parsing.Global.Function
+import           Htcc.Parser.Parsing.Global.Var
+import           Htcc.Parser.Parsing.Type            (takeType)
+import           Htcc.Parser.Parsing.Typedef
+import qualified Htcc.Tokenizer                      as HT
+import           Htcc.Utils                          (uncurry4)
 
 -- | `globalDef` parses global definitions (include functions and global variables)
 -- \[

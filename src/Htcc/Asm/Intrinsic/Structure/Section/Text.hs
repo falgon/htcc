@@ -15,6 +15,6 @@ module Htcc.Asm.Intrinsic.Structure.Section.Text (
     module Htcc.Asm.Intrinsic.Structure.Section.Text.Operations
 ) where
 
-import Htcc.Asm.Intrinsic.Structure.Section.Text.Directive
-import Htcc.Asm.Intrinsic.Structure.Section.Text.Instruction
-import Htcc.Asm.Intrinsic.Structure.Section.Text.Operations
+import           Htcc.Asm.Intrinsic.Structure.Section.Text.Directive
+import           Htcc.Asm.Intrinsic.Structure.Section.Text.Instruction
+import           Htcc.Asm.Intrinsic.Structure.Section.Text.Operations

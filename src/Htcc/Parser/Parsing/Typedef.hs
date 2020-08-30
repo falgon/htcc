@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedStrings, TupleSections, BangPatterns, ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns, OverloadedStrings, ScopedTypeVariables,
+             TupleSections #-}
 {-|
 Module      : Htcc.Parser.Parsing.Typedef
 Description : The C languge parser and AST constructor
@@ -14,16 +15,17 @@ module Htcc.Parser.Parsing.Typedef (
     typedef
 ) where
 
-import Data.Bits (Bits)
-import Data.Foldable (Foldable (..))
+import           Data.Bits                                       (Bits)
+import           Data.Foldable                                   (Foldable (..))
 
-import Htcc.Utils (tshow, maybeToRight)
-import qualified Htcc.Tokenizer as HT
-import Htcc.Parser.AST
-import Htcc.Parser.ConstructionData.Scope.Utils (internalCE)
-import Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
-import Htcc.Parser.ConstructionData
-import Htcc.Parser.Parsing.Type
+import           Htcc.Parser.AST
+import           Htcc.Parser.ConstructionData
+import           Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
+import           Htcc.Parser.ConstructionData.Scope.Utils        (internalCE)
+import           Htcc.Parser.Parsing.Type
+import qualified Htcc.Tokenizer                                  as HT
+import           Htcc.Utils                                      (maybeToRight,
+                                                                  tshow)
 
 -- | Perform type definition from token string starting from @typedef@ token.
 -- \[\text{typedef-name}=\text{ident}\]

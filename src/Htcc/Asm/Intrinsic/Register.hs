@@ -38,7 +38,7 @@ module Htcc.Asm.Intrinsic.Register (
     popRegs
 ) where
 
-import Numeric.Natural
+import           Numeric.Natural
 
 -- | The register type class
 class Show a => IsRegister a where
@@ -55,16 +55,16 @@ data AccumulatorReg = RAX -- ^ Full 64 bits of register
 instance Show AccumulatorReg where
     show RAX = "rax"
     show EAX = "eax"
-    show AX = "ax"
-    show AH = "ah"
-    show AL = "al"
+    show AX  = "ax"
+    show AH  = "ah"
+    show AL  = "al"
 
 instance IsRegister AccumulatorReg where
     byteWidth RAX = 8
     byteWidth EAX = 4
-    byteWidth AX = 2
-    byteWidth AH = 1
-    byteWidth AL = 1
+    byteWidth AX  = 2
+    byteWidth AH  = 1
+    byteWidth AL  = 1
 
 instance Eq AccumulatorReg where
     (==) = flip (.) byteWidth . (==) . byteWidth
@@ -82,16 +82,16 @@ data BaseReg = RBX -- ^ Full 64 bits of register
 instance Show BaseReg where
     show RBX = "rbx"
     show EBX = "ebx"
-    show BX = "bx"
-    show BH = "bh"
-    show BL = "bl"
+    show BX  = "bx"
+    show BH  = "bh"
+    show BL  = "bl"
 
 instance IsRegister BaseReg where
     byteWidth RBX = 8
     byteWidth EBX = 4
-    byteWidth BX = 2
-    byteWidth BH = 1
-    byteWidth BL = 1
+    byteWidth BX  = 2
+    byteWidth BH  = 1
+    byteWidth BL  = 1
 
 instance Eq BaseReg where
     (==) = flip (.) byteWidth . (==) . byteWidth
@@ -109,16 +109,16 @@ data CounterReg = RCX -- ^ Full 64 bits of register
 instance Show CounterReg where
     show RCX = "rcx"
     show ECX = "ecx"
-    show CX = "cx"
-    show CH = "ch"
-    show CL = "cl"
+    show CX  = "cx"
+    show CH  = "ch"
+    show CL  = "cl"
 
 instance IsRegister CounterReg where
     byteWidth RCX = 8
     byteWidth ECX = 4
-    byteWidth CX = 2
-    byteWidth CH = 1
-    byteWidth CL = 1
+    byteWidth CX  = 2
+    byteWidth CH  = 1
+    byteWidth CL  = 1
 
 instance Eq CounterReg where
     (==) = flip (.) byteWidth . (==) . byteWidth
@@ -136,16 +136,16 @@ data DataReg = RDX -- ^ Full 64 bits of register
 instance Show DataReg where
     show RDX = "rdx"
     show EDX = "edx"
-    show DX = "dx"
-    show DH = "dh"
-    show DL = "dl"
+    show DX  = "dx"
+    show DH  = "dh"
+    show DL  = "dl"
 
 instance IsRegister DataReg where
     byteWidth RDX = 8
     byteWidth EDX = 4
-    byteWidth DX = 2
-    byteWidth DH = 1
-    byteWidth DL = 1
+    byteWidth DX  = 2
+    byteWidth DH  = 1
+    byteWidth DL  = 1
 
 instance Eq DataReg where
     (==) = flip (.) byteWidth . (==) . byteWidth
@@ -162,13 +162,13 @@ data SrcIndexReg = RSI -- ^ Full 64 bits of register
 instance Show SrcIndexReg where
     show RSI = "rsi"
     show ESI = "esi"
-    show SI = "si"
+    show SI  = "si"
     show SIL = "sil"
 
 instance IsRegister SrcIndexReg where
     byteWidth RSI = 8
     byteWidth ESI = 4
-    byteWidth SI = 2
+    byteWidth SI  = 2
     byteWidth SIL = 1
 
 instance Eq SrcIndexReg where
@@ -186,13 +186,13 @@ data DstIndexReg = RDI -- ^ Full 64 bits of register
 instance Show DstIndexReg where
     show RDI = "rdi"
     show EDI = "edi"
-    show DI = "di"
+    show DI  = "di"
     show DIL = "dil"
 
 instance IsRegister DstIndexReg where
     byteWidth RDI = 8
     byteWidth EDI = 4
-    byteWidth DI = 2
+    byteWidth DI  = 2
     byteWidth DIL = 1
 
 instance Eq DstIndexReg where
@@ -210,13 +210,13 @@ data BasePtrReg = RBP -- ^ Full 64 bits of register
 instance Show BasePtrReg where
     show RBP = "rbp"
     show EBP = "ebp"
-    show BP = "bp"
+    show BP  = "bp"
     show BPL = "bpl"
 
 instance IsRegister BasePtrReg where
     byteWidth RBP = 8
     byteWidth EBP = 4
-    byteWidth BP = 2
+    byteWidth BP  = 2
     byteWidth BPL = 1
 
 instance Eq BasePtrReg where
@@ -234,13 +234,13 @@ data StackPtrReg = RSP -- ^ Full 64 bits of register
 instance Show StackPtrReg where
     show RSP = "rsp"
     show ESP = "esp"
-    show SP = "sp"
+    show SP  = "sp"
     show SPL = "spl"
 
 instance IsRegister StackPtrReg where
     byteWidth RSP = 8
     byteWidth ESP = 4
-    byteWidth SP = 2
+    byteWidth SP  = 2
     byteWidth SPL = 1
 
 instance Eq StackPtrReg where
@@ -256,21 +256,21 @@ data ExtendedReg = Rn Int -- ^ Full 64 bits of register
     | RnB Int -- ^ Lower 8 bits of register
 
 instance Show ExtendedReg where
-    show (Rn x) 
-        | x >= 8 && x <= 15 = "r" ++ show x 
+    show (Rn x)
+        | x >= 8 && x <= 15 = "r" ++ show x
         | otherwise = error $ "Extended registers should be " ++ concat ["r" ++ show n ++ ", " | n <- [8..14] :: [Int]] ++ "or r15."
-    show (RnD x) 
+    show (RnD x)
         | x >= 8 && x <= 15 = "r" ++ show x ++ "d"
         | otherwise = error $ "Extended registers should be " ++ concat ["r" ++ show n ++ "d, " | n <- [8..14] :: [Int]] ++ "or r15d."
     show (RnW x)
         | x >= 8 && x <= 15 = "r" ++ show x ++ "w"
         | otherwise = error $ "Extended registers should be " ++ concat ["r" ++ show n ++ "w, " | n <- [8..14] :: [Int]] ++ "or r15w."
-    show (RnB x) 
+    show (RnB x)
         | x >= 8 && x <= 15 = "r" ++ show x ++ "b"
         | otherwise = error $ "Extended registers should be " ++ concat ["r" ++ show n ++ "b, " | n <- [8..14] :: [Int]] ++ "or r15b."
-        
+
 instance IsRegister ExtendedReg where
-    byteWidth (Rn _) = 8
+    byteWidth (Rn _)  = 8
     byteWidth (RnD _) = 4
     byteWidth (RnW _) = 2
     byteWidth (RnB _) = 1
@@ -298,25 +298,25 @@ data Register = Accumulator AccumulatorReg -- ^ The accumulator
 
 instance Show Register where
     show (Accumulator x) = show x
-    show (Base x) = show x
-    show (Counter x) = show x
-    show (Data x) = show x
-    show (SrcIndex x) = show x
-    show (DstIndex x) = show x
-    show (BasePtr x) = show x
-    show (StackPtr x) = show x
-    show (Extended x) = show x
+    show (Base x)        = show x
+    show (Counter x)     = show x
+    show (Data x)        = show x
+    show (SrcIndex x)    = show x
+    show (DstIndex x)    = show x
+    show (BasePtr x)     = show x
+    show (StackPtr x)    = show x
+    show (Extended x)    = show x
 
 instance IsRegister Register where
     byteWidth (Accumulator x) = byteWidth x
-    byteWidth (Base x) = byteWidth x
-    byteWidth (Counter x) = byteWidth x
-    byteWidth (Data x) = byteWidth x
-    byteWidth (SrcIndex x) = byteWidth x
-    byteWidth (DstIndex x) = byteWidth x
-    byteWidth (BasePtr x) = byteWidth x
-    byteWidth (StackPtr x) = byteWidth x
-    byteWidth (Extended x) = byteWidth x
+    byteWidth (Base x)        = byteWidth x
+    byteWidth (Counter x)     = byteWidth x
+    byteWidth (Data x)        = byteWidth x
+    byteWidth (SrcIndex x)    = byteWidth x
+    byteWidth (DstIndex x)    = byteWidth x
+    byteWidth (BasePtr x)     = byteWidth x
+    byteWidth (StackPtr x)    = byteWidth x
+    byteWidth (Extended x)    = byteWidth x
 
 instance Eq Register where
     (==) = flip (.) byteWidth . (==) . byteWidth
@@ -411,7 +411,7 @@ edx = Data EDX
 
 {-# INLINE dx #-}
 -- | The dx register. Lower 16 bits of `rdx`.
-dx :: Register 
+dx :: Register
 dx = Data DX
 
 {-# INLINE dh #-}
@@ -430,7 +430,7 @@ rsi :: Register
 rsi = SrcIndex RSI
 
 {-# INLINE esi #-}
--- | The esi register. Lower 32 bits of `rsi`. 
+-- | The esi register. Lower 32 bits of `rsi`.
 esi :: Register
 esi = SrcIndex ESI
 
@@ -536,4 +536,4 @@ argRegs = [[dil, di, edi, rdi], [sil, si, esi, rsi], [dl, dx, edx, rdx], [cl, cx
 --
 -- >>> popRegs 3 == map maximum (reverse (take 3 argRegs))
 popRegs :: Int -> [Register]
-popRegs = flip drop [rn 9, rn 8, rcx, rdx, rsi, rdi] . (6-) 
+popRegs = flip drop [rn 9, rn 8, rcx, rdx, rsi, rdi] . (6-)

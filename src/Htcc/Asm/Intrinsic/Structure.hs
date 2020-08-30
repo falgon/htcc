@@ -13,4 +13,4 @@ module Htcc.Asm.Intrinsic.Structure (
     module Htcc.Asm.Intrinsic.Structure.Internal
 ) where
 
-import Htcc.Asm.Intrinsic.Structure.Internal
+import           Htcc.Asm.Intrinsic.Structure.Internal

@@ -9,7 +9,8 @@ Portability : POSIX
 
 General-purpose utilities
 -}
-{-# LANGUAGE ScopedTypeVariables, BangPatterns, TupleSections, TypeOperators, Rank2Types #-}
+{-# LANGUAGE BangPatterns, Rank2Types, ScopedTypeVariables, TupleSections,
+             TypeOperators #-}
 module Htcc.Utils (
     -- * Extra functions for lists
     module Htcc.Utils.List,
@@ -35,17 +36,17 @@ module Htcc.Utils (
     toInts
 ) where
 
-import Prelude hiding (toInteger)
-import Data.Char (isSpace)
-import Data.Tuple.Extra (both)
-import Numeric.Natural
+import           Data.Char                         (isSpace)
+import           Data.Tuple.Extra                  (both)
+import           Numeric.Natural
+import           Prelude                           hiding (toInteger)
 
-import Htcc.Utils.Print
-import Htcc.Utils.Text
-import Htcc.Utils.Tuple
-import Htcc.Utils.List
-import Htcc.Utils.Bool
-import Htcc.Utils.NaturalTransformations
+import           Htcc.Utils.Bool
+import           Htcc.Utils.List
+import           Htcc.Utils.NaturalTransformations
+import           Htcc.Utils.Print
+import           Htcc.Utils.Text
+import           Htcc.Utils.Tuple
 
 {-# INLINE maybe' #-}
 -- | `maybe'` is `maybe` with changed argument order.
@@ -74,13 +75,13 @@ toInts !x = if xd >= 1 && xm == 0 then [fromIntegral x] else replicate xd (maxBo
     where
         (!xd, !xm) = both fromIntegral $ x `divMod` fromIntegral (maxBound :: Int)
 
--- | `isStrictSpace` returns True only if the given string is not a linefeed code and `Data.Char.isSpace` returns `True`, otherwise returns `False`. 
+-- | `isStrictSpace` returns True only if the given string is not a linefeed code and `Data.Char.isSpace` returns `True`, otherwise returns `False`.
 isStrictSpace :: Char -> Bool
 isStrictSpace = land [(/='\n'), (/='\r'), isSpace]
 
 -- | The monadic `Data.Tuple.Extra.both`.
 -- e.g.:
--- 
+--
 -- >>> a <- newIORef (42 :: Int)
 -- >>> b <- newIORef (53 :: Int)
 -- >>> bothM readIORef (a, b) >>= print

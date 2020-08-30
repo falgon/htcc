@@ -13,10 +13,10 @@ module Htcc.CRules.Preprocessor.Core (
     preprocess
 ) where
 
-import qualified Htcc.Tokenizer.Token as HT
-import Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
+import           Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
+import qualified Htcc.Tokenizer.Token                            as HT
 
--- | The function that executes a proprocess. 
+-- | The function that executes a proprocess.
 -- __NOTE__: This is not yet implemented.
 preprocess :: [HT.TokenLC i] -> Either (ASTError i) [HT.TokenLC i]
 preprocess = Right . filter (not . HT.isTKMacro . snd)

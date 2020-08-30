@@ -13,4 +13,4 @@ module Htcc.Parser.Parsing (
     module Htcc.Parser.Parsing.Core
 ) where
 
-import Htcc.Parser.Parsing.Core
+import           Htcc.Parser.Parsing.Core

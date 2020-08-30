@@ -9,7 +9,7 @@ Portability : POSIX
 
 List utilities
 -}
-{-# LANGUAGE ScopedTypeVariables, BangPatterns #-}
+{-# LANGUAGE BangPatterns, ScopedTypeVariables #-}
 module Htcc.Utils.List (
     -- * Extra functions for lists
     takeWhileLen,
@@ -18,16 +18,16 @@ module Htcc.Utils.List (
     lastInit
 ) where
 
-import Prelude hiding (toInteger)
-import Data.Tuple.Extra (second)
-import Htcc.Utils.Tuple
+import           Data.Tuple.Extra (second)
+import           Htcc.Utils.Tuple
+import           Prelude          hiding (toInteger)
 
 -- | `lastInit` returns @Just (init xxs)@ when @f (last x) == True@ for then given list @xxs@.
 -- Otherwise, returns `Nothing`
 lastInit :: (a -> Bool) -> [a] -> Maybe [a]
 lastInit _ [] = Nothing
-lastInit f [x] 
-    | f x = Just [] 
+lastInit f [x]
+    | f x = Just []
     | otherwise = Nothing
 lastInit y (x:xs) = (x:) <$> lastInit y xs
 
@@ -40,16 +40,16 @@ takeWhileLen = takeWhileLen' 0
     where
         takeWhileLen' !n _ [] = (n, [])
         takeWhileLen' !n f (x:xs)
-            | f x = second (x:) $ takeWhileLen' (succ n) f xs 
+            | f x = second (x:) $ takeWhileLen' (succ n) f xs
             | otherwise = (n, [])
 
 -- | `splitAtLen`, simmilar to `splitAt` but also returns the length of the splited list.
 splitAtLen :: Int -> [a] -> (Int, [a], [a])
 splitAtLen !n = go n
     where
-        go 0 xs = (n, [], xs)
+        go 0 xs       = (n, [], xs)
         go !n' (x:xs) = second3 (x:) $ go (pred n') xs
-        go !n' [] = (n - n', [], [])
+        go !n' []     = (n - n', [], [])
 
 -- | Almost the same as `span`, but returns the number of elements in the list that
 -- satisfy @f@ at the same time.

@@ -37,7 +37,7 @@ module Htcc.Utils.Tuple (
     uncurry4,
 ) where
 
-import Data.Tuple.Extra (first, second, dupe)
+import           Data.Tuple.Extra (dupe, first, second)
 
 {-# INLINE swap #-}
 -- | Swap a first element and second element

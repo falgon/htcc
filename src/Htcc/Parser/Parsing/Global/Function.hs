@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedStrings, TupleSections, LambdaCase, BangPatterns, ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns, LambdaCase, OverloadedStrings, ScopedTypeVariables,
+             TupleSections #-}
 {-|
 Module      : Htcc.Parser.Parsing.Global.Function
 Description : The C languge parser and AST constructor
@@ -14,26 +15,28 @@ module Htcc.Parser.Parsing.Global.Function (
     function
 ) where
 
-import Prelude hiding (toInteger)
-import Data.Bits hiding (shift)
-import Data.Foldable (Foldable (..))
-import Data.List (find)
-import Data.List.Split (linesBy)
-import Data.Maybe (fromMaybe, isJust)
-import Data.STRef (newSTRef, readSTRef, writeSTRef)
-import Control.Monad.ST (runST)
-import Control.Monad.Loops (unfoldrM)
+import           Control.Monad.Loops                      (unfoldrM)
+import           Control.Monad.ST                         (runST)
+import           Data.Bits                                hiding (shift)
+import           Data.Foldable                            (Foldable (..))
+import           Data.List                                (find)
+import           Data.List.Split                          (linesBy)
+import           Data.Maybe                               (fromMaybe, isJust)
+import           Data.STRef                               (newSTRef, readSTRef,
+                                                           writeSTRef)
+import           Prelude                                  hiding (toInteger)
 
-import Htcc.Utils (tshow, maybeToRight, maybe')
-import qualified Htcc.Tokenizer as HT
-import qualified Htcc.CRules.Types as CT
-import Htcc.Parser.AST
-import Htcc.Parser.ConstructionData.Scope.Utils (internalCE)
-import Htcc.Parser.ConstructionData
-import Htcc.Parser.Utils
-import Htcc.Parser.Parsing.Type
-import {-# SOURCE #-} Htcc.Parser.Parsing.Core (stmt)
-import {-# SOURCE #-} Htcc.Parser.Parsing.Global (globalDef)
+import qualified Htcc.CRules.Types                        as CT
+import           Htcc.Parser.AST
+import           Htcc.Parser.ConstructionData
+import           Htcc.Parser.ConstructionData.Scope.Utils (internalCE)
+import {-# SOURCE #-} Htcc.Parser.Parsing.Core                 (stmt)
+import {-# SOURCE #-} Htcc.Parser.Parsing.Global               (globalDef)
+import           Htcc.Parser.Parsing.Type
+import           Htcc.Parser.Utils
+import qualified Htcc.Tokenizer                           as HT
+import           Htcc.Utils                               (maybe', maybeToRight,
+                                                           tshow)
 
 -- |
 -- \[
@@ -59,12 +62,12 @@ function funcType (Just cur@(_, HT.TKIdent fname)) tk@((_, HT.TKReserved "("):_)
                         Just ident -> addLVar t' ident scp''
                     flip (either ((<$) Nothing . writeSTRef eri . Just)) m $ \(vat, scp'') -> Just (vat, tail args') <$ writeSTRef v scp''
                 (>>=) (readSTRef eri) $ flip maybe (return . Left) $ flip fmap (readSTRef v) $ \v' -> (>>=) (stmt st at v') $ \case -- Forbid void to return a value in a return type function.
-                    (ert, erat@(ATNode (ATBlock block) _ _ _), erscp) 
+                    (ert, erat@(ATNode (ATBlock block) _ _ _), erscp)
                         | CT.toTypeKind funcType == CT.CTVoid -> if isJust (find isNonEmptyReturn block) then
                             Left ("The return type of function '" <> fname <> "' is void, but the statement returns a value", cur) else
                                 Right (ert, atDefFunc fname (if null mk then Nothing else Just mk) funcType erat, erscp)
                         | otherwise -> let fnode = atDefFunc fname (if null mk then Nothing else Just mk) funcType erat in
-                            maybe' (Right (ert, fnode, erscp)) (find isEmptyReturn block) $ const $ 
+                            maybe' (Right (ert, fnode, erscp)) (find isEmptyReturn block) $ const $
                                 Right (ert, fnode, pushWarn ("The return type of function '" <> fname <> "' is " <> tshow (CT.toTypeKind funcType) <> ", but the statement returns no value") cur erscp)
                     _ -> Left (internalCE, HT.emptyToken)
             _ -> stmt tk at scp

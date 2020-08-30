@@ -16,12 +16,12 @@ module Htcc.CRules.Types.StorageClass (
     StorageClassBase (..)
 ) where
 
-import GHC.Generics (Generic)
-import Control.DeepSeq (NFData (..))
-import Data.Tuple.Extra (first, second)
+import           Control.DeepSeq            (NFData (..))
+import           Data.Tuple.Extra           (first, second)
+import           GHC.Generics               (Generic)
 
-import Htcc.CRules.Types.CType
-import Htcc.CRules.Types.TypeKind
+import           Htcc.CRules.Types.CType
+import           Htcc.CRules.Types.TypeKind
 
 -- | The data type representing `StorageClass`
 data StorageClass i = SCAuto (TypeKind i) -- ^ The @auto@ keyword
@@ -38,43 +38,43 @@ class StorageClassBase a where
 {-# INLINE fromsc #-}
 -- | Take type from `StorageClass`
 fromsc :: StorageClass i -> TypeKind i
-fromsc (SCAuto t) = t
-fromsc (SCStatic t) = t
+fromsc (SCAuto t)     = t
+fromsc (SCStatic t)   = t
 fromsc (SCRegister t) = t
-fromsc (SCUndef t) = t
+fromsc (SCUndef t)    = t
 
 {-# INLINE picksc #-}
 -- | Take storage-class from `StorageClass`
 picksc :: StorageClass i -> TypeKind j -> StorageClass j
-picksc (SCAuto _) = SCAuto
-picksc (SCStatic _) = SCStatic
+picksc (SCAuto _)     = SCAuto
+picksc (SCStatic _)   = SCStatic
 picksc (SCRegister _) = SCRegister
-picksc (SCUndef _) = SCUndef
+picksc (SCUndef _)    = SCUndef
 
 {-# INLINE isSameSC #-}
 isSameSC :: StorageClass i -> StorageClass i -> Bool
-isSameSC (SCAuto _) (SCAuto _) = True
-isSameSC (SCStatic _) (SCStatic _) = True
+isSameSC (SCAuto _) (SCAuto _)         = True
+isSameSC (SCStatic _) (SCStatic _)     = True
 isSameSC (SCRegister _) (SCRegister _) = True
-isSameSC (SCUndef _) (SCUndef _) = True
-isSameSC _ _ = False
+isSameSC (SCUndef _) (SCUndef _)       = True
+isSameSC _ _                           = False
 
 instance Ord i => Ord (StorageClass i) where
     compare x y = compare (toTypeKind x) (toTypeKind y)
 
 instance Show i => Show (StorageClass i) where
-    show (SCAuto CTUndef) = "auto"
-    show (SCAuto t) = "auto " ++ show t
-    show (SCStatic CTUndef) = "static"
-    show (SCStatic t) = "static " ++ show t
+    show (SCAuto CTUndef)     = "auto"
+    show (SCAuto t)           = "auto " ++ show t
+    show (SCStatic CTUndef)   = "static"
+    show (SCStatic t)         = "static " ++ show t
     show (SCRegister CTUndef) = "register"
-    show (SCRegister t) = "register " ++ show t
-    show (SCUndef CTUndef) = "undefined"
-    show (SCUndef t) = show t
+    show (SCRegister t)       = "register " ++ show t
+    show (SCUndef CTUndef)    = "undefined"
+    show (SCUndef t)          = show t
 
 instance Ord i => CType (StorageClass i) where
     isFundamental = isFundamental . toTypeKind
-    qualify x y 
+    qualify x y
         | isSameSC x y = picksc x <$> qualify (toTypeKind x) (toTypeKind y)
         | otherwise = Nothing
     sizeof = sizeof . toTypeKind
@@ -93,26 +93,26 @@ instance TypeKindBase StorageClass where
 
     {-# INLINE isArray #-}
     isArray = isArray . toTypeKind
-    
+
     {-# INLINE isCTStruct #-}
     isCTStruct = isCTStruct . toTypeKind
-    
+
     {-# INLINE isCTUndef #-}
     isCTUndef = isCTUndef . toTypeKind
 
     {-# INLINE isCTIncomplete #-}
     isCTIncomplete = isCTIncomplete . toTypeKind
-    
+
     {-# INLINE makeCTArray #-}
     makeCTArray ns = mapTypeKind (makeCTArray ns)
 
     concatCTArray x y
         | isSameSC x y = picksc x <$> concatCTArray (toTypeKind x) (toTypeKind y)
         | otherwise = Nothing
-    
+
     {-# INLINE toTypeKind #-}
     toTypeKind = fromsc
-    
+
     {-# INLINE mapTypeKind #-}
     mapTypeKind f sc = picksc sc $ f $ toTypeKind sc
 
@@ -131,6 +131,6 @@ instance IncompleteBase StorageClass where
 instance StorageClassBase StorageClass where
     {-# INLINE isSCStatic #-}
     isSCStatic (SCStatic _) = True
-    isSCStatic _ = False
+    isSCStatic _            = False
 
 instance NFData i => NFData (StorageClass i)

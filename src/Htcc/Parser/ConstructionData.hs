@@ -13,4 +13,4 @@ module Htcc.Parser.ConstructionData (
     module Htcc.Parser.ConstructionData.Core
 ) where
 
-import Htcc.Parser.ConstructionData.Core
+import           Htcc.Parser.ConstructionData.Core

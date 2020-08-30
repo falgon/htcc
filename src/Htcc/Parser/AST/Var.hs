@@ -13,4 +13,4 @@ module Htcc.Parser.AST.Var (
     module Htcc.Parser.AST.Var.Init
 ) where
 
-import Htcc.Parser.AST.Var.Init
+import           Htcc.Parser.AST.Var.Init

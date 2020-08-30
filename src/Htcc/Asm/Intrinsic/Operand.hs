@@ -18,15 +18,15 @@ module Htcc.Asm.Intrinsic.Operand (
     Ref (..)
 ) where
 
-import GHC.Arr (Ix)
-import GHC.Generics (Generic, Generic1)
-import Foreign.Storable (Storable)
-import Data.Bits (Bits, FiniteBits)
-import Data.Tuple.Extra ((***))
-import Control.Monad (liftM2)
-import Control.Monad.Fix (MonadFix (..), fix)
-import Control.Monad.Zip (MonadZip (..))
-import Htcc.Asm.Intrinsic.Register (Register (..))
+import           Control.Monad               (liftM2)
+import           Control.Monad.Fix           (MonadFix (..), fix)
+import           Control.Monad.Zip           (MonadZip (..))
+import           Data.Bits                   (Bits, FiniteBits)
+import           Data.Tuple.Extra            ((***))
+import           Foreign.Storable            (Storable)
+import           GHC.Arr                     (Ix)
+import           GHC.Generics                (Generic, Generic1)
+import           Htcc.Asm.Intrinsic.Register (Register (..))
 
 -- | The operand type.
 newtype Operand = Operand String -- ^ The constructor of `Operand`.
@@ -64,8 +64,8 @@ instance IsOperand Register
 --      mov rax, [rsp]
 --      add rsp, 8
 newtype Ref a = Ref -- ^ The constructor of `Ref`.
-    { 
-        runRef :: a 
+    {
+        runRef :: a
     } deriving (
         Bits
         , Bounded

@@ -9,7 +9,7 @@ Portability : POSIX
 
 The modules of intrinsic (x86_64) assembly
 -}
-{-# LANGUAGE OverloadedStrings, LambdaCase #-}
+{-# LANGUAGE LambdaCase, OverloadedStrings #-}
 module Htcc.Asm.Intrinsic.Structure.Section.Text.Directive (
     -- * Context type
     TextSectionCtx,
@@ -42,16 +42,17 @@ module Htcc.Asm.Intrinsic.Structure.Section.Text.Directive (
     makeCases
 ) where
 
-import Prelude hiding (break)
-import Control.Monad (unless, forM)
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import Data.Maybe (fromJust, isJust)
-import Data.IORef (IORef, readIORef, modifyIORef)
+import           Control.Monad                         (forM, unless)
+import           Data.IORef                            (IORef, modifyIORef,
+                                                        readIORef)
+import           Data.Maybe                            (fromJust, isJust)
+import qualified Data.Text                             as T
+import qualified Data.Text.IO                          as T
+import           Prelude                               hiding (break)
 
-import Htcc.Parser.AST.Core (ATree (..), ATKind (..))
 import qualified Htcc.Asm.Intrinsic.Structure.Internal as C
-import Htcc.Utils (tshow, err)
+import           Htcc.Parser.AST.Core                  (ATKind (..), ATree (..))
+import           Htcc.Utils                            (err, tshow)
 
 -- | the type representing the context inside the text section
 data TextSectionCtx
@@ -71,7 +72,7 @@ text = C.section "text"
 global :: T.Text -> C.Asm TextSectionCtx e ()
 global = C.putStrLnWithIndent . T.append ".global "
 
--- | the label as function definition in text section 
+-- | the label as function definition in text section
 fn :: T.Text -> C.Asm TextLabelCtx e a -> C.Asm TextSectionCtx e a
 fn fname asm = C.writeCurFn (Just fname) *>
     C.putStrLnWithIndent (fname <> ":") *>
@@ -130,12 +131,12 @@ refCnt f mes = C.Asm $ \x -> do
     cf <- readIORef (C.curFn x)
     unless (isJust cf) $ err $ "stray " <> mes
     n <- readIORef (f x)
-    unless (isJust n) $ err $ "stray " <> mes 
+    unless (isJust n) $ err $ "stray " <> mes
     T.putStrLn $ ".L." <> mes <> "." <> fromJust cf <> "." <> tshow (fromJust n)
 
 -- | reference for break label
 refBreak :: (Show e, Show i) => i -> C.Asm TargetLabelCtx e ()
-refBreak = ref "break" 
+refBreak = ref "break"
 
 -- | reference for break label (applying value by `Htcc.Asm.Intrinsic.Structure.Internal.brkCnt`)
 refHBreak :: Show e => C.Asm TargetLabelCtx e ()
@@ -143,7 +144,7 @@ refHBreak = refCnt C.brkCnt "break"
 
 -- | reference for continue label
 refContinue :: (Show e, Show i) => i -> C.Asm TargetLabelCtx e ()
-refContinue = ref "continue" 
+refContinue = ref "continue"
 
 -- | reference for break label (applying value by `Htcc.Asm.Intrinsic.Structure.Internal.cntCnt`)
 refHContinue :: Show e => C.Asm TargetLabelCtx e ()

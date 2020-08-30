@@ -9,7 +9,7 @@ Portability : POSIX
 
 The types of C language
 -}
-{-# LANGUAGE DeriveGeneric, BangPatterns #-}
+{-# LANGUAGE BangPatterns, DeriveGeneric #-}
 module Htcc.CRules.Types.TypeKind (
     -- * TypeKind data type
     StructMember (..),
@@ -26,23 +26,24 @@ module Htcc.CRules.Types.TypeKind (
     accessibleIndices,
 ) where
 
-import Prelude hiding (toInteger)
-import GHC.Generics (Generic)
-import Control.Applicative ((<|>))
-import Control.DeepSeq (NFData (..))
-import Numeric.Natural
-import Data.Tuple.Extra (first, second)
-import Data.List (foldl', maximumBy, find, intercalate)
-import Data.List.Split (chunksOf)
-import Data.Bits ((.&.), complement, Bits (..))
-import Data.Tree (Tree (..))
-import Data.Foldable (Foldable (..))
-import qualified Data.Map as M
-import qualified Data.Text as T
+import           Control.Applicative     ((<|>))
+import           Control.DeepSeq         (NFData (..))
+import           Data.Bits               (Bits (..), complement, (.&.))
+import           Data.Foldable           (Foldable (..))
+import           Data.List               (find, foldl', intercalate, maximumBy)
+import           Data.List.Split         (chunksOf)
+import qualified Data.Map                as M
+import qualified Data.Text               as T
+import           Data.Tree               (Tree (..))
+import           Data.Tuple.Extra        (first, second)
+import           GHC.Generics            (Generic)
+import           Numeric.Natural
+import           Prelude                 hiding (toInteger)
 
-import Htcc.CRules.Char
-import Htcc.CRules.Types.CType
-import Htcc.Utils (toNatural, toInteger, dropFst3, spanLen, maybe', dropSnd3, lor)
+import           Htcc.CRules.Char
+import           Htcc.CRules.Types.CType
+import           Htcc.Utils              (dropFst3, dropSnd3, lor, maybe',
+                                          spanLen, toInteger, toNatural)
 
 -- | Class to a type based on `TypeKind`.
 class TypeKindBase a where
@@ -68,10 +69,10 @@ class TypeKindBase a where
     -- >>> makeCTArray [1, 2] (CTArray 2 CTInt)
     -- int[2][1][2]
     makeCTArray :: [Natural] -> a i -> a i
-    -- | Only if both arguments is `Htcc.CRules.Types.Core.CTArray`, 
+    -- | Only if both arguments is `Htcc.CRules.Types.Core.CTArray`,
     -- `concatCTArray` returns a new multidimensional array by conbining the types of
     -- multidimensional arrays as follows.
-    -- 
+    --
     -- >>> makeCTArray [1, 2] CTInt `concatCTArray` makeCTArray [3, 4] CTInt
     -- Just int[1][2][3][4]
     -- >>> CTInt `concatCTArray` CTArray 2 CTInt
@@ -85,7 +86,7 @@ class TypeKindBase a where
 -- | The type and offset value of a data member.
 data StructMember i = StructMember -- ^ `StructMember` constructor
     {
-        smType :: TypeKind i, -- ^ The type of a data member
+        smType   :: TypeKind i, -- ^ The type of a data member
         smOffset :: Natural -- ^ The offset of a data member
     } deriving (Eq, Show, Read, Generic)
 
@@ -111,18 +112,18 @@ data Incomplete i = IncompleteArray (TypeKind i) -- ^ incomplete array, it has a
 
 instance IncompleteBase Incomplete where
     isIncompleteArray (IncompleteArray _) = True
-    isIncompleteArray _ = False
+    isIncompleteArray _                   = False
     isIncompleteStruct (IncompleteStruct _) = True
-    isIncompleteStruct _ = False
+    isIncompleteStruct _                    = False
     fromIncompleteStruct (IncompleteStruct t) = Just t
-    fromIncompleteStruct _ = Nothing
+    fromIncompleteStruct _                    = Nothing
     fromIncompleteArray (IncompleteArray t) = Just t
-    fromIncompleteArray _ = Nothing
+    fromIncompleteArray _                   = Nothing
     isValidIncomplete (IncompleteArray t) = isFundamental t
-    isValidIncomplete _ = True
+    isValidIncomplete _                   = True
 
 instance Show i => Show (Incomplete i) where
-    show (IncompleteArray t) = show t ++ "[]"
+    show (IncompleteArray t)  = show t ++ "[]"
     show (IncompleteStruct t) = T.unpack t
 
 instance NFData i => NFData (Incomplete i)
@@ -146,72 +147,72 @@ data TypeKind i = CTInt -- ^ The type @int@ as C language
 {-# INLINE fundamental #-}
 fundamental :: [TypeKind i]
 fundamental = [CTChar, CTInt, CTShort CTUndef, CTLong CTUndef, CTSigned CTUndef]
-    
+
 {-# INLINE isLongShortable #-}
 isLongShortable :: TypeKind i -> Bool
-isLongShortable CTInt = True
-isLongShortable CTUndef = True
-isLongShortable (CTLong x) = isLongShortable x
-isLongShortable (CTShort x) = isLongShortable x
+isLongShortable CTInt        = True
+isLongShortable CTUndef      = True
+isLongShortable (CTLong x)   = isLongShortable x
+isLongShortable (CTShort x)  = isLongShortable x
 isLongShortable (CTSigned x) = isLongShortable x
-isLongShortable _ = False
-            
+isLongShortable _            = False
+
 {-# INLINE isShort #-}
 isShort :: TypeKind i -> Bool
-isShort (CTShort _) = True
+isShort (CTShort _)  = True
 isShort (CTSigned t) = isShort t
-isShort _ = False
+isShort _            = False
 
 {-# INLINE isLong #-}
 isLong :: TypeKind i -> Bool
-isLong (CTLong _) = True
+isLong (CTLong _)   = True
 isLong (CTSigned t) = isLong t
-isLong _ = False
-    
+isLong _            = False
+
 {-# INLINE isQualifier #-}
 isQualifier :: TypeKind i -> Bool
-isQualifier (CTShort _) = True
-isQualifier (CTLong _) = True
+isQualifier (CTShort _)  = True
+isQualifier (CTLong _)   = True
 isQualifier (CTSigned _) = True
-isQualifier _ = False
+isQualifier _            = False
 
 {-# INLINE qual #-}
 qual :: TypeKind i -> TypeKind i -> TypeKind i
-qual (CTLong x) t = CTLong $ qual x t
-qual (CTShort x) t = CTShort $ qual x t
+qual (CTLong x) t   = CTLong $ qual x t
+qual (CTShort x) t  = CTShort $ qual x t
 qual (CTSigned x) t = CTSigned $ qual x t
-qual CTUndef t = t
-qual _ _ = error "qual: should not reach here"
+qual CTUndef t      = t
+qual _ _            = error "qual: should not reach here"
 
 {-# INLINE removeAllQualified #-}
 removeAllQualified :: TypeKind i -> TypeKind i
-removeAllQualified (CTLong x) = removeAllQualified x
-removeAllQualified (CTShort x) = removeAllQualified x
+removeAllQualified (CTLong x)   = removeAllQualified x
+removeAllQualified (CTShort x)  = removeAllQualified x
 removeAllQualified (CTSigned x) = removeAllQualified x
-removeAllQualified x = x
+removeAllQualified x            = x
 
 {-# INLINE combTable #-}
 combTable :: TypeKind i -> Maybe Int
-combTable CTChar = Just 1
-combTable CTInt = Just $ shiftL 1 1
-combTable CTBool = Just $ shiftL 1 2
-combTable CTVoid = Just $ shiftL 1 3
-combTable CTUndef = Just $ shiftL 1 4
-combTable (CTPtr x) = (shiftL 1 5 .|.) <$> combTable x
+combTable CTChar       = Just 1
+combTable CTInt        = Just $ shiftL 1 1
+combTable CTBool       = Just $ shiftL 1 2
+combTable CTVoid       = Just $ shiftL 1 3
+combTable CTUndef      = Just $ shiftL 1 4
+combTable (CTPtr x)    = (shiftL 1 5 .|.) <$> combTable x
 combTable (CTSigned x) = (shiftL 1 6 .|.) <$> combTable x
-combTable (CTLong x) = (shiftL 1 7 .|.) <$> combTable x
-combTable (CTShort x) = (shiftL 1 8 .|.) <$> combTable x
-combTable _ = Nothing
+combTable (CTLong x)   = (shiftL 1 7 .|.) <$> combTable x
+combTable (CTShort x)  = (shiftL 1 8 .|.) <$> combTable x
+combTable _            = Nothing
 
 {-# INLINE arSizes #-}
 arSizes :: (Num i, Enum i) => TypeKind i -> (i, [[i]])
 arSizes = arSizes' 0
     where
-        arSizes' !dp (CTArray v t) = second ([0..pred $ fromIntegral v]:) $ arSizes' (succ dp) t 
+        arSizes' !dp (CTArray v t) = second ([0..pred $ fromIntegral v]:) $ arSizes' (succ dp) t
         arSizes' !dp _ = (dp, [])
 
 -- | The type of designator
-data Desg i = DesgIdx i -- ^ index type 
+data Desg i = DesgIdx i -- ^ index type
     | DesgMem (StructMember i) -- ^ struct member type
     deriving Eq
 
@@ -222,15 +223,15 @@ instance (Eq i, Ord i, Integral i) => Ord (Desg i) where
 
 instance (Enum i, Integral i) => Enum (Desg i) where
     toEnum = DesgIdx . fromIntegral
-    fromEnum (DesgIdx x) = fromIntegral x
+    fromEnum (DesgIdx x)   = fromIntegral x
     fromEnum (DesgMem mem) = fromIntegral $ smOffset mem
 
 -- | If the given argument is `CTArray`, it returns a list of accessible indexes of the array.
 -- Othrewise returns empty list.
 accessibleIndices :: Integral i => TypeKind i -> [[Desg i]]
-accessibleIndices = uncurry (concatMap . chunksOf) . first fromIntegral . second (concatMap (map (iNode' id) . iNode id) . arIndices') . arSizes 
+accessibleIndices = uncurry (concatMap . chunksOf) . first fromIntegral . second (concatMap (map (iNode' id) . iNode id) . arIndices') . arSizes
     where
-        arIndices' [] = []
+        arIndices' []     = []
         arIndices' (x:xs) = map (flip ($) (arIndices' xs) . Node) x
 
         iNode f x@(Node _ []) = [f x]
@@ -238,7 +239,7 @@ accessibleIndices = uncurry (concatMap . chunksOf) . first fromIntegral . second
         iNode f (Node v (x:xs)) = iNode (Node v . (:[]) . f) x ++ concatMap (iNode (Node v . (:[]) . f)) xs
 
         iNode' f (Node v []) = f [DesgIdx v]
-        iNode' f (Node v t) = concatMap (iNode' ((DesgIdx v:) . f)) t
+        iNode' f (Node v t)  = concatMap (iNode' ((DesgIdx v:) . f)) t
 
 instance Eq i => Eq (TypeKind i) where
     (==) CTInt CTInt = True
@@ -260,7 +261,7 @@ instance Show i => Show (TypeKind i) where
     show CTInt = "int"
     show CTChar = "char"
     show (CTSigned CTUndef) = "signed"
-    show (CTSigned t) = "signed " ++ show t 
+    show (CTSigned t) = "signed " ++ show t
     show (CTShort CTUndef) = "short"
     show (CTShort t) = "short " ++ show t
     show (CTLong CTUndef) = "long"
@@ -269,7 +270,7 @@ instance Show i => Show (TypeKind i) where
     show CTVoid = "void"
     show (CTPtr x) = show x ++ "*"
     show (CTArray v t) = show t ++ "[" ++ show v ++ "]"
-    show (CTEnum _ m) = "enum { " ++ intercalate ", " (map T.unpack $ M.keys m) ++ " }" 
+    show (CTEnum _ m) = "enum { " ++ intercalate ", " (map T.unpack $ M.keys m) ++ " }"
     show (CTStruct m) = "struct { " ++ concatMap (\(v, inf) -> show (smType inf) ++ " " ++ T.unpack v ++ "; ") (M.toList m) ++ "}"
     show (CTIncomplete t) = show t
     show CTUndef = "undefined"
@@ -294,14 +295,14 @@ instance Ord i => CType (TypeKind i) where
                 | isQualifier ty1 && isQualifier ty2 && isLongShortable (max ty1 ty2) = Just (min ty1 ty2, max ty1 ty2)
                 | otherwise = f ty1 ty2 <|> f ty2 ty1
                 where
-                    f t u 
-                        | isQualifier t && isLongShortable u = Just (t, u) 
+                    f t u
+                        | isQualifier t && isLongShortable u = Just (t, u)
                         | otherwise = Nothing
-    
+
     {-# INLINE isFundamental #-}
     isFundamental = flip elem [CTChar, CTInt, CTBool] . removeAllQualified
 
-    sizeof CTInt = 4 
+    sizeof CTInt = 4
     sizeof CTChar = 1
     sizeof (CTSigned x) = sizeof x
     sizeof (CTShort CTInt) = 2
@@ -314,14 +315,14 @@ instance Ord i => CType (TypeKind i) where
     sizeof (CTPtr _) = 8
     sizeof (CTArray v t) = v * sizeof t
     sizeof (CTEnum t _) = sizeof t
-    sizeof t@(CTStruct m) 
+    sizeof t@(CTStruct m)
         | M.null m = 1
         | otherwise = let sn = maximumBy (flip (.) smOffset . compare . smOffset) $ M.elems m in
             toNatural $ alignas (toInteger $ smOffset sn + sizeof (smType sn)) (toInteger $ alignof t)
     sizeof CTUndef = 0
     sizeof (CTIncomplete _) = 0
     sizeof _ = error "sizeof: sould not reach here"
-    
+
     alignof CTInt = 4
     alignof CTChar = 1
     alignof (CTSigned x) = sizeof x
@@ -335,7 +336,7 @@ instance Ord i => CType (TypeKind i) where
     alignof (CTPtr _) = 8
     alignof (CTArray _ t) = alignof $ removeAllExtents t
     alignof (CTEnum t _) = alignof t
-    alignof (CTIncomplete (IncompleteArray t)) 
+    alignof (CTIncomplete (IncompleteArray t))
         | isFundamental t = alignof t
         | otherwise = 0
     alignof (CTIncomplete _) = 1
@@ -349,8 +350,8 @@ instance Ord i => CType (TypeKind i) where
     deref ct@(CTArray _ _) = Just $ f ct
         where
             f (CTArray n c@(CTArray _ _)) = CTArray n (f c)
-            f (CTArray _ t) = t
-            f t = t
+            f (CTArray _ t)               = t
+            f t                           = t
     deref (CTIncomplete (IncompleteArray (CTArray _ _))) = Nothing
     deref (CTIncomplete (IncompleteArray t)) = Just t
     deref _ = Nothing
@@ -358,47 +359,47 @@ instance Ord i => CType (TypeKind i) where
     ctorPtr n = foldr (.) id $ replicate (fromIntegral n) CTPtr
 
     dctorPtr (CTPtr x) = second (CTPtr .) $ dctorPtr x
-    dctorPtr x = (x, id)
+    dctorPtr x         = (x, id)
 
     dctorArray (CTArray n x) = second (CTArray n .) $ dctorArray x
-    dctorArray x = (x, id)
+    dctorArray x             = (x, id)
 
-    removeAllExtents (CTArray _ t) = removeAllExtents t
+    removeAllExtents (CTArray _ t)                      = removeAllExtents t
     removeAllExtents (CTIncomplete (IncompleteArray t)) = removeAllExtents t
-    removeAllExtents x = x
+    removeAllExtents x                                  = x
 
     conversion l r
         | l == r = l
         | otherwise = max l r
-    
+
     {-# INLINE implicitInt #-}
-    implicitInt (CTLong x) = CTLong $ implicitInt x
-    implicitInt (CTShort x) = CTShort $ implicitInt x
+    implicitInt (CTLong x)   = CTLong $ implicitInt x
+    implicitInt (CTShort x)  = CTShort $ implicitInt x
     implicitInt (CTSigned x) = CTSigned $ implicitInt x
-    implicitInt CTUndef = CTInt
-    implicitInt x = x
+    implicitInt CTUndef      = CTInt
+    implicitInt x            = x
 
 
 instance TypeKindBase TypeKind where
     {-# INLINE isCTArray #-}
     isCTArray (CTArray _ _) = True
-    isCTArray _ = False
+    isCTArray _             = False
 
     {-# INLINE isArray #-}
-    isArray = lor [isCTArray, isIncompleteArray] 
-    
+    isArray = lor [isCTArray, isIncompleteArray]
+
     {-# INLINE isCTStruct #-}
     isCTStruct (CTStruct _) = True
-    isCTStruct _ = False
-    
+    isCTStruct _            = False
+
     {-# INLINE isCTUndef #-}
     isCTUndef CTUndef = True
-    isCTUndef _ = False
+    isCTUndef _       = False
 
     {-# INLINE isCTIncomplete #-}
     isCTIncomplete (CTIncomplete _) = True
-    isCTIncomplete _ = False
-    
+    isCTIncomplete _                = False
+
     {-# INLINE makeCTArray #-}
     makeCTArray ns t = foldl' (flip CTArray) t ns
 
@@ -407,7 +408,7 @@ instance TypeKindBase TypeKind where
         | otherwise = Nothing
         where
             f l'@(CTArray _ _) (CTArray n'' r'') = CTArray n'' $ f l' r''
-            f l' _ = l'
+            f l' _                               = l'
     concatCTArray l@(CTIncomplete (IncompleteArray _)) r@(CTArray n r')
         | removeAllExtents l == removeAllExtents r = Just $ CTArray n $ f l r'
         | otherwise = Nothing
@@ -418,29 +419,29 @@ instance TypeKindBase TypeKind where
 
     {-# INLINE toTypeKind #-}
     toTypeKind = id
-    
+
     {-# INLINE mapTypeKind #-}
     mapTypeKind = id
 
 instance IncompleteBase TypeKind where
     {-# INLINE isIncompleteArray #-}
     isIncompleteArray (CTIncomplete x) = isIncompleteArray x
-    isIncompleteArray (CTArray _ x) = isIncompleteArray x
-    isIncompleteArray _ = False
+    isIncompleteArray (CTArray _ x)    = isIncompleteArray x
+    isIncompleteArray _                = False
     {-# INLINE isIncompleteStruct #-}
     isIncompleteStruct (CTIncomplete x) = isIncompleteStruct x
-    isIncompleteStruct _ = False
+    isIncompleteStruct _                = False
     {-# INLINE fromIncompleteStruct #-}
     fromIncompleteStruct (CTIncomplete x) = fromIncompleteStruct x
-    fromIncompleteStruct _ = Nothing
+    fromIncompleteStruct _                = Nothing
     {-# INLINE fromIncompleteArray #-}
     fromIncompleteArray (CTIncomplete x) = fromIncompleteArray x
-    fromIncompleteArray (CTArray _ x) = fromIncompleteArray x
-    fromIncompleteArray _ = Nothing
+    fromIncompleteArray (CTArray _ x)    = fromIncompleteArray x
+    fromIncompleteArray _                = Nothing
     {-# INLINE isValidIncomplete #-}
     isValidIncomplete (CTIncomplete x) = isValidIncomplete x
-    isValidIncomplete (CTArray _ x) = isValidIncomplete x
-    isValidIncomplete _ = True
+    isValidIncomplete (CTArray _ x)    = isValidIncomplete x
+    isValidIncomplete _                = True
 
 {-# INLINE alignas #-}
 -- | `alignas` align to @n@.
@@ -450,4 +451,4 @@ alignas !n !aval = pred (n + aval) .&. complement (pred aval)
 -- | `lookupMember` search the specified member by its name from `CTStruct`.
 lookupMember :: T.Text -> TypeKind i -> Maybe (StructMember i)
 lookupMember t (CTStruct m) = M.lookup t m
-lookupMember _ _ = Nothing
+lookupMember _ _            = Nothing

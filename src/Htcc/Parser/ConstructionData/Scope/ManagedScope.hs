@@ -14,9 +14,9 @@ module Htcc.Parser.ConstructionData.Scope.ManagedScope (
     ASTError
 ) where
 
-import qualified Data.Text as T
-import qualified Data.Map as M
-import Htcc.Tokenizer.Token (TokenLC)
+import qualified Data.Map             as M
+import qualified Data.Text            as T
+import           Htcc.Tokenizer.Token (TokenLC)
 
 -- | Type classes common to concepts managed in scope
 class ManagedScope a where

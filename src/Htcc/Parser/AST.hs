@@ -16,7 +16,7 @@ module Htcc.Parser.AST (
     module Htcc.Parser.AST.Var
 ) where
 
-import Htcc.Parser.AST.Core
-import Htcc.Parser.AST.Type
-import Htcc.Parser.AST.DeduceKind
-import Htcc.Parser.AST.Var
+import           Htcc.Parser.AST.Core
+import           Htcc.Parser.AST.DeduceKind
+import           Htcc.Parser.AST.Type
+import           Htcc.Parser.AST.Var

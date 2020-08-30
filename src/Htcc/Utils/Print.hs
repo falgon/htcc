@@ -18,12 +18,14 @@ module Htcc.Utils.Print (
     warnCharDoc, locTxtDoc, locCharDoc,
 ) where
 
-import Prelude hiding (toInteger)
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import System.IO (stderr)
-import System.Exit (exitFailure)
-import Text.PrettyPrint.ANSI.Leijen (Doc, putDoc, hPutDoc, text, char, red, magenta, bold, linebreak)
+import qualified Data.Text                    as T
+import qualified Data.Text.IO                 as T
+import           Prelude                      hiding (toInteger)
+import           System.Exit                  (exitFailure)
+import           System.IO                    (stderr)
+import           Text.PrettyPrint.ANSI.Leijen (Doc, bold, char, hPutDoc,
+                                               linebreak, magenta, putDoc, red,
+                                               text)
 
 {-# INLINE putDocLn #-}
 -- | Execute `Text.PrettyPrint.ANSI.Leijen.putDoc` by applying `Text.PrettyPrint.ANSI.Leijen.linebreak`

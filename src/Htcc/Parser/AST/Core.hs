@@ -22,7 +22,7 @@ module Htcc.Parser.AST.Core (
     atAssign, atNumLit, atMemberAcc, atExprStmt,
     atBlock, atNull, atDefFunc, atReturn,
     atIf, atElse, atWhile, atFor,
-    atBreak, atContinue, atSwitch, atCase, 
+    atBreak, atContinue, atSwitch, atCase,
     atDefault, atGoto, atLabel, atComma,
     atConditional, atCast,
     -- * Utilities
@@ -39,8 +39,8 @@ module Htcc.Parser.AST.Core (
     modifyTypeATKind
 ) where
 
-import qualified Data.Text as T
-import Control.Monad ((>=>))
+import           Control.Monad     ((>=>))
+import qualified Data.Text         as T
 import qualified Htcc.CRules.Types as CT
 
 -- | Specially @for@ syntax tree type
@@ -55,25 +55,25 @@ data ATKindFor a = ATForkw -- ^ The @for@ keyword
 -- | An utility of `ATForInit`. When an argument is `ATForInit`, return `True` otherwise `False`
 isATForInit :: ATKindFor a -> Bool
 isATForInit (ATForInit _) = True
-isATForInit _ = False
+isATForInit _             = False
 
 {-# INLINE isATForCond #-}
 -- | An utility of `ATForCond`. When an argument is `ATForCond`, return `True` otherwise `False`
 isATForCond :: ATKindFor a -> Bool
 isATForCond (ATForCond _) = True
-isATForCond _ = False
+isATForCond _             = False
 
 {-# INLINE isATForStmt #-}
 -- | An utility `ATForStmt`. When an argument is `ATForStmt`, return `True` otherwise `False`
 isATForStmt :: ATKindFor a -> Bool
 isATForStmt (ATForStmt _) = True
-isATForStmt _ = False
+isATForStmt _             = False
 
 {-# INLINE isATForIncr #-}
 -- | An utility `ATForIncr`. When an argument is `ATForIncr`, return `True` otherwise `False`
 isATForIncr :: ATKindFor a -> Bool
 isATForIncr (ATForIncr _) = True
-isATForIncr _ = False
+isATForIncr _             = False
 
 {-# INLINE fromATKindFor #-}
 -- | take ATree data from `ATKindFor`.
@@ -82,7 +82,7 @@ fromATKindFor (ATForInit x) = x
 fromATKindFor (ATForCond x) = x
 fromATKindFor (ATForIncr x) = x
 fromATKindFor (ATForStmt x) = x
-fromATKindFor _ = error "ATKindFor is ATForkw"
+fromATKindFor _             = error "ATKindFor is ATForkw"
 
 -- | The syntax tree type. Let \(x,y\in\mathbb{N}\), Let \(p\) and \(q\) be pointers to variables \(a\) and \(b\), respectively (@p=&a,q=&b@).
 data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
@@ -158,39 +158,39 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
 fromATVar :: ATKind i -> Maybe (CT.StorageClass i)
 fromATVar (ATLVar s _) = Just s
 fromATVar (ATGVar s _) = Just s
-fromATVar _ = Nothing
+fromATVar _            = Nothing
 
 instance CT.IncompleteBase ATKind where
     isIncompleteArray = maybe False CT.isIncompleteArray . fromATVar
     isIncompleteStruct = maybe False CT.isIncompleteStruct . fromATVar
     fromIncompleteArray = fromATVar >=> CT.fromIncompleteArray
     fromIncompleteStruct = fromATVar >=> CT.fromIncompleteStruct
-    isValidIncomplete = maybe False CT.isValidIncomplete . fromATVar 
+    isValidIncomplete = maybe False CT.isValidIncomplete . fromATVar
 
 {-# INLINE isComplexAssign #-}
--- | Returns True if the given `ATKind` is an assignment operator other than simple assignment. 
+-- | Returns True if the given `ATKind` is an assignment operator other than simple assignment.
 -- Otherwise, returns `False`.
 isComplexAssign :: ATKind a -> Bool
-isComplexAssign ATAddAssign = True
-isComplexAssign ATSubAssign = True
-isComplexAssign ATMulAssign = True
-isComplexAssign ATDivAssign = True
+isComplexAssign ATAddAssign    = True
+isComplexAssign ATSubAssign    = True
+isComplexAssign ATMulAssign    = True
+isComplexAssign ATDivAssign    = True
 isComplexAssign ATAddPtrAssign = True
 isComplexAssign ATSubPtrAssign = True
-isComplexAssign ATOrAssign = True
-isComplexAssign ATAndAssign = True
-isComplexAssign ATXorAssign = True
-isComplexAssign ATShlAssign = True
-isComplexAssign ATShrAssign = True
-isComplexAssign _ = False
+isComplexAssign ATOrAssign     = True
+isComplexAssign ATAndAssign    = True
+isComplexAssign ATXorAssign    = True
+isComplexAssign ATShlAssign    = True
+isComplexAssign ATShrAssign    = True
+isComplexAssign _              = False
 
 -- | The data structure of abstract syntax tree
-data ATree a = ATEmpty -- ^ The empty node 
-    | ATNode { 
+data ATree a = ATEmpty -- ^ The empty node
+    | ATNode {
     atkind :: ATKind a, -- ^ The kind of abstract tree
-    atype :: CT.StorageClass a, -- ^ The data type
-    atL :: ATree a, -- ^ The left hand side abstract tree
-    atR :: ATree a -- ^ The right hand side abstract tree
+    atype  :: CT.StorageClass a, -- ^ The data type
+    atL    :: ATree a, -- ^ The left hand side abstract tree
+    atR    :: ATree a -- ^ The right hand side abstract tree
     } -- ^ `ATKind` representing the kind of node and the two branches `ATree` it has
     deriving Show
 
@@ -203,22 +203,22 @@ class Treealizable a where
 -- | `isEmptyExprStmt` returns `True` only if both sides of `ATExprStmt` are `ATEmpty`. Otherwise, returns `False`.
 isEmptyExprStmt :: ATree a -> Bool
 isEmptyExprStmt (ATNode ATExprStmt _ ATEmpty ATEmpty) = True
-isEmptyExprStmt _ = False
+isEmptyExprStmt _                                     = False
 
 {-# INLINE isNonEmptyReturn #-}
 -- | `isNonEmptyReturn` returns `True` only if the `ATKind` of the given argument is `ATReturn` and the left side hand node of the given argument is not `ATEmpty`.
 -- Otherwise, returns `False`.
 isNonEmptyReturn :: ATree a -> Bool
 isNonEmptyReturn (ATNode ATReturn _ ATEmpty _) = False
-isNonEmptyReturn (ATNode ATReturn _ _ _) = True
-isNonEmptyReturn _ = False
+isNonEmptyReturn (ATNode ATReturn _ _ _)       = True
+isNonEmptyReturn _                             = False
 
 {-# INLINE isEmptyReturn #-}
 -- | `isEmptyReturn` returns `True` only if the `ATKind` of the given argument is `ATReturn` and the left side hand node of the given argument is `ATEmpty`.
 -- Otherwise, returns `False`.
 isEmptyReturn :: ATree a -> Bool
 isEmptyReturn (ATNode ATReturn _ ATEmpty _) = True
-isEmptyReturn _ = False
+isEmptyReturn _                             = False
 
 {-# INLINE atBinary #-}
 -- | `atBinary` is equivalent to `ATNode`
@@ -364,4 +364,4 @@ mapATKind _ ATEmpty = ATEmpty
 modifyTypeATKind :: (CT.StorageClass i -> CT.StorageClass i) -> ATKind i -> ATKind i
 modifyTypeATKind f (ATLVar t o) = ATLVar (f t) o
 modifyTypeATKind f (ATGVar t o) = ATGVar (f t) o
-modifyTypeATKind _ _ = ATNull ATEmpty
+modifyTypeATKind _ _            = ATNull ATEmpty

@@ -9,14 +9,14 @@ Portability : POSIX
 
 Utilities of natural transformations
 -}
-{-# LANGUAGE TypeOperators, Rank2Types #-}
+{-# LANGUAGE Rank2Types, TypeOperators #-}
 module Htcc.Utils.NaturalTransformations (
     maybeToRight
 ) where
 
-import Control.Natural (type (~>))
+import           Control.Natural (type (~>))
 
 -- | Natural transformation from @Maybe@ functor to @Either e@ functor
 maybeToRight :: e -> Maybe ~> Either e
-maybeToRight s Nothing = Left s
+maybeToRight s Nothing  = Left s
 maybeToRight _ (Just x) = Right x

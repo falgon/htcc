@@ -9,28 +9,28 @@ Portability : POSIX
 
 The Data type of variables and its utilities used in parsing
 -}
-{-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric, OverloadedStrings #-}
 module Htcc.Parser.ConstructionData.Scope.Typedef (
     Typedef (..),
     Typedefs,
     add
 ) where
 
-import GHC.Generics (Generic (..))
-import Numeric.Natural
-import qualified Data.Map as M
-import qualified Data.Text as T
-import Control.DeepSeq (NFData (..))
+import           Control.DeepSeq                                 (NFData (..))
+import qualified Data.Map                                        as M
+import qualified Data.Text                                       as T
+import           GHC.Generics                                    (Generic (..))
+import           Numeric.Natural
 
-import Htcc.Parser.ConstructionData.Scope.ManagedScope
-import Htcc.Parser.ConstructionData.Scope.Utils (internalCE)
-import qualified Htcc.CRules.Types as CT
-import qualified Htcc.Tokenizer.Token as HT
+import qualified Htcc.CRules.Types                               as CT
+import           Htcc.Parser.ConstructionData.Scope.ManagedScope
+import           Htcc.Parser.ConstructionData.Scope.Utils        (internalCE)
+import qualified Htcc.Tokenizer.Token                            as HT
 
 -- | The data type of a typedef tag
 data Typedef a = Typedef -- ^ The contypedefor of a typedef tag
     {
-        tdtype :: CT.StorageClass a, -- ^ The type of this typedef
+        tdtype      :: CT.StorageClass a, -- ^ The type of this typedef
         tdNestDepth :: !Natural -- ^ The nest depth of this typedef
     } deriving (Eq, Ord, Show, Generic)
 
@@ -44,9 +44,9 @@ instance ManagedScope (Typedef i) where
 -- | The typedefs data type
 type Typedefs a = M.Map T.Text (Typedef a)
 
--- | Given the current nesting number, type, identifier token, and `Typedefs`, if the specified identifier already exists in the same scope, 
--- return an error message and its location as a pair. 
--- Otherwise, add a new tag to `Typedefs` and return it. 
+-- | Given the current nesting number, type, identifier token, and `Typedefs`, if the specified identifier already exists in the same scope,
+-- return an error message and its location as a pair.
+-- Otherwise, add a new tag to `Typedefs` and return it.
 -- If the token does not indicate an identifier, an error indicating internal compiler error is returned.
 add :: (Num i, Eq i) => Natural -> CT.StorageClass i -> HT.TokenLC i -> Typedefs i -> Either (ASTError i) (Typedefs i)
 add cnd t cur@(_, HT.TKIdent ident) sts = case M.lookup ident sts of

@@ -1,15 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import Control.Exception (finally)
-import System.Environment (getArgs)
-import System.Exit (exitFailure)
-import System.Directory (createDirectoryIfMissing)
-import qualified Data.Text as T
+import           Control.Exception  (finally)
+import qualified Data.Text          as T
+import           System.Directory   (createDirectoryIfMissing)
+import           System.Environment (getArgs)
+import           System.Exit        (exitFailure)
 
-import Htcc.Utils (putStrLnErr)
-import Tests.Utils
+import           Htcc.Utils         (putStrLnErr)
 import qualified Tests.SubProcTests as SubProcTests
+import           Tests.Utils
 
 {-# INLINE workDir #-}
 workDir :: FilePath
@@ -45,7 +45,7 @@ main :: IO ()
 main = do
     args <- getArgs
     case args of
-        ["subp"] -> SubProcTests.exec 
+        ["subp"] -> SubProcTests.exec
         ["inc"] -> inc
         ["docker"] -> docker DkBuild
         ["cleanDocker"] -> docker DkClean

@@ -24,27 +24,27 @@ module Htcc.Asm.Intrinsic.Structure.Internal (
     labeled
 ) where
 
-import Data.IORef (IORef, newIORef, writeIORef)
-import Data.Semigroup (Semigroup (..))
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import Control.Monad.Finally (MonadFinally (..))
+import           Control.Monad.Finally (MonadFinally (..))
+import           Data.IORef            (IORef, newIORef, writeIORef)
+import           Data.Semigroup        (Semigroup (..))
+import qualified Data.Text             as T
+import qualified Data.Text.IO          as T
 
-import Htcc.Utils (err)
+import           Htcc.Utils            (err)
 
 -- | Counter and label information used when generating assembly code
 data AsmInfo e = AsmInfo
     {
         inLabel :: Bool, -- ^ the flag that indicates whether it is inside the label. If True, indent by single tab,
-        lblCnt :: IORef e, -- ^ the label counter
-        brkCnt :: IORef (Maybe e), -- ^ the @break@ label counter
-        cntCnt :: IORef (Maybe e), -- ^ the @continue@ label counter
-        curFn :: IORef (Maybe T.Text) -- ^ the function being processed
+        lblCnt  :: IORef e, -- ^ the label counter
+        brkCnt  :: IORef (Maybe e), -- ^ the @break@ label counter
+        cntCnt  :: IORef (Maybe e), -- ^ the @continue@ label counter
+        curFn   :: IORef (Maybe T.Text) -- ^ the function being processed
     }
 
 -- | A monad that represents the context of the assembly code
-newtype Asm ctx e a = Asm 
-    { 
+newtype Asm ctx e a = Asm
+    {
         unAsm :: AsmInfo e -> IO a -- ^ Function that determines the structure of assembly code
     }
 
@@ -98,7 +98,7 @@ putStrWithIndent :: T.Text -> Asm ctx e ()
 putStrWithIndent s = Asm $ \x -> T.putStr $ if inLabel x then '\t' `T.cons` s else s
 
 -- | The error context.
--- when this is executed, 
+-- when this is executed,
 -- it will exit the application immediately with `System.Exit.exitFailure` after printing the message.
 errCtx :: T.Text -> Asm ctx e ()
 errCtx = Asm . const . err

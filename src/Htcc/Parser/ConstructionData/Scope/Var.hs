@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric, OverloadedStrings #-}
 {-|
 Module      : Htcc.Parser.ConstructionData.Scope.Var
 Description : The Data type of variables and its utilities used in parsing
@@ -37,20 +37,25 @@ module Htcc.Parser.ConstructionData.Scope.Var (
     fallBack
 ) where
 
-import Data.Bits (Bits (..))
-import qualified Data.ByteString as B
-import qualified Data.Text as T
-import qualified Data.Map.Strict as M
-import Numeric.Natural
-import GHC.Generics (Generic, Generic1)
-import Control.DeepSeq (NFData (..))
+import           Control.DeepSeq                                 (NFData (..))
+import           Data.Bits                                       (Bits (..))
+import qualified Data.ByteString                                 as B
+import qualified Data.Map.Strict                                 as M
+import qualified Data.Text                                       as T
+import           GHC.Generics                                    (Generic,
+                                                                  Generic1)
+import           Numeric.Natural
 
+import qualified Htcc.CRules.Types                               as CT
+import           Htcc.Parser.AST.Core                            (ATKind (..),
+                                                                  ATree (..),
+                                                                  Treealizable (..),
+                                                                  atGVar,
+                                                                  atLVar)
 import qualified Htcc.Parser.ConstructionData.Scope.ManagedScope as SM
-import qualified Htcc.Tokenizer.Token as HT
-import qualified Htcc.CRules.Types as CT
-import Htcc.Parser.AST.Core (ATree (..), ATKind (..), Treealizable (..), atLVar, atGVar)
-import Htcc.Parser.ConstructionData.Scope.Utils (internalCE)
-import Htcc.Utils (tshow)
+import           Htcc.Parser.ConstructionData.Scope.Utils        (internalCE)
+import qualified Htcc.Tokenizer.Token                            as HT
+import           Htcc.Utils                                      (tshow)
 
 -- | The type class of the type representing the variable
 class Var a where
@@ -66,7 +71,7 @@ instance NFData i => NFData (GVarInitWith i)
 -- | The data type of the global variable
 data GVar i = GVar -- ^ The constructor of the global variable
     {
-        gvtype :: CT.StorageClass i, -- ^ The type of the global variable
+        gvtype   :: CT.StorageClass i, -- ^ The type of the global variable
         initWith :: GVarInitWith i -- ^ The informations about initial value of the global variable
     } deriving (Eq, Ord, Show, Generic)
 
@@ -83,7 +88,7 @@ instance SM.ManagedScope (GVar i) where
 -- | The data type of local variable
 data LVar a = LVar -- ^ The constructor of local variable
     {
-        lvtype :: CT.StorageClass a, -- ^ The type of the local variable
+        lvtype    :: CT.StorageClass a, -- ^ The type of the local variable
         rbpOffset :: !a, -- ^ The offset value from RBP
         nestDepth :: !Natural -- ^ The nest depth of a local variable
     } deriving (Eq, Ord, Show, Generic)
@@ -92,7 +97,7 @@ instance NFData a => NFData (LVar a)
 
 instance Treealizable LVar where
     {-# INLINE treealize #-}
-    treealize (LVar t o _) = atLVar t o 
+    treealize (LVar t o _) = atLVar t o
 
 instance Var LVar where
     vtype = lvtype
@@ -106,8 +111,8 @@ instance SM.ManagedScope (LVar a) where
 data Literal a = Literal -- ^ The literal constructor
     {
         litype :: CT.StorageClass a, -- ^ The single literal type
-        ln :: !Natural, -- ^ The number of labels placed in the @.data@ section
-        lcts :: B.ByteString -- ^ The content
+        ln     :: !Natural, -- ^ The number of labels placed in the @.data@ section
+        lcts   :: B.ByteString -- ^ The content
     } deriving (Eq, Show, Generic)
 
 instance NFData a => NFData (Literal a)
@@ -129,12 +134,12 @@ type Literals a = [Literal a]
 
 -- | The data type of local variables
 data Vars a = Vars -- ^ The constructor of variables
-    { 
-        globals :: GlobalVars a, -- ^ The global variables
-        locals :: LocalVars a, -- ^ The local variables
+    {
+        globals  :: GlobalVars a, -- ^ The global variables
+        locals   :: LocalVars a, -- ^ The local variables
         literals :: Literals a -- ^ Literals
     } deriving (Show, Generic, Generic1)
-    
+
 instance NFData a => NFData (Vars a)
 
 {-# INLINE initVars #-}
@@ -164,7 +169,7 @@ lookupVar s vars = maybe (Left <$> lookupGVar s vars) (Just . Right) $ lookupLVa
 
 {-# INLINE maximumOffset #-}
 maximumOffset :: (Num a, Ord a) => M.Map T.Text (LVar a) -> a
-maximumOffset m 
+maximumOffset m
     | M.null m = 0
     | otherwise = maximum $ map rbpOffset $ M.elems m
 
@@ -177,14 +182,14 @@ fallBack pre post = pre { literals = literals post }
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
 addLVar :: (Integral i, Bits i) => Natural -> CT.StorageClass i -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
 addLVar cnd t cur@(_, HT.TKIdent ident) vars = case lookupLVar ident vars of
-    Just foundedVar 
+    Just foundedVar
         | nestDepth foundedVar /= cnd -> varnat
         | CT.isIncompleteArray (lvtype foundedVar) -> varnat
         | otherwise -> Left ("redeclaration of '" <> ident <> "' with no linkage", cur) -- ODR
     Nothing -> varnat
     where
         ofs = (+) (fromIntegral $ CT.sizeof t) $ CT.alignas (maximumOffset $ locals vars) $ fromIntegral $ CT.alignof t
-        varnat = let lvar = LVar t ofs cnd in 
+        varnat = let lvar = LVar t ofs cnd in
             Right (atLVar (lvtype lvar) (rbpOffset lvar), vars { locals = M.insert ident lvar $ locals vars })
 addLVar _ _ _ _ = Left (internalCE, HT.emptyToken)
 
@@ -206,7 +211,7 @@ addGVar t ident = addGVarWith t ident GVarInitWithZero
 -- | If the specified token is `HT.TKString`, `addLiteral` adds a new literal to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
 addLiteral :: (Ord i, Num i) => CT.StorageClass i -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
-addLiteral t (_, HT.TKString cont) vars 
+addLiteral t (_, HT.TKString cont) vars
     | null (literals vars) = let lit = Literal (CT.removeAllExtents t) 0 cont; nat = ATNode (ATGVar t ".L.data.0") t ATEmpty ATEmpty in
         Right (nat, vars { literals = lit : literals vars })
     | otherwise = let ln' = succ $ ln $ head $ literals vars; lit = Literal (CT.removeAllExtents t) ln' cont; nat = ATNode (ATGVar t (".L.data." <> tshow ln')) t ATEmpty ATEmpty in

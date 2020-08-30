@@ -9,32 +9,40 @@ Portability : POSIX
 
 The tokenizer
 -}
-{-# LANGUAGE OverloadedStrings, LambdaCase, TupleSections, MultiWayIf #-}
+{-# LANGUAGE LambdaCase, MultiWayIf, OverloadedStrings, TupleSections #-}
 module Htcc.Tokenizer.Core (
     -- * Tokenizer
     tokenize'
 ) where
 
-import Control.Applicative (Alternative (..))
-import Control.Conditional (ifM)
-import Control.Monad.Extra (firstJustM)
-import Control.Monad.Trans (lift)
-import Control.Monad.State 
+import           Control.Applicative                             (Alternative (..))
+import           Control.Conditional                             (ifM)
+import           Control.Monad.Extra                             (firstJustM)
+import           Control.Monad.State
+import           Control.Monad.Trans                             (lift)
 
-import Data.Char (isDigit, digitToInt, ord)
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
-import Data.List (find)
-import Data.Maybe (isJust, isNothing, fromJust)
+import           Data.Char                                       (digitToInt,
+                                                                  isDigit, ord)
+import           Data.List                                       (find)
+import           Data.Maybe                                      (fromJust,
+                                                                  isJust,
+                                                                  isNothing)
+import qualified Data.Text                                       as T
+import qualified Data.Text.Encoding                              as T
 
-import Numeric (showHex, readHex)
+import           Numeric                                         (readHex,
+                                                                  showHex)
 
-import qualified Htcc.CRules as CR
-import qualified Htcc.CRules.Preprocessor.Punctuators as CP
-import Htcc.Tokenizer.Token
-import Htcc.Utils (spanLenT, subTextIndex, isStrictSpace, lor, maybe', tshow)
-import qualified Htcc.Utils.CompilationState as C
-import Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
+import qualified Htcc.CRules                                     as CR
+import qualified Htcc.CRules.Preprocessor.Punctuators            as CP
+import           Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
+import           Htcc.Tokenizer.Token
+import           Htcc.Utils                                      (isStrictSpace,
+                                                                  lor, maybe',
+                                                                  spanLenT,
+                                                                  subTextIndex,
+                                                                  tshow)
+import qualified Htcc.Utils.CompilationState                     as C
 
 
 {-# INLINE isNewLine #-}
@@ -51,7 +59,7 @@ type Tokenizer i a = C.CompilationState (TokenLCNums i) T.Text i a
 
 {-# INLINE advanceLC #-}
 advanceLC :: (Enum i, Num i) => TokenLCNums i -> Char -> TokenLCNums i
-advanceLC lc e 
+advanceLC lc e
     | isNewLine e = lc { tkCn = 1, tkLn = succ $ tkLn lc }
     | otherwise = lc { tkCn = succ $ tkCn lc }
 
@@ -75,10 +83,10 @@ char :: (Enum i, Num i) => (Char -> Bool) -> Tokenizer i (Maybe Char)
 char = C.itemCWhen advanceLC
 
 string :: (Enum i, Num i) => (Char -> Bool) -> Tokenizer i T.Text
-string = C.itemsCWhen advanceLC 
+string = C.itemsCWhen advanceLC
 
 isPrefixOf :: Enum i => T.Text -> Tokenizer i Bool
-isPrefixOf = C.isSatisfied . T.isPrefixOf 
+isPrefixOf = C.isSatisfied . T.isPrefixOf
 
 consumeSpace :: (Enum i, Num i) => Tokenizer i Bool
 consumeSpace = not . T.null <$> string isStrictSpace
@@ -112,7 +120,7 @@ natLit = do
     lc <- gets fst
     ifM (maybe True (not . isDigit) <$> itemP) (return Nothing) $ do
         txt <- gets snd
-        maybe' (lift $ Left ("invalid number in program", (lc, headToken (TKNum . fromIntegral . digitToInt) txt))) (spanIntLit txt) $ \(n, tk, ds) -> 
+        maybe' (lift $ Left ("invalid number in program", (lc, headToken (TKNum . fromIntegral . digitToInt) txt))) (spanIntLit txt) $ \(n, tk, ds) ->
             Just tk <$ put (lc { tkCn = tkCn lc + fromIntegral n }, ds)
 
 strLit :: (Enum i, Num i) => Tokenizer i (Maybe (Token i))
@@ -120,9 +128,9 @@ strLit = do
     lc <- gets fst
     ifM (isNothing <$> char (=='\"')) (return Nothing) $ do
         txt <- gets snd
-        maybe' (lift $ Left ("invalid string literal in program", (lc, TKReserved "\""))) (spanStrLiteral txt) $ \(lit, ds) -> 
+        maybe' (lift $ Left ("invalid string literal in program", (lc, TKReserved "\""))) (spanStrLiteral txt) $ \(lit, ds) ->
             -- The meaning of adding 2 is to add the two "characters surrounding the string literal.
-            Just (TKString (T.encodeUtf8 $ T.append lit "\0")) <$ put (lc { tkCn = 2 + tkCn lc + fromIntegral (T.length lit) }, ds) 
+            Just (TKString (T.encodeUtf8 $ T.append lit "\0")) <$ put (lc { tkCn = 2 + tkCn lc + fromIntegral (T.length lit) }, ds)
 
 charLit :: (Enum i, Num i, Eq i) => Tokenizer i (Maybe (Token i))
 charLit = do
@@ -131,7 +139,7 @@ charLit = do
         txt <- gets snd
         maybe' (lift $ Left ("invalid char literal in program", (lc, TKReserved "\'"))) (spanCharLiteral txt) $ \(lit, ds) ->
             -- Adding 3 means to add a single character literal and two @"@
-            if  | T.length lit == 1 -> Just (TKNum (fromIntegral $ ord $ T.head lit)) <$ put (lc { tkCn = 3 + tkCn lc }, ds) 
+            if  | T.length lit == 1 -> Just (TKNum (fromIntegral $ ord $ T.head lit)) <$ put (lc { tkCn = 3 + tkCn lc }, ds)
                 -- For multi-character constants.
                 -- The standard states that this is an implementation definition.
                 -- Here it follows the implementation definitions of GCC and Clang.
@@ -145,7 +153,7 @@ operators = do
         s2 <- itemsP 2
         if isJust s2 && fromJust s2 `elem` CR.strOps2 then Just (TKReserved $ fromJust s2) <$ replicateM_ 2 itemC else do
             s1 <- itemP
-            if isJust s1 && fromJust s1 `elem` CR.charOps then Just (TKReserved $ T.singleton $ fromJust s1) <$ itemC else 
+            if isJust s1 && fromJust s1 `elem` CR.charOps then Just (TKReserved $ T.singleton $ fromJust s1) <$ itemC else
                 return Nothing
 
 keyWordOrIdent :: (Enum i, Num i, Show i) => Tokenizer i (Maybe (Token i))
@@ -161,5 +169,5 @@ tokenize' = evalStateT runTokenizer' . (TokenLCNums 1 1,)
         next = get >>= lift . evalStateT runTokenizer'
         runTokenizer' = foldr ((.) . (`ifM` next)) id [consumeSpace, consumeNewLine, consumeComment] $ do
             cur <- curLC
-            ifM (isNothing <$> itemP) (lift $ Right []) $ 
+            ifM (isNothing <$> itemP) (lift $ Right []) $
                 firstJustM id [macro, natLit, strLit, charLit, operators, keyWordOrIdent] >>= maybe (lift $ Right []) (\tk -> ((cur, tk):) <$> next)

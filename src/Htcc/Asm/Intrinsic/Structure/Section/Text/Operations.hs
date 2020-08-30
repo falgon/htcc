@@ -16,13 +16,16 @@ module Htcc.Asm.Intrinsic.Structure.Section.Text.Operations (
     bracketBrkCnt
 ) where
 
-import Data.IORef (modifyIORef, readIORef, writeIORef)
-import Data.Tuple.Extra ((&&&))
+import           Data.IORef                                          (modifyIORef,
+                                                                      readIORef,
+                                                                      writeIORef)
+import           Data.Tuple.Extra                                    ((&&&))
 
-import qualified Htcc.Asm.Intrinsic.Structure.Internal as C
-import Htcc.Asm.Intrinsic.Structure.Section.Text.Directive
-import Htcc.Utils (bothM, (*^*))
-import Control.Monad.Finally (MonadFinally (..))
+import           Control.Monad.Finally                               (MonadFinally (..))
+import qualified Htcc.Asm.Intrinsic.Structure.Internal               as C
+import           Htcc.Asm.Intrinsic.Structure.Section.Text.Directive
+import           Htcc.Utils                                          (bothM,
+                                                                      (*^*))
 
 -- | count up the internal label counter
 incrLbl :: Enum e => C.Asm TextLabelCtx e e
@@ -36,7 +39,7 @@ applyCnt = C.Asm $ \x -> readIORef (C.lblCnt x) >>= writeIORef (C.cntCnt x) . Ju
 applyBrk :: C.Asm ctx e ()
 applyBrk = C.Asm $ \x -> readIORef (C.lblCnt x) >>= writeIORef (C.brkCnt x) . Just
 
--- | Apply values from lblCnt to brkCnt and cntCnt in function execution scope, 
+-- | Apply values from lblCnt to brkCnt and cntCnt in function execution scope,
 -- and return values to their original state when exiting the scope
 bracketBrkCnt :: C.Asm TextLabelCtx e () -> C.Asm TextLabelCtx e ()
 bracketBrkCnt mc = bracket

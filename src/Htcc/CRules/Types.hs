@@ -15,6 +15,6 @@ module Htcc.CRules.Types (
     module Htcc.CRules.Types.StorageClass
 ) where
 
-import Htcc.CRules.Types.CType
-import Htcc.CRules.Types.TypeKind
-import Htcc.CRules.Types.StorageClass
+import           Htcc.CRules.Types.CType
+import           Htcc.CRules.Types.StorageClass
+import           Htcc.CRules.Types.TypeKind

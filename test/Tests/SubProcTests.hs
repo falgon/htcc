@@ -3,13 +3,13 @@ module Tests.SubProcTests (
     exec
 ) where
 
-import Data.Char (ord)
-import Numeric.Natural
+import           Data.Char         (ord)
+import           Numeric.Natural
 
-import Tests.Utils hiding (exec)
-import qualified Tests.Test1 as StatementEqual
-import qualified Tests.Test2 as LinkFuncRet
-import qualified Tests.Test3 as LinkFuncStdOut
+import qualified Tests.Test1       as StatementEqual
+import qualified Tests.Test2       as LinkFuncRet
+import qualified Tests.Test3       as LinkFuncStdOut
+import           Tests.Utils       hiding (exec)
 
 import qualified Htcc.CRules.Types as CT
 

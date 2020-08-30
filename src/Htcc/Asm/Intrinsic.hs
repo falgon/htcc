@@ -15,5 +15,5 @@ module Htcc.Asm.Intrinsic (
     module Htcc.Asm.Intrinsic.Operand
 ) where
 
-import Htcc.Asm.Intrinsic.Register
-import Htcc.Asm.Intrinsic.Operand
+import           Htcc.Asm.Intrinsic.Operand
+import           Htcc.Asm.Intrinsic.Register

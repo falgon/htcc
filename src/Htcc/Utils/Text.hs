@@ -9,7 +9,7 @@ Portability : POSIX
 
 Text utilities
 -}
-{-# LANGUAGE ScopedTypeVariables, BangPatterns #-}
+{-# LANGUAGE BangPatterns, ScopedTypeVariables #-}
 module Htcc.Utils.Text (
     -- * For Data.Text
     tshow,
@@ -17,10 +17,10 @@ module Htcc.Utils.Text (
     subTextIndex
 ) where
 
-import Prelude hiding (toInteger)
+import qualified Data.Text                 as T
 import qualified Data.Text.Internal.Search as T
-import qualified Data.Text as T
-import Htcc.Utils.Tuple (second3)
+import           Htcc.Utils.Tuple          (second3)
+import           Prelude                   hiding (toInteger)
 
 {-# INLINE tshow #-}
 -- | Convert `Show` class instance to `Data.Text`.
@@ -32,7 +32,7 @@ spanLenT :: (Char -> Bool) -> T.Text -> (Int, T.Text, T.Text)
 spanLenT = spanLenT' 0
     where
         spanLenT' !n f xs = case T.uncons xs of
-            Just (x, xs') 
+            Just (x, xs')
                 | f x -> second3 (T.cons x) $ spanLenT' (succ n) f xs'
                 | otherwise -> (n, T.empty, xs)
             Nothing -> (n, T.empty, T.empty)
@@ -42,5 +42,5 @@ spanLenT = spanLenT' 0
 subTextIndex :: T.Text -> T.Text -> Maybe Int
 subTextIndex s t = case T.indices s t of
     (i:_) -> Just i
-    _ -> Nothing
+    _     -> Nothing
 

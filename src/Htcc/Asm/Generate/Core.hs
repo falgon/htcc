@@ -15,31 +15,42 @@ module Htcc.Asm.Generate.Core (
     textSection,
 ) where
 
-import Prelude hiding (truncate)
-import Control.Monad (when, unless, forM_, zipWithM_)
-import Control.Monad.Finally (MonadFinally (..))
+import           Control.Monad                             (forM_, unless, when,
+                                                            zipWithM_)
+import           Control.Monad.Finally                     (MonadFinally (..))
+import           Prelude                                   hiding (truncate)
 
-import Data.List (find)
-import Data.Maybe (fromJust, isJust)
-import Data.Int (Int32)
-import Data.IORef (readIORef)
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import qualified Data.Map as M
+import           Data.Int                                  (Int32)
+import           Data.IORef                                (readIORef)
+import           Data.List                                 (find)
+import qualified Data.Map                                  as M
+import           Data.Maybe                                (fromJust, isJust)
+import qualified Data.Text                                 as T
+import qualified Data.Text.IO                              as T
 
-import Htcc.Parser.ConstructionData.Scope.Var as PV
-import Htcc.Parser (ATree (..), ATKind (..), fromATKindFor, isATForInit, isATForCond, isATForStmt, isATForIncr, isComplexAssign, stackSize)
-import Htcc.Parser.ConstructionData.Scope.Var (GVar (..), Literal (..))
+import           Htcc.Parser                               (ATKind (..),
+                                                            ATree (..),
+                                                            fromATKindFor,
+                                                            isATForCond,
+                                                            isATForIncr,
+                                                            isATForInit,
+                                                            isATForStmt,
+                                                            isComplexAssign,
+                                                            stackSize)
+import           Htcc.Parser.ConstructionData.Scope.Var    as PV
+import           Htcc.Parser.ConstructionData.Scope.Var    (GVar (..),
+                                                            Literal (..))
 
-import qualified Htcc.Asm.Intrinsic.Structure as SI
-import qualified Htcc.Asm.Intrinsic.Structure.Section.Data as ID    
-import qualified Htcc.Asm.Intrinsic.Structure.Section.Text as IT 
-import Htcc.Asm.Intrinsic.Register
-import Htcc.Asm.Intrinsic.Operand
+import           Htcc.Asm.Intrinsic.Operand
+import           Htcc.Asm.Intrinsic.Register
+import qualified Htcc.Asm.Intrinsic.Structure              as SI
+import qualified Htcc.Asm.Intrinsic.Structure.Section.Data as ID
+import qualified Htcc.Asm.Intrinsic.Structure.Section.Text as IT
 
-import Htcc.Utils (tshow, err, splitAtLen, maybe')
+import           Htcc.Utils                                (err, maybe',
+                                                            splitAtLen, tshow)
 
-import qualified Htcc.CRules.Types as CR
+import qualified Htcc.CRules.Types                         as CR
 
 {-# INLINE prologue #-}
 prologue :: Integral i => i -> SI.Asm IT.TextLabelCtx e ()
@@ -135,7 +146,7 @@ genStmt (ATNode (ATBlock stmt) _ _ _) = mapM_ genStmt stmt
 genStmt (ATNode (ATStmtExpr stmt) _ _ _) = mapM_ genStmt stmt
 genStmt (ATNode ATBreak _ _ _) = IT.jmp IT.refHBreak
 genStmt (ATNode ATContinue _ _ _) = IT.jmp IT.refHContinue
-genStmt (ATNode (ATGoto ident) _ _ _) = IT.jmp $ IT.refGoto ident 
+genStmt (ATNode (ATGoto ident) _ _ _) = IT.jmp $ IT.refGoto ident
 genStmt (ATNode (ATLabel ident) _ _ _) = IT.gotoLabel ident
 genStmt (ATNode (ATFor exps) _ _ _) = IT.bracketBrkCnt $ do
     n <- IT.incrLbl
@@ -353,7 +364,7 @@ textSection' lc@(ATNode (ATDefFunc fn margs) ty st _) = do
     IT.fn fn $ do
         prologue (stackSize lc)
         when (isJust margs) $ flip (`zipWithM_` fromJust margs) argRegs $ \(ATNode (ATLVar t o) _ _ _) reg ->
-            maybe (SI.errCtx "internal compiler error: there is no register that fits the specified size") 
+            maybe (SI.errCtx "internal compiler error: there is no register that fits the specified size")
                 (IT.mov (Ref $ rbp `osub` o)) $ find ((== CR.sizeof t) . byteWidth) reg
         genStmt st
         epilogue
@@ -365,10 +376,10 @@ dataSection :: (Show i, Ord i, Num i) => M.Map T.Text (GVar i) -> [Literal i] ->
 dataSection gvars lits = ID.dAta $ do
     forM_ lits $ \(Literal _ n cnt) -> ID.label (".L.data." <> tshow n) $ ID.byte cnt
     forM_ (M.toList gvars) $ \(var, GVar t ginit) -> case ginit of
-        PV.GVarInitWithZero -> ID.label var $ ID.zero (CR.sizeof t)
-        PV.GVarInitWithOG ref -> ID.label var $ ID.quad ref
+        PV.GVarInitWithZero    -> ID.label var $ ID.zero (CR.sizeof t)
+        PV.GVarInitWithOG ref  -> ID.label var $ ID.quad ref
         PV.GVarInitWithVal val -> ID.label var $ ID.sbyte (CR.sizeof t) val
 
 -- | text section of assembly code
 textSection :: (Integral e, Show e, IsOperand i, Integral i, Show i, IT.UnaryInstruction i, IT.BinaryInstruction i) => [ATree i] -> SI.Asm SI.AsmCodeCtx e ()
-textSection atl = IT.text $ forM_ atl textSection' 
+textSection atl = IT.text $ forM_ atl textSection'

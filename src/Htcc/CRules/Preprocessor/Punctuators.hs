@@ -19,10 +19,10 @@ module Htcc.CRules.Preprocessor.Punctuators (
     length
 ) where
 
-import Prelude hiding (length)
-import qualified Prelude as P (length)
-import GHC.Generics (Generic)
-import Control.DeepSeq (NFData (..))
+import           Control.DeepSeq (NFData (..))
+import           GHC.Generics    (Generic)
+import           Prelude         hiding (length)
+import qualified Prelude         as P (length)
 
 {-# INLINE bgMacro #-}
 -- | `bgMacro` is the character that starts the macro, so it is @#@

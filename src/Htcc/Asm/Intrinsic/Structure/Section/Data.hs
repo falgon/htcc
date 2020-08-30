@@ -23,12 +23,12 @@ module Htcc.Asm.Intrinsic.Structure.Section.Data (
     quad,
 ) where
 
+import qualified Data.ByteString                       as B
+import qualified Data.Text                             as T
 import qualified Htcc.Asm.Intrinsic.Structure.Internal as C
-import qualified Data.Text as T
-import qualified Data.ByteString as B
-import Numeric.Natural
+import           Numeric.Natural
 
-import Htcc.Utils (tshow)
+import           Htcc.Utils                            (tshow)
 
 -- | the type representing the context inside the data section
 data DataSectionCtx
@@ -50,7 +50,7 @@ byte = C.putStrLnWithIndent . T.append ".byte " . T.intercalate ", " . map tshow
 
 -- | @.x.byte@ in data section
 sbyte :: (Num i, Show i) => Natural -> i -> C.Asm DataLabelCtx e ()
-sbyte sz val 
+sbyte sz val
     | sz == 1 = C.putStrLnWithIndent $ ".byte " <> tshow val
     | otherwise = C.putStrLnWithIndent $ "." <> tshow sz <> "byte " <> tshow val
 
