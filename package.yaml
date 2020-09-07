@@ -45,6 +45,7 @@ dependencies:
 - diagrams-contrib
 - diagrams-lib
 - natural-transformation
+- optparse-applicative
 
 library:
   source-dirs: src
@@ -63,7 +64,6 @@ executables:
     dependencies:
     - htcc
     - directory
-    - optparse-applicative
 
 tests:
   htcc-test:
@@ -86,6 +86,7 @@ tests:
     - hspec
     - hspec-core
     - hspec-contrib
+    - filepath
 
 benchmarks:
     criterion:

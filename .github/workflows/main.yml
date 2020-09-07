@@ -39,7 +39,7 @@ jobs:
             - name: Test htcc on ${{ matrix.os }}
               if: runner.os == 'Linux'
               run: |
-                  stack --system-ghc test
+                  stack --system-ghc test --test-arguments self
                   stack --system-ghc test --test-arguments subp
             - name: Compile and execute example C codes on ${{ matrix.os }}
               if: runner.os == 'Linux'
@@ -51,7 +51,7 @@ jobs:
             - name: Test htcc on ${{ matrix.os }} with Docker
               run: |
                   stack --system-ghc test --test-arguments docker
-                  stack --system-ghc test --test-arguments cleanDocker
+                  stack --system-ghc test --test-arguments docker --test-arguments --clean
             - name: Compile and execute example C codes on ${{ matrix.os }} with Docker
               run: |
                   make docker

@@ -113,22 +113,22 @@ and [docker-compose](https://github.com/docker/compose) are installed,
 you can run tests inside the docker container by specifying docker as an argument.
 
 ```sh
-$ stack test --test-arguments help
-htcc> test (suite: htcc-test, args: help)
+$ stack test --test-arguments --help
+htcc> test (suite: htcc-test, args: --help)
+Usage: htcc-test [--clean] COMMAND
+  The htcc unit tester
 
---test-arguments are available by:
-        inc             : Test itself with test code written in C (default, more faster).
-        subp            : Given C codes as input, run HUnit tests.
-        docker          : Build the test using the environment inside the Linux container (This is useful when running tests in a development environment other than Linux).
-        cleanDocker     : Erases containers and images built with the docker option.
+Available options:
+  -h,--help                Show this help text
+  --clean                  clean the docker container
 
-htcc> Test suite htcc-test failed
-Test suite failure for package htcc-0.0.0.1
-    htcc-test:  exited with: ExitFailure 1
-Logs printed to console
+Available commands:
+  subp                     run tests with subprocess
+  docker                   run tests in docker container
+  self                     run the test using htcc's processing power
 
-$ stack test
-$ stack test --test-arguments inc
+htcc> Test suite htcc-test passed
+$ stack test --test-arguments self
 $ stack test --test-arguments subp
 $ stack test --test-arguments docker # For running outside the linux environment. It requires docker and docker-compose.
 ```
@@ -136,7 +136,7 @@ $ stack test --test-arguments docker # For running outside the linux environment
 If you want to delete the created test container and its image, execute as follows:
 
 ```sh
-$ stack test --test-arguments cleanDocker
+$ stack test --test-arguments docker --test-arguments --clean
 ```
 
 Source files that can be compiled by htcc are placed under the [example/](https://github.com/falgon/htcc/tree/master/example).

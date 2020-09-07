@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.31.1.
+-- This file has been generated from package.yaml by hpack version 0.33.0.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0a0d132615e98803f43395e59ded53dad714baa5758effed63b8f34512c093a3
+-- hash: 008afbd35397e7ebb929fecd7e6956aa94eadab120f4243f52828f59aa506142
 
 name:           htcc
 version:        0.0.0.1
@@ -123,6 +123,7 @@ library
     , mono-traversable
     , mtl
     , natural-transformation
+    , optparse-applicative
     , safe
     , split
     , text
@@ -187,6 +188,7 @@ test-suite htcc-test
     , diagrams-svg
     , directory
     , extra
+    , filepath
     , foldl
     , hspec
     , hspec-contrib
@@ -197,6 +199,7 @@ test-suite htcc-test
     , mono-traversable
     , mtl
     , natural-transformation
+    , optparse-applicative
     , safe
     , split
     , text
@@ -229,6 +232,7 @@ benchmark criterion
     , mono-traversable
     , mtl
     , natural-transformation
+    , optparse-applicative
     , safe
     , split
     , text
