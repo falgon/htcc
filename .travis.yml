@@ -31,6 +31,7 @@ before_install:
       mkdir -p ~/.local/bin
       export PATH=$HOME/.local/bin:$PATH
       ./.travis/install-stack.sh
+      ./.travis/install-dhall-to-yaml.sh
   fi
   echo -e "Host github.com\n\tStrictHostKeyChecking no\nIdentityFile ~/.ssh/deploy.key\n" >> ~/.ssh/config
   openssl aes-256-cbc -pass "pass:$SERVER_KEY" -pbkdf2 -in .travis/deploy_key.enc -d -a -out deploy.key

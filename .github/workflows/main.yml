@@ -30,6 +30,9 @@ jobs:
                   ghc-version: ${{ matrix.ghc }}
                   cabal-version: ${{ matrix.cabal }}
             - uses: mstksg/setup-stack@v1
+            - name: Setup Dhall to yaml
+              if: runner.os == 'Linux'
+              run: .travis/install-dhall-to-yaml.sh
             - name: Install dependencies to ${{ matrix.os }}
               run: stack --system-ghc build --only-dependencies
             - name: Build htcc to ${{ matrix.os }}
