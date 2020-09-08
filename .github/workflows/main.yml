@@ -16,7 +16,7 @@ jobs:
                 cabal: ["3.0"]
                 cache-version: ["v4"]
         steps:
-            - uses: actions/checkout@v1
+            - uses: actions/checkout@v2
             - name: Cache .stack
               id: cache-stack
               uses: actions/cache@v1

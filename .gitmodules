@@ -1,3 +1,0 @@
-[submodule "external/dhall-docker-compose"]
-	path = external/dhall-docker-compose
-	url = git@github.com:falgon/dhall-docker-compose.git

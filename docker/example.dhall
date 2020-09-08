@@ -1,7 +1,7 @@
-let types = 
-    ../external/dhall-docker-compose/compose/v3/types.dhall
-let defaults = 
-    ../external/dhall-docker-compose/compose/v3/defaults.dhall
+let types =
+    https://raw.githubusercontent.com/falgon/dhall-docker-compose/master/compose/v3/types.dhall
+let defaults =
+    https://raw.githubusercontent.com/falgon/dhall-docker-compose/master/compose/v3/defaults.dhall
 
 let htccService =
     defaults.Service // { 
