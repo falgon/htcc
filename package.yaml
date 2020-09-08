@@ -87,6 +87,10 @@ tests:
     - hspec-core
     - hspec-contrib
     - filepath
+    - dhall-json
+    - dhall-yaml
+    - process
+    - utf8-string
 
 benchmarks:
     criterion:

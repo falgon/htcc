@@ -19,7 +19,6 @@ import           Control.Monad                            (when)
 import           Control.Monad.Loops                      (unfoldrM)
 import           Control.Monad.ST                         (runST)
 import           Data.Bits                                hiding (shift)
-import           Data.Foldable                            (Foldable (..))
 import           Data.STRef                               (newSTRef, readSTRef,
                                                            writeSTRef)
 import           Prelude                                  hiding (toInteger)

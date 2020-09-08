@@ -16,7 +16,6 @@ module Htcc.Parser.Parsing.Global.Var (
 ) where
 
 import           Data.Bits                                       hiding (shift)
-import           Data.Foldable                                   (Foldable (..))
 import           Prelude                                         hiding
                                                                   (toInteger)
 

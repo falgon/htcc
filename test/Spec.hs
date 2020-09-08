@@ -1,12 +1,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import           Control.Exception   (finally)
-import qualified Data.Text           as T
-import qualified Options.Applicative as OA
-import           System.Directory    (createDirectoryIfMissing)
-import           System.FilePath     ((</>))
-import qualified Tests.SubProcTests  as SubProcTests
+import           Codec.Binary.UTF8.String (decodeString)
+import           Control.Exception        (finally)
+import qualified Data.ByteString.Char8    as B
+import qualified Data.Text                as T
+import qualified Data.Text.IO             as T
+import           Dhall.JSON               (omitNull)
+import           Dhall.Yaml               (Options (..), defaultOptions,
+                                           dhallToYaml)
+import qualified Options.Applicative      as OA
+import           System.Directory         (createDirectoryIfMissing)
+import           System.FilePath          ((</>))
+import           System.Process           (readCreateProcess, shell)
+import qualified Tests.SubProcTests       as SubProcTests
 import           Tests.Utils
 
 workDir :: FilePath
@@ -16,7 +23,7 @@ specPath :: FilePath
 specPath = workDir </> "spec.s"
 
 dockerComposePath :: FilePath
-dockerComposePath = "./docker" </> "test.yml"
+dockerComposePath = "./docker" </> "test.dhall"
 
 data Command = WithSubProc | WithDocker | WithSelf
 
@@ -65,18 +72,23 @@ genTestAsm = do
     where
         testCoreFile = "./test" </> "Tests" </> "csrc" </> "test_core.c"
 
+createProcessDhallDocker :: FilePath -> String -> IO ()
+createProcessDhallDocker fp cmd = T.readFile fp
+    >>= dhallToYaml (defaultOptions { explain = True, omission = omitNull }) (Just fp)
+    >>= readCreateProcess (shell $ "docker-compose -f - " <> cmd) . decodeString . B.unpack
+    >>= putStrLn
+
 main :: IO ()
 main = do
     opts <- OA.execParser optsParser
     case optCmd opts of
         WithSubProc -> SubProcTests.exec
-        WithDocker  ->
+        WithDocker  -> let runDhallDocker = createProcessDhallDocker dockerComposePath in
             if optClean opts then
-                execErrFin $ "docker-compose -f " <> T.pack dockerComposePath <> " down --rmi all"
+                runDhallDocker "down --rmi all"
             else
-                flip finally (clean [workDir]) $ do
-                    genTestAsm
-                    execErrFin ("docker-compose -f " <> T.pack dockerComposePath <> " up --build")
+                flip finally (clean [workDir]) $
+                    genTestAsm >> runDhallDocker "up --build"
         WithSelf    -> flip finally (clean [workDir, "spec"]) $ do
             genTestAsm
             execErrFin $ "gcc -no-pie -o spec " <> T.pack specPath

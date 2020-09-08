@@ -52,7 +52,7 @@ import qualified Data.ByteString                                 as B
 import           Data.Either                                     (isLeft, lefts,
                                                                   rights)
 import           Data.Foldable                                   (Foldable (..))
-import           Data.List                                       (find, foldl')
+import           Data.List                                       (find)
 import           Data.Maybe                                      (fromJust,
                                                                   fromMaybe)
 import qualified Data.Set                                        as S

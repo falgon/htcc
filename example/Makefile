@@ -8,7 +8,7 @@ endef
 define compile_docker_and_run
 	mkdir -p /tmp/htcc
 	stack exec htcc -- $1 > /tmp/htcc/spec.s
-	docker-compose -f ../docker/example.yml up
+	dhall-to-yaml < ../docker/example.dhall | docker-compose -f - up
 	rm -r /tmp/htcc
 endef
 
@@ -41,6 +41,6 @@ clean:
 	$(RM) -r $(DIST_DIR)
 
 clean_docker:
-	docker-compose -f ../docker/example.yml down --rmi all
+	dhall-to-yaml < ../docker/example.dhall | docker-compose -f - down --rmi all
 
 .PHONY: knapsack shuffle_and_sort merge_sort_linked_list lifegame docker_knapsack docker_shuffle_and_sort docker_merge_sort_linked_list docker clean

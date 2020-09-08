@@ -26,7 +26,6 @@ module Htcc.Asm.Intrinsic.Structure.Internal (
 
 import           Control.Monad.Finally (MonadFinally (..))
 import           Data.IORef            (IORef, newIORef, writeIORef)
-import           Data.Semigroup        (Semigroup (..))
 import qualified Data.Text             as T
 import qualified Data.Text.IO          as T
 

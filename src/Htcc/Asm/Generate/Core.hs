@@ -15,11 +15,9 @@ module Htcc.Asm.Generate.Core (
     textSection,
 ) where
 
-import           Control.Monad                             (forM_, unless, when,
-                                                            zipWithM_)
+import           Control.Monad                             (forM_, unless, when, zipWithM_)
 import           Control.Monad.Finally                     (MonadFinally (..))
 import           Prelude                                   hiding (truncate)
-
 import           Data.Int                                  (Int32)
 import           Data.IORef                                (readIORef)
 import           Data.List                                 (find)
@@ -38,18 +36,12 @@ import           Htcc.Parser                               (ATKind (..),
                                                             isComplexAssign,
                                                             stackSize)
 import           Htcc.Parser.ConstructionData.Scope.Var    as PV
-import           Htcc.Parser.ConstructionData.Scope.Var    (GVar (..),
-                                                            Literal (..))
-
 import           Htcc.Asm.Intrinsic.Operand
 import           Htcc.Asm.Intrinsic.Register
 import qualified Htcc.Asm.Intrinsic.Structure              as SI
 import qualified Htcc.Asm.Intrinsic.Structure.Section.Data as ID
 import qualified Htcc.Asm.Intrinsic.Structure.Section.Text as IT
-
-import           Htcc.Utils                                (err, maybe',
-                                                            splitAtLen, tshow)
-
+import           Htcc.Utils                                (err, maybe', splitAtLen, tshow)
 import qualified Htcc.CRules.Types                         as CR
 
 {-# INLINE prologue #-}

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 008afbd35397e7ebb929fecd7e6956aa94eadab120f4243f52828f59aa506142
+-- hash: 22bacaccc5bc8617817eb1c982386f1b7ce9a77e1928a9f47181e1dcd7a27d2a
 
 name:           htcc
 version:        0.0.0.1
@@ -183,6 +183,8 @@ test-suite htcc-test
     , cond
     , containers
     , deepseq
+    , dhall-json
+    , dhall-yaml
     , diagrams-contrib
     , diagrams-lib
     , diagrams-svg
@@ -200,12 +202,14 @@ test-suite htcc-test
     , mtl
     , natural-transformation
     , optparse-applicative
+    , process
     , safe
     , split
     , text
     , time
     , transformers
     , turtle
+    , utf8-string
   default-language: Haskell2010
 
 benchmark criterion

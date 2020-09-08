@@ -16,7 +16,6 @@ module Htcc.Parser.Parsing.Typedef (
 ) where
 
 import           Data.Bits                                       (Bits)
-import           Data.Foldable                                   (Foldable (..))
 
 import           Htcc.Parser.AST
 import           Htcc.Parser.ConstructionData

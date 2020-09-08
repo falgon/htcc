@@ -17,17 +17,17 @@ packages:
       size: 486
       sha256: 8aae8657f16cd20d32307b6e815ab3b53bcd6a35e770dbe96064a3b6a5a06b6d
   original:
-    hackage: monad-abort-fd-0.7@sha256:dc917e7ee2ec0b4f20d6e1cc323bef03adf5b2067619b6e7f4f324a50ae6e870
+    hackage: monad-abort-fd-0.7@sha256:dc917e7ee2ec0b4f20d6e1cc323bef03adf5b2067619b6e7f4f324a50ae6e870,1340
 - completed:
-    hackage: transformers-abort-0.6.0.1@sha256:2502f690904cfa55bd99d4af2647c9f25b30b16b14494fcca909d4b1fbbc25c9,1034
+    hackage: transformers-abort-0.6.0.3@sha256:34de32cc6e852df10ad57df34e46404f841c6b0123526b7fd942c455f62a7a31,1236
     pantry-tree:
-      size: 309
-      sha256: 1dea766af762cd1234521634832d60396de46f0b13f6b565f0fd216f2be60bbe
+      size: 357
+      sha256: eeafa773cab79ad314b113aaa6e182e4a353bc1843b759241c1e761ebc1f453e
   original:
-    hackage: transformers-abort-0.6.0.1@sha256:2502f690904cfa55bd99d4af2647c9f25b30b16b14494fcca909d4b1fbbc25c9
+    hackage: transformers-abort-0.6.0.3@sha256:34de32cc6e852df10ad57df34e46404f841c6b0123526b7fd942c455f62a7a31,1236
 snapshots:
 - completed:
-    size: 500539
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/13/28.yaml
-    sha256: cdde1bfb38fdee21c6acb73d506e78f7e12e0a73892adbbbe56374ebef4d3adf
-  original: lts-13.28
+    size: 532381
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/16/13.yaml
+    sha256: 6ee17f7996e5bc75ae4406250841f1362ad4196418a4d90a0615ff4f26ac98df
+  original: lts-16.13

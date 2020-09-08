@@ -18,7 +18,6 @@ module Htcc.Parser.Parsing.Global.Function (
 import           Control.Monad.Loops                      (unfoldrM)
 import           Control.Monad.ST                         (runST)
 import           Data.Bits                                hiding (shift)
-import           Data.Foldable                            (Foldable (..))
 import           Data.List                                (find)
 import           Data.List.Split                          (linesBy)
 import           Data.Maybe                               (fromMaybe, isJust)

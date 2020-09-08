@@ -16,7 +16,7 @@ let htccService =
       , build =
             Some (types.Build.Object {
                 context = "."
-              , dockerfile = "Dockerfile"
+              , dockerfile = "./docker/Dockerfile"
               , args = types.ListOrDict.List ([] : List (Optional types.StringOrNumber))
             })
     }
