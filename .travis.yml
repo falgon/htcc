@@ -83,7 +83,7 @@ jobs:
   - stage: Deploy gh-pages
     os: linux
     script:
-        - stack haddock --fast
+        - stack haddock --fast --haddock-arguments --odir=docs
         - ghp-import -m "by Travis CI (JOB $TRAVIS_JOB_NUMBER)" -n docs
         - git push -qf git@github.com:falgon/htcc.git gh-pages
 branches:
