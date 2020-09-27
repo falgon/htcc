@@ -1,0 +1,217 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">{-|
+Module      : Htcc.Parser.ConstructionData.Scope.Typedef
+Description : The Data type of typedef and its utilities used in parsing
+Copyright   : (c) roki, 2019
+License     : MIT
+Maintainer  : falgon53@yahoo.co.jp
+Stability   : experimental
+Portability : POSIX
+
+The Data type of variables and its utilities used in parsing
+-}</span><span>
+</span><span id="line-12"></span><span class="hs-pragma">{-# LANGUAGE DeriveGeneric, OverloadedStrings #-}</span><span>
+</span><span id="line-13"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Htcc.Parser.ConstructionData.Scope.Typedef</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-14"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Typedef.html#Typedef"><span class="hs-identifier">Typedef</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-15"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Typedef.html#Typedefs"><span class="hs-identifier">Typedefs</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-16"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Typedef.html#add"><span class="hs-identifier">add</span></a></span><span>
+</span><span id="line-17"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-18"></span><span>
+</span><span id="line-19"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Control.DeepSeq</span></span><span>                                 </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">NFData</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-20"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Map</span></span><span>                                        </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">M</span></span><span>
+</span><span id="line-21"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text</span></span><span>                                       </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">T</span></span><span>
+</span><span id="line-22"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">GHC.Generics</span></span><span>                                    </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Generic</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-23"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Numeric.Natural</span></span><span>
+</span><span id="line-24"></span><span>
+</span><span id="line-25"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.CRules.Types.html"><span class="hs-identifier">Htcc.CRules.Types</span></a></span><span>                               </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">CT</span></span><span>
+</span><span id="line-26"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html"><span class="hs-identifier">Htcc.Parser.ConstructionData.Scope.ManagedScope</span></a></span><span>
+</span><span id="line-27"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Utils.html"><span class="hs-identifier">Htcc.Parser.ConstructionData.Scope.Utils</span></a></span><span>        </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Utils.html#internalCE"><span class="hs-identifier">internalCE</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-28"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html"><span class="hs-identifier">Htcc.Tokenizer.Token</span></a></span><span>                            </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">HT</span></span><span>
+</span><span id="line-29"></span><span>
+</span><span id="line-30"></span><span class="hs-comment">-- | The data type of a typedef tag</span><span>
+</span><span id="line-31"></span><span id="local-6989586621679288382"><span id="local-6989586621679288383"></span></span><span class="hs-keyword">data</span><span> </span><span id="Typedef"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Typedef.html#Typedef"><span class="hs-identifier hs-var">Typedef</span></a></span></span><span> </span><span id="local-6989586621679288399"><span class="annot"><a href="#local-6989586621679288399"><span class="hs-identifier hs-type">a</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="Typedef"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Typedef.html#Typedef"><span class="hs-identifier hs-var">Typedef</span></a></span></span><span> </span><span class="hs-comment">-- ^ The contypedefor of a typedef tag</span><span>
+</span><span id="line-32"></span><span>    </span><span class="hs-special">{</span><span>
+</span><span id="line-33"></span><span>        </span><span id="tdtype"><span class="annot"><span class="annottext">Typedef a -&gt; StorageClass a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Typedef.html#tdtype"><span class="hs-identifier hs-var hs-var">tdtype</span></a></span></span><span>      </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Htcc.CRules.Types.StorageClass.html#StorageClass"><span class="hs-identifier hs-type">CT.StorageClass</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288399"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">,</span><span> </span><span class="hs-comment">-- ^ The type of this typedef</span><span>
+</span><span id="line-34"></span><span>        </span><span id="tdNestDepth"><span class="annot"><span class="annottext">Typedef a -&gt; Natural
+</span><a href="Htcc.Parser.ConstructionData.Scope.Typedef.html#tdNestDepth"><span class="hs-identifier hs-var hs-var">tdNestDepth</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="annot"><span class="hs-identifier hs-type">Natural</span></span><span> </span><span class="hs-comment">-- ^ The nest depth of this typedef</span><span>
+</span><span id="line-35"></span><span>    </span><span class="hs-special">}</span><span> </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679288375"><span id="local-6989586621679288377"><span class="annot"><span class="annottext">Typedef a -&gt; Typedef a -&gt; Bool
+(Typedef a -&gt; Typedef a -&gt; Bool)
+-&gt; (Typedef a -&gt; Typedef a -&gt; Bool) -&gt; Eq (Typedef a)
+forall a. Eq a =&gt; Typedef a -&gt; Typedef a -&gt; Bool
+forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
+/= :: Typedef a -&gt; Typedef a -&gt; Bool
+$c/= :: forall a. Eq a =&gt; Typedef a -&gt; Typedef a -&gt; Bool
+== :: Typedef a -&gt; Typedef a -&gt; Bool
+$c== :: forall a. Eq a =&gt; Typedef a -&gt; Typedef a -&gt; Bool
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679288359"><span id="local-6989586621679288361"><span id="local-6989586621679288363"><span id="local-6989586621679288365"><span id="local-6989586621679288367"><span id="local-6989586621679288369"><span id="local-6989586621679288371"><span class="annot"><span class="annottext">Eq (Typedef a)
+Eq (Typedef a) =&gt;
+(Typedef a -&gt; Typedef a -&gt; Ordering)
+-&gt; (Typedef a -&gt; Typedef a -&gt; Bool)
+-&gt; (Typedef a -&gt; Typedef a -&gt; Bool)
+-&gt; (Typedef a -&gt; Typedef a -&gt; Bool)
+-&gt; (Typedef a -&gt; Typedef a -&gt; Bool)
+-&gt; (Typedef a -&gt; Typedef a -&gt; Typedef a)
+-&gt; (Typedef a -&gt; Typedef a -&gt; Typedef a)
+-&gt; Ord (Typedef a)
+Typedef a -&gt; Typedef a -&gt; Bool
+Typedef a -&gt; Typedef a -&gt; Ordering
+Typedef a -&gt; Typedef a -&gt; Typedef a
+forall a.
+Eq a =&gt;
+(a -&gt; a -&gt; Ordering)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; Ord a
+forall a. Ord a =&gt; Eq (Typedef a)
+forall a. Ord a =&gt; Typedef a -&gt; Typedef a -&gt; Bool
+forall a. Ord a =&gt; Typedef a -&gt; Typedef a -&gt; Ordering
+forall a. Ord a =&gt; Typedef a -&gt; Typedef a -&gt; Typedef a
+min :: Typedef a -&gt; Typedef a -&gt; Typedef a
+$cmin :: forall a. Ord a =&gt; Typedef a -&gt; Typedef a -&gt; Typedef a
+max :: Typedef a -&gt; Typedef a -&gt; Typedef a
+$cmax :: forall a. Ord a =&gt; Typedef a -&gt; Typedef a -&gt; Typedef a
+&gt;= :: Typedef a -&gt; Typedef a -&gt; Bool
+$c&gt;= :: forall a. Ord a =&gt; Typedef a -&gt; Typedef a -&gt; Bool
+&gt; :: Typedef a -&gt; Typedef a -&gt; Bool
+$c&gt; :: forall a. Ord a =&gt; Typedef a -&gt; Typedef a -&gt; Bool
+&lt;= :: Typedef a -&gt; Typedef a -&gt; Bool
+$c&lt;= :: forall a. Ord a =&gt; Typedef a -&gt; Typedef a -&gt; Bool
+&lt; :: Typedef a -&gt; Typedef a -&gt; Bool
+$c&lt; :: forall a. Ord a =&gt; Typedef a -&gt; Typedef a -&gt; Bool
+compare :: Typedef a -&gt; Typedef a -&gt; Ordering
+$ccompare :: forall a. Ord a =&gt; Typedef a -&gt; Typedef a -&gt; Ordering
+$cp1Ord :: forall a. Ord a =&gt; Eq (Typedef a)
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Ord</span></span></span></span></span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679288352"><span id="local-6989586621679288354"><span id="local-6989586621679288356"><span class="annot"><span class="annottext">Int -&gt; Typedef a -&gt; ShowS
+[Typedef a] -&gt; ShowS
+Typedef a -&gt; String
+(Int -&gt; Typedef a -&gt; ShowS)
+-&gt; (Typedef a -&gt; String)
+-&gt; ([Typedef a] -&gt; ShowS)
+-&gt; Show (Typedef a)
+forall a. Show a =&gt; Int -&gt; Typedef a -&gt; ShowS
+forall a. Show a =&gt; [Typedef a] -&gt; ShowS
+forall a. Show a =&gt; Typedef a -&gt; String
+forall a.
+(Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
+showList :: [Typedef a] -&gt; ShowS
+$cshowList :: forall a. Show a =&gt; [Typedef a] -&gt; ShowS
+show :: Typedef a -&gt; String
+$cshow :: forall a. Show a =&gt; Typedef a -&gt; String
+showsPrec :: Int -&gt; Typedef a -&gt; ShowS
+$cshowsPrec :: forall a. Show a =&gt; Int -&gt; Typedef a -&gt; ShowS
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">(forall x. Typedef a -&gt; Rep (Typedef a) x)
+-&gt; (forall x. Rep (Typedef a) x -&gt; Typedef a)
+-&gt; Generic (Typedef a)
+forall x. Rep (Typedef a) x -&gt; Typedef a
+forall x. Typedef a -&gt; Rep (Typedef a) x
+forall a.
+(forall x. a -&gt; Rep a x) -&gt; (forall x. Rep a x -&gt; a) -&gt; Generic a
+forall a x. Rep (Typedef a) x -&gt; Typedef a
+forall a x. Typedef a -&gt; Rep (Typedef a) x
+$cto :: forall a x. Rep (Typedef a) x -&gt; Typedef a
+$cfrom :: forall a x. Typedef a -&gt; Rep (Typedef a) x
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">Generic</span></span><span class="hs-special">)</span><span>
+</span><span id="line-36"></span><span>
+</span><span id="line-37"></span><span id="local-6989586621679288347"><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679288345"><span class="annot"><span class="hs-identifier hs-type">NFData</span></span><span> </span><span class="annot"><a href="#local-6989586621679288347"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">NFData</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Typedef.html#Typedef"><span class="hs-identifier hs-type">Typedef</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288347"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-38"></span><span>
+</span><span id="line-39"></span><span id="local-6989586621679288343"><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ManagedScope"><span class="hs-identifier hs-type">ManagedScope</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Typedef.html#Typedef"><span class="hs-identifier hs-type">Typedef</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288343"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-40"></span><span>    </span><span id="local-6989586621679288338"><span class="annot"><span class="annottext">lookup :: Text -&gt; Map Text (Typedef i) -&gt; Maybe (Typedef i)
+</span><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#lookup"><span class="hs-identifier hs-var hs-var hs-var hs-var">lookup</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Map Text (Typedef i) -&gt; Maybe (Typedef i)
+forall k a. Ord k =&gt; k -&gt; Map k a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">M.lookup</span></span><span>
+</span><span id="line-41"></span><span>    </span><span id="local-6989586621679288335"><span class="annot"><span class="annottext">fallBack :: Map Text (Typedef i)
+-&gt; Map Text (Typedef i) -&gt; Map Text (Typedef i)
+</span><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#fallBack"><span class="hs-identifier hs-var hs-var hs-var hs-var">fallBack</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Map Text (Typedef i)
+-&gt; Map Text (Typedef i) -&gt; Map Text (Typedef i)
+forall a b. a -&gt; b -&gt; a
+</span><span class="hs-identifier hs-var">const</span></span><span>
+</span><span id="line-42"></span><span>    </span><span id="local-6989586621679288332"><span class="annot"><span class="annottext">initial :: Map Text (Typedef i)
+</span><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#initial"><span class="hs-identifier hs-var hs-var hs-var hs-var">initial</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Map Text (Typedef i)
+forall k a. Map k a
+</span><span class="hs-identifier hs-var">M.empty</span></span></span><span>
+</span><span id="line-43"></span><span>
+</span><span id="line-44"></span><span class="hs-comment">-- | The typedefs data type</span><span>
+</span><span id="line-45"></span><span class="hs-keyword">type</span><span> </span><span id="Typedefs"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Typedef.html#Typedefs"><span class="hs-identifier hs-var">Typedefs</span></a></span></span><span> </span><span id="local-6989586621679288329"><span class="annot"><a href="#local-6989586621679288329"><span class="hs-identifier hs-type">a</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-identifier hs-type">M.Map</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Typedef.html#Typedef"><span class="hs-identifier hs-type">Typedef</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288329"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-46"></span><span>
+</span><span id="line-47"></span><span class="hs-comment">-- | Given the current nesting number, type, identifier token, and `Typedefs`, if the specified identifier already exists in the same scope,</span><span>
+</span><span id="line-48"></span><span class="hs-comment">-- return an error message and its location as a pair.</span><span>
+</span><span id="line-49"></span><span class="hs-comment">-- Otherwise, add a new tag to `Typedefs` and return it.</span><span>
+</span><span id="line-50"></span><span class="hs-comment">-- If the token does not indicate an identifier, an error indicating internal compiler error is returned.</span><span>
+</span><span id="line-51"></span><span id="local-6989586621679288328"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Typedef.html#add"><span class="hs-identifier hs-type">add</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679288328"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Eq</span></span><span> </span><span class="annot"><a href="#local-6989586621679288328"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Natural</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.CRules.Types.StorageClass.html#StorageClass"><span class="hs-identifier hs-type">CT.StorageClass</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288328"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288328"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Typedef.html#Typedefs"><span class="hs-identifier hs-type">Typedefs</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288328"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Either</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ASTError"><span class="hs-identifier hs-type">ASTError</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288328"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Typedef.html#Typedefs"><span class="hs-identifier hs-type">Typedefs</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288328"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span></span><span>
+</span><span id="line-52"></span><span id="add"><span class="annot"><span class="annottext">add :: Natural
+-&gt; StorageClass i
+-&gt; TokenLC i
+-&gt; Typedefs i
+-&gt; Either (ASTError i) (Typedefs i)
+</span><a href="Htcc.Parser.ConstructionData.Scope.Typedef.html#add"><span class="hs-identifier hs-var hs-var">add</span></a></span></span><span> </span><span id="local-6989586621679288327"><span class="annot"><span class="annottext">cnd :: Natural
+</span><a href="#local-6989586621679288327"><span class="hs-identifier hs-var">cnd</span></a></span></span><span> </span><span id="local-6989586621679288326"><span class="annot"><span class="annottext">t :: StorageClass i
+</span><a href="#local-6989586621679288326"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679288325"><span class="annot"><span class="annottext">cur :: TokenLC i
+</span><a href="#local-6989586621679288325"><span class="hs-identifier hs-var">cur</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="hs-identifier">_</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TKIdent"><span class="hs-identifier hs-type">HT.TKIdent</span></a></span><span> </span><span id="local-6989586621679288323"><span class="annot"><span class="annottext">ident :: Text
+</span><a href="#local-6989586621679288323"><span class="hs-identifier hs-var">ident</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679288322"><span class="annot"><span class="annottext">sts :: Typedefs i
+</span><a href="#local-6989586621679288322"><span class="hs-identifier hs-var">sts</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Typedefs i -&gt; Maybe (Typedef i)
+forall k a. Ord k =&gt; k -&gt; Map k a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">M.lookup</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679288323"><span class="hs-identifier hs-var">ident</span></a></span><span> </span><span class="annot"><span class="annottext">Typedefs i
+</span><a href="#local-6989586621679288322"><span class="hs-identifier hs-var">sts</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-53"></span><span>    </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span id="local-6989586621679288321"><span class="annot"><span class="annottext">foundedTag :: Typedef i
+</span><a href="#local-6989586621679288321"><span class="hs-identifier hs-var">foundedTag</span></a></span></span><span>
+</span><span id="line-54"></span><span>        </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Typedef i -&gt; Natural
+forall a. Typedef a -&gt; Natural
+</span><a href="Htcc.Parser.ConstructionData.Scope.Typedef.html#tdNestDepth"><span class="hs-identifier hs-var hs-var">tdNestDepth</span></a></span><span> </span><span class="annot"><span class="annottext">Typedef i
+</span><a href="#local-6989586621679288321"><span class="hs-identifier hs-var">foundedTag</span></a></span><span> </span><span class="annot"><span class="annottext">Natural -&gt; Natural -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">/=</span></span><span> </span><span class="annot"><span class="annottext">Natural
+</span><a href="#local-6989586621679288327"><span class="hs-identifier hs-var">cnd</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Either (ASTError i) (Typedefs i)
+forall a. Either a (Typedefs i)
+</span><a href="#local-6989586621679288319"><span class="hs-identifier hs-var">tdnat</span></a></span><span>
+</span><span id="line-55"></span><span>        </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Typedef i -&gt; StorageClass i
+forall a. Typedef a -&gt; StorageClass a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Typedef.html#tdtype"><span class="hs-identifier hs-var hs-var">tdtype</span></a></span><span> </span><span class="annot"><span class="annottext">Typedef i
+</span><a href="#local-6989586621679288321"><span class="hs-identifier hs-var">foundedTag</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i -&gt; StorageClass i -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679288326"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Either (ASTError i) (Typedefs i)
+forall a. Either a (Typedefs i)
+</span><a href="#local-6989586621679288319"><span class="hs-identifier hs-var">tdnat</span></a></span><span>
+</span><span id="line-56"></span><span>        </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">ASTError i -&gt; Either (ASTError i) (Typedefs i)
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;conflicting types for '&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679288323"><span class="hs-identifier hs-var">ident</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;'&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">TokenLC i
+</span><a href="#local-6989586621679288325"><span class="hs-identifier hs-var">cur</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-comment">-- ODR</span><span>
+</span><span id="line-57"></span><span>    </span><span class="annot"><span class="hs-identifier hs-type">Nothing</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Either (ASTError i) (Typedefs i)
+forall a. Either a (Typedefs i)
+</span><a href="#local-6989586621679288319"><span class="hs-identifier hs-var">tdnat</span></a></span><span>
+</span><span id="line-58"></span><span>    </span><span class="hs-keyword">where</span><span>
+</span><span id="line-59"></span><span>        </span><span id="local-6989586621679288319"><span class="annot"><span class="annottext">tdnat :: Either a (Typedefs i)
+</span><a href="#local-6989586621679288319"><span class="hs-identifier hs-var hs-var">tdnat</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Typedefs i -&gt; Either a (Typedefs i)
+forall a b. b -&gt; Either a b
+</span><span class="hs-identifier hs-var">Right</span></span><span> </span><span class="annot"><span class="annottext">(Typedefs i -&gt; Either a (Typedefs i))
+-&gt; Typedefs i -&gt; Either a (Typedefs i)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Typedef i -&gt; Typedefs i -&gt; Typedefs i
+forall k a. Ord k =&gt; k -&gt; a -&gt; Map k a -&gt; Map k a
+</span><span class="hs-identifier hs-var">M.insert</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679288323"><span class="hs-identifier hs-var">ident</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; Natural -&gt; Typedef i
+forall a. StorageClass a -&gt; Natural -&gt; Typedef a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Typedef.html#Typedef"><span class="hs-identifier hs-var">Typedef</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679288326"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="annot"><span class="annottext">Natural
+</span><a href="#local-6989586621679288327"><span class="hs-identifier hs-var">cnd</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Typedefs i
+</span><a href="#local-6989586621679288322"><span class="hs-identifier hs-var">sts</span></a></span><span>
+</span><span id="line-60"></span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Typedef.html#add"><span class="hs-identifier hs-var">add</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ASTError i -&gt; Either (ASTError i) (Typedefs i)
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text
+</span><a href="Htcc.Parser.ConstructionData.Scope.Utils.html#internalCE"><span class="hs-identifier hs-var">internalCE</span></a></span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">i -&gt; i -&gt; TokenLCNums i
+forall i. i -&gt; i -&gt; TokenLCNums i
+</span><a href="Htcc.Tokenizer.Token.html#TokenLCNums"><span class="hs-identifier hs-var">HT.TokenLCNums</span></a></span><span> </span><span class="annot"><span class="hs-number">0</span></span><span> </span><span class="annot"><span class="hs-number">0</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Token i
+forall i. Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKEmpty"><span class="hs-identifier hs-var">HT.TKEmpty</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-61"></span></pre></body></html>

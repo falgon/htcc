@@ -1,0 +1,1088 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">{-|
+Module      : Htcc.Visualizer.Core
+Description : Build AST from C source code
+Copyright   : (c) roki, 2019
+License     : MIT
+Maintainer  : falgon53@yahoo.co.jp
+Stability   : experimental
+Portability : POSIX
+
+Build AST from C source code
+-}</span><span>
+</span><span id="line-12"></span><span class="hs-pragma">{-# LANGUAGE FlexibleContexts, OverloadedStrings #-}</span><span>
+</span><span id="line-13"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Htcc.Visualizer.Core</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-14"></span><span>    </span><span class="annot"><a href="Htcc.Visualizer.Core.html#visualize"><span class="hs-identifier">visualize</span></a></span><span>
+</span><span id="line-15"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-16"></span><span>
+</span><span id="line-17"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text</span></span><span>                 </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">T</span></span><span>
+</span><span id="line-18"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.Tree</span></span><span>                 </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Tree</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-19"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Diagrams.Backend.SVG</span></span><span>      </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">SVG</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">renderPretty</span></span><span class="hs-special">)</span><span>
+</span><span id="line-20"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Diagrams.Prelude</span></span><span>
+</span><span id="line-21"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Diagrams.TwoD.Layout.Tree</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">renderTree</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">slHSep</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">slVSep</span></span><span class="hs-special">,</span><span>
+</span><span id="line-22"></span><span>                                            </span><span class="annot"><span class="hs-identifier">symmLayout'</span></span><span class="hs-special">)</span><span>
+</span><span id="line-23"></span><span>
+</span><span id="line-24"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.CRules.Types.html"><span class="hs-identifier">Htcc.CRules.Types</span></a></span><span>         </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">CT</span></span><span>
+</span><span id="line-25"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.html"><span class="hs-identifier">Htcc.Parser</span></a></span><span>               </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Type.html#ASTs"><span class="hs-identifier">ASTs</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-26"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.AST.Core.html"><span class="hs-identifier">Htcc.Parser.AST.Core</span></a></span><span>      </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATKind"><span class="hs-identifier">ATKind</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATree"><span class="hs-identifier">ATree</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-27"></span><span>                                            </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#fromATKindFor"><span class="hs-identifier">fromATKindFor</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-28"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Utils.html"><span class="hs-identifier">Htcc.Utils</span></a></span><span>                </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Utils.Print.html#putStrLnErr"><span class="hs-identifier">putStrLnErr</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-29"></span><span>
+</span><span id="line-30"></span><span class="hs-comment">-- | the function to convert `ATree` to `Data.Tree`</span><span>
+</span><span id="line-31"></span><span id="local-6989586621679294910"><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-type">encodeTree</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679294910"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATree"><span class="hs-identifier hs-type">ATree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679294910"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Tree</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">String</span></span></span><span>
+</span><span id="line-32"></span><span id="encodeTree"><span class="annot"><span class="annottext">encodeTree :: ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var hs-var">encodeTree</span></a></span></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATEmpty"><span class="hs-identifier hs-type">ATEmpty</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;Null&quot;</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>
+</span><span id="line-33"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATAdd"><span class="hs-identifier hs-type">ATAdd</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294802"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294802"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294801"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294801"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;+&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294802"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294801"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-34"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATAddPtr"><span class="hs-identifier hs-type">ATAddPtr</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294799"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294799"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294798"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294798"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;+&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294799"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294798"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-35"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATSub"><span class="hs-identifier hs-type">ATSub</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294796"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294796"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294795"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294795"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;-&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294796"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294795"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-36"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATSubPtr"><span class="hs-identifier hs-type">ATSubPtr</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294793"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294793"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294792"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294792"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;-&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294793"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294792"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-37"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATPtrDis"><span class="hs-identifier hs-type">ATPtrDis</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294790"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294790"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294789"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294789"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;-&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294790"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294789"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-38"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATMul"><span class="hs-identifier hs-type">ATMul</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294787"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294787"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294786"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294786"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;*&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294787"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294786"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-39"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATDiv"><span class="hs-identifier hs-type">ATDiv</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294784"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294784"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294783"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294783"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;/&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294784"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294783"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-40"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATMod"><span class="hs-identifier hs-type">ATMod</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294781"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294781"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294780"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294780"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;%&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294781"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294780"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-41"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATAddAssign"><span class="hs-identifier hs-type">ATAddAssign</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294778"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294778"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294777"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294777"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;+=&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294778"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294777"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-42"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATSubAssign"><span class="hs-identifier hs-type">ATSubAssign</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294775"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294775"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294774"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294774"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;-=&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294775"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294774"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-43"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATMulAssign"><span class="hs-identifier hs-type">ATMulAssign</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294772"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294772"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294771"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294771"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;*=&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294772"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294771"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-44"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATDivAssign"><span class="hs-identifier hs-type">ATDivAssign</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294769"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294769"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294768"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294768"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;/=&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294769"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294768"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-45"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATAddPtrAssign"><span class="hs-identifier hs-type">ATAddPtrAssign</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294766"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294766"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294765"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294765"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;+=&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294766"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294765"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-46"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATSubPtrAssign"><span class="hs-identifier hs-type">ATSubPtrAssign</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294763"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294763"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294762"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294762"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;-=&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294763"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294762"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-47"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATLAnd"><span class="hs-identifier hs-type">ATLAnd</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294760"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294760"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294759"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294759"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;&amp;&amp;&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294760"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294759"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-48"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATLOr"><span class="hs-identifier hs-type">ATLOr</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294757"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294757"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294756"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294756"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;||&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294757"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294756"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-49"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATAnd"><span class="hs-identifier hs-type">ATAnd</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294754"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294754"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294753"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294753"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;&amp;&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294754"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294753"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-50"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATAndAssign"><span class="hs-identifier hs-type">ATAndAssign</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294751"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294751"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294750"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294750"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;&amp;=&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294751"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294750"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-51"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATOr"><span class="hs-identifier hs-type">ATOr</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294748"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294748"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294747"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294747"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;|&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294748"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294747"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-52"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATOrAssign"><span class="hs-identifier hs-type">ATOrAssign</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294745"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294745"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294744"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294744"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;|=&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294745"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294744"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-53"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATXor"><span class="hs-identifier hs-type">ATXor</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294742"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294742"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294741"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294741"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;^&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294742"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294741"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-54"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATXorAssign"><span class="hs-identifier hs-type">ATXorAssign</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294739"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294739"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294738"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294738"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;^=&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294739"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294738"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-55"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATBitNot"><span class="hs-identifier hs-type">ATBitNot</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294736"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294736"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294735"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294735"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;~&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294736"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294735"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-56"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATShl"><span class="hs-identifier hs-type">ATShl</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294733"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294733"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294732"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294732"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;&lt;&lt;&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294733"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294732"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-57"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATShlAssign"><span class="hs-identifier hs-type">ATShlAssign</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294730"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294730"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294729"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294729"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;&lt;&lt;=&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294730"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294729"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-58"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATShr"><span class="hs-identifier hs-type">ATShr</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294727"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294727"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294726"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294726"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;&gt;&gt;&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294727"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294726"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-59"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATShrAssign"><span class="hs-identifier hs-type">ATShrAssign</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294724"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294724"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294723"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294723"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;&gt;&gt;=&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294724"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294723"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-60"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATLT"><span class="hs-identifier hs-type">ATLT</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294721"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294721"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294720"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294720"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;&lt;&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294721"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294720"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-61"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATLEQ"><span class="hs-identifier hs-type">ATLEQ</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294718"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294718"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294717"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294717"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;&lt;=&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294718"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294717"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-62"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATGT"><span class="hs-identifier hs-type">ATGT</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294715"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294715"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294714"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294714"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;&gt;&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294715"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294714"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-63"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATGEQ"><span class="hs-identifier hs-type">ATGEQ</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294712"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294712"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294711"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294711"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;&gt;=&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294712"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294711"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-64"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATEQ"><span class="hs-identifier hs-type">ATEQ</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294709"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294709"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294708"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294708"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;==&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294709"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294708"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-65"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNEQ"><span class="hs-identifier hs-type">ATNEQ</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294706"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294706"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294705"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294705"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;!=&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294706"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294705"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-66"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNot"><span class="hs-identifier hs-type">ATNot</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294703"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294703"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;!&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294703"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-67"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATAddr"><span class="hs-identifier hs-type">ATAddr</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294701"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294701"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;&amp;&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294701"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-68"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATDeref"><span class="hs-identifier hs-type">ATDeref</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294699"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294699"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;*&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294699"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-69"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATAssign"><span class="hs-identifier hs-type">ATAssign</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294697"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294697"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294696"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294696"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;=&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294697"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294696"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-70"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATPreInc"><span class="hs-identifier hs-type">ATPreInc</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294694"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294694"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294693"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294693"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;++ (pre)&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294694"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294693"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-71"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATPreDec"><span class="hs-identifier hs-type">ATPreDec</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294691"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294691"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294690"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294690"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;-- (pre)&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294691"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294690"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-72"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATPostInc"><span class="hs-identifier hs-type">ATPostInc</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294688"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294688"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294687"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294687"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;++ (post)&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294688"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294687"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-73"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATPostDec"><span class="hs-identifier hs-type">ATPostDec</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294685"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294685"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294684"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294684"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;-- (post)&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294685"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294684"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-74"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNum"><span class="hs-identifier hs-type">ATNum</span></a></span><span> </span><span id="local-6989586621679294682"><span class="annot"><span class="annottext">n :: i
+</span><a href="#local-6989586621679294682"><span class="hs-identifier hs-var">n</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679294681"><span class="annot"><span class="annottext">t :: StorageClass i
+</span><a href="#local-6989586621679294681"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679294680"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294680"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294679"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294679"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">i -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">i
+</span><a href="#local-6989586621679294682"><span class="hs-identifier hs-var">n</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="hs-string">&quot; (&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">TypeKind i -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; TypeKind i
+forall (a :: * -&gt; *) i. TypeKindBase a =&gt; a i -&gt; TypeKind i
+</span><a href="Htcc.CRules.Types.TypeKind.html#toTypeKind"><span class="hs-identifier hs-var">CT.toTypeKind</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679294681"><span class="hs-identifier hs-var">t</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="hs-string">&quot;)&quot;</span></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294680"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294679"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-75"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATConditional"><span class="hs-identifier hs-type">ATConditional</span></a></span><span> </span><span id="local-6989586621679294675"><span class="annot"><span class="annottext">a :: ATree i
+</span><a href="#local-6989586621679294675"><span class="hs-identifier hs-var">a</span></a></span></span><span> </span><span id="local-6989586621679294674"><span class="annot"><span class="annottext">b :: ATree i
+</span><a href="#local-6989586621679294674"><span class="hs-identifier hs-var">b</span></a></span></span><span> </span><span id="local-6989586621679294673"><span class="annot"><span class="annottext">c :: ATree i
+</span><a href="#local-6989586621679294673"><span class="hs-identifier hs-var">c</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;?:&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294675"><span class="hs-identifier hs-var">a</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294674"><span class="hs-identifier hs-var">b</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294673"><span class="hs-identifier hs-var">c</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-76"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATComma"><span class="hs-identifier hs-type">ATComma</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294671"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294671"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294670"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294670"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;,&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294671"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294670"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-77"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATCast"><span class="hs-identifier hs-type">ATCast</span></a></span><span> </span><span id="local-6989586621679294668"><span class="annot"><span class="annottext">t :: StorageClass i
+</span><a href="#local-6989586621679294668"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679294667"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294667"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;(&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">TypeKind i -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; TypeKind i
+forall (a :: * -&gt; *) i. TypeKindBase a =&gt; a i -&gt; TypeKind i
+</span><a href="Htcc.CRules.Types.TypeKind.html#toTypeKind"><span class="hs-identifier hs-var">CT.toTypeKind</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679294668"><span class="hs-identifier hs-var">t</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="hs-string">&quot;)\n(type cast)&quot;</span></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294667"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-78"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATMemberAcc"><span class="hs-identifier hs-type">ATMemberAcc</span></a></span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294665"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294665"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294664"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294664"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294665"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294664"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-79"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATReturn"><span class="hs-identifier hs-type">ATReturn</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294662"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294662"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294661"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294661"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;return&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294662"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294661"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-80"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATIf"><span class="hs-identifier hs-type">ATIf</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294659"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294659"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294658"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294658"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;if&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294659"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294658"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-81"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATElse"><span class="hs-identifier hs-type">ATElse</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294656"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294656"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294655"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294655"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;else&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294656"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294655"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-82"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATSwitch"><span class="hs-identifier hs-type">ATSwitch</span></a></span><span> </span><span id="local-6989586621679294653"><span class="annot"><span class="annottext">th :: ATree i
+</span><a href="#local-6989586621679294653"><span class="hs-identifier hs-var">th</span></a></span></span><span> </span><span id="local-6989586621679294652"><span class="annot"><span class="annottext">xs :: [ATree i]
+</span><a href="#local-6989586621679294652"><span class="hs-identifier hs-var">xs</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294651"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294651"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294650"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294650"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;switch&quot;</span></span><span> </span><span class="annot"><span class="annottext">(Forest String -&gt; Tree String) -&gt; Forest String -&gt; Tree String
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294653"><span class="hs-identifier hs-var">th</span></a></span><span> </span><span class="annot"><span class="annottext">Tree String -&gt; Forest String -&gt; Forest String
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span> </span><span class="annot"><span class="annottext">(ATree i -&gt; Tree String) -&gt; [ATree i] -&gt; Forest String
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">[ATree i]
+</span><a href="#local-6989586621679294652"><span class="hs-identifier hs-var">xs</span></a></span><span> </span><span class="annot"><span class="annottext">Forest String -&gt; Forest String -&gt; Forest String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294651"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294650"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-83"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATCase"><span class="hs-identifier hs-type">ATCase</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294648"><span class="annot"><span class="annottext">v :: i
+</span><a href="#local-6989586621679294648"><span class="hs-identifier hs-var">v</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294647"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294647"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294646"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294646"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;case &quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">i -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">i
+</span><a href="#local-6989586621679294648"><span class="hs-identifier hs-var">v</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294647"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294646"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-84"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATDefault"><span class="hs-identifier hs-type">ATDefault</span></a></span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294644"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294644"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294643"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294643"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;default&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294644"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294643"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-85"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATWhile"><span class="hs-identifier hs-type">ATWhile</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294641"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294641"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294640"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294640"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;while&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294641"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294640"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-86"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATFor"><span class="hs-identifier hs-type">ATFor</span></a></span><span> </span><span id="local-6989586621679294638"><span class="annot"><span class="annottext">atf :: [ATKindFor i]
+</span><a href="#local-6989586621679294638"><span class="hs-identifier hs-var">atf</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294637"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294637"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294636"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294636"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;for&quot;</span></span><span> </span><span class="annot"><span class="annottext">(Forest String -&gt; Tree String) -&gt; Forest String -&gt; Tree String
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(ATKindFor i -&gt; Tree String) -&gt; [ATKindFor i] -&gt; Forest String
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">(ATree i -&gt; Tree String)
+-&gt; (ATKindFor i -&gt; ATree i) -&gt; ATKindFor i -&gt; Tree String
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">ATKindFor i -&gt; ATree i
+forall a. ATKindFor a -&gt; ATree a
+</span><a href="Htcc.Parser.AST.Core.html#fromATKindFor"><span class="hs-identifier hs-var">fromATKindFor</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">[ATKindFor i]
+</span><a href="#local-6989586621679294638"><span class="hs-identifier hs-var">atf</span></a></span><span> </span><span class="annot"><span class="annottext">Forest String -&gt; Forest String -&gt; Forest String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294637"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294636"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-87"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATBreak"><span class="hs-identifier hs-type">ATBreak</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294633"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294633"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294632"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294632"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;break&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294633"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294632"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-88"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATContinue"><span class="hs-identifier hs-type">ATContinue</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294630"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294630"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294629"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294629"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;continue&quot;</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294630"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294629"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-89"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATGoto"><span class="hs-identifier hs-type">ATGoto</span></a></span><span> </span><span id="local-6989586621679294627"><span class="annot"><span class="annottext">lbl :: Text
+</span><a href="#local-6989586621679294627"><span class="hs-identifier hs-var">lbl</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294626"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294626"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294625"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294625"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;goto &quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; String
+</span><span class="hs-identifier hs-var">T.unpack</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679294627"><span class="hs-identifier hs-var">lbl</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294626"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294625"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-90"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATLabel"><span class="hs-identifier hs-type">ATLabel</span></a></span><span> </span><span id="local-6989586621679294622"><span class="annot"><span class="annottext">lbl :: Text
+</span><a href="#local-6989586621679294622"><span class="hs-identifier hs-var">lbl</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294621"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294621"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294620"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294620"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;:&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; String
+</span><span class="hs-identifier hs-var">T.unpack</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679294622"><span class="hs-identifier hs-var">lbl</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294621"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294620"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-91"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATBlock"><span class="hs-identifier hs-type">ATBlock</span></a></span><span> </span><span id="local-6989586621679294618"><span class="annot"><span class="annottext">xs :: [ATree i]
+</span><a href="#local-6989586621679294618"><span class="hs-identifier hs-var">xs</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;{}&quot;</span></span><span> </span><span class="annot"><span class="annottext">(Forest String -&gt; Tree String) -&gt; Forest String -&gt; Tree String
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(ATree i -&gt; Tree String) -&gt; [ATree i] -&gt; Forest String
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">[ATree i]
+</span><a href="#local-6989586621679294618"><span class="hs-identifier hs-var">xs</span></a></span><span>
+</span><span id="line-92"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATLVar"><span class="hs-identifier hs-type">ATLVar</span></a></span><span> </span><span id="local-6989586621679294616"><span class="annot"><span class="annottext">t :: StorageClass i
+</span><a href="#local-6989586621679294616"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679294615"><span class="annot"><span class="annottext">o :: i
+</span><a href="#local-6989586621679294615"><span class="hs-identifier hs-var">o</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294614"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294614"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294613"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294613"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679294616"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="hs-string">&quot; lvar&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">i -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">i
+</span><a href="#local-6989586621679294615"><span class="hs-identifier hs-var">o</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294614"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294613"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-93"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATGVar"><span class="hs-identifier hs-type">ATGVar</span></a></span><span> </span><span id="local-6989586621679294611"><span class="annot"><span class="annottext">t :: StorageClass i
+</span><a href="#local-6989586621679294611"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679294610"><span class="annot"><span class="annottext">n :: Text
+</span><a href="#local-6989586621679294610"><span class="hs-identifier hs-var">n</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294609"><span class="annot"><span class="annottext">l :: ATree i
+</span><a href="#local-6989586621679294609"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span id="local-6989586621679294608"><span class="annot"><span class="annottext">r :: ATree i
+</span><a href="#local-6989586621679294608"><span class="hs-identifier hs-var">r</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679294611"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="hs-string">&quot; &quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; String
+</span><span class="hs-identifier hs-var">T.unpack</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679294610"><span class="hs-identifier hs-var">n</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294609"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294608"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-94"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATDefFunc"><span class="hs-identifier hs-type">ATDefFunc</span></a></span><span> </span><span id="local-6989586621679294606"><span class="annot"><span class="annottext">fname :: Text
+</span><a href="#local-6989586621679294606"><span class="hs-identifier hs-var">fname</span></a></span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Nothing</span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679294605"><span class="annot"><span class="annottext">t :: StorageClass i
+</span><a href="#local-6989586621679294605"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679294604"><span class="annot"><span class="annottext">lhs :: ATree i
+</span><a href="#local-6989586621679294604"><span class="hs-identifier hs-var">lhs</span></a></span></span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TypeKind i -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; TypeKind i
+forall (a :: * -&gt; *) i. TypeKindBase a =&gt; a i -&gt; TypeKind i
+</span><a href="Htcc.CRules.Types.TypeKind.html#toTypeKind"><span class="hs-identifier hs-var">CT.toTypeKind</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679294605"><span class="hs-identifier hs-var">t</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="hs-string">&quot; &quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; String
+</span><span class="hs-identifier hs-var">T.unpack</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679294606"><span class="hs-identifier hs-var">fname</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="hs-string">&quot;()&quot;</span></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294604"><span class="hs-identifier hs-var">lhs</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-95"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATDefFunc"><span class="hs-identifier hs-type">ATDefFunc</span></a></span><span> </span><span id="local-6989586621679294603"><span class="annot"><span class="annottext">fname :: Text
+</span><a href="#local-6989586621679294603"><span class="hs-identifier hs-var">fname</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span id="local-6989586621679294602"><span class="annot"><span class="annottext">args :: [ATree i]
+</span><a href="#local-6989586621679294602"><span class="hs-identifier hs-var">args</span></a></span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span id="local-6989586621679294601"><span class="annot"><span class="annottext">t :: StorageClass i
+</span><a href="#local-6989586621679294601"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679294600"><span class="annot"><span class="annottext">lhs :: ATree i
+</span><a href="#local-6989586621679294600"><span class="hs-identifier hs-var">lhs</span></a></span></span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TypeKind i -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; TypeKind i
+forall (a :: * -&gt; *) i. TypeKindBase a =&gt; a i -&gt; TypeKind i
+</span><a href="Htcc.CRules.Types.TypeKind.html#toTypeKind"><span class="hs-identifier hs-var">CT.toTypeKind</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679294601"><span class="hs-identifier hs-var">t</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="hs-string">&quot; &quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; String
+</span><span class="hs-identifier hs-var">T.unpack</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679294603"><span class="hs-identifier hs-var">fname</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="hs-string">&quot;(some arguments)&quot;</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Forest String -&gt; Tree String) -&gt; Forest String -&gt; Tree String
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(ATree i -&gt; Tree String) -&gt; [ATree i] -&gt; Forest String
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">[ATree i]
+</span><a href="#local-6989586621679294602"><span class="hs-identifier hs-var">args</span></a></span><span> </span><span class="annot"><span class="annottext">Forest String -&gt; Forest String -&gt; Forest String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294600"><span class="hs-identifier hs-var">lhs</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-96"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATCallFunc"><span class="hs-identifier hs-type">ATCallFunc</span></a></span><span> </span><span id="local-6989586621679294598"><span class="annot"><span class="annottext">fname :: Text
+</span><a href="#local-6989586621679294598"><span class="hs-identifier hs-var">fname</span></a></span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Nothing</span></span><span class="hs-special">)</span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294597"><span class="annot"><span class="annottext">lhs :: ATree i
+</span><a href="#local-6989586621679294597"><span class="hs-identifier hs-var">lhs</span></a></span></span><span> </span><span id="local-6989586621679294596"><span class="annot"><span class="annottext">rhs :: ATree i
+</span><a href="#local-6989586621679294596"><span class="hs-identifier hs-var">rhs</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; String
+</span><span class="hs-identifier hs-var">T.unpack</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679294598"><span class="hs-identifier hs-var">fname</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="hs-string">&quot;()&quot;</span></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294597"><span class="hs-identifier hs-var">lhs</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294596"><span class="hs-identifier hs-var">rhs</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-97"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATCallFunc"><span class="hs-identifier hs-type">ATCallFunc</span></a></span><span> </span><span id="local-6989586621679294595"><span class="annot"><span class="annottext">fname :: Text
+</span><a href="#local-6989586621679294595"><span class="hs-identifier hs-var">fname</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span id="local-6989586621679294594"><span class="annot"><span class="annottext">args :: [ATree i]
+</span><a href="#local-6989586621679294594"><span class="hs-identifier hs-var">args</span></a></span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294593"><span class="annot"><span class="annottext">lhs :: ATree i
+</span><a href="#local-6989586621679294593"><span class="hs-identifier hs-var">lhs</span></a></span></span><span> </span><span id="local-6989586621679294592"><span class="annot"><span class="annottext">rhs :: ATree i
+</span><a href="#local-6989586621679294592"><span class="hs-identifier hs-var">rhs</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; String
+</span><span class="hs-identifier hs-var">T.unpack</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679294595"><span class="hs-identifier hs-var">fname</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="hs-string">&quot;(some arguments)&quot;</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Forest String -&gt; Tree String) -&gt; Forest String -&gt; Tree String
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(ATree i -&gt; Tree String) -&gt; [ATree i] -&gt; Forest String
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">[ATree i]
+</span><a href="#local-6989586621679294594"><span class="hs-identifier hs-var">args</span></a></span><span> </span><span class="annot"><span class="annottext">Forest String -&gt; Forest String -&gt; Forest String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294593"><span class="hs-identifier hs-var">lhs</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294592"><span class="hs-identifier hs-var">rhs</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-98"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATExprStmt"><span class="hs-identifier hs-type">ATExprStmt</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294590"><span class="annot"><span class="annottext">lhs :: ATree i
+</span><a href="#local-6989586621679294590"><span class="hs-identifier hs-var">lhs</span></a></span></span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294590"><span class="hs-identifier hs-var">lhs</span></a></span><span>
+</span><span id="line-99"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATStmtExpr"><span class="hs-identifier hs-type">ATStmtExpr</span></a></span><span> </span><span id="local-6989586621679294588"><span class="annot"><span class="annottext">exps :: [ATree i]
+</span><a href="#local-6989586621679294588"><span class="hs-identifier hs-var">exps</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679294587"><span class="annot"><span class="annottext">lhs :: ATree i
+</span><a href="#local-6989586621679294587"><span class="hs-identifier hs-var">lhs</span></a></span></span><span> </span><span id="local-6989586621679294586"><span class="annot"><span class="annottext">rhs :: ATree i
+</span><a href="#local-6989586621679294586"><span class="hs-identifier hs-var">rhs</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;({})&quot;</span></span><span> </span><span class="annot"><span class="annottext">(Forest String -&gt; Tree String) -&gt; Forest String -&gt; Tree String
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(ATree i -&gt; Tree String) -&gt; [ATree i] -&gt; Forest String
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">[ATree i]
+</span><a href="#local-6989586621679294588"><span class="hs-identifier hs-var">exps</span></a></span><span> </span><span class="annot"><span class="annottext">Forest String -&gt; Forest String -&gt; Forest String
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294587"><span class="hs-identifier hs-var">lhs</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679294586"><span class="hs-identifier hs-var">rhs</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-100"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNull"><span class="hs-identifier hs-type">ATNull</span></a></span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Forest String -&gt; Tree String
+forall a. a -&gt; Forest a -&gt; Tree a
+</span><span class="hs-identifier hs-var">Node</span></span><span> </span><span class="annot"><span class="hs-string">&quot;&quot;</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>
+</span><span id="line-101"></span><span>
+</span><span id="line-102"></span><span class="annot"><a href="Htcc.Visualizer.Core.html#renderNTree"><span class="hs-identifier hs-type">renderNTree</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Tree</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">String</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">QDiagram</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">SVG</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">V2</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Double</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Any</span></span><span>
+</span><span id="line-103"></span><span id="renderNTree"><span class="annot"><span class="annottext">renderNTree :: Tree String -&gt; QDiagram SVG V2 Double Any
+</span><a href="Htcc.Visualizer.Core.html#renderNTree"><span class="hs-identifier hs-var hs-var">renderNTree</span></a></span></span><span> </span><span id="local-6989586621679294583"><span class="annot"><span class="annottext">nt :: Tree String
+</span><a href="#local-6989586621679294583"><span class="hs-identifier hs-var">nt</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(String -&gt; QDiagram SVG V2 Double Any)
+-&gt; (P2 Double -&gt; P2 Double -&gt; QDiagram SVG V2 Double Any)
+-&gt; Tree (String, P2 Double)
+-&gt; QDiagram SVG V2 Double Any
+forall m n a b.
+(Monoid' m, Floating n, Ord n) =&gt;
+(a -&gt; QDiagram b V2 n m)
+-&gt; (P2 n -&gt; P2 n -&gt; QDiagram b V2 n m)
+-&gt; Tree (a, P2 n)
+-&gt; QDiagram b V2 n m
+</span><span class="hs-identifier hs-var">renderTree</span></span><span>
+</span><span id="line-104"></span><span>    </span><span class="hs-special">(</span><span class="hs-glyph">\</span><span id="local-6989586621679294582"><span class="annot"><span class="annottext">a :: String
+</span><a href="#local-6989586621679294582"><span class="hs-identifier hs-var">a</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">String -&gt; QDiagram SVG V2 Double Any
+forall n b.
+(Typeable n, RealFloat n, Renderable (Text n) b) =&gt;
+String -&gt; QDiagram b V2 n Any
+</span><a href="#local-6989586621679294581"><span class="hs-identifier hs-var">letter</span></a></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679294582"><span class="hs-identifier hs-var">a</span></a></span><span> </span><span class="annot"><span class="annottext">QDiagram SVG V2 Double Any
+-&gt; QDiagram SVG V2 Double Any -&gt; QDiagram SVG V2 Double Any
+forall n (v :: * -&gt; *) m b.
+(OrderedField n, Metric v, Semigroup m) =&gt;
+QDiagram b v n m -&gt; QDiagram b v n m -&gt; QDiagram b v n m
+</span><span class="hs-operator hs-var">`atop`</span></span><span> </span><span class="annot"><span class="annottext">Double -&gt; QDiagram SVG V2 Double Any
+forall t n.
+(TrailLike t, V t ~ V2, N t ~ n, Transformable t) =&gt;
+n -&gt; t
+</span><span class="hs-identifier hs-var">circle</span></span><span> </span><span class="annot"><span class="hs-number">2.5</span></span><span> </span><span class="annot"><span class="annottext">QDiagram SVG V2 Double Any
+-&gt; (QDiagram SVG V2 Double Any -&gt; QDiagram SVG V2 Double Any)
+-&gt; QDiagram SVG V2 Double Any
+forall a b. a -&gt; (a -&gt; b) -&gt; b
+</span><span class="hs-operator hs-var">#</span></span><span> </span><span class="annot"><span class="annottext">Colour Double
+-&gt; QDiagram SVG V2 Double Any -&gt; QDiagram SVG V2 Double Any
+forall n a.
+(InSpace V2 n a, Floating n, Typeable n, HasStyle a) =&gt;
+Colour Double -&gt; a -&gt; a
+</span><span class="hs-identifier hs-var">fc</span></span><span> </span><span class="annot"><span class="annottext">Colour Double
+forall a. (Ord a, Floating a) =&gt; Colour a
+</span><span class="hs-identifier hs-var">white</span></span><span class="hs-special">)</span><span>
+</span><span id="line-105"></span><span>    </span><span class="annot"><span class="annottext">P2 Double -&gt; P2 Double -&gt; QDiagram SVG V2 Double Any
+forall t (v :: * -&gt; *) n.
+(V t ~ v, N t ~ n, TrailLike t) =&gt;
+Point v n -&gt; Point v n -&gt; t
+</span><span class="hs-operator hs-var">(~~)</span></span><span>
+</span><span id="line-106"></span><span>    </span><span class="hs-special">(</span><span class="annot"><span class="annottext">SymmLayoutOpts Double String
+-&gt; Tree String -&gt; Tree (String, P2 Double)
+forall n a.
+(Fractional n, Ord n) =&gt;
+SymmLayoutOpts n a -&gt; Tree a -&gt; Tree (a, P2 n)
+</span><span class="hs-identifier hs-var">symmLayout'</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">SymmLayoutOpts Double String
+forall d. Default d =&gt; d
+</span><span class="hs-identifier hs-var">with</span></span><span> </span><span class="annot"><span class="annottext">SymmLayoutOpts Double String
+-&gt; (SymmLayoutOpts Double String -&gt; SymmLayoutOpts Double String)
+-&gt; SymmLayoutOpts Double String
+forall a b. a -&gt; (a -&gt; b) -&gt; b
+</span><span class="hs-operator hs-var">&amp;</span></span><span> </span><span class="annot"><span class="annottext">(Double -&gt; Identity Double)
+-&gt; SymmLayoutOpts Double String
+-&gt; Identity (SymmLayoutOpts Double String)
+forall n a. Lens' (SymmLayoutOpts n a) n
+</span><span class="hs-identifier hs-var">slHSep</span></span><span> </span><span class="annot"><span class="annottext">((Double -&gt; Identity Double)
+ -&gt; SymmLayoutOpts Double String
+ -&gt; Identity (SymmLayoutOpts Double String))
+-&gt; Double
+-&gt; SymmLayoutOpts Double String
+-&gt; SymmLayoutOpts Double String
+forall s t a b. ASetter s t a b -&gt; b -&gt; s -&gt; t
+</span><span class="hs-operator hs-var">.~</span></span><span> </span><span class="annot"><span class="hs-number">6</span></span><span> </span><span class="annot"><span class="annottext">SymmLayoutOpts Double String
+-&gt; (SymmLayoutOpts Double String -&gt; SymmLayoutOpts Double String)
+-&gt; SymmLayoutOpts Double String
+forall a b. a -&gt; (a -&gt; b) -&gt; b
+</span><span class="hs-operator hs-var">&amp;</span></span><span> </span><span class="annot"><span class="annottext">(Double -&gt; Identity Double)
+-&gt; SymmLayoutOpts Double String
+-&gt; Identity (SymmLayoutOpts Double String)
+forall n a. Lens' (SymmLayoutOpts n a) n
+</span><span class="hs-identifier hs-var">slVSep</span></span><span> </span><span class="annot"><span class="annottext">((Double -&gt; Identity Double)
+ -&gt; SymmLayoutOpts Double String
+ -&gt; Identity (SymmLayoutOpts Double String))
+-&gt; Double
+-&gt; SymmLayoutOpts Double String
+-&gt; SymmLayoutOpts Double String
+forall s t a b. ASetter s t a b -&gt; b -&gt; s -&gt; t
+</span><span class="hs-operator hs-var">.~</span></span><span> </span><span class="annot"><span class="hs-number">6</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Tree String
+</span><a href="#local-6989586621679294583"><span class="hs-identifier hs-var">nt</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-107"></span><span>    </span><span class="hs-keyword">where</span><span>
+</span><span id="line-108"></span><span>        </span><span id="local-6989586621679294581"><span class="annot"><span class="annottext">letter :: String -&gt; QDiagram b V2 n Any
+</span><a href="#local-6989586621679294581"><span class="hs-identifier hs-var hs-var">letter</span></a></span></span><span> </span><span id="local-6989586621679294571"><span class="annot"><span class="annottext">a :: String
+</span><a href="#local-6989586621679294571"><span class="hs-identifier hs-var">a</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; QDiagram b V2 n Any
+forall n b.
+(TypeableFloat n, Renderable (Text n) b) =&gt;
+String -&gt; QDiagram b V2 n Any
+</span><span class="hs-identifier hs-var">text</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679294571"><span class="hs-identifier hs-var">a</span></a></span><span> </span><span class="annot"><span class="annottext">QDiagram b V2 n Any
+-&gt; (QDiagram b V2 n Any -&gt; QDiagram b V2 n Any)
+-&gt; QDiagram b V2 n Any
+forall a b. a -&gt; (a -&gt; b) -&gt; b
+</span><span class="hs-operator hs-var">#</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; QDiagram b V2 n Any -&gt; QDiagram b V2 n Any
+forall a. HasStyle a =&gt; String -&gt; a -&gt; a
+</span><span class="hs-identifier hs-var">font</span></span><span> </span><span class="annot"><span class="hs-string">&quot;monospace&quot;</span></span><span> </span><span class="annot"><span class="annottext">QDiagram b V2 n Any
+-&gt; (QDiagram b V2 n Any -&gt; QDiagram b V2 n Any)
+-&gt; QDiagram b V2 n Any
+forall a b. a -&gt; (a -&gt; b) -&gt; b
+</span><span class="hs-operator hs-var">#</span></span><span> </span><span class="annot"><span class="annottext">Measure n -&gt; QDiagram b V2 n Any -&gt; QDiagram b V2 n Any
+forall a n.
+(N a ~ n, Typeable n, HasStyle a) =&gt;
+Measure n -&gt; a -&gt; a
+</span><span class="hs-identifier hs-var">fontSize</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">n -&gt; Measure n
+forall n. Num n =&gt; n -&gt; Measure n
+</span><span class="hs-identifier hs-var">local</span></span><span> </span><span class="annot"><span class="hs-number">0.7</span></span><span class="hs-special">)</span><span>
+</span><span id="line-109"></span><span>
+</span><span id="line-110"></span><span class="hs-comment">-- | Build AST from C source code</span><span>
+</span><span id="line-111"></span><span id="local-6989586621679294566"><span class="annot"><a href="Htcc.Visualizer.Core.html#visualize"><span class="hs-identifier hs-type">visualize</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679294566"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Type.html#ASTs"><span class="hs-identifier hs-type">ASTs</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679294566"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">SizeSpec</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">V2</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Double</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">FilePath</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span><span>
+</span><span id="line-112"></span><span id="visualize"><span class="annot"><span class="annottext">visualize :: ASTs i -&gt; SizeSpec V2 Double -&gt; String -&gt; IO ()
+</span><a href="Htcc.Visualizer.Core.html#visualize"><span class="hs-identifier hs-var hs-var">visualize</span></a></span></span><span> </span><span id="local-6989586621679294564"><span class="annot"><span class="annottext">ast :: ASTs i
+</span><a href="#local-6989586621679294564"><span class="hs-identifier hs-var">ast</span></a></span></span><span> </span><span id="local-6989586621679294563"><span class="annot"><span class="annottext">ss :: SizeSpec V2 Double
+</span><a href="#local-6989586621679294563"><span class="hs-identifier hs-var">ss</span></a></span></span><span> </span><span id="local-6989586621679294562"><span class="annot"><span class="annottext">fpath :: String
+</span><a href="#local-6989586621679294562"><span class="hs-identifier hs-var">fpath</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679294561"><span class="annot"><span class="annottext">et :: Forest String
+</span><a href="#local-6989586621679294561"><span class="hs-identifier hs-var hs-var">et</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(ATree i -&gt; Tree String) -&gt; ASTs i -&gt; Forest String
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Tree String
+forall i. Show i =&gt; ATree i -&gt; Tree String
+</span><a href="Htcc.Visualizer.Core.html#encodeTree"><span class="hs-identifier hs-var">encodeTree</span></a></span><span> </span><span class="annot"><span class="annottext">ASTs i
+</span><a href="#local-6989586621679294564"><span class="hs-identifier hs-var">ast</span></a></span><span> </span><span class="hs-keyword">in</span><span> </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool
+</span><span class="hs-identifier hs-var">not</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Forest String -&gt; Bool
+forall (t :: * -&gt; *) a. Foldable t =&gt; t a -&gt; Bool
+</span><span class="hs-identifier hs-var">null</span></span><span> </span><span class="annot"><span class="annottext">Forest String
+</span><a href="#local-6989586621679294561"><span class="hs-identifier hs-var">et</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">then</span><span>
+</span><span id="line-113"></span><span>    </span><span class="annot"><span class="annottext">String -&gt; SizeSpec V2 Double -&gt; QDiagram SVG V2 Double Any -&gt; IO ()
+forall n.
+SVGFloat n =&gt;
+String -&gt; SizeSpec V2 n -&gt; QDiagram SVG V2 n Any -&gt; IO ()
+</span><span class="hs-identifier hs-var">renderPretty</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679294562"><span class="hs-identifier hs-var">fpath</span></a></span><span> </span><span class="annot"><span class="annottext">SizeSpec V2 Double
+</span><a href="#local-6989586621679294563"><span class="hs-identifier hs-var">ss</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(Tree String
+ -&gt; QDiagram SVG V2 Double Any -&gt; QDiagram SVG V2 Double Any)
+-&gt; QDiagram SVG V2 Double Any
+-&gt; Forest String
+-&gt; QDiagram SVG V2 Double Any
+forall (t :: * -&gt; *) a b.
+Foldable t =&gt;
+(a -&gt; b -&gt; b) -&gt; b -&gt; t a -&gt; b
+</span><span class="hs-identifier hs-var">foldr</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">QDiagram SVG V2 Double Any
+-&gt; QDiagram SVG V2 Double Any -&gt; QDiagram SVG V2 Double Any
+forall n a.
+(InSpace V2 n a, Juxtaposable a, Semigroup a) =&gt;
+a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">(|||)</span></span><span> </span><span class="annot"><span class="annottext">(QDiagram SVG V2 Double Any
+ -&gt; QDiagram SVG V2 Double Any -&gt; QDiagram SVG V2 Double Any)
+-&gt; (Tree String -&gt; QDiagram SVG V2 Double Any)
+-&gt; Tree String
+-&gt; QDiagram SVG V2 Double Any
+-&gt; QDiagram SVG V2 Double Any
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">Tree String -&gt; QDiagram SVG V2 Double Any
+</span><a href="Htcc.Visualizer.Core.html#renderNTree"><span class="hs-identifier hs-var">renderNTree</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Tree String -&gt; QDiagram SVG V2 Double Any
+</span><a href="Htcc.Visualizer.Core.html#renderNTree"><span class="hs-identifier hs-var">renderNTree</span></a></span><span> </span><span class="annot"><span class="annottext">(Tree String -&gt; QDiagram SVG V2 Double Any)
+-&gt; Tree String -&gt; QDiagram SVG V2 Double Any
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Forest String -&gt; Tree String
+forall a. [a] -&gt; a
+</span><span class="hs-identifier hs-var">head</span></span><span> </span><span class="annot"><span class="annottext">Forest String
+</span><a href="#local-6989586621679294561"><span class="hs-identifier hs-var">et</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Forest String -&gt; QDiagram SVG V2 Double Any)
+-&gt; Forest String -&gt; QDiagram SVG V2 Double Any
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Forest String -&gt; Forest String
+forall a. [a] -&gt; [a]
+</span><span class="hs-identifier hs-var">tail</span></span><span> </span><span class="annot"><span class="annottext">Forest String
+</span><a href="#local-6989586621679294561"><span class="hs-identifier hs-var">et</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">else</span><span>
+</span><span id="line-114"></span><span>        </span><span class="annot"><span class="annottext">Text -&gt; IO ()
+</span><a href="Htcc.Utils.Print.html#putStrLnErr"><span class="hs-identifier hs-var">putStrLnErr</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;There is nothing to describe&quot;</span></span><span>
+</span><span id="line-115"></span></pre></body></html>

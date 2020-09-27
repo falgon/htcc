@@ -1,0 +1,1050 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">{-|
+Module      : Htcc.Asm.Intrinsic.Register
+Description : Types and classes of the x86_64 operands
+Copyright   : (c) roki, 2019
+License     : MIT
+Maintainer  : falgon53@yahoo.co.jp
+Stability   : experimental
+Portability : POSIX
+
+Types and classes of the x86_64 operands
+-}</span><span>
+</span><span id="line-12"></span><span class="hs-pragma">{-# LANGUAGE DeriveGeneric, GeneralizedNewtypeDeriving #-}</span><span>
+</span><span id="line-13"></span><span>
+</span><span id="line-14"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Htcc.Asm.Intrinsic.Operand</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-15"></span><span>    </span><span class="annot"><span class="hs-comment">-- * The operand classes and types.</span></span><span>
+</span><span id="line-16"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#IsOperand"><span class="hs-identifier">IsOperand</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-17"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Operand"><span class="hs-identifier">Operand</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-18"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier">Ref</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span>
+</span><span id="line-19"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-20"></span><span>
+</span><span id="line-21"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Control.Monad</span></span><span>               </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">liftM2</span></span><span class="hs-special">)</span><span>
+</span><span id="line-22"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Control.Monad.Fix</span></span><span>           </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">MonadFix</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">fix</span></span><span class="hs-special">)</span><span>
+</span><span id="line-23"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Control.Monad.Zip</span></span><span>           </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">MonadZip</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-24"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.Bits</span></span><span>                   </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Bits</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">FiniteBits</span></span><span class="hs-special">)</span><span>
+</span><span id="line-25"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.Tuple.Extra</span></span><span>            </span><span class="hs-special">(</span><span class="annot"><span class="hs-operator">(***)</span></span><span class="hs-special">)</span><span>
+</span><span id="line-26"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Foreign.Storable</span></span><span>            </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Storable</span></span><span class="hs-special">)</span><span>
+</span><span id="line-27"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">GHC.Arr</span></span><span>                     </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Ix</span></span><span class="hs-special">)</span><span>
+</span><span id="line-28"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">GHC.Generics</span></span><span>                </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Generic</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">Generic1</span></span><span class="hs-special">)</span><span>
+</span><span id="line-29"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Register.html"><span class="hs-identifier">Htcc.Asm.Intrinsic.Register</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Asm.Intrinsic.Register.html#Register"><span class="hs-identifier">Register</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-30"></span><span>
+</span><span id="line-31"></span><span class="hs-comment">-- | The operand type.</span><span>
+</span><span id="line-32"></span><span id="local-6989586621679285071"><span id="local-6989586621679285072"></span></span><span class="hs-keyword">newtype</span><span> </span><span id="Operand"><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Operand"><span class="hs-identifier hs-var">Operand</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="Operand"><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Operand"><span class="hs-identifier hs-var">Operand</span></a></span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">String</span></span><span> </span><span class="hs-comment">-- ^ The constructor of `Operand`.</span><span>
+</span><span id="line-33"></span><span>    </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679285066"><span id="local-6989586621679285068"><span class="annot"><span class="annottext">Operand -&gt; Operand -&gt; Bool
+(Operand -&gt; Operand -&gt; Bool)
+-&gt; (Operand -&gt; Operand -&gt; Bool) -&gt; Eq Operand
+forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
+/= :: Operand -&gt; Operand -&gt; Bool
+$c/= :: Operand -&gt; Operand -&gt; Bool
+== :: Operand -&gt; Operand -&gt; Bool
+$c== :: Operand -&gt; Operand -&gt; Bool
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">(forall x. Operand -&gt; Rep Operand x)
+-&gt; (forall x. Rep Operand x -&gt; Operand) -&gt; Generic Operand
+forall x. Rep Operand x -&gt; Operand
+forall x. Operand -&gt; Rep Operand x
+forall a.
+(forall x. a -&gt; Rep a x) -&gt; (forall x. Rep a x -&gt; a) -&gt; Generic a
+$cto :: forall x. Rep Operand x -&gt; Operand
+$cfrom :: forall x. Operand -&gt; Rep Operand x
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">Generic</span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679285056"><span id="local-6989586621679285058"><span id="local-6989586621679285060"><span class="annot"><span class="annottext">b -&gt; Operand -&gt; Operand
+NonEmpty Operand -&gt; Operand
+Operand -&gt; Operand -&gt; Operand
+(Operand -&gt; Operand -&gt; Operand)
+-&gt; (NonEmpty Operand -&gt; Operand)
+-&gt; (forall b. Integral b =&gt; b -&gt; Operand -&gt; Operand)
+-&gt; Semigroup Operand
+forall b. Integral b =&gt; b -&gt; Operand -&gt; Operand
+forall a.
+(a -&gt; a -&gt; a)
+-&gt; (NonEmpty a -&gt; a)
+-&gt; (forall b. Integral b =&gt; b -&gt; a -&gt; a)
+-&gt; Semigroup a
+stimes :: b -&gt; Operand -&gt; Operand
+$cstimes :: forall b. Integral b =&gt; b -&gt; Operand -&gt; Operand
+sconcat :: NonEmpty Operand -&gt; Operand
+$csconcat :: NonEmpty Operand -&gt; Operand
+&lt;&gt; :: Operand -&gt; Operand -&gt; Operand
+$c&lt;&gt; :: Operand -&gt; Operand -&gt; Operand
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Semigroup</span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679285048"><span id="local-6989586621679285050"><span id="local-6989586621679285052"><span class="annot"><span class="annottext">Semigroup Operand
+Operand
+Semigroup Operand =&gt;
+Operand
+-&gt; (Operand -&gt; Operand -&gt; Operand)
+-&gt; ([Operand] -&gt; Operand)
+-&gt; Monoid Operand
+[Operand] -&gt; Operand
+Operand -&gt; Operand -&gt; Operand
+forall a.
+Semigroup a =&gt;
+a -&gt; (a -&gt; a -&gt; a) -&gt; ([a] -&gt; a) -&gt; Monoid a
+mconcat :: [Operand] -&gt; Operand
+$cmconcat :: [Operand] -&gt; Operand
+mappend :: Operand -&gt; Operand -&gt; Operand
+$cmappend :: Operand -&gt; Operand -&gt; Operand
+mempty :: Operand
+$cmempty :: Operand
+$cp1Monoid :: Semigroup Operand
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Monoid</span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679285032"><span id="local-6989586621679285034"><span id="local-6989586621679285036"><span id="local-6989586621679285038"><span id="local-6989586621679285040"><span id="local-6989586621679285042"><span id="local-6989586621679285044"><span class="annot"><span class="annottext">Eq Operand
+Eq Operand =&gt;
+(Operand -&gt; Operand -&gt; Ordering)
+-&gt; (Operand -&gt; Operand -&gt; Bool)
+-&gt; (Operand -&gt; Operand -&gt; Bool)
+-&gt; (Operand -&gt; Operand -&gt; Bool)
+-&gt; (Operand -&gt; Operand -&gt; Bool)
+-&gt; (Operand -&gt; Operand -&gt; Operand)
+-&gt; (Operand -&gt; Operand -&gt; Operand)
+-&gt; Ord Operand
+Operand -&gt; Operand -&gt; Bool
+Operand -&gt; Operand -&gt; Ordering
+Operand -&gt; Operand -&gt; Operand
+forall a.
+Eq a =&gt;
+(a -&gt; a -&gt; Ordering)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; Ord a
+min :: Operand -&gt; Operand -&gt; Operand
+$cmin :: Operand -&gt; Operand -&gt; Operand
+max :: Operand -&gt; Operand -&gt; Operand
+$cmax :: Operand -&gt; Operand -&gt; Operand
+&gt;= :: Operand -&gt; Operand -&gt; Bool
+$c&gt;= :: Operand -&gt; Operand -&gt; Bool
+&gt; :: Operand -&gt; Operand -&gt; Bool
+$c&gt; :: Operand -&gt; Operand -&gt; Bool
+&lt;= :: Operand -&gt; Operand -&gt; Bool
+$c&lt;= :: Operand -&gt; Operand -&gt; Bool
+&lt; :: Operand -&gt; Operand -&gt; Bool
+$c&lt; :: Operand -&gt; Operand -&gt; Bool
+compare :: Operand -&gt; Operand -&gt; Ordering
+$ccompare :: Operand -&gt; Operand -&gt; Ordering
+$cp1Ord :: Eq Operand
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Ord</span></span></span></span></span></span></span></span></span><span class="hs-special">)</span><span>
+</span><span id="line-34"></span><span>
+</span><span id="line-35"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679285026"><span id="local-6989586621679285029"><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Operand"><span class="hs-identifier hs-type">Operand</span></a></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-36"></span><span>    </span><span id="local-6989586621679285024"><span class="annot"><span class="annottext">show :: Operand -&gt; String
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">show</span></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Operand"><span class="hs-identifier hs-type">Operand</span></a></span><span> </span><span id="local-6989586621679285022"><span class="annot"><span class="annottext">x :: String
+</span><a href="#local-6989586621679285022"><span class="hs-identifier hs-var">x</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679285022"><span class="hs-identifier hs-var">x</span></a></span><span>
+</span><span id="line-37"></span><span>
+</span><span id="line-38"></span><span class="hs-comment">-- | `IsOperand` class has an operand type as instances.</span><span>
+</span><span id="line-39"></span><span class="hs-keyword">class</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679285228"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span id="IsOperand"><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#IsOperand"><span class="hs-identifier hs-var">IsOperand</span></a></span></span><span> </span><span id="local-6989586621679285228"><span class="annot"><a href="#local-6989586621679285228"><span class="hs-identifier hs-type">a</span></a></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-40"></span><span>    </span><span class="hs-comment">-- | The operation of add.</span><span>
+</span><span id="line-41"></span><span>    </span><span id="local-6989586621679285220"><span id="oadd"><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#oadd"><span class="hs-identifier hs-type">oadd</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#IsOperand"><span class="hs-identifier hs-type">IsOperand</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679285220"><span class="hs-identifier hs-type">b</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679285228"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679285220"><span class="hs-identifier hs-type">b</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Operand"><span class="hs-identifier hs-type">Operand</span></a></span></span><span>
+</span><span id="line-42"></span><span>    </span><span id="local-6989586621679285020"><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#oadd"><span class="hs-identifier hs-var hs-var">oadd</span></a></span><span> </span><span id="local-6989586621679285019"><span class="annot"><span class="annottext">x :: a
+</span><a href="#local-6989586621679285019"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span id="local-6989586621679285018"><span class="annot"><span class="annottext">y :: b
+</span><a href="#local-6989586621679285018"><span class="hs-identifier hs-var">y</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Operand
+</span><a href="Htcc.Asm.Intrinsic.Operand.html#Operand"><span class="hs-identifier hs-var">Operand</span></a></span><span> </span><span class="annot"><span class="annottext">(String -&gt; Operand) -&gt; String -&gt; Operand
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679285019"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="hs-string">&quot;+&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">b -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">b
+</span><a href="#local-6989586621679285018"><span class="hs-identifier hs-var">y</span></a></span><span>
+</span><span id="line-43"></span><span>    </span><span class="hs-comment">-- | The operation of sub.</span></span><span>
+</span><span id="line-44"></span><span>    </span><span id="local-6989586621679285017"><span id="osub"><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#osub"><span class="hs-identifier hs-type">osub</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#IsOperand"><span class="hs-identifier hs-type">IsOperand</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679285017"><span class="hs-identifier hs-type">b</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679285228"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679285017"><span class="hs-identifier hs-type">b</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Operand"><span class="hs-identifier hs-type">Operand</span></a></span></span><span>
+</span><span id="line-45"></span><span>    </span><span id="local-6989586621679285015"><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#osub"><span class="hs-identifier hs-var hs-var">osub</span></a></span><span> </span><span id="local-6989586621679285014"><span class="annot"><span class="annottext">x :: a
+</span><a href="#local-6989586621679285014"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span id="local-6989586621679285013"><span class="annot"><span class="annottext">y :: b
+</span><a href="#local-6989586621679285013"><span class="hs-identifier hs-var">y</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Operand
+</span><a href="Htcc.Asm.Intrinsic.Operand.html#Operand"><span class="hs-identifier hs-var">Operand</span></a></span><span> </span><span class="annot"><span class="annottext">(String -&gt; Operand) -&gt; String -&gt; Operand
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679285014"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="hs-string">&quot;-&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">b -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">b
+</span><a href="#local-6989586621679285013"><span class="hs-identifier hs-var">y</span></a></span><span>
+</span><span id="line-46"></span><span>    </span><span class="hs-comment">-- | The operation of mul.</span></span><span>
+</span><span id="line-47"></span><span>    </span><span id="local-6989586621679285012"><span id="omul"><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#omul"><span class="hs-identifier hs-type">omul</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#IsOperand"><span class="hs-identifier hs-type">IsOperand</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679285012"><span class="hs-identifier hs-type">b</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679285228"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679285012"><span class="hs-identifier hs-type">b</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Operand"><span class="hs-identifier hs-type">Operand</span></a></span></span><span>
+</span><span id="line-48"></span><span>    </span><span id="local-6989586621679285010"><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#omul"><span class="hs-identifier hs-var hs-var">omul</span></a></span><span> </span><span id="local-6989586621679285009"><span class="annot"><span class="annottext">x :: a
+</span><a href="#local-6989586621679285009"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span id="local-6989586621679285008"><span class="annot"><span class="annottext">y :: b
+</span><a href="#local-6989586621679285008"><span class="hs-identifier hs-var">y</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Operand
+</span><a href="Htcc.Asm.Intrinsic.Operand.html#Operand"><span class="hs-identifier hs-var">Operand</span></a></span><span> </span><span class="annot"><span class="annottext">(String -&gt; Operand) -&gt; String -&gt; Operand
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679285009"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="hs-string">&quot;*&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">b -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">b
+</span><a href="#local-6989586621679285008"><span class="hs-identifier hs-var">y</span></a></span></span><span>
+</span><span id="line-49"></span><span>
+</span><span id="line-50"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679285001"><span id="local-6989586621679285003"><span id="local-6989586621679285005"><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#IsOperand"><span class="hs-identifier hs-type">IsOperand</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Operand"><span class="hs-identifier hs-type">Operand</span></a></span></span></span></span><span>
+</span><span id="line-51"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679284993"><span id="local-6989586621679284995"><span id="local-6989586621679284997"><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#IsOperand"><span class="hs-identifier hs-type">IsOperand</span></a></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span></span></span></span><span>
+</span><span id="line-52"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679284986"><span id="local-6989586621679284988"><span id="local-6989586621679284990"><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#IsOperand"><span class="hs-identifier hs-type">IsOperand</span></a></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Integer</span></span></span></span></span><span>
+</span><span id="line-53"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679284979"><span id="local-6989586621679284981"><span id="local-6989586621679284983"><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#IsOperand"><span class="hs-identifier hs-type">IsOperand</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Register.html#Register"><span class="hs-identifier hs-type">Register</span></a></span></span></span></span><span>
+</span><span id="line-54"></span><span>
+</span><span id="line-55"></span><span class="hs-comment">-- | The type that specifies that register values are considered address values.</span><span>
+</span><span id="line-56"></span><span class="hs-comment">-- e.g.:</span><span>
+</span><span id="line-57"></span><span class="hs-comment">--</span><span>
+</span><span id="line-58"></span><span class="hs-comment">-- &gt;&gt;&gt; Ref rax</span><span>
+</span><span id="line-59"></span><span class="hs-comment">-- [rax]</span><span>
+</span><span id="line-60"></span><span class="hs-comment">-- &gt;&gt;&gt; Ref rsp</span><span>
+</span><span id="line-61"></span><span class="hs-comment">-- [rsp]</span><span>
+</span><span id="line-62"></span><span class="hs-comment">-- &gt;&gt;&gt; import qualified Data.Text as T</span><span>
+</span><span id="line-63"></span><span class="hs-comment">-- &gt;&gt;&gt; T.putStr $ mov rax (Ref rsp) &lt;&gt; add rsp 8</span><span>
+</span><span id="line-64"></span><span class="hs-comment">--      mov rax, [rsp]</span><span>
+</span><span id="line-65"></span><span class="hs-comment">--      add rsp, 8</span><span>
+</span><span id="line-66"></span><span id="local-6989586621679284975"><span id="local-6989586621679284976"><span id="local-6989586621679284977"><span id="local-6989586621679284978"></span></span></span></span><span class="hs-keyword">newtype</span><span> </span><span id="Ref"><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-var">Ref</span></a></span></span><span> </span><span id="local-6989586621679285140"><span class="annot"><a href="#local-6989586621679285140"><span class="hs-identifier hs-type">a</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="Ref"><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-var">Ref</span></a></span></span><span> </span><span class="hs-comment">-- ^ The constructor of `Ref`.</span><span>
+</span><span id="line-67"></span><span>    </span><span class="hs-special">{</span><span>
+</span><span id="line-68"></span><span>        </span><span id="runRef"><span class="annot"><span class="annottext">Ref a -&gt; a
+</span><a href="Htcc.Asm.Intrinsic.Operand.html#runRef"><span class="hs-identifier hs-var hs-var">runRef</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="#local-6989586621679285140"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-69"></span><span>    </span><span class="hs-special">}</span><span> </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-70"></span><span>        </span><span id="local-6989586621679284928"><span id="local-6989586621679284930"><span id="local-6989586621679284932"><span id="local-6989586621679284934"><span id="local-6989586621679284936"><span id="local-6989586621679284938"><span id="local-6989586621679284940"><span id="local-6989586621679284942"><span id="local-6989586621679284944"><span id="local-6989586621679284946"><span id="local-6989586621679284948"><span id="local-6989586621679284950"><span id="local-6989586621679284952"><span id="local-6989586621679284954"><span id="local-6989586621679284956"><span id="local-6989586621679284958"><span id="local-6989586621679284960"><span id="local-6989586621679284962"><span id="local-6989586621679284964"><span id="local-6989586621679284966"><span id="local-6989586621679284968"><span id="local-6989586621679284970"><span class="annot"><span class="annottext">Eq (Ref a)
+Ref a
+Eq (Ref a) =&gt;
+(Ref a -&gt; Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Int -&gt; Ref a)
+-&gt; (Ref a -&gt; Int -&gt; Ref a)
+-&gt; Ref a
+-&gt; (Int -&gt; Ref a)
+-&gt; (Ref a -&gt; Int -&gt; Ref a)
+-&gt; (Ref a -&gt; Int -&gt; Ref a)
+-&gt; (Ref a -&gt; Int -&gt; Ref a)
+-&gt; (Ref a -&gt; Int -&gt; Bool)
+-&gt; (Ref a -&gt; Maybe Int)
+-&gt; (Ref a -&gt; Int)
+-&gt; (Ref a -&gt; Bool)
+-&gt; (Ref a -&gt; Int -&gt; Ref a)
+-&gt; (Ref a -&gt; Int -&gt; Ref a)
+-&gt; (Ref a -&gt; Int -&gt; Ref a)
+-&gt; (Ref a -&gt; Int -&gt; Ref a)
+-&gt; (Ref a -&gt; Int -&gt; Ref a)
+-&gt; (Ref a -&gt; Int -&gt; Ref a)
+-&gt; (Ref a -&gt; Int)
+-&gt; Bits (Ref a)
+Int -&gt; Ref a
+Ref a -&gt; Bool
+Ref a -&gt; Int
+Ref a -&gt; Maybe Int
+Ref a -&gt; Ref a
+Ref a -&gt; Int -&gt; Bool
+Ref a -&gt; Int -&gt; Ref a
+Ref a -&gt; Ref a -&gt; Ref a
+forall a.
+Eq a =&gt;
+(a -&gt; a -&gt; a)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; Int -&gt; a)
+-&gt; (a -&gt; Int -&gt; a)
+-&gt; a
+-&gt; (Int -&gt; a)
+-&gt; (a -&gt; Int -&gt; a)
+-&gt; (a -&gt; Int -&gt; a)
+-&gt; (a -&gt; Int -&gt; a)
+-&gt; (a -&gt; Int -&gt; Bool)
+-&gt; (a -&gt; Maybe Int)
+-&gt; (a -&gt; Int)
+-&gt; (a -&gt; Bool)
+-&gt; (a -&gt; Int -&gt; a)
+-&gt; (a -&gt; Int -&gt; a)
+-&gt; (a -&gt; Int -&gt; a)
+-&gt; (a -&gt; Int -&gt; a)
+-&gt; (a -&gt; Int -&gt; a)
+-&gt; (a -&gt; Int -&gt; a)
+-&gt; (a -&gt; Int)
+-&gt; Bits a
+forall a. Bits a =&gt; Eq (Ref a)
+forall a. Bits a =&gt; Ref a
+forall a. Bits a =&gt; Int -&gt; Ref a
+forall a. Bits a =&gt; Ref a -&gt; Bool
+forall a. Bits a =&gt; Ref a -&gt; Int
+forall a. Bits a =&gt; Ref a -&gt; Maybe Int
+forall a. Bits a =&gt; Ref a -&gt; Ref a
+forall a. Bits a =&gt; Ref a -&gt; Int -&gt; Bool
+forall a. Bits a =&gt; Ref a -&gt; Int -&gt; Ref a
+forall a. Bits a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+popCount :: Ref a -&gt; Int
+$cpopCount :: forall a. Bits a =&gt; Ref a -&gt; Int
+rotateR :: Ref a -&gt; Int -&gt; Ref a
+$crotateR :: forall a. Bits a =&gt; Ref a -&gt; Int -&gt; Ref a
+rotateL :: Ref a -&gt; Int -&gt; Ref a
+$crotateL :: forall a. Bits a =&gt; Ref a -&gt; Int -&gt; Ref a
+unsafeShiftR :: Ref a -&gt; Int -&gt; Ref a
+$cunsafeShiftR :: forall a. Bits a =&gt; Ref a -&gt; Int -&gt; Ref a
+shiftR :: Ref a -&gt; Int -&gt; Ref a
+$cshiftR :: forall a. Bits a =&gt; Ref a -&gt; Int -&gt; Ref a
+unsafeShiftL :: Ref a -&gt; Int -&gt; Ref a
+$cunsafeShiftL :: forall a. Bits a =&gt; Ref a -&gt; Int -&gt; Ref a
+shiftL :: Ref a -&gt; Int -&gt; Ref a
+$cshiftL :: forall a. Bits a =&gt; Ref a -&gt; Int -&gt; Ref a
+isSigned :: Ref a -&gt; Bool
+$cisSigned :: forall a. Bits a =&gt; Ref a -&gt; Bool
+bitSize :: Ref a -&gt; Int
+$cbitSize :: forall a. Bits a =&gt; Ref a -&gt; Int
+bitSizeMaybe :: Ref a -&gt; Maybe Int
+$cbitSizeMaybe :: forall a. Bits a =&gt; Ref a -&gt; Maybe Int
+testBit :: Ref a -&gt; Int -&gt; Bool
+$ctestBit :: forall a. Bits a =&gt; Ref a -&gt; Int -&gt; Bool
+complementBit :: Ref a -&gt; Int -&gt; Ref a
+$ccomplementBit :: forall a. Bits a =&gt; Ref a -&gt; Int -&gt; Ref a
+clearBit :: Ref a -&gt; Int -&gt; Ref a
+$cclearBit :: forall a. Bits a =&gt; Ref a -&gt; Int -&gt; Ref a
+setBit :: Ref a -&gt; Int -&gt; Ref a
+$csetBit :: forall a. Bits a =&gt; Ref a -&gt; Int -&gt; Ref a
+bit :: Int -&gt; Ref a
+$cbit :: forall a. Bits a =&gt; Int -&gt; Ref a
+zeroBits :: Ref a
+$czeroBits :: forall a. Bits a =&gt; Ref a
+rotate :: Ref a -&gt; Int -&gt; Ref a
+$crotate :: forall a. Bits a =&gt; Ref a -&gt; Int -&gt; Ref a
+shift :: Ref a -&gt; Int -&gt; Ref a
+$cshift :: forall a. Bits a =&gt; Ref a -&gt; Int -&gt; Ref a
+complement :: Ref a -&gt; Ref a
+$ccomplement :: forall a. Bits a =&gt; Ref a -&gt; Ref a
+xor :: Ref a -&gt; Ref a -&gt; Ref a
+$cxor :: forall a. Bits a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+.|. :: Ref a -&gt; Ref a -&gt; Ref a
+$c.|. :: forall a. Bits a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+.&amp;. :: Ref a -&gt; Ref a -&gt; Ref a
+$c.&amp;. :: forall a. Bits a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+$cp1Bits :: forall a. Bits a =&gt; Eq (Ref a)
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Bits</span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span><span>
+</span><span id="line-71"></span><span>        </span><span class="hs-special">,</span><span> </span><span id="local-6989586621679284923"><span id="local-6989586621679284925"><span class="annot"><span class="annottext">Ref a
+Ref a -&gt; Ref a -&gt; Bounded (Ref a)
+forall a. a -&gt; a -&gt; Bounded a
+forall a. Bounded a =&gt; Ref a
+maxBound :: Ref a
+$cmaxBound :: forall a. Bounded a =&gt; Ref a
+minBound :: Ref a
+$cminBound :: forall a. Bounded a =&gt; Ref a
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Bounded</span></span></span></span><span>
+</span><span id="line-72"></span><span>        </span><span class="hs-special">,</span><span> </span><span id="local-6989586621679284906"><span id="local-6989586621679284908"><span id="local-6989586621679284910"><span id="local-6989586621679284912"><span id="local-6989586621679284914"><span id="local-6989586621679284916"><span id="local-6989586621679284918"><span id="local-6989586621679284920"><span class="annot"><span class="annottext">Int -&gt; Ref a
+Ref a -&gt; Int
+Ref a -&gt; [Ref a]
+Ref a -&gt; Ref a
+Ref a -&gt; Ref a -&gt; [Ref a]
+Ref a -&gt; Ref a -&gt; Ref a -&gt; [Ref a]
+(Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Int -&gt; Ref a)
+-&gt; (Ref a -&gt; Int)
+-&gt; (Ref a -&gt; [Ref a])
+-&gt; (Ref a -&gt; Ref a -&gt; [Ref a])
+-&gt; (Ref a -&gt; Ref a -&gt; [Ref a])
+-&gt; (Ref a -&gt; Ref a -&gt; Ref a -&gt; [Ref a])
+-&gt; Enum (Ref a)
+forall a. Enum a =&gt; Int -&gt; Ref a
+forall a. Enum a =&gt; Ref a -&gt; Int
+forall a. Enum a =&gt; Ref a -&gt; [Ref a]
+forall a. Enum a =&gt; Ref a -&gt; Ref a
+forall a. Enum a =&gt; Ref a -&gt; Ref a -&gt; [Ref a]
+forall a. Enum a =&gt; Ref a -&gt; Ref a -&gt; Ref a -&gt; [Ref a]
+forall a.
+(a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (Int -&gt; a)
+-&gt; (a -&gt; Int)
+-&gt; (a -&gt; [a])
+-&gt; (a -&gt; a -&gt; [a])
+-&gt; (a -&gt; a -&gt; [a])
+-&gt; (a -&gt; a -&gt; a -&gt; [a])
+-&gt; Enum a
+enumFromThenTo :: Ref a -&gt; Ref a -&gt; Ref a -&gt; [Ref a]
+$cenumFromThenTo :: forall a. Enum a =&gt; Ref a -&gt; Ref a -&gt; Ref a -&gt; [Ref a]
+enumFromTo :: Ref a -&gt; Ref a -&gt; [Ref a]
+$cenumFromTo :: forall a. Enum a =&gt; Ref a -&gt; Ref a -&gt; [Ref a]
+enumFromThen :: Ref a -&gt; Ref a -&gt; [Ref a]
+$cenumFromThen :: forall a. Enum a =&gt; Ref a -&gt; Ref a -&gt; [Ref a]
+enumFrom :: Ref a -&gt; [Ref a]
+$cenumFrom :: forall a. Enum a =&gt; Ref a -&gt; [Ref a]
+fromEnum :: Ref a -&gt; Int
+$cfromEnum :: forall a. Enum a =&gt; Ref a -&gt; Int
+toEnum :: Int -&gt; Ref a
+$ctoEnum :: forall a. Enum a =&gt; Int -&gt; Ref a
+pred :: Ref a -&gt; Ref a
+$cpred :: forall a. Enum a =&gt; Ref a -&gt; Ref a
+succ :: Ref a -&gt; Ref a
+$csucc :: forall a. Enum a =&gt; Ref a -&gt; Ref a
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Enum</span></span></span></span></span></span></span></span></span></span><span>
+</span><span id="line-73"></span><span>        </span><span class="hs-special">,</span><span> </span><span id="local-6989586621679284901"><span id="local-6989586621679284903"><span class="annot"><span class="annottext">Ref a -&gt; Ref a -&gt; Bool
+(Ref a -&gt; Ref a -&gt; Bool) -&gt; (Ref a -&gt; Ref a -&gt; Bool) -&gt; Eq (Ref a)
+forall a. Eq a =&gt; Ref a -&gt; Ref a -&gt; Bool
+forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
+/= :: Ref a -&gt; Ref a -&gt; Bool
+$c/= :: forall a. Eq a =&gt; Ref a -&gt; Ref a -&gt; Bool
+== :: Ref a -&gt; Ref a -&gt; Bool
+$c== :: forall a. Eq a =&gt; Ref a -&gt; Ref a -&gt; Bool
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span>
+</span><span id="line-74"></span><span>        </span><span class="hs-special">,</span><span> </span><span id="local-6989586621679284894"><span id="local-6989586621679284896"><span id="local-6989586621679284898"><span class="annot"><span class="annottext">Bits (Ref a)
+Bits (Ref a) =&gt;
+(Ref a -&gt; Int)
+-&gt; (Ref a -&gt; Int) -&gt; (Ref a -&gt; Int) -&gt; FiniteBits (Ref a)
+Ref a -&gt; Int
+forall b.
+Bits b =&gt;
+(b -&gt; Int) -&gt; (b -&gt; Int) -&gt; (b -&gt; Int) -&gt; FiniteBits b
+forall a. FiniteBits a =&gt; Bits (Ref a)
+forall a. FiniteBits a =&gt; Ref a -&gt; Int
+countTrailingZeros :: Ref a -&gt; Int
+$ccountTrailingZeros :: forall a. FiniteBits a =&gt; Ref a -&gt; Int
+countLeadingZeros :: Ref a -&gt; Int
+$ccountLeadingZeros :: forall a. FiniteBits a =&gt; Ref a -&gt; Int
+finiteBitSize :: Ref a -&gt; Int
+$cfiniteBitSize :: forall a. FiniteBits a =&gt; Ref a -&gt; Int
+$cp1FiniteBits :: forall a. FiniteBits a =&gt; Bits (Ref a)
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">FiniteBits</span></span></span></span></span><span>
+</span><span id="line-75"></span><span>        </span><span class="hs-special">,</span><span> </span><span id="local-6989586621679284848"><span id="local-6989586621679284850"><span id="local-6989586621679284852"><span id="local-6989586621679284854"><span id="local-6989586621679284856"><span id="local-6989586621679284858"><span id="local-6989586621679284860"><span id="local-6989586621679284862"><span id="local-6989586621679284864"><span id="local-6989586621679284866"><span id="local-6989586621679284868"><span id="local-6989586621679284870"><span id="local-6989586621679284872"><span id="local-6989586621679284874"><span id="local-6989586621679284876"><span id="local-6989586621679284878"><span id="local-6989586621679284880"><span id="local-6989586621679284882"><span id="local-6989586621679284884"><span id="local-6989586621679284886"><span id="local-6989586621679284888"><span id="local-6989586621679284890"><span class="annot"><span class="annottext">Fractional (Ref a)
+Ref a
+Fractional (Ref a) =&gt;
+Ref a
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; Floating (Ref a)
+Ref a -&gt; Ref a
+Ref a -&gt; Ref a -&gt; Ref a
+forall a. Floating a =&gt; Fractional (Ref a)
+forall a. Floating a =&gt; Ref a
+forall a. Floating a =&gt; Ref a -&gt; Ref a
+forall a. Floating a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+forall a.
+Fractional a =&gt;
+a
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; Floating a
+log1mexp :: Ref a -&gt; Ref a
+$clog1mexp :: forall a. Floating a =&gt; Ref a -&gt; Ref a
+log1pexp :: Ref a -&gt; Ref a
+$clog1pexp :: forall a. Floating a =&gt; Ref a -&gt; Ref a
+expm1 :: Ref a -&gt; Ref a
+$cexpm1 :: forall a. Floating a =&gt; Ref a -&gt; Ref a
+log1p :: Ref a -&gt; Ref a
+$clog1p :: forall a. Floating a =&gt; Ref a -&gt; Ref a
+atanh :: Ref a -&gt; Ref a
+$catanh :: forall a. Floating a =&gt; Ref a -&gt; Ref a
+acosh :: Ref a -&gt; Ref a
+$cacosh :: forall a. Floating a =&gt; Ref a -&gt; Ref a
+asinh :: Ref a -&gt; Ref a
+$casinh :: forall a. Floating a =&gt; Ref a -&gt; Ref a
+tanh :: Ref a -&gt; Ref a
+$ctanh :: forall a. Floating a =&gt; Ref a -&gt; Ref a
+cosh :: Ref a -&gt; Ref a
+$ccosh :: forall a. Floating a =&gt; Ref a -&gt; Ref a
+sinh :: Ref a -&gt; Ref a
+$csinh :: forall a. Floating a =&gt; Ref a -&gt; Ref a
+atan :: Ref a -&gt; Ref a
+$catan :: forall a. Floating a =&gt; Ref a -&gt; Ref a
+acos :: Ref a -&gt; Ref a
+$cacos :: forall a. Floating a =&gt; Ref a -&gt; Ref a
+asin :: Ref a -&gt; Ref a
+$casin :: forall a. Floating a =&gt; Ref a -&gt; Ref a
+tan :: Ref a -&gt; Ref a
+$ctan :: forall a. Floating a =&gt; Ref a -&gt; Ref a
+cos :: Ref a -&gt; Ref a
+$ccos :: forall a. Floating a =&gt; Ref a -&gt; Ref a
+sin :: Ref a -&gt; Ref a
+$csin :: forall a. Floating a =&gt; Ref a -&gt; Ref a
+logBase :: Ref a -&gt; Ref a -&gt; Ref a
+$clogBase :: forall a. Floating a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+** :: Ref a -&gt; Ref a -&gt; Ref a
+$c** :: forall a. Floating a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+sqrt :: Ref a -&gt; Ref a
+$csqrt :: forall a. Floating a =&gt; Ref a -&gt; Ref a
+log :: Ref a -&gt; Ref a
+$clog :: forall a. Floating a =&gt; Ref a -&gt; Ref a
+exp :: Ref a -&gt; Ref a
+$cexp :: forall a. Floating a =&gt; Ref a -&gt; Ref a
+pi :: Ref a
+$cpi :: forall a. Floating a =&gt; Ref a
+$cp1Floating :: forall a. Floating a =&gt; Fractional (Ref a)
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Floating</span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span><span>
+</span><span id="line-76"></span><span>        </span><span class="hs-special">,</span><span> </span><span id="local-6989586621679284840"><span id="local-6989586621679284842"><span id="local-6989586621679284844"><span class="annot"><span class="annottext">Num (Ref a)
+Num (Ref a) =&gt;
+(Ref a -&gt; Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a) -&gt; (Rational -&gt; Ref a) -&gt; Fractional (Ref a)
+Rational -&gt; Ref a
+Ref a -&gt; Ref a
+Ref a -&gt; Ref a -&gt; Ref a
+forall a. Fractional a =&gt; Num (Ref a)
+forall a. Fractional a =&gt; Rational -&gt; Ref a
+forall a. Fractional a =&gt; Ref a -&gt; Ref a
+forall a. Fractional a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+forall a.
+Num a =&gt;
+(a -&gt; a -&gt; a) -&gt; (a -&gt; a) -&gt; (Rational -&gt; a) -&gt; Fractional a
+fromRational :: Rational -&gt; Ref a
+$cfromRational :: forall a. Fractional a =&gt; Rational -&gt; Ref a
+recip :: Ref a -&gt; Ref a
+$crecip :: forall a. Fractional a =&gt; Ref a -&gt; Ref a
+/ :: Ref a -&gt; Ref a -&gt; Ref a
+$c/ :: forall a. Fractional a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+$cp1Fractional :: forall a. Fractional a =&gt; Num (Ref a)
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Fractional</span></span></span></span></span><span>
+</span><span id="line-77"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">(forall x. Ref a -&gt; Rep (Ref a) x)
+-&gt; (forall x. Rep (Ref a) x -&gt; Ref a) -&gt; Generic (Ref a)
+forall x. Rep (Ref a) x -&gt; Ref a
+forall x. Ref a -&gt; Rep (Ref a) x
+forall a.
+(forall x. a -&gt; Rep a x) -&gt; (forall x. Rep a x -&gt; a) -&gt; Generic a
+forall a x. Rep (Ref a) x -&gt; Ref a
+forall a x. Ref a -&gt; Rep (Ref a) x
+$cto :: forall a x. Rep (Ref a) x -&gt; Ref a
+$cfrom :: forall a x. Ref a -&gt; Rep (Ref a) x
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">Generic</span></span><span>
+</span><span id="line-78"></span><span>        </span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">(forall a. Ref a -&gt; Rep1 Ref a)
+-&gt; (forall a. Rep1 Ref a -&gt; Ref a) -&gt; Generic1 Ref
+forall a. Rep1 Ref a -&gt; Ref a
+forall a. Ref a -&gt; Rep1 Ref a
+forall k (f :: k -&gt; *).
+(forall (a :: k). f a -&gt; Rep1 f a)
+-&gt; (forall (a :: k). Rep1 f a -&gt; f a) -&gt; Generic1 f
+$cto1 :: forall a. Rep1 Ref a -&gt; Ref a
+$cfrom1 :: forall a. Ref a -&gt; Rep1 Ref a
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">Generic1</span></span><span>
+</span><span id="line-79"></span><span>        </span><span class="hs-special">,</span><span> </span><span id="local-6989586621679284818"><span id="local-6989586621679284820"><span id="local-6989586621679284822"><span id="local-6989586621679284824"><span id="local-6989586621679284826"><span id="local-6989586621679284828"><span id="local-6989586621679284830"><span class="annot"><span class="annottext">Enum (Ref a)
+Real (Ref a)
+(Real (Ref a), Enum (Ref a)) =&gt;
+(Ref a -&gt; Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a -&gt; (Ref a, Ref a))
+-&gt; (Ref a -&gt; Ref a -&gt; (Ref a, Ref a))
+-&gt; (Ref a -&gt; Integer)
+-&gt; Integral (Ref a)
+Ref a -&gt; Integer
+Ref a -&gt; Ref a -&gt; (Ref a, Ref a)
+Ref a -&gt; Ref a -&gt; Ref a
+forall a. Integral a =&gt; Enum (Ref a)
+forall a. Integral a =&gt; Real (Ref a)
+forall a. Integral a =&gt; Ref a -&gt; Integer
+forall a. Integral a =&gt; Ref a -&gt; Ref a -&gt; (Ref a, Ref a)
+forall a. Integral a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+forall a.
+(Real a, Enum a) =&gt;
+(a -&gt; a -&gt; a)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; (a -&gt; a -&gt; (a, a))
+-&gt; (a -&gt; a -&gt; (a, a))
+-&gt; (a -&gt; Integer)
+-&gt; Integral a
+toInteger :: Ref a -&gt; Integer
+$ctoInteger :: forall a. Integral a =&gt; Ref a -&gt; Integer
+divMod :: Ref a -&gt; Ref a -&gt; (Ref a, Ref a)
+$cdivMod :: forall a. Integral a =&gt; Ref a -&gt; Ref a -&gt; (Ref a, Ref a)
+quotRem :: Ref a -&gt; Ref a -&gt; (Ref a, Ref a)
+$cquotRem :: forall a. Integral a =&gt; Ref a -&gt; Ref a -&gt; (Ref a, Ref a)
+mod :: Ref a -&gt; Ref a -&gt; Ref a
+$cmod :: forall a. Integral a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+div :: Ref a -&gt; Ref a -&gt; Ref a
+$cdiv :: forall a. Integral a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+rem :: Ref a -&gt; Ref a -&gt; Ref a
+$crem :: forall a. Integral a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+quot :: Ref a -&gt; Ref a -&gt; Ref a
+$cquot :: forall a. Integral a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+$cp2Integral :: forall a. Integral a =&gt; Enum (Ref a)
+$cp1Integral :: forall a. Integral a =&gt; Real (Ref a)
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Integral</span></span></span></span></span></span></span></span></span><span>
+</span><span id="line-80"></span><span>        </span><span class="hs-special">,</span><span> </span><span id="local-6989586621679284804"><span id="local-6989586621679284806"><span id="local-6989586621679284808"><span id="local-6989586621679284810"><span id="local-6989586621679284812"><span id="local-6989586621679284814"><span class="annot"><span class="annottext">Ord (Ref a)
+Ord (Ref a) =&gt;
+((Ref a, Ref a) -&gt; [Ref a])
+-&gt; ((Ref a, Ref a) -&gt; Ref a -&gt; Int)
+-&gt; ((Ref a, Ref a) -&gt; Ref a -&gt; Int)
+-&gt; ((Ref a, Ref a) -&gt; Ref a -&gt; Bool)
+-&gt; ((Ref a, Ref a) -&gt; Int)
+-&gt; ((Ref a, Ref a) -&gt; Int)
+-&gt; Ix (Ref a)
+(Ref a, Ref a) -&gt; Int
+(Ref a, Ref a) -&gt; [Ref a]
+(Ref a, Ref a) -&gt; Ref a -&gt; Bool
+(Ref a, Ref a) -&gt; Ref a -&gt; Int
+forall a.
+Ord a =&gt;
+((a, a) -&gt; [a])
+-&gt; ((a, a) -&gt; a -&gt; Int)
+-&gt; ((a, a) -&gt; a -&gt; Int)
+-&gt; ((a, a) -&gt; a -&gt; Bool)
+-&gt; ((a, a) -&gt; Int)
+-&gt; ((a, a) -&gt; Int)
+-&gt; Ix a
+forall a. Ix a =&gt; Ord (Ref a)
+forall a. Ix a =&gt; (Ref a, Ref a) -&gt; Int
+forall a. Ix a =&gt; (Ref a, Ref a) -&gt; [Ref a]
+forall a. Ix a =&gt; (Ref a, Ref a) -&gt; Ref a -&gt; Bool
+forall a. Ix a =&gt; (Ref a, Ref a) -&gt; Ref a -&gt; Int
+unsafeRangeSize :: (Ref a, Ref a) -&gt; Int
+$cunsafeRangeSize :: forall a. Ix a =&gt; (Ref a, Ref a) -&gt; Int
+rangeSize :: (Ref a, Ref a) -&gt; Int
+$crangeSize :: forall a. Ix a =&gt; (Ref a, Ref a) -&gt; Int
+inRange :: (Ref a, Ref a) -&gt; Ref a -&gt; Bool
+$cinRange :: forall a. Ix a =&gt; (Ref a, Ref a) -&gt; Ref a -&gt; Bool
+unsafeIndex :: (Ref a, Ref a) -&gt; Ref a -&gt; Int
+$cunsafeIndex :: forall a. Ix a =&gt; (Ref a, Ref a) -&gt; Ref a -&gt; Int
+index :: (Ref a, Ref a) -&gt; Ref a -&gt; Int
+$cindex :: forall a. Ix a =&gt; (Ref a, Ref a) -&gt; Ref a -&gt; Int
+range :: (Ref a, Ref a) -&gt; [Ref a]
+$crange :: forall a. Ix a =&gt; (Ref a, Ref a) -&gt; [Ref a]
+$cp1Ix :: forall a. Ix a =&gt; Ord (Ref a)
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Ix</span></span></span></span></span></span></span></span><span>
+</span><span id="line-81"></span><span>        </span><span class="hs-special">,</span><span> </span><span id="local-6989586621679284797"><span id="local-6989586621679284799"><span id="local-6989586621679284801"><span class="annot"><span class="annottext">b -&gt; Ref a -&gt; Ref a
+NonEmpty (Ref a) -&gt; Ref a
+Ref a -&gt; Ref a -&gt; Ref a
+(Ref a -&gt; Ref a -&gt; Ref a)
+-&gt; (NonEmpty (Ref a) -&gt; Ref a)
+-&gt; (forall b. Integral b =&gt; b -&gt; Ref a -&gt; Ref a)
+-&gt; Semigroup (Ref a)
+forall b. Integral b =&gt; b -&gt; Ref a -&gt; Ref a
+forall a. Semigroup a =&gt; NonEmpty (Ref a) -&gt; Ref a
+forall a. Semigroup a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+forall a b. (Semigroup a, Integral b) =&gt; b -&gt; Ref a -&gt; Ref a
+forall a.
+(a -&gt; a -&gt; a)
+-&gt; (NonEmpty a -&gt; a)
+-&gt; (forall b. Integral b =&gt; b -&gt; a -&gt; a)
+-&gt; Semigroup a
+stimes :: b -&gt; Ref a -&gt; Ref a
+$cstimes :: forall a b. (Semigroup a, Integral b) =&gt; b -&gt; Ref a -&gt; Ref a
+sconcat :: NonEmpty (Ref a) -&gt; Ref a
+$csconcat :: forall a. Semigroup a =&gt; NonEmpty (Ref a) -&gt; Ref a
+&lt;&gt; :: Ref a -&gt; Ref a -&gt; Ref a
+$c&lt;&gt; :: forall a. Semigroup a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Semigroup</span></span></span></span></span><span>
+</span><span id="line-82"></span><span>        </span><span class="hs-special">,</span><span> </span><span id="local-6989586621679284790"><span id="local-6989586621679284792"><span id="local-6989586621679284794"><span class="annot"><span class="annottext">Semigroup (Ref a)
+Ref a
+Semigroup (Ref a) =&gt;
+Ref a
+-&gt; (Ref a -&gt; Ref a -&gt; Ref a)
+-&gt; ([Ref a] -&gt; Ref a)
+-&gt; Monoid (Ref a)
+[Ref a] -&gt; Ref a
+Ref a -&gt; Ref a -&gt; Ref a
+forall a.
+Semigroup a =&gt;
+a -&gt; (a -&gt; a -&gt; a) -&gt; ([a] -&gt; a) -&gt; Monoid a
+forall a. Monoid a =&gt; Semigroup (Ref a)
+forall a. Monoid a =&gt; Ref a
+forall a. Monoid a =&gt; [Ref a] -&gt; Ref a
+forall a. Monoid a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+mconcat :: [Ref a] -&gt; Ref a
+$cmconcat :: forall a. Monoid a =&gt; [Ref a] -&gt; Ref a
+mappend :: Ref a -&gt; Ref a -&gt; Ref a
+$cmappend :: forall a. Monoid a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+mempty :: Ref a
+$cmempty :: forall a. Monoid a =&gt; Ref a
+$cp1Monoid :: forall a. Monoid a =&gt; Semigroup (Ref a)
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Monoid</span></span></span></span></span><span>
+</span><span id="line-83"></span><span>        </span><span class="hs-special">,</span><span> </span><span id="local-6989586621679284776"><span id="local-6989586621679284778"><span id="local-6989586621679284780"><span id="local-6989586621679284782"><span id="local-6989586621679284784"><span id="local-6989586621679284786"><span id="local-6989586621679284788"><span class="annot"><span class="annottext">Integer -&gt; Ref a
+Ref a -&gt; Ref a
+Ref a -&gt; Ref a -&gt; Ref a
+(Ref a -&gt; Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Integer -&gt; Ref a)
+-&gt; Num (Ref a)
+forall a. Num a =&gt; Integer -&gt; Ref a
+forall a. Num a =&gt; Ref a -&gt; Ref a
+forall a. Num a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+forall a.
+(a -&gt; a -&gt; a)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (a -&gt; a)
+-&gt; (Integer -&gt; a)
+-&gt; Num a
+fromInteger :: Integer -&gt; Ref a
+$cfromInteger :: forall a. Num a =&gt; Integer -&gt; Ref a
+signum :: Ref a -&gt; Ref a
+$csignum :: forall a. Num a =&gt; Ref a -&gt; Ref a
+abs :: Ref a -&gt; Ref a
+$cabs :: forall a. Num a =&gt; Ref a -&gt; Ref a
+negate :: Ref a -&gt; Ref a
+$cnegate :: forall a. Num a =&gt; Ref a -&gt; Ref a
+* :: Ref a -&gt; Ref a -&gt; Ref a
+$c* :: forall a. Num a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+- :: Ref a -&gt; Ref a -&gt; Ref a
+$c- :: forall a. Num a =&gt; Ref a -&gt; Ref a -&gt; Ref a
++ :: Ref a -&gt; Ref a -&gt; Ref a
+$c+ :: forall a. Num a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Num</span></span></span></span></span></span></span></span></span><span>
+</span><span id="line-84"></span><span>        </span><span class="hs-special">,</span><span> </span><span id="local-6989586621679284760"><span id="local-6989586621679284762"><span id="local-6989586621679284764"><span id="local-6989586621679284766"><span id="local-6989586621679284768"><span id="local-6989586621679284770"><span id="local-6989586621679284772"><span class="annot"><span class="annottext">Eq (Ref a)
+Eq (Ref a) =&gt;
+(Ref a -&gt; Ref a -&gt; Ordering)
+-&gt; (Ref a -&gt; Ref a -&gt; Bool)
+-&gt; (Ref a -&gt; Ref a -&gt; Bool)
+-&gt; (Ref a -&gt; Ref a -&gt; Bool)
+-&gt; (Ref a -&gt; Ref a -&gt; Bool)
+-&gt; (Ref a -&gt; Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Ref a -&gt; Ref a)
+-&gt; Ord (Ref a)
+Ref a -&gt; Ref a -&gt; Bool
+Ref a -&gt; Ref a -&gt; Ordering
+Ref a -&gt; Ref a -&gt; Ref a
+forall a.
+Eq a =&gt;
+(a -&gt; a -&gt; Ordering)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; Ord a
+forall a. Ord a =&gt; Eq (Ref a)
+forall a. Ord a =&gt; Ref a -&gt; Ref a -&gt; Bool
+forall a. Ord a =&gt; Ref a -&gt; Ref a -&gt; Ordering
+forall a. Ord a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+min :: Ref a -&gt; Ref a -&gt; Ref a
+$cmin :: forall a. Ord a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+max :: Ref a -&gt; Ref a -&gt; Ref a
+$cmax :: forall a. Ord a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+&gt;= :: Ref a -&gt; Ref a -&gt; Bool
+$c&gt;= :: forall a. Ord a =&gt; Ref a -&gt; Ref a -&gt; Bool
+&gt; :: Ref a -&gt; Ref a -&gt; Bool
+$c&gt; :: forall a. Ord a =&gt; Ref a -&gt; Ref a -&gt; Bool
+&lt;= :: Ref a -&gt; Ref a -&gt; Bool
+$c&lt;= :: forall a. Ord a =&gt; Ref a -&gt; Ref a -&gt; Bool
+&lt; :: Ref a -&gt; Ref a -&gt; Bool
+$c&lt; :: forall a. Ord a =&gt; Ref a -&gt; Ref a -&gt; Bool
+compare :: Ref a -&gt; Ref a -&gt; Ordering
+$ccompare :: forall a. Ord a =&gt; Ref a -&gt; Ref a -&gt; Ordering
+$cp1Ord :: forall a. Ord a =&gt; Eq (Ref a)
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Ord</span></span></span></span></span></span></span></span></span><span>
+</span><span id="line-85"></span><span>        </span><span class="hs-special">,</span><span> </span><span id="local-6989586621679284756"><span class="annot"><span class="annottext">Num (Ref a)
+Ord (Ref a)
+(Num (Ref a), Ord (Ref a)) =&gt; (Ref a -&gt; Rational) -&gt; Real (Ref a)
+Ref a -&gt; Rational
+forall a. (Num a, Ord a) =&gt; (a -&gt; Rational) -&gt; Real a
+forall a. Real a =&gt; Num (Ref a)
+forall a. Real a =&gt; Ord (Ref a)
+forall a. Real a =&gt; Ref a -&gt; Rational
+toRational :: Ref a -&gt; Rational
+$ctoRational :: forall a. Real a =&gt; Ref a -&gt; Rational
+$cp2Real :: forall a. Real a =&gt; Ord (Ref a)
+$cp1Real :: forall a. Real a =&gt; Num (Ref a)
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Real</span></span></span><span>
+</span><span id="line-86"></span><span>        </span><span class="hs-special">,</span><span> </span><span id="local-6989586621679284743"><span id="local-6989586621679284745"><span id="local-6989586621679284747"><span id="local-6989586621679284749"><span id="local-6989586621679284751"><span class="annot"><span class="annottext">Fractional (Ref a)
+Real (Ref a)
+(Real (Ref a), Fractional (Ref a)) =&gt;
+(forall b. Integral b =&gt; Ref a -&gt; (b, Ref a))
+-&gt; (forall b. Integral b =&gt; Ref a -&gt; b)
+-&gt; (forall b. Integral b =&gt; Ref a -&gt; b)
+-&gt; (forall b. Integral b =&gt; Ref a -&gt; b)
+-&gt; (forall b. Integral b =&gt; Ref a -&gt; b)
+-&gt; RealFrac (Ref a)
+Ref a -&gt; b
+Ref a -&gt; b
+Ref a -&gt; b
+Ref a -&gt; b
+Ref a -&gt; (b, Ref a)
+forall b. Integral b =&gt; Ref a -&gt; b
+forall b. Integral b =&gt; Ref a -&gt; (b, Ref a)
+forall a.
+(Real a, Fractional a) =&gt;
+(forall b. Integral b =&gt; a -&gt; (b, a))
+-&gt; (forall b. Integral b =&gt; a -&gt; b)
+-&gt; (forall b. Integral b =&gt; a -&gt; b)
+-&gt; (forall b. Integral b =&gt; a -&gt; b)
+-&gt; (forall b. Integral b =&gt; a -&gt; b)
+-&gt; RealFrac a
+forall a. RealFrac a =&gt; Fractional (Ref a)
+forall a. RealFrac a =&gt; Real (Ref a)
+forall a b. (RealFrac a, Integral b) =&gt; Ref a -&gt; b
+forall a b. (RealFrac a, Integral b) =&gt; Ref a -&gt; (b, Ref a)
+floor :: Ref a -&gt; b
+$cfloor :: forall a b. (RealFrac a, Integral b) =&gt; Ref a -&gt; b
+ceiling :: Ref a -&gt; b
+$cceiling :: forall a b. (RealFrac a, Integral b) =&gt; Ref a -&gt; b
+round :: Ref a -&gt; b
+$cround :: forall a b. (RealFrac a, Integral b) =&gt; Ref a -&gt; b
+truncate :: Ref a -&gt; b
+$ctruncate :: forall a b. (RealFrac a, Integral b) =&gt; Ref a -&gt; b
+properFraction :: Ref a -&gt; (b, Ref a)
+$cproperFraction :: forall a b. (RealFrac a, Integral b) =&gt; Ref a -&gt; (b, Ref a)
+$cp2RealFrac :: forall a. RealFrac a =&gt; Fractional (Ref a)
+$cp1RealFrac :: forall a. RealFrac a =&gt; Real (Ref a)
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">RealFrac</span></span></span></span></span></span></span><span>
+</span><span id="line-87"></span><span>        </span><span class="hs-special">,</span><span> </span><span id="local-6989586621679284712"><span id="local-6989586621679284714"><span id="local-6989586621679284716"><span id="local-6989586621679284718"><span id="local-6989586621679284720"><span id="local-6989586621679284722"><span id="local-6989586621679284724"><span id="local-6989586621679284726"><span id="local-6989586621679284728"><span id="local-6989586621679284730"><span id="local-6989586621679284732"><span id="local-6989586621679284734"><span id="local-6989586621679284736"><span id="local-6989586621679284738"><span class="annot"><span class="annottext">Floating (Ref a)
+RealFrac (Ref a)
+(RealFrac (Ref a), Floating (Ref a)) =&gt;
+(Ref a -&gt; Integer)
+-&gt; (Ref a -&gt; Int)
+-&gt; (Ref a -&gt; (Int, Int))
+-&gt; (Ref a -&gt; (Integer, Int))
+-&gt; (Integer -&gt; Int -&gt; Ref a)
+-&gt; (Ref a -&gt; Int)
+-&gt; (Ref a -&gt; Ref a)
+-&gt; (Int -&gt; Ref a -&gt; Ref a)
+-&gt; (Ref a -&gt; Bool)
+-&gt; (Ref a -&gt; Bool)
+-&gt; (Ref a -&gt; Bool)
+-&gt; (Ref a -&gt; Bool)
+-&gt; (Ref a -&gt; Bool)
+-&gt; (Ref a -&gt; Ref a -&gt; Ref a)
+-&gt; RealFloat (Ref a)
+Int -&gt; Ref a -&gt; Ref a
+Integer -&gt; Int -&gt; Ref a
+Ref a -&gt; Bool
+Ref a -&gt; Int
+Ref a -&gt; Integer
+Ref a -&gt; (Int, Int)
+Ref a -&gt; (Integer, Int)
+Ref a -&gt; Ref a
+Ref a -&gt; Ref a -&gt; Ref a
+forall a. RealFloat a =&gt; Floating (Ref a)
+forall a. RealFloat a =&gt; RealFrac (Ref a)
+forall a. RealFloat a =&gt; Int -&gt; Ref a -&gt; Ref a
+forall a. RealFloat a =&gt; Integer -&gt; Int -&gt; Ref a
+forall a. RealFloat a =&gt; Ref a -&gt; Bool
+forall a. RealFloat a =&gt; Ref a -&gt; Int
+forall a. RealFloat a =&gt; Ref a -&gt; Integer
+forall a. RealFloat a =&gt; Ref a -&gt; (Int, Int)
+forall a. RealFloat a =&gt; Ref a -&gt; (Integer, Int)
+forall a. RealFloat a =&gt; Ref a -&gt; Ref a
+forall a. RealFloat a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+forall a.
+(RealFrac a, Floating a) =&gt;
+(a -&gt; Integer)
+-&gt; (a -&gt; Int)
+-&gt; (a -&gt; (Int, Int))
+-&gt; (a -&gt; (Integer, Int))
+-&gt; (Integer -&gt; Int -&gt; a)
+-&gt; (a -&gt; Int)
+-&gt; (a -&gt; a)
+-&gt; (Int -&gt; a -&gt; a)
+-&gt; (a -&gt; Bool)
+-&gt; (a -&gt; Bool)
+-&gt; (a -&gt; Bool)
+-&gt; (a -&gt; Bool)
+-&gt; (a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; RealFloat a
+atan2 :: Ref a -&gt; Ref a -&gt; Ref a
+$catan2 :: forall a. RealFloat a =&gt; Ref a -&gt; Ref a -&gt; Ref a
+isIEEE :: Ref a -&gt; Bool
+$cisIEEE :: forall a. RealFloat a =&gt; Ref a -&gt; Bool
+isNegativeZero :: Ref a -&gt; Bool
+$cisNegativeZero :: forall a. RealFloat a =&gt; Ref a -&gt; Bool
+isDenormalized :: Ref a -&gt; Bool
+$cisDenormalized :: forall a. RealFloat a =&gt; Ref a -&gt; Bool
+isInfinite :: Ref a -&gt; Bool
+$cisInfinite :: forall a. RealFloat a =&gt; Ref a -&gt; Bool
+isNaN :: Ref a -&gt; Bool
+$cisNaN :: forall a. RealFloat a =&gt; Ref a -&gt; Bool
+scaleFloat :: Int -&gt; Ref a -&gt; Ref a
+$cscaleFloat :: forall a. RealFloat a =&gt; Int -&gt; Ref a -&gt; Ref a
+significand :: Ref a -&gt; Ref a
+$csignificand :: forall a. RealFloat a =&gt; Ref a -&gt; Ref a
+exponent :: Ref a -&gt; Int
+$cexponent :: forall a. RealFloat a =&gt; Ref a -&gt; Int
+encodeFloat :: Integer -&gt; Int -&gt; Ref a
+$cencodeFloat :: forall a. RealFloat a =&gt; Integer -&gt; Int -&gt; Ref a
+decodeFloat :: Ref a -&gt; (Integer, Int)
+$cdecodeFloat :: forall a. RealFloat a =&gt; Ref a -&gt; (Integer, Int)
+floatRange :: Ref a -&gt; (Int, Int)
+$cfloatRange :: forall a. RealFloat a =&gt; Ref a -&gt; (Int, Int)
+floatDigits :: Ref a -&gt; Int
+$cfloatDigits :: forall a. RealFloat a =&gt; Ref a -&gt; Int
+floatRadix :: Ref a -&gt; Integer
+$cfloatRadix :: forall a. RealFloat a =&gt; Ref a -&gt; Integer
+$cp2RealFloat :: forall a. RealFloat a =&gt; Floating (Ref a)
+$cp1RealFloat :: forall a. RealFloat a =&gt; RealFrac (Ref a)
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">RealFloat</span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span><span>
+</span><span id="line-88"></span><span>        </span><span class="hs-special">,</span><span> </span><span id="local-6989586621679284695"><span id="local-6989586621679284697"><span id="local-6989586621679284699"><span id="local-6989586621679284701"><span id="local-6989586621679284703"><span id="local-6989586621679284705"><span id="local-6989586621679284707"><span id="local-6989586621679284709"><span class="annot"><span class="annottext">Ptr b -&gt; Int -&gt; IO (Ref a)
+Ptr b -&gt; Int -&gt; Ref a -&gt; IO ()
+Ptr (Ref a) -&gt; IO (Ref a)
+Ptr (Ref a) -&gt; Int -&gt; IO (Ref a)
+Ptr (Ref a) -&gt; Int -&gt; Ref a -&gt; IO ()
+Ptr (Ref a) -&gt; Ref a -&gt; IO ()
+Ref a -&gt; Int
+(Ref a -&gt; Int)
+-&gt; (Ref a -&gt; Int)
+-&gt; (Ptr (Ref a) -&gt; Int -&gt; IO (Ref a))
+-&gt; (Ptr (Ref a) -&gt; Int -&gt; Ref a -&gt; IO ())
+-&gt; (forall b. Ptr b -&gt; Int -&gt; IO (Ref a))
+-&gt; (forall b. Ptr b -&gt; Int -&gt; Ref a -&gt; IO ())
+-&gt; (Ptr (Ref a) -&gt; IO (Ref a))
+-&gt; (Ptr (Ref a) -&gt; Ref a -&gt; IO ())
+-&gt; Storable (Ref a)
+forall b. Ptr b -&gt; Int -&gt; IO (Ref a)
+forall b. Ptr b -&gt; Int -&gt; Ref a -&gt; IO ()
+forall a. Storable a =&gt; Ptr (Ref a) -&gt; IO (Ref a)
+forall a. Storable a =&gt; Ptr (Ref a) -&gt; Int -&gt; IO (Ref a)
+forall a. Storable a =&gt; Ptr (Ref a) -&gt; Int -&gt; Ref a -&gt; IO ()
+forall a. Storable a =&gt; Ptr (Ref a) -&gt; Ref a -&gt; IO ()
+forall a. Storable a =&gt; Ref a -&gt; Int
+forall a b. Storable a =&gt; Ptr b -&gt; Int -&gt; IO (Ref a)
+forall a b. Storable a =&gt; Ptr b -&gt; Int -&gt; Ref a -&gt; IO ()
+forall a.
+(a -&gt; Int)
+-&gt; (a -&gt; Int)
+-&gt; (Ptr a -&gt; Int -&gt; IO a)
+-&gt; (Ptr a -&gt; Int -&gt; a -&gt; IO ())
+-&gt; (forall b. Ptr b -&gt; Int -&gt; IO a)
+-&gt; (forall b. Ptr b -&gt; Int -&gt; a -&gt; IO ())
+-&gt; (Ptr a -&gt; IO a)
+-&gt; (Ptr a -&gt; a -&gt; IO ())
+-&gt; Storable a
+poke :: Ptr (Ref a) -&gt; Ref a -&gt; IO ()
+$cpoke :: forall a. Storable a =&gt; Ptr (Ref a) -&gt; Ref a -&gt; IO ()
+peek :: Ptr (Ref a) -&gt; IO (Ref a)
+$cpeek :: forall a. Storable a =&gt; Ptr (Ref a) -&gt; IO (Ref a)
+pokeByteOff :: Ptr b -&gt; Int -&gt; Ref a -&gt; IO ()
+$cpokeByteOff :: forall a b. Storable a =&gt; Ptr b -&gt; Int -&gt; Ref a -&gt; IO ()
+peekByteOff :: Ptr b -&gt; Int -&gt; IO (Ref a)
+$cpeekByteOff :: forall a b. Storable a =&gt; Ptr b -&gt; Int -&gt; IO (Ref a)
+pokeElemOff :: Ptr (Ref a) -&gt; Int -&gt; Ref a -&gt; IO ()
+$cpokeElemOff :: forall a. Storable a =&gt; Ptr (Ref a) -&gt; Int -&gt; Ref a -&gt; IO ()
+peekElemOff :: Ptr (Ref a) -&gt; Int -&gt; IO (Ref a)
+$cpeekElemOff :: forall a. Storable a =&gt; Ptr (Ref a) -&gt; Int -&gt; IO (Ref a)
+alignment :: Ref a -&gt; Int
+$calignment :: forall a. Storable a =&gt; Ref a -&gt; Int
+sizeOf :: Ref a -&gt; Int
+$csizeOf :: forall a. Storable a =&gt; Ref a -&gt; Int
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Storable</span></span></span></span></span></span></span></span></span></span><span>
+</span><span id="line-89"></span><span>        </span><span class="hs-special">)</span><span>
+</span><span id="line-90"></span><span>
+</span><span id="line-91"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679284691"><span class="annot"><span class="hs-identifier hs-type">Functor</span></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-type">Ref</span></a></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-92"></span><span>    </span><span id="local-6989586621679284689"><span class="annot"><span class="annottext">fmap :: (a -&gt; b) -&gt; Ref a -&gt; Ref b
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">fmap</span></span></span><span> </span><span id="local-6989586621679284688"><span class="annot"><span class="annottext">f :: a -&gt; b
+</span><a href="#local-6989586621679284688"><span class="hs-identifier hs-var">f</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-type">Ref</span></a></span><span> </span><span id="local-6989586621679284687"><span class="annot"><span class="annottext">x :: a
+</span><a href="#local-6989586621679284687"><span class="hs-identifier hs-var">x</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">b -&gt; Ref b
+forall a. a -&gt; Ref a
+</span><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-var">Ref</span></a></span><span> </span><span class="annot"><span class="annottext">(b -&gt; Ref b) -&gt; b -&gt; Ref b
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; b
+</span><a href="#local-6989586621679284688"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679284687"><span class="hs-identifier hs-var">x</span></a></span><span>
+</span><span id="line-93"></span><span>
+</span><span id="line-94"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679284678"><span id="local-6989586621679284680"><span id="local-6989586621679284682"><span class="annot"><span class="hs-identifier hs-type">Applicative</span></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-type">Ref</span></a></span></span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-95"></span><span>    </span><span id="local-6989586621679284676"><span class="annot"><span class="annottext">pure :: a -&gt; Ref a
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">pure</span></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">a -&gt; Ref a
+forall a. a -&gt; Ref a
+</span><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-var">Ref</span></a></span><span>
+</span><span id="line-96"></span><span>    </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-type">Ref</span></a></span><span> </span><span id="local-6989586621679284675"><span class="annot"><span class="annottext">f :: a -&gt; b
+</span><a href="#local-6989586621679284675"><span class="hs-identifier hs-var">f</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679284674"><span class="annot"><span class="annottext">&lt;*&gt; :: Ref (a -&gt; b) -&gt; Ref a -&gt; Ref b
+</span><span class="hs-operator hs-var hs-var hs-var hs-var">&lt;*&gt;</span></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-type">Ref</span></a></span><span> </span><span id="local-6989586621679284673"><span class="annot"><span class="annottext">x :: a
+</span><a href="#local-6989586621679284673"><span class="hs-identifier hs-var">x</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">b -&gt; Ref b
+forall a. a -&gt; Ref a
+</span><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-var">Ref</span></a></span><span> </span><span class="annot"><span class="annottext">(b -&gt; Ref b) -&gt; b -&gt; Ref b
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; b
+</span><a href="#local-6989586621679284675"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679284673"><span class="hs-identifier hs-var">x</span></a></span><span>
+</span><span id="line-97"></span><span>
+</span><span id="line-98"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679284669"><span class="annot"><span class="hs-identifier hs-type">Monad</span></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-type">Ref</span></a></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-99"></span><span>    </span><span id="local-6989586621679284666"><span class="annot"><span class="annottext">return :: a -&gt; Ref a
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">return</span></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">a -&gt; Ref a
+forall (f :: * -&gt; *) a. Applicative f =&gt; a -&gt; f a
+</span><span class="hs-identifier hs-var">pure</span></span><span>
+</span><span id="line-100"></span><span>    </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-type">Ref</span></a></span><span> </span><span id="local-6989586621679284665"><span class="annot"><span class="annottext">x :: a
+</span><a href="#local-6989586621679284665"><span class="hs-identifier hs-var">x</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679284664"><span class="annot"><span class="annottext">&gt;&gt;= :: Ref a -&gt; (a -&gt; Ref b) -&gt; Ref b
+</span><span class="hs-operator hs-var hs-var hs-var hs-var">&gt;&gt;=</span></span></span><span> </span><span id="local-6989586621679284663"><span class="annot"><span class="annottext">f :: a -&gt; Ref b
+</span><a href="#local-6989586621679284663"><span class="hs-identifier hs-var">f</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">a -&gt; Ref b
+</span><a href="#local-6989586621679284663"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679284665"><span class="hs-identifier hs-var">x</span></a></span><span>
+</span><span id="line-101"></span><span>
+</span><span id="line-102"></span><span class="hs-keyword">instance</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MonadFix</span></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-type">Ref</span></a></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-103"></span><span>    </span><span id="local-6989586621679284659"><span class="annot"><span class="annottext">mfix :: (a -&gt; Ref a) -&gt; Ref a
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">mfix</span></span></span><span> </span><span id="local-6989586621679284658"><span class="annot"><span class="annottext">f :: a -&gt; Ref a
+</span><a href="#local-6989586621679284658"><span class="hs-identifier hs-var">f</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">a -&gt; Ref a
+forall a. a -&gt; Ref a
+</span><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-var">Ref</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(a -&gt; a) -&gt; a
+forall a. (a -&gt; a) -&gt; a
+</span><span class="hs-identifier hs-var">fix</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Ref a -&gt; a
+forall a. Ref a -&gt; a
+</span><a href="Htcc.Asm.Intrinsic.Operand.html#runRef"><span class="hs-identifier hs-var hs-var">runRef</span></a></span><span> </span><span class="annot"><span class="annottext">(Ref a -&gt; a) -&gt; (a -&gt; Ref a) -&gt; a -&gt; a
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; Ref a
+</span><a href="#local-6989586621679284658"><span class="hs-identifier hs-var">f</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-104"></span><span>
+</span><span id="line-105"></span><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679284654"><span class="annot"><span class="hs-identifier hs-type">MonadZip</span></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-type">Ref</span></a></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-106"></span><span>    </span><span id="local-6989586621679284650"><span class="annot"><span class="annottext">mzipWith :: (a -&gt; b -&gt; c) -&gt; Ref a -&gt; Ref b -&gt; Ref c
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">mzipWith</span></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(a -&gt; b -&gt; c) -&gt; Ref a -&gt; Ref b -&gt; Ref c
+forall (m :: * -&gt; *) a1 a2 r.
+Monad m =&gt;
+(a1 -&gt; a2 -&gt; r) -&gt; m a1 -&gt; m a2 -&gt; m r
+</span><span class="hs-identifier hs-var">liftM2</span></span><span>
+</span><span id="line-107"></span><span>    </span><span id="local-6989586621679284648"><span class="annot"><span class="annottext">munzip :: Ref (a, b) -&gt; (Ref a, Ref b)
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">munzip</span></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-type">Ref</span></a></span><span> </span><span id="local-6989586621679284646"><span class="annot"><span class="annottext">x :: (a, b)
+</span><a href="#local-6989586621679284646"><span class="hs-identifier hs-var">x</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">a -&gt; Ref a
+forall a. a -&gt; Ref a
+</span><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-var">Ref</span></a></span><span> </span><span class="annot"><span class="annottext">(a -&gt; Ref a) -&gt; (b -&gt; Ref b) -&gt; (a, b) -&gt; (Ref a, Ref b)
+forall a a' b b'. (a -&gt; a') -&gt; (b -&gt; b') -&gt; (a, b) -&gt; (a', b')
+</span><span class="hs-operator hs-var">***</span></span><span> </span><span class="annot"><span class="annottext">b -&gt; Ref b
+forall a. a -&gt; Ref a
+</span><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-var">Ref</span></a></span><span> </span><span class="annot"><span class="annottext">((a, b) -&gt; (Ref a, Ref b)) -&gt; (a, b) -&gt; (Ref a, Ref b)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(a, b)
+</span><a href="#local-6989586621679284646"><span class="hs-identifier hs-var">x</span></a></span><span>
+</span><span id="line-108"></span><span>
+</span><span id="line-109"></span><span id="local-6989586621679284645"><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679284640"><span id="local-6989586621679284643"><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#IsOperand"><span class="hs-identifier hs-type">IsOperand</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679284645"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-type">Ref</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679284645"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-110"></span><span>    </span><span id="local-6989586621679284639"><span class="annot"><span class="annottext">show :: Ref a -&gt; String
+</span><a href="#local-6989586621679284639"><span class="hs-identifier hs-var hs-var hs-var hs-var">show</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#Ref"><span class="hs-identifier hs-type">Ref</span></a></span><span> </span><span id="local-6989586621679284638"><span class="annot"><span class="annottext">x :: a
+</span><a href="#local-6989586621679284638"><span class="hs-identifier hs-var">x</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-string">&quot;[&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679284638"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">String -&gt; ShowS
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="annot"><span class="hs-string">&quot;]&quot;</span></span></span><span>
+</span><span id="line-111"></span></pre></body></html>

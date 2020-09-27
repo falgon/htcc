@@ -1,0 +1,48 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">{-|
+Module      : Htcc.Asm
+Description : The modules of C Rules
+Copyright   : (c) roki, 2019
+License     : MIT
+Maintainer  : falgon53@yahoo.co.jp
+Stability   : experimental
+Portability : POSIX
+
+The executable module for compilation
+-}</span><span>
+</span><span id="line-12"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Htcc.Asm</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-13"></span><span>    </span><span class="annot"><span class="hs-comment">-- * Export modules</span></span><span>
+</span><span id="line-14"></span><span>    </span><span class="hs-keyword">module</span><span> </span><span class="annot"><a href="Htcc.Asm.Generate.html"><span class="hs-identifier">Htcc.Asm.Generate</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-15"></span><span>    </span><span class="annot"><a href="Htcc.Asm.html#casm"><span class="hs-identifier">casm</span></a></span><span>
+</span><span id="line-16"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-17"></span><span>
+</span><span id="line-18"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.Tuple.Extra</span></span><span>                                      </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">uncurry3</span></span><span class="hs-special">)</span><span>
+</span><span id="line-19"></span><span>
+</span><span id="line-20"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Asm.Generate.html"><span class="hs-identifier">Htcc.Asm.Generate</span></a></span><span>
+</span><span id="line-21"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html"><span class="hs-identifier">Htcc.Asm.Intrinsic.Operand</span></a></span><span>                            </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">O</span></span><span>
+</span><span id="line-22"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html"><span class="hs-identifier">Htcc.Asm.Intrinsic.Structure.Internal</span></a></span><span>                 </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">SI</span></span><span>
+</span><span id="line-23"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Instruction.html"><span class="hs-identifier">Htcc.Asm.Intrinsic.Structure.Section.Text.Instruction</span></a></span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">TI</span></span><span>
+</span><span id="line-24"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.html"><span class="hs-identifier">Htcc.Parser</span></a></span><span>                                           </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Type.html#ASTs"><span class="hs-identifier">ASTs</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-25"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html"><span class="hs-identifier">Htcc.Parser.ConstructionData.Scope.Var</span></a></span><span>                </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GlobalVars"><span class="hs-identifier">GlobalVars</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-26"></span><span>                                                                        </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Literals"><span class="hs-identifier">Literals</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-27"></span><span>
+</span><span id="line-28"></span><span class="hs-comment">-- | Generate full assembly code from string of C source code</span><span>
+</span><span id="line-29"></span><span id="local-6989586621679294532"><span class="annot"><a href="Htcc.Asm.html#casm"><span class="hs-identifier hs-type">casm</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Asm.Intrinsic.Operand.html#IsOperand"><span class="hs-identifier hs-type">O.IsOperand</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679294532"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Instruction.html#UnaryInstruction"><span class="hs-identifier hs-type">TI.UnaryInstruction</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679294532"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Instruction.html#BinaryInstruction"><span class="hs-identifier hs-type">TI.BinaryInstruction</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679294532"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Integral</span></span><span> </span><span class="annot"><a href="#local-6989586621679294532"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Type.html#ASTs"><span class="hs-identifier hs-type">ASTs</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679294532"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GlobalVars"><span class="hs-identifier hs-type">GlobalVars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679294532"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Literals"><span class="hs-identifier hs-type">Literals</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679294532"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">IO</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span><span>
+</span><span id="line-30"></span><span id="casm"><span class="annot"><span class="annottext">casm :: (ASTs i, GlobalVars i, Literals i) -&gt; IO ()
+</span><a href="Htcc.Asm.html#casm"><span class="hs-identifier hs-var hs-var">casm</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Asm AsmCodeCtx Integer () -&gt; IO ()
+forall e a. (Num e, Enum e) =&gt; Asm AsmCodeCtx e a -&gt; IO a
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#runAsm"><span class="hs-identifier hs-var">SI.runAsm</span></a></span><span> </span><span class="annot"><span class="annottext">(Asm AsmCodeCtx Integer () -&gt; IO ())
+-&gt; ((ASTs i, GlobalVars i, Literals i)
+    -&gt; Asm AsmCodeCtx Integer ())
+-&gt; (ASTs i, GlobalVars i, Literals i)
+-&gt; IO ()
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">(ASTs i -&gt; GlobalVars i -&gt; Literals i -&gt; Asm AsmCodeCtx Integer ())
+-&gt; (ASTs i, GlobalVars i, Literals i) -&gt; Asm AsmCodeCtx Integer ()
+forall a b c d. (a -&gt; b -&gt; c -&gt; d) -&gt; (a, b, c) -&gt; d
+</span><span class="hs-identifier hs-var">uncurry3</span></span><span> </span><span class="annot"><span class="annottext">ASTs i -&gt; GlobalVars i -&gt; Literals i -&gt; Asm AsmCodeCtx Integer ()
+forall e i.
+(Integral e, Show e, Integral i, IsOperand i, UnaryInstruction i,
+ BinaryInstruction i) =&gt;
+ASTs i -&gt; GlobalVars i -&gt; Literals i -&gt; Asm AsmCodeCtx e ()
+</span><a href="Htcc.Asm.Generate.html#casm%27"><span class="hs-identifier hs-var">casm'</span></a></span><span>
+</span><span id="line-31"></span></pre></body></html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">{-|
+Module      : Htcc.CRules.Preprocessor.Core
+Description : The preprocessor
+Copyright   : (c) roki, 2019
+License     : MIT
+Maintainer  : falgon53@yahoo.co.jp
+Stability   : experimental
+Portability : POSIX
+
+The preprocessor
+-}</span><span>
+</span><span id="line-12"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Htcc.CRules.Preprocessor.Core</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-13"></span><span>    </span><span class="annot"><a href="Htcc.CRules.Preprocessor.Core.html#preprocess"><span class="hs-identifier">preprocess</span></a></span><span>
+</span><span id="line-14"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-15"></span><span>
+</span><span id="line-16"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html"><span class="hs-identifier">Htcc.Parser.ConstructionData.Scope.ManagedScope</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ASTError"><span class="hs-identifier">ASTError</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-17"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html"><span class="hs-identifier">Htcc.Tokenizer.Token</span></a></span><span>                            </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">HT</span></span><span>
+</span><span id="line-18"></span><span>
+</span><span id="line-19"></span><span class="hs-comment">-- | The function that executes a proprocess.</span><span>
+</span><span id="line-20"></span><span class="hs-comment">-- __NOTE__: This is not yet implemented.</span><span>
+</span><span id="line-21"></span><span id="local-6989586621679289299"><span class="annot"><a href="Htcc.CRules.Preprocessor.Core.html#preprocess"><span class="hs-identifier hs-type">preprocess</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289299"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Either</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ASTError"><span class="hs-identifier hs-type">ASTError</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289299"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289299"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span></span><span>
+</span><span id="line-22"></span><span id="preprocess"><span class="annot"><span class="annottext">preprocess :: [TokenLC i] -&gt; Either (ASTError i) [TokenLC i]
+</span><a href="Htcc.CRules.Preprocessor.Core.html#preprocess"><span class="hs-identifier hs-var hs-var">preprocess</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; Either (ASTError i) [TokenLC i]
+forall a b. b -&gt; Either a b
+</span><span class="hs-identifier hs-var">Right</span></span><span> </span><span class="annot"><span class="annottext">([TokenLC i] -&gt; Either (ASTError i) [TokenLC i])
+-&gt; ([TokenLC i] -&gt; [TokenLC i])
+-&gt; [TokenLC i]
+-&gt; Either (ASTError i) [TokenLC i]
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">(TokenLC i -&gt; Bool) -&gt; [TokenLC i] -&gt; [TokenLC i]
+forall a. (a -&gt; Bool) -&gt; [a] -&gt; [a]
+</span><span class="hs-identifier hs-var">filter</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Bool -&gt; Bool
+</span><span class="hs-identifier hs-var">not</span></span><span> </span><span class="annot"><span class="annottext">(Bool -&gt; Bool) -&gt; (TokenLC i -&gt; Bool) -&gt; TokenLC i -&gt; Bool
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">Token i -&gt; Bool
+forall i. Token i -&gt; Bool
+</span><a href="Htcc.Tokenizer.Token.html#isTKMacro"><span class="hs-identifier hs-var">HT.isTKMacro</span></a></span><span> </span><span class="annot"><span class="annottext">(Token i -&gt; Bool) -&gt; (TokenLC i -&gt; Token i) -&gt; TokenLC i -&gt; Bool
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">TokenLC i -&gt; Token i
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span class="hs-special">)</span><span>
+</span><span id="line-23"></span></pre></body></html>

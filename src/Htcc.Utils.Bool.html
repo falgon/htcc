@@ -1,0 +1,103 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">{-|
+Module      : Htcc.Utils.Bool
+Description : Utilities of boolean
+Copyright   : (c) roki, 2019
+License     : MIT
+Maintainer  : falgon53@yahoo.co.jp
+Stability   : experimental
+Portability : POSIX
+
+Utilities of boolean
+-}</span><span>
+</span><span id="line-12"></span><span class="hs-pragma">{-# LANGUAGE ScopedTypeVariables #-}</span><span>
+</span><span id="line-13"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Htcc.Utils.Bool</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-14"></span><span>    </span><span class="annot"><span class="hs-comment">-- * Boolean methods</span></span><span>
+</span><span id="line-15"></span><span>    </span><span class="annot"><a href="Htcc.Utils.Bool.html#lor"><span class="hs-identifier">lor</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-16"></span><span>    </span><span class="annot"><a href="Htcc.Utils.Bool.html#land"><span class="hs-identifier">land</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-17"></span><span>    </span><span class="annot"><a href="Htcc.Utils.Bool.html#sop"><span class="hs-identifier">sop</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-18"></span><span>    </span><span class="annot"><a href="Htcc.Utils.Bool.html#sopText"><span class="hs-identifier">sopText</span></a></span><span>
+</span><span id="line-19"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-20"></span><span>
+</span><span id="line-21"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text</span></span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">T</span></span><span>
+</span><span id="line-22"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Prelude</span></span><span>   </span><span class="hs-keyword">hiding</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">toInteger</span></span><span class="hs-special">)</span><span>
+</span><span id="line-23"></span><span>
+</span><span id="line-24"></span><span class="hs-comment">-- | For mappings \(f_i:X\to B\) to an element \(x\in X\) of a set \(X\), \(\displaystyle\bigvee_{i} f_i(x)\) where \(B\) is the boolean domain.</span><span>
+</span><span id="line-25"></span><span class="hs-comment">-- This function will stop evaluation when the result of \(f_i(x)\) is `True` (short circuit evaluation).</span><span>
+</span><span id="line-26"></span><span class="hs-comment">-- This is equivalent to:</span><span>
+</span><span id="line-27"></span><span class="hs-comment">--</span><span>
+</span><span id="line-28"></span><span class="hs-comment">-- &gt; f1 x || f2 x || f3 x == lor [f1, f2, f3] x</span><span>
+</span><span id="line-29"></span><span id="local-6989586621679285368"><span class="annot"><a href="Htcc.Utils.Bool.html#lor"><span class="hs-identifier hs-type">lor</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="#local-6989586621679285368"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679285368"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span></span><span>
+</span><span id="line-30"></span><span id="lor"><span class="annot"><span class="annottext">lor :: [a -&gt; Bool] -&gt; a -&gt; Bool
+</span><a href="Htcc.Utils.Bool.html#lor"><span class="hs-identifier hs-var hs-var">lor</span></a></span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span> </span><span class="hs-identifier">_</span><span>     </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span>
+</span><span id="line-31"></span><span class="annot"><a href="Htcc.Utils.Bool.html#lor"><span class="hs-identifier hs-var">lor</span></a></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679285348"><span class="annot"><span class="annottext">f :: a -&gt; Bool
+</span><a href="#local-6989586621679285348"><span class="hs-identifier hs-var">f</span></a></span></span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679285347"><span class="annot"><span class="annottext">fs :: [a -&gt; Bool]
+</span><a href="#local-6989586621679285347"><span class="hs-identifier hs-var">fs</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679285346"><span class="annot"><span class="annottext">x :: a
+</span><a href="#local-6989586621679285346"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">a -&gt; Bool
+</span><a href="#local-6989586621679285348"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679285346"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span> </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[a -&gt; Bool] -&gt; a -&gt; Bool
+forall a. [a -&gt; Bool] -&gt; a -&gt; Bool
+</span><a href="Htcc.Utils.Bool.html#lor"><span class="hs-identifier hs-var">lor</span></a></span><span> </span><span class="annot"><span class="annottext">[a -&gt; Bool]
+</span><a href="#local-6989586621679285347"><span class="hs-identifier hs-var">fs</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679285346"><span class="hs-identifier hs-var">x</span></a></span><span>
+</span><span id="line-32"></span><span>
+</span><span id="line-33"></span><span class="hs-comment">-- | For mappings \(f_i:X\to B\) to an element (\x\in X\) of a set \(X\), \(\displaystyle\bigwedge_{i} f_i(x)\) where \(B\) is the boolean domain.</span><span>
+</span><span id="line-34"></span><span class="hs-comment">-- This is equivalent to:</span><span>
+</span><span id="line-35"></span><span class="hs-comment">--</span><span>
+</span><span id="line-36"></span><span class="hs-comment">-- &gt; f1 x &amp;&amp; f2 x &amp;&amp; f3 x == land [f1, f2, f3] x</span><span>
+</span><span id="line-37"></span><span id="local-6989586621679285345"><span class="annot"><a href="Htcc.Utils.Bool.html#land"><span class="hs-identifier hs-type">land</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="#local-6989586621679285345"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679285345"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span></span><span>
+</span><span id="line-38"></span><span id="land"><span class="annot"><span class="annottext">land :: [a -&gt; Bool] -&gt; a -&gt; Bool
+</span><a href="Htcc.Utils.Bool.html#land"><span class="hs-identifier hs-var hs-var">land</span></a></span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span> </span><span class="hs-identifier">_</span><span>     </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span>
+</span><span id="line-39"></span><span class="annot"><a href="Htcc.Utils.Bool.html#land"><span class="hs-identifier hs-var">land</span></a></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679285344"><span class="annot"><span class="annottext">f :: a -&gt; Bool
+</span><a href="#local-6989586621679285344"><span class="hs-identifier hs-var">f</span></a></span></span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679285343"><span class="annot"><span class="annottext">fs :: [a -&gt; Bool]
+</span><a href="#local-6989586621679285343"><span class="hs-identifier hs-var">fs</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679285342"><span class="annot"><span class="annottext">x :: a
+</span><a href="#local-6989586621679285342"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">((a -&gt; Bool) -&gt; Bool -&gt; Bool) -&gt; Bool -&gt; [a -&gt; Bool] -&gt; Bool
+forall (t :: * -&gt; *) a b.
+Foldable t =&gt;
+(a -&gt; b -&gt; b) -&gt; b -&gt; t a -&gt; b
+</span><span class="hs-identifier hs-var">foldr</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
+</span><span class="hs-operator hs-var">(&amp;&amp;)</span></span><span> </span><span class="annot"><span class="annottext">(Bool -&gt; Bool -&gt; Bool)
+-&gt; ((a -&gt; Bool) -&gt; Bool) -&gt; (a -&gt; Bool) -&gt; Bool -&gt; Bool
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">((a -&gt; Bool) -&gt; a -&gt; Bool) -&gt; a -&gt; (a -&gt; Bool) -&gt; Bool
+forall a b c. (a -&gt; b -&gt; c) -&gt; b -&gt; a -&gt; c
+</span><span class="hs-identifier hs-var">flip</span></span><span> </span><span class="annot"><span class="annottext">(a -&gt; Bool) -&gt; a -&gt; Bool
+forall a. a -&gt; a
+</span><span class="hs-identifier hs-var">id</span></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679285342"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a -&gt; Bool
+</span><a href="#local-6989586621679285344"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679285342"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">[a -&gt; Bool]
+</span><a href="#local-6989586621679285343"><span class="hs-identifier hs-var">fs</span></a></span><span>
+</span><span id="line-40"></span><span>
+</span><span id="line-41"></span><span class="hs-comment">-- | Sum of product form.</span><span>
+</span><span id="line-42"></span><span class="hs-comment">-- For mappings \(f_i:X\to B\) to an element \(x\in X\) of a set \(X\), \(\displaystyle\bigwedge_{j}\bigvee_{i} f_i(x_j)\) where \(B\) is the Boolean domain.</span><span>
+</span><span id="line-43"></span><span class="hs-comment">-- This function will stop evaluation when the result of \(f_i(x)\) is `True` (short circuit evaluation).</span><span>
+</span><span id="line-44"></span><span id="local-6989586621679285336"><span class="annot"><a href="Htcc.Utils.Bool.html#sop"><span class="hs-identifier hs-type">sop</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="#local-6989586621679285336"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="#local-6989586621679285336"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span></span><span>
+</span><span id="line-45"></span><span id="sop"><span class="annot"><span class="annottext">sop :: [a -&gt; Bool] -&gt; [a] -&gt; Bool
+</span><a href="Htcc.Utils.Bool.html#sop"><span class="hs-identifier hs-var hs-var">sop</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(a -&gt; Bool) -&gt; [a] -&gt; Bool
+forall (t :: * -&gt; *) a. Foldable t =&gt; (a -&gt; Bool) -&gt; t a -&gt; Bool
+</span><span class="hs-identifier hs-var">all</span></span><span> </span><span class="annot"><span class="annottext">((a -&gt; Bool) -&gt; [a] -&gt; Bool)
+-&gt; ([a -&gt; Bool] -&gt; a -&gt; Bool) -&gt; [a -&gt; Bool] -&gt; [a] -&gt; Bool
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">[a -&gt; Bool] -&gt; a -&gt; Bool
+forall a. [a -&gt; Bool] -&gt; a -&gt; Bool
+</span><a href="Htcc.Utils.Bool.html#lor"><span class="hs-identifier hs-var">lor</span></a></span><span>
+</span><span id="line-46"></span><span>
+</span><span id="line-47"></span><span class="hs-comment">-- | The `T.Text` version of `sop`.</span><span>
+</span><span id="line-48"></span><span class="annot"><a href="Htcc.Utils.Bool.html#sopText"><span class="hs-identifier hs-type">sopText</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="hs-identifier hs-type">Char</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span>
+</span><span id="line-49"></span><span id="sopText"><span class="annot"><span class="annottext">sopText :: [Char -&gt; Bool] -&gt; Text -&gt; Bool
+</span><a href="Htcc.Utils.Bool.html#sopText"><span class="hs-identifier hs-var hs-var">sopText</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Char -&gt; Bool) -&gt; Text -&gt; Bool
+</span><span class="hs-identifier hs-var">T.all</span></span><span> </span><span class="annot"><span class="annottext">((Char -&gt; Bool) -&gt; Text -&gt; Bool)
+-&gt; ([Char -&gt; Bool] -&gt; Char -&gt; Bool)
+-&gt; [Char -&gt; Bool]
+-&gt; Text
+-&gt; Bool
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">[Char -&gt; Bool] -&gt; Char -&gt; Bool
+forall a. [a -&gt; Bool] -&gt; a -&gt; Bool
+</span><a href="Htcc.Utils.Bool.html#lor"><span class="hs-identifier hs-var">lor</span></a></span><span>
+</span><span id="line-50"></span><span>
+</span><span id="line-51"></span></pre></body></html>

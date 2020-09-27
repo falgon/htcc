@@ -1,0 +1,43 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">{-|
+Module      : Htcc.Tokenizer
+Description : Tokenizer
+Copyright   : (c) roki, 2019
+License     : MIT
+Maintainer  : falgon53@yahoo.co.jp
+Stability   : experimental
+Portability : POSIX
+
+The tokenizer
+-}</span><span>
+</span><span id="line-12"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Htcc.Tokenizer</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-13"></span><span>    </span><span class="hs-keyword">module</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html"><span class="hs-identifier">Htcc.Tokenizer.Token</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-14"></span><span>    </span><span class="annot"><a href="Htcc.Tokenizer.html#tokenize"><span class="hs-identifier">tokenize</span></a></span><span>
+</span><span id="line-15"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-16"></span><span>
+</span><span id="line-17"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Control.Monad</span></span><span>                                   </span><span class="hs-special">(</span><span class="annot"><span class="hs-operator">(&gt;=&gt;)</span></span><span class="hs-special">)</span><span>
+</span><span id="line-18"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text</span></span><span>                                       </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">T</span></span><span>
+</span><span id="line-19"></span><span>
+</span><span id="line-20"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.CRules.Preprocessor.html"><span class="hs-identifier">Htcc.CRules.Preprocessor</span></a></span><span>                        </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">CP</span></span><span>
+</span><span id="line-21"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html"><span class="hs-identifier">Htcc.Parser.ConstructionData.Scope.ManagedScope</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ASTError"><span class="hs-identifier">ASTError</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-22"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Tokenizer.Core.html"><span class="hs-identifier">Htcc.Tokenizer.Core</span></a></span><span>                             </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Tokenizer.Core.html#tokenize%27"><span class="hs-identifier">tokenize'</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-23"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Tokenizer.Token.html"><span class="hs-identifier">Htcc.Tokenizer.Token</span></a></span><span>
+</span><span id="line-24"></span><span>
+</span><span id="line-25"></span><span class="hs-comment">-- | Tokenize the `T.Text`. If an invalid chraracter matches as C language, the part and the character are returned.</span><span>
+</span><span id="line-26"></span><span class="hs-comment">-- Otherwise, @[TokenIdx i]@ is returned.</span><span>
+</span><span id="line-27"></span><span id="local-6989586621679289648"><span class="annot"><a href="Htcc.Tokenizer.html#tokenize"><span class="hs-identifier hs-type">tokenize</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Integral</span></span><span> </span><span class="annot"><a href="#local-6989586621679289648"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Read</span></span><span> </span><span class="annot"><a href="#local-6989586621679289648"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679289648"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Either</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ASTError"><span class="hs-identifier hs-type">ASTError</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289648"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289648"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span></span><span>
+</span><span id="line-28"></span><span id="tokenize"><span class="annot"><span class="annottext">tokenize :: Text -&gt; Either (ASTError i) [TokenLC i]
+</span><a href="Htcc.Tokenizer.html#tokenize"><span class="hs-identifier hs-var hs-var">tokenize</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Either (ASTError i) [TokenLC i]
+forall i.
+(Enum i, Num i, Eq i, Read i, Show i) =&gt;
+Text -&gt; Either (ASTError i) [TokenLC i]
+</span><a href="Htcc.Tokenizer.Core.html#tokenize%27"><span class="hs-identifier hs-var">tokenize'</span></a></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Either (ASTError i) [TokenLC i])
+-&gt; ([TokenLC i] -&gt; Either (ASTError i) [TokenLC i])
+-&gt; Text
+-&gt; Either (ASTError i) [TokenLC i]
+forall (m :: * -&gt; *) a b c.
+Monad m =&gt;
+(a -&gt; m b) -&gt; (b -&gt; m c) -&gt; a -&gt; m c
+</span><span class="hs-operator hs-var">&gt;=&gt;</span></span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; Either (ASTError i) [TokenLC i]
+forall i. [TokenLC i] -&gt; Either (ASTError i) [TokenLC i]
+</span><a href="Htcc.CRules.Preprocessor.Core.html#preprocess"><span class="hs-identifier hs-var">CP.preprocess</span></a></span><span>
+</span><span id="line-29"></span></pre></body></html>

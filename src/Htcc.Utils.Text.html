@@ -1,0 +1,98 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">{-|
+Module      : Htcc.Utils.Text
+Description : Utilities
+Copyright   : (c) roki, 2019
+License     : MIT
+Maintainer  : falgon53@yahoo.co.jp
+Stability   : experimental
+Portability : POSIX
+
+Text utilities
+-}</span><span>
+</span><span id="line-12"></span><span class="hs-pragma">{-# LANGUAGE BangPatterns, ScopedTypeVariables #-}</span><span>
+</span><span id="line-13"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Htcc.Utils.Text</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-14"></span><span>    </span><span class="annot"><span class="hs-comment">-- * For Data.Text</span></span><span>
+</span><span id="line-15"></span><span>    </span><span class="annot"><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier">tshow</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-16"></span><span>    </span><span class="annot"><a href="Htcc.Utils.Text.html#spanLenT"><span class="hs-identifier">spanLenT</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-17"></span><span>    </span><span class="annot"><a href="Htcc.Utils.Text.html#subTextIndex"><span class="hs-identifier">subTextIndex</span></a></span><span>
+</span><span id="line-18"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-19"></span><span>
+</span><span id="line-20"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text</span></span><span>                 </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">T</span></span><span>
+</span><span id="line-21"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text.Internal.Search</span></span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">T</span></span><span>
+</span><span id="line-22"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Utils.Tuple.html"><span class="hs-identifier">Htcc.Utils.Tuple</span></a></span><span>          </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Utils.Tuple.html#second3"><span class="hs-identifier">second3</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-23"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Prelude</span></span><span>                   </span><span class="hs-keyword">hiding</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">toInteger</span></span><span class="hs-special">)</span><span>
+</span><span id="line-24"></span><span>
+</span><span id="line-25"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Utils.Text.html#tshow"><span class="hs-pragma hs-type">tshow</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-26"></span><span class="hs-comment">-- | Convert `Show` class instance to `Data.Text`.</span><span>
+</span><span id="line-27"></span><span id="local-6989586621679285710"><span class="annot"><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier hs-type">tshow</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679285710"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679285710"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span></span><span>
+</span><span id="line-28"></span><span id="tshow"><span class="annot"><span class="annottext">tshow :: a -&gt; Text
+</span><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier hs-var hs-var">tshow</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">String -&gt; Text
+</span><span class="hs-identifier hs-var">T.pack</span></span><span> </span><span class="annot"><span class="annottext">(String -&gt; Text) -&gt; (a -&gt; String) -&gt; a -&gt; Text
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; String
+forall a. Show a =&gt; a -&gt; String
+</span><span class="hs-identifier hs-var">show</span></span><span>
+</span><span id="line-29"></span><span>
+</span><span id="line-30"></span><span class="hs-comment">-- | `T.Text` version of the `Htcc.Utils.List.spanLen`.</span><span>
+</span><span id="line-31"></span><span class="annot"><a href="Htcc.Utils.Text.html#spanLenT"><span class="hs-identifier hs-type">spanLenT</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Char</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span class="hs-special">)</span><span>
+</span><span id="line-32"></span><span id="spanLenT"><span class="annot"><span class="annottext">spanLenT :: (Char -&gt; Bool) -&gt; Text -&gt; (Int, Text, Text)
+</span><a href="Htcc.Utils.Text.html#spanLenT"><span class="hs-identifier hs-var hs-var">spanLenT</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Int -&gt; (Char -&gt; Bool) -&gt; Text -&gt; (Int, Text, Text)
+forall a. Enum a =&gt; a -&gt; (Char -&gt; Bool) -&gt; Text -&gt; (a, Text, Text)
+</span><a href="#local-6989586621679285706"><span class="hs-identifier hs-var">spanLenT'</span></a></span><span> </span><span class="annot"><span class="hs-number">0</span></span><span>
+</span><span id="line-33"></span><span>    </span><span class="hs-keyword">where</span><span>
+</span><span id="line-34"></span><span>        </span><span id="local-6989586621679285706"><span class="annot"><span class="annottext">spanLenT' :: a -&gt; (Char -&gt; Bool) -&gt; Text -&gt; (a, Text, Text)
+</span><a href="#local-6989586621679285706"><span class="hs-identifier hs-var hs-var">spanLenT'</span></a></span></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679285705"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679285705"><span class="hs-identifier hs-var">n</span></a></span></span><span> </span><span id="local-6989586621679285704"><span class="annot"><span class="annottext">f :: Char -&gt; Bool
+</span><a href="#local-6989586621679285704"><span class="hs-identifier hs-var">f</span></a></span></span><span> </span><span id="local-6989586621679285703"><span class="annot"><span class="annottext">xs :: Text
+</span><a href="#local-6989586621679285703"><span class="hs-identifier hs-var">xs</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Maybe (Char, Text)
+</span><span class="hs-identifier hs-var">T.uncons</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679285703"><span class="hs-identifier hs-var">xs</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-35"></span><span>            </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679285701"><span class="annot"><span class="annottext">x :: Char
+</span><a href="#local-6989586621679285701"><span class="hs-identifier hs-var">x</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679285700"><span class="annot"><span class="annottext">xs' :: Text
+</span><a href="#local-6989586621679285700"><span class="hs-identifier hs-var">xs'</span></a></span></span><span class="hs-special">)</span><span>
+</span><span id="line-36"></span><span>                </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Char -&gt; Bool
+</span><a href="#local-6989586621679285704"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">Char
+</span><a href="#local-6989586621679285701"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Text) -&gt; (a, Text, Text) -&gt; (a, Text, Text)
+forall b d a c. (b -&gt; d) -&gt; (a, b, c) -&gt; (a, d, c)
+</span><a href="Htcc.Utils.Tuple.html#second3"><span class="hs-identifier hs-var">second3</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Char -&gt; Text -&gt; Text
+</span><span class="hs-identifier hs-var">T.cons</span></span><span> </span><span class="annot"><span class="annottext">Char
+</span><a href="#local-6989586621679285701"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">((a, Text, Text) -&gt; (a, Text, Text))
+-&gt; (a, Text, Text) -&gt; (a, Text, Text)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; (Char -&gt; Bool) -&gt; Text -&gt; (a, Text, Text)
+</span><a href="#local-6989586621679285706"><span class="hs-identifier hs-var">spanLenT'</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a -&gt; a
+forall a. Enum a =&gt; a -&gt; a
+</span><span class="hs-identifier hs-var">succ</span></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679285705"><span class="hs-identifier hs-var">n</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Char -&gt; Bool
+</span><a href="#local-6989586621679285704"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679285700"><span class="hs-identifier hs-var">xs'</span></a></span><span>
+</span><span id="line-37"></span><span>                </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679285705"><span class="hs-identifier hs-var">n</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Text
+</span><span class="hs-identifier hs-var">T.empty</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679285703"><span class="hs-identifier hs-var">xs</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-38"></span><span>            </span><span class="annot"><span class="hs-identifier hs-type">Nothing</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679285705"><span class="hs-identifier hs-var">n</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Text
+</span><span class="hs-identifier hs-var">T.empty</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Text
+</span><span class="hs-identifier hs-var">T.empty</span></span><span class="hs-special">)</span><span>
+</span><span id="line-39"></span><span>
+</span><span id="line-40"></span><span class="hs-comment">-- | `subTextIndex` searches text for a substring of text and returns its starting position.</span><span>
+</span><span id="line-41"></span><span class="hs-comment">-- If nothing is found, `Nothing` is returned.</span><span>
+</span><span id="line-42"></span><span class="annot"><a href="Htcc.Utils.Text.html#subTextIndex"><span class="hs-identifier hs-type">subTextIndex</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span>
+</span><span id="line-43"></span><span id="subTextIndex"><span class="annot"><span class="annottext">subTextIndex :: Text -&gt; Text -&gt; Maybe Int
+</span><a href="Htcc.Utils.Text.html#subTextIndex"><span class="hs-identifier hs-var hs-var">subTextIndex</span></a></span></span><span> </span><span id="local-6989586621679285696"><span class="annot"><span class="annottext">s :: Text
+</span><a href="#local-6989586621679285696"><span class="hs-identifier hs-var">s</span></a></span></span><span> </span><span id="local-6989586621679285695"><span class="annot"><span class="annottext">t :: Text
+</span><a href="#local-6989586621679285695"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; [Int]
+</span><span class="hs-identifier hs-var">T.indices</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679285696"><span class="hs-identifier hs-var">s</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679285695"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-44"></span><span>    </span><span class="hs-special">(</span><span id="local-6989586621679285693"><span class="annot"><span class="annottext">i :: Int
+</span><a href="#local-6989586621679285693"><span class="hs-identifier hs-var">i</span></a></span></span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Int -&gt; Maybe Int
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679285693"><span class="hs-identifier hs-var">i</span></a></span><span>
+</span><span id="line-45"></span><span>    </span><span class="hs-identifier">_</span><span>     </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Maybe Int
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-46"></span><span>
+</span><span id="line-47"></span></pre></body></html>

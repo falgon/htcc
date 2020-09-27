@@ -1,0 +1,997 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span id="%24con2tag_4NQ141gVjYGJW3SqZZxURP"></span><span class="hs-pragma">{-# LANGUAGE DeriveGeneric, OverloadedStrings #-}</span><span>
+</span><span id="line-2"></span><span class="hs-comment">{-|
+Module      : Htcc.Parser.ConstructionData.Scope.Var
+Description : The Data type of variables and its utilities used in parsing
+Copyright   : (c) roki, 2019
+License     : MIT
+Maintainer  : falgon53@yahoo.co.jp
+Stability   : experimental
+Portability : POSIX
+
+The Data type of variables and its utilities used in parsing
+-}</span><span>
+</span><span id="line-13"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Htcc.Parser.ConstructionData.Scope.Var</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-14"></span><span>    </span><span class="annot"><span class="hs-comment">-- * The classes</span></span><span>
+</span><span id="line-15"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Var"><span class="hs-identifier">Var</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-16"></span><span>    </span><span class="annot"><span class="hs-comment">-- * The data type</span></span><span>
+</span><span id="line-17"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#SomeVars"><span class="hs-identifier">SomeVars</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-18"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVarInitWith"><span class="hs-identifier">GVarInitWith</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-19"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVar"><span class="hs-identifier">GVar</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-20"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#LVar"><span class="hs-identifier">LVar</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-21"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Literal"><span class="hs-identifier">Literal</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-22"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GlobalVars"><span class="hs-identifier">GlobalVars</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-23"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#LocalVars"><span class="hs-identifier">LocalVars</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-24"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Literals"><span class="hs-identifier">Literals</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-25"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier">Vars</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-26"></span><span>    </span><span class="annot"><span class="hs-comment">-- * Functions for adding and searching for variables and literals</span></span><span>
+</span><span id="line-27"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lookupLVar"><span class="hs-identifier">lookupLVar</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-28"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lookupGVar"><span class="hs-identifier">lookupGVar</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-29"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lookupVar"><span class="hs-identifier">lookupVar</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-30"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#addLVar"><span class="hs-identifier">addLVar</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-31"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#addGVarWith"><span class="hs-identifier">addGVarWith</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-32"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#addGVar"><span class="hs-identifier">addGVar</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-33"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#addLiteral"><span class="hs-identifier">addLiteral</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-34"></span><span>    </span><span class="annot"><span class="hs-comment">-- * Utilities</span></span><span>
+</span><span id="line-35"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#initVars"><span class="hs-identifier">initVars</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-36"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#resetLocal"><span class="hs-identifier">resetLocal</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-37"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#fallBack"><span class="hs-identifier">fallBack</span></a></span><span>
+</span><span id="line-38"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-39"></span><span>
+</span><span id="line-40"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Control.DeepSeq</span></span><span>                                 </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">NFData</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-41"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.Bits</span></span><span>                                       </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Bits</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-42"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.ByteString</span></span><span>                                 </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">B</span></span><span>
+</span><span id="line-43"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Map.Strict</span></span><span>                                 </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">M</span></span><span>
+</span><span id="line-44"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text</span></span><span>                                       </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">T</span></span><span>
+</span><span id="line-45"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">GHC.Generics</span></span><span>                                    </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Generic</span></span><span class="hs-special">,</span><span>
+</span><span id="line-46"></span><span>                                                                  </span><span class="annot"><span class="hs-identifier">Generic1</span></span><span class="hs-special">)</span><span>
+</span><span id="line-47"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Numeric.Natural</span></span><span>
+</span><span id="line-48"></span><span>
+</span><span id="line-49"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.CRules.Types.html"><span class="hs-identifier">Htcc.CRules.Types</span></a></span><span>                               </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">CT</span></span><span>
+</span><span id="line-50"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.AST.Core.html"><span class="hs-identifier">Htcc.Parser.AST.Core</span></a></span><span>                            </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATKind"><span class="hs-identifier">ATKind</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-51"></span><span>                                                                  </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATree"><span class="hs-identifier">ATree</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-52"></span><span>                                                                  </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#Treealizable"><span class="hs-identifier">Treealizable</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-53"></span><span>                                                                  </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#atGVar"><span class="hs-identifier">atGVar</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-54"></span><span>                                                                  </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#atLVar"><span class="hs-identifier">atLVar</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-55"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html"><span class="hs-identifier">Htcc.Parser.ConstructionData.Scope.ManagedScope</span></a></span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">SM</span></span><span>
+</span><span id="line-56"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Utils.html"><span class="hs-identifier">Htcc.Parser.ConstructionData.Scope.Utils</span></a></span><span>        </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Utils.html#internalCE"><span class="hs-identifier">internalCE</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-57"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html"><span class="hs-identifier">Htcc.Tokenizer.Token</span></a></span><span>                            </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">HT</span></span><span>
+</span><span id="line-58"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Utils.html"><span class="hs-identifier">Htcc.Utils</span></a></span><span>                                      </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier">tshow</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-59"></span><span>
+</span><span id="line-60"></span><span class="hs-comment">-- | The type class of the type representing the variable</span><span>
+</span><span id="line-61"></span><span class="hs-keyword">class</span><span> </span><span id="Var"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Var"><span class="hs-identifier hs-var">Var</span></a></span></span><span> </span><span id="local-6989586621679288284"><span class="annot"><a href="#local-6989586621679288284"><span class="hs-identifier hs-type">a</span></a></span></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-62"></span><span>    </span><span class="hs-comment">-- | `vtype` returns the type of the variable</span><span>
+</span><span id="line-63"></span><span>    </span><span id="local-6989586621679288286"><span id="vtype"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#vtype"><span class="hs-identifier hs-type">vtype</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="#local-6989586621679288284"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288286"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.CRules.Types.StorageClass.html#StorageClass"><span class="hs-identifier hs-type">CT.StorageClass</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288286"><span class="hs-identifier hs-type">i</span></a></span></span><span>
+</span><span id="line-64"></span><span>
+</span><span id="line-65"></span><span class="hs-comment">-- | The informations type about initial value of the global variable</span><span>
+</span><span id="line-66"></span><span id="local-6989586621679288130"><span id="local-6989586621679288131"></span></span><span class="hs-keyword">data</span><span> </span><span id="GVarInitWith"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVarInitWith"><span class="hs-identifier hs-var">GVarInitWith</span></a></span></span><span> </span><span id="local-6989586621679288158"><span class="annot"><a href="#local-6989586621679288158"><span class="hs-identifier hs-type">i</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="GVarInitWithZero"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVarInitWithZero"><span class="hs-identifier hs-var">GVarInitWithZero</span></a></span></span><span> </span><span class="hs-glyph">|</span><span> </span><span id="GVarInitWithOG"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVarInitWithOG"><span class="hs-identifier hs-var">GVarInitWithOG</span></a></span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">|</span><span> </span><span id="GVarInitWithVal"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVarInitWithVal"><span class="hs-identifier hs-var">GVarInitWithVal</span></a></span></span><span> </span><span class="annot"><a href="#local-6989586621679288158"><span class="hs-identifier hs-type">i</span></a></span><span>
+</span><span id="line-67"></span><span>    </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679288123"><span id="local-6989586621679288125"><span class="annot"><span class="annottext">GVarInitWith i -&gt; GVarInitWith i -&gt; Bool
+(GVarInitWith i -&gt; GVarInitWith i -&gt; Bool)
+-&gt; (GVarInitWith i -&gt; GVarInitWith i -&gt; Bool)
+-&gt; Eq (GVarInitWith i)
+forall i. Eq i =&gt; GVarInitWith i -&gt; GVarInitWith i -&gt; Bool
+forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
+/= :: GVarInitWith i -&gt; GVarInitWith i -&gt; Bool
+$c/= :: forall i. Eq i =&gt; GVarInitWith i -&gt; GVarInitWith i -&gt; Bool
+== :: GVarInitWith i -&gt; GVarInitWith i -&gt; Bool
+$c== :: forall i. Eq i =&gt; GVarInitWith i -&gt; GVarInitWith i -&gt; Bool
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679288107"><span id="local-6989586621679288109"><span id="local-6989586621679288111"><span id="local-6989586621679288113"><span id="local-6989586621679288115"><span id="local-6989586621679288117"><span id="local-6989586621679288119"><span class="annot"><span class="annottext">Eq (GVarInitWith i)
+Eq (GVarInitWith i) =&gt;
+(GVarInitWith i -&gt; GVarInitWith i -&gt; Ordering)
+-&gt; (GVarInitWith i -&gt; GVarInitWith i -&gt; Bool)
+-&gt; (GVarInitWith i -&gt; GVarInitWith i -&gt; Bool)
+-&gt; (GVarInitWith i -&gt; GVarInitWith i -&gt; Bool)
+-&gt; (GVarInitWith i -&gt; GVarInitWith i -&gt; Bool)
+-&gt; (GVarInitWith i -&gt; GVarInitWith i -&gt; GVarInitWith i)
+-&gt; (GVarInitWith i -&gt; GVarInitWith i -&gt; GVarInitWith i)
+-&gt; Ord (GVarInitWith i)
+GVarInitWith i -&gt; GVarInitWith i -&gt; Bool
+GVarInitWith i -&gt; GVarInitWith i -&gt; Ordering
+GVarInitWith i -&gt; GVarInitWith i -&gt; GVarInitWith i
+forall a.
+Eq a =&gt;
+(a -&gt; a -&gt; Ordering)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; Ord a
+forall i. Ord i =&gt; Eq (GVarInitWith i)
+forall i. Ord i =&gt; GVarInitWith i -&gt; GVarInitWith i -&gt; Bool
+forall i. Ord i =&gt; GVarInitWith i -&gt; GVarInitWith i -&gt; Ordering
+forall i.
+Ord i =&gt;
+GVarInitWith i -&gt; GVarInitWith i -&gt; GVarInitWith i
+min :: GVarInitWith i -&gt; GVarInitWith i -&gt; GVarInitWith i
+$cmin :: forall i.
+Ord i =&gt;
+GVarInitWith i -&gt; GVarInitWith i -&gt; GVarInitWith i
+max :: GVarInitWith i -&gt; GVarInitWith i -&gt; GVarInitWith i
+$cmax :: forall i.
+Ord i =&gt;
+GVarInitWith i -&gt; GVarInitWith i -&gt; GVarInitWith i
+&gt;= :: GVarInitWith i -&gt; GVarInitWith i -&gt; Bool
+$c&gt;= :: forall i. Ord i =&gt; GVarInitWith i -&gt; GVarInitWith i -&gt; Bool
+&gt; :: GVarInitWith i -&gt; GVarInitWith i -&gt; Bool
+$c&gt; :: forall i. Ord i =&gt; GVarInitWith i -&gt; GVarInitWith i -&gt; Bool
+&lt;= :: GVarInitWith i -&gt; GVarInitWith i -&gt; Bool
+$c&lt;= :: forall i. Ord i =&gt; GVarInitWith i -&gt; GVarInitWith i -&gt; Bool
+&lt; :: GVarInitWith i -&gt; GVarInitWith i -&gt; Bool
+$c&lt; :: forall i. Ord i =&gt; GVarInitWith i -&gt; GVarInitWith i -&gt; Bool
+compare :: GVarInitWith i -&gt; GVarInitWith i -&gt; Ordering
+$ccompare :: forall i. Ord i =&gt; GVarInitWith i -&gt; GVarInitWith i -&gt; Ordering
+$cp1Ord :: forall i. Ord i =&gt; Eq (GVarInitWith i)
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Ord</span></span></span></span></span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679288100"><span id="local-6989586621679288102"><span id="local-6989586621679288104"><span class="annot"><span class="annottext">Int -&gt; GVarInitWith i -&gt; ShowS
+[GVarInitWith i] -&gt; ShowS
+GVarInitWith i -&gt; String
+(Int -&gt; GVarInitWith i -&gt; ShowS)
+-&gt; (GVarInitWith i -&gt; String)
+-&gt; ([GVarInitWith i] -&gt; ShowS)
+-&gt; Show (GVarInitWith i)
+forall i. Show i =&gt; Int -&gt; GVarInitWith i -&gt; ShowS
+forall i. Show i =&gt; [GVarInitWith i] -&gt; ShowS
+forall i. Show i =&gt; GVarInitWith i -&gt; String
+forall a.
+(Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
+showList :: [GVarInitWith i] -&gt; ShowS
+$cshowList :: forall i. Show i =&gt; [GVarInitWith i] -&gt; ShowS
+show :: GVarInitWith i -&gt; String
+$cshow :: forall i. Show i =&gt; GVarInitWith i -&gt; String
+showsPrec :: Int -&gt; GVarInitWith i -&gt; ShowS
+$cshowsPrec :: forall i. Show i =&gt; Int -&gt; GVarInitWith i -&gt; ShowS
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">(forall x. GVarInitWith i -&gt; Rep (GVarInitWith i) x)
+-&gt; (forall x. Rep (GVarInitWith i) x -&gt; GVarInitWith i)
+-&gt; Generic (GVarInitWith i)
+forall x. Rep (GVarInitWith i) x -&gt; GVarInitWith i
+forall x. GVarInitWith i -&gt; Rep (GVarInitWith i) x
+forall a.
+(forall x. a -&gt; Rep a x) -&gt; (forall x. Rep a x -&gt; a) -&gt; Generic a
+forall i x. Rep (GVarInitWith i) x -&gt; GVarInitWith i
+forall i x. GVarInitWith i -&gt; Rep (GVarInitWith i) x
+$cto :: forall i x. Rep (GVarInitWith i) x -&gt; GVarInitWith i
+$cfrom :: forall i x. GVarInitWith i -&gt; Rep (GVarInitWith i) x
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">Generic</span></span><span class="hs-special">)</span><span>
+</span><span id="line-68"></span><span>
+</span><span id="line-69"></span><span id="local-6989586621679288095"><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679288093"><span class="annot"><span class="hs-identifier hs-type">NFData</span></span><span> </span><span class="annot"><a href="#local-6989586621679288095"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">NFData</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVarInitWith"><span class="hs-identifier hs-type">GVarInitWith</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288095"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-70"></span><span>
+</span><span id="line-71"></span><span class="hs-comment">-- | The data type of the global variable</span><span>
+</span><span id="line-72"></span><span id="local-6989586621679288090"><span id="local-6989586621679288091"></span></span><span class="hs-keyword">data</span><span> </span><span id="GVar"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVar"><span class="hs-identifier hs-var">GVar</span></a></span></span><span> </span><span id="local-6989586621679288165"><span class="annot"><a href="#local-6989586621679288165"><span class="hs-identifier hs-type">i</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="GVar"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVar"><span class="hs-identifier hs-var">GVar</span></a></span></span><span> </span><span class="hs-comment">-- ^ The constructor of the global variable</span><span>
+</span><span id="line-73"></span><span>    </span><span class="hs-special">{</span><span>
+</span><span id="line-74"></span><span>        </span><span id="gvtype"><span class="annot"><span class="annottext">GVar i -&gt; StorageClass i
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#gvtype"><span class="hs-identifier hs-var hs-var">gvtype</span></a></span></span><span>   </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Htcc.CRules.Types.StorageClass.html#StorageClass"><span class="hs-identifier hs-type">CT.StorageClass</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288165"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="hs-comment">-- ^ The type of the global variable</span><span>
+</span><span id="line-75"></span><span>        </span><span id="initWith"><span class="annot"><span class="annottext">GVar i -&gt; GVarInitWith i
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#initWith"><span class="hs-identifier hs-var hs-var">initWith</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVarInitWith"><span class="hs-identifier hs-type">GVarInitWith</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288165"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-comment">-- ^ The informations about initial value of the global variable</span><span>
+</span><span id="line-76"></span><span>    </span><span class="hs-special">}</span><span> </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679288083"><span id="local-6989586621679288085"><span class="annot"><span class="annottext">GVar i -&gt; GVar i -&gt; Bool
+(GVar i -&gt; GVar i -&gt; Bool)
+-&gt; (GVar i -&gt; GVar i -&gt; Bool) -&gt; Eq (GVar i)
+forall i. Eq i =&gt; GVar i -&gt; GVar i -&gt; Bool
+forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
+/= :: GVar i -&gt; GVar i -&gt; Bool
+$c/= :: forall i. Eq i =&gt; GVar i -&gt; GVar i -&gt; Bool
+== :: GVar i -&gt; GVar i -&gt; Bool
+$c== :: forall i. Eq i =&gt; GVar i -&gt; GVar i -&gt; Bool
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679288068"><span id="local-6989586621679288070"><span id="local-6989586621679288072"><span id="local-6989586621679288074"><span id="local-6989586621679288076"><span id="local-6989586621679288078"><span id="local-6989586621679288080"><span class="annot"><span class="annottext">Eq (GVar i)
+Eq (GVar i) =&gt;
+(GVar i -&gt; GVar i -&gt; Ordering)
+-&gt; (GVar i -&gt; GVar i -&gt; Bool)
+-&gt; (GVar i -&gt; GVar i -&gt; Bool)
+-&gt; (GVar i -&gt; GVar i -&gt; Bool)
+-&gt; (GVar i -&gt; GVar i -&gt; Bool)
+-&gt; (GVar i -&gt; GVar i -&gt; GVar i)
+-&gt; (GVar i -&gt; GVar i -&gt; GVar i)
+-&gt; Ord (GVar i)
+GVar i -&gt; GVar i -&gt; Bool
+GVar i -&gt; GVar i -&gt; Ordering
+GVar i -&gt; GVar i -&gt; GVar i
+forall a.
+Eq a =&gt;
+(a -&gt; a -&gt; Ordering)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; Ord a
+forall i. Ord i =&gt; Eq (GVar i)
+forall i. Ord i =&gt; GVar i -&gt; GVar i -&gt; Bool
+forall i. Ord i =&gt; GVar i -&gt; GVar i -&gt; Ordering
+forall i. Ord i =&gt; GVar i -&gt; GVar i -&gt; GVar i
+min :: GVar i -&gt; GVar i -&gt; GVar i
+$cmin :: forall i. Ord i =&gt; GVar i -&gt; GVar i -&gt; GVar i
+max :: GVar i -&gt; GVar i -&gt; GVar i
+$cmax :: forall i. Ord i =&gt; GVar i -&gt; GVar i -&gt; GVar i
+&gt;= :: GVar i -&gt; GVar i -&gt; Bool
+$c&gt;= :: forall i. Ord i =&gt; GVar i -&gt; GVar i -&gt; Bool
+&gt; :: GVar i -&gt; GVar i -&gt; Bool
+$c&gt; :: forall i. Ord i =&gt; GVar i -&gt; GVar i -&gt; Bool
+&lt;= :: GVar i -&gt; GVar i -&gt; Bool
+$c&lt;= :: forall i. Ord i =&gt; GVar i -&gt; GVar i -&gt; Bool
+&lt; :: GVar i -&gt; GVar i -&gt; Bool
+$c&lt; :: forall i. Ord i =&gt; GVar i -&gt; GVar i -&gt; Bool
+compare :: GVar i -&gt; GVar i -&gt; Ordering
+$ccompare :: forall i. Ord i =&gt; GVar i -&gt; GVar i -&gt; Ordering
+$cp1Ord :: forall i. Ord i =&gt; Eq (GVar i)
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Ord</span></span></span></span></span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679288062"><span id="local-6989586621679288064"><span id="local-6989586621679288066"><span class="annot"><span class="annottext">Int -&gt; GVar i -&gt; ShowS
+[GVar i] -&gt; ShowS
+GVar i -&gt; String
+(Int -&gt; GVar i -&gt; ShowS)
+-&gt; (GVar i -&gt; String) -&gt; ([GVar i] -&gt; ShowS) -&gt; Show (GVar i)
+forall i. Show i =&gt; Int -&gt; GVar i -&gt; ShowS
+forall i. Show i =&gt; [GVar i] -&gt; ShowS
+forall i. Show i =&gt; GVar i -&gt; String
+forall a.
+(Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
+showList :: [GVar i] -&gt; ShowS
+$cshowList :: forall i. Show i =&gt; [GVar i] -&gt; ShowS
+show :: GVar i -&gt; String
+$cshow :: forall i. Show i =&gt; GVar i -&gt; String
+showsPrec :: Int -&gt; GVar i -&gt; ShowS
+$cshowsPrec :: forall i. Show i =&gt; Int -&gt; GVar i -&gt; ShowS
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">(forall x. GVar i -&gt; Rep (GVar i) x)
+-&gt; (forall x. Rep (GVar i) x -&gt; GVar i) -&gt; Generic (GVar i)
+forall x. Rep (GVar i) x -&gt; GVar i
+forall x. GVar i -&gt; Rep (GVar i) x
+forall a.
+(forall x. a -&gt; Rep a x) -&gt; (forall x. Rep a x -&gt; a) -&gt; Generic a
+forall i x. Rep (GVar i) x -&gt; GVar i
+forall i x. GVar i -&gt; Rep (GVar i) x
+$cto :: forall i x. Rep (GVar i) x -&gt; GVar i
+$cfrom :: forall i x. GVar i -&gt; Rep (GVar i) x
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">Generic</span></span><span class="hs-special">)</span><span>
+</span><span id="line-77"></span><span>
+</span><span id="line-78"></span><span id="local-6989586621679288059"><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679288057"><span class="annot"><span class="hs-identifier hs-type">NFData</span></span><span> </span><span class="annot"><a href="#local-6989586621679288059"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">NFData</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVar"><span class="hs-identifier hs-type">GVar</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288059"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-79"></span><span>
+</span><span id="line-80"></span><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Var"><span class="hs-identifier hs-type">Var</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVar"><span class="hs-identifier hs-type">GVar</span></a></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-81"></span><span>    </span><span id="local-6989586621679288054"><span class="annot"><span class="annottext">vtype :: GVar i -&gt; StorageClass i
+</span><a href="#local-6989586621679288054"><span class="hs-identifier hs-var hs-var hs-var hs-var">vtype</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">GVar i -&gt; StorageClass i
+forall i. GVar i -&gt; StorageClass i
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#gvtype"><span class="hs-identifier hs-var hs-var">gvtype</span></a></span><span>
+</span><span id="line-82"></span><span>
+</span><span id="line-83"></span><span id="local-6989586621679288053"><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ManagedScope"><span class="hs-identifier hs-type">SM.ManagedScope</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVar"><span class="hs-identifier hs-type">GVar</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288053"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-84"></span><span>    </span><span id="local-6989586621679288048"><span class="annot"><span class="annottext">lookup :: Text -&gt; Map Text (GVar i) -&gt; Maybe (GVar i)
+</span><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#lookup"><span class="hs-identifier hs-var hs-var hs-var hs-var">lookup</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Map Text (GVar i) -&gt; Maybe (GVar i)
+forall k a. Ord k =&gt; k -&gt; Map k a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">M.lookup</span></span><span>
+</span><span id="line-85"></span><span>    </span><span id="local-6989586621679288045"><span class="annot"><span class="annottext">fallBack :: Map Text (GVar i) -&gt; Map Text (GVar i) -&gt; Map Text (GVar i)
+</span><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#fallBack"><span class="hs-identifier hs-var hs-var hs-var hs-var">fallBack</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Map Text (GVar i) -&gt; Map Text (GVar i) -&gt; Map Text (GVar i)
+forall a b. a -&gt; b -&gt; a
+</span><span class="hs-identifier hs-var">const</span></span><span>
+</span><span id="line-86"></span><span>    </span><span id="local-6989586621679288042"><span class="annot"><span class="annottext">initial :: Map Text (GVar i)
+</span><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#initial"><span class="hs-identifier hs-var hs-var hs-var hs-var">initial</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Map Text (GVar i)
+forall k a. Map k a
+</span><span class="hs-identifier hs-var">M.empty</span></span></span><span>
+</span><span id="line-87"></span><span>
+</span><span id="line-88"></span><span class="hs-comment">-- | The data type of local variable</span><span>
+</span><span id="line-89"></span><span id="local-6989586621679288038"><span id="local-6989586621679288039"></span></span><span class="hs-keyword">data</span><span> </span><span id="LVar"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#LVar"><span class="hs-identifier hs-var">LVar</span></a></span></span><span> </span><span id="local-6989586621679288193"><span class="annot"><a href="#local-6989586621679288193"><span class="hs-identifier hs-type">a</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="LVar"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#LVar"><span class="hs-identifier hs-var">LVar</span></a></span></span><span> </span><span class="hs-comment">-- ^ The constructor of local variable</span><span>
+</span><span id="line-90"></span><span>    </span><span class="hs-special">{</span><span>
+</span><span id="line-91"></span><span>        </span><span id="lvtype"><span class="annot"><span class="annottext">LVar a -&gt; StorageClass a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lvtype"><span class="hs-identifier hs-var hs-var">lvtype</span></a></span></span><span>    </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Htcc.CRules.Types.StorageClass.html#StorageClass"><span class="hs-identifier hs-type">CT.StorageClass</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288193"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">,</span><span> </span><span class="hs-comment">-- ^ The type of the local variable</span><span>
+</span><span id="line-92"></span><span>        </span><span id="rbpOffset"><span class="annot"><span class="annottext">LVar a -&gt; a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#rbpOffset"><span class="hs-identifier hs-var hs-var">rbpOffset</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="annot"><a href="#local-6989586621679288193"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">,</span><span> </span><span class="hs-comment">-- ^ The offset value from RBP</span><span>
+</span><span id="line-93"></span><span>        </span><span id="nestDepth"><span class="annot"><span class="annottext">LVar a -&gt; Natural
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#nestDepth"><span class="hs-identifier hs-var hs-var">nestDepth</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="annot"><span class="hs-identifier hs-type">Natural</span></span><span> </span><span class="hs-comment">-- ^ The nest depth of a local variable</span><span>
+</span><span id="line-94"></span><span>    </span><span class="hs-special">}</span><span> </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679288030"><span id="local-6989586621679288032"><span class="annot"><span class="annottext">LVar a -&gt; LVar a -&gt; Bool
+(LVar a -&gt; LVar a -&gt; Bool)
+-&gt; (LVar a -&gt; LVar a -&gt; Bool) -&gt; Eq (LVar a)
+forall a. Eq a =&gt; LVar a -&gt; LVar a -&gt; Bool
+forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
+/= :: LVar a -&gt; LVar a -&gt; Bool
+$c/= :: forall a. Eq a =&gt; LVar a -&gt; LVar a -&gt; Bool
+== :: LVar a -&gt; LVar a -&gt; Bool
+$c== :: forall a. Eq a =&gt; LVar a -&gt; LVar a -&gt; Bool
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679288015"><span id="local-6989586621679288017"><span id="local-6989586621679288019"><span id="local-6989586621679288021"><span id="local-6989586621679288023"><span id="local-6989586621679288025"><span id="local-6989586621679288027"><span class="annot"><span class="annottext">Eq (LVar a)
+Eq (LVar a) =&gt;
+(LVar a -&gt; LVar a -&gt; Ordering)
+-&gt; (LVar a -&gt; LVar a -&gt; Bool)
+-&gt; (LVar a -&gt; LVar a -&gt; Bool)
+-&gt; (LVar a -&gt; LVar a -&gt; Bool)
+-&gt; (LVar a -&gt; LVar a -&gt; Bool)
+-&gt; (LVar a -&gt; LVar a -&gt; LVar a)
+-&gt; (LVar a -&gt; LVar a -&gt; LVar a)
+-&gt; Ord (LVar a)
+LVar a -&gt; LVar a -&gt; Bool
+LVar a -&gt; LVar a -&gt; Ordering
+LVar a -&gt; LVar a -&gt; LVar a
+forall a.
+Eq a =&gt;
+(a -&gt; a -&gt; Ordering)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; Ord a
+forall a. Ord a =&gt; Eq (LVar a)
+forall a. Ord a =&gt; LVar a -&gt; LVar a -&gt; Bool
+forall a. Ord a =&gt; LVar a -&gt; LVar a -&gt; Ordering
+forall a. Ord a =&gt; LVar a -&gt; LVar a -&gt; LVar a
+min :: LVar a -&gt; LVar a -&gt; LVar a
+$cmin :: forall a. Ord a =&gt; LVar a -&gt; LVar a -&gt; LVar a
+max :: LVar a -&gt; LVar a -&gt; LVar a
+$cmax :: forall a. Ord a =&gt; LVar a -&gt; LVar a -&gt; LVar a
+&gt;= :: LVar a -&gt; LVar a -&gt; Bool
+$c&gt;= :: forall a. Ord a =&gt; LVar a -&gt; LVar a -&gt; Bool
+&gt; :: LVar a -&gt; LVar a -&gt; Bool
+$c&gt; :: forall a. Ord a =&gt; LVar a -&gt; LVar a -&gt; Bool
+&lt;= :: LVar a -&gt; LVar a -&gt; Bool
+$c&lt;= :: forall a. Ord a =&gt; LVar a -&gt; LVar a -&gt; Bool
+&lt; :: LVar a -&gt; LVar a -&gt; Bool
+$c&lt; :: forall a. Ord a =&gt; LVar a -&gt; LVar a -&gt; Bool
+compare :: LVar a -&gt; LVar a -&gt; Ordering
+$ccompare :: forall a. Ord a =&gt; LVar a -&gt; LVar a -&gt; Ordering
+$cp1Ord :: forall a. Ord a =&gt; Eq (LVar a)
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Ord</span></span></span></span></span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679288009"><span id="local-6989586621679288011"><span id="local-6989586621679288013"><span class="annot"><span class="annottext">Int -&gt; LVar a -&gt; ShowS
+[LVar a] -&gt; ShowS
+LVar a -&gt; String
+(Int -&gt; LVar a -&gt; ShowS)
+-&gt; (LVar a -&gt; String) -&gt; ([LVar a] -&gt; ShowS) -&gt; Show (LVar a)
+forall a. Show a =&gt; Int -&gt; LVar a -&gt; ShowS
+forall a. Show a =&gt; [LVar a] -&gt; ShowS
+forall a. Show a =&gt; LVar a -&gt; String
+forall a.
+(Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
+showList :: [LVar a] -&gt; ShowS
+$cshowList :: forall a. Show a =&gt; [LVar a] -&gt; ShowS
+show :: LVar a -&gt; String
+$cshow :: forall a. Show a =&gt; LVar a -&gt; String
+showsPrec :: Int -&gt; LVar a -&gt; ShowS
+$cshowsPrec :: forall a. Show a =&gt; Int -&gt; LVar a -&gt; ShowS
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">(forall x. LVar a -&gt; Rep (LVar a) x)
+-&gt; (forall x. Rep (LVar a) x -&gt; LVar a) -&gt; Generic (LVar a)
+forall x. Rep (LVar a) x -&gt; LVar a
+forall x. LVar a -&gt; Rep (LVar a) x
+forall a.
+(forall x. a -&gt; Rep a x) -&gt; (forall x. Rep a x -&gt; a) -&gt; Generic a
+forall a x. Rep (LVar a) x -&gt; LVar a
+forall a x. LVar a -&gt; Rep (LVar a) x
+$cto :: forall a x. Rep (LVar a) x -&gt; LVar a
+$cfrom :: forall a x. LVar a -&gt; Rep (LVar a) x
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">Generic</span></span><span class="hs-special">)</span><span>
+</span><span id="line-95"></span><span>
+</span><span id="line-96"></span><span id="local-6989586621679288006"><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679288004"><span class="annot"><span class="hs-identifier hs-type">NFData</span></span><span> </span><span class="annot"><a href="#local-6989586621679288006"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">NFData</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#LVar"><span class="hs-identifier hs-type">LVar</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288006"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-97"></span><span>
+</span><span id="line-98"></span><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#Treealizable"><span class="hs-identifier hs-type">Treealizable</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#LVar"><span class="hs-identifier hs-type">LVar</span></a></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-99"></span><span>    </span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#treealize"><span class="hs-pragma hs-type">treealize</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-100"></span><span>    </span><span id="local-6989586621679288000"><span class="annot"><span class="annottext">treealize :: LVar i -&gt; ATree i
+</span><a href="#local-6989586621679288000"><span class="hs-identifier hs-var hs-var hs-var hs-var">treealize</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#LVar"><span class="hs-identifier hs-type">LVar</span></a></span><span> </span><span id="local-6989586621679287999"><span class="annot"><span class="annottext">t :: StorageClass i
+</span><a href="#local-6989586621679287999"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679287998"><span class="annot"><span class="annottext">o :: i
+</span><a href="#local-6989586621679287998"><span class="hs-identifier hs-var">o</span></a></span></span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">StorageClass i -&gt; i -&gt; ATree i
+forall i. StorageClass i -&gt; i -&gt; ATree i
+</span><a href="Htcc.Parser.AST.Core.html#atLVar"><span class="hs-identifier hs-var">atLVar</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679287999"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="annot"><span class="annottext">i
+</span><a href="#local-6989586621679287998"><span class="hs-identifier hs-var">o</span></a></span><span>
+</span><span id="line-101"></span><span>
+</span><span id="line-102"></span><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Var"><span class="hs-identifier hs-type">Var</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#LVar"><span class="hs-identifier hs-type">LVar</span></a></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-103"></span><span>    </span><span id="local-6989586621679287996"><span class="annot"><span class="annottext">vtype :: LVar i -&gt; StorageClass i
+</span><a href="#local-6989586621679287996"><span class="hs-identifier hs-var hs-var hs-var hs-var">vtype</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">LVar i -&gt; StorageClass i
+forall i. LVar i -&gt; StorageClass i
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lvtype"><span class="hs-identifier hs-var hs-var">lvtype</span></a></span><span>
+</span><span id="line-104"></span><span>
+</span><span id="line-105"></span><span id="local-6989586621679287995"><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ManagedScope"><span class="hs-identifier hs-type">SM.ManagedScope</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#LVar"><span class="hs-identifier hs-type">LVar</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287995"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-106"></span><span>    </span><span id="local-6989586621679287991"><span class="annot"><span class="annottext">lookup :: Text -&gt; Map Text (LVar a) -&gt; Maybe (LVar a)
+</span><a href="#local-6989586621679287991"><span class="hs-identifier hs-var hs-var hs-var hs-var">lookup</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Map Text (LVar a) -&gt; Maybe (LVar a)
+forall k a. Ord k =&gt; k -&gt; Map k a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">M.lookup</span></span><span>
+</span><span id="line-107"></span><span>    </span><span id="local-6989586621679287990"><span class="annot"><span class="annottext">fallBack :: Map Text (LVar a) -&gt; Map Text (LVar a) -&gt; Map Text (LVar a)
+</span><a href="#local-6989586621679287990"><span class="hs-identifier hs-var hs-var hs-var hs-var">fallBack</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Map Text (LVar a) -&gt; Map Text (LVar a) -&gt; Map Text (LVar a)
+forall a b. a -&gt; b -&gt; a
+</span><span class="hs-identifier hs-var">const</span></span><span>
+</span><span id="line-108"></span><span>    </span><span id="local-6989586621679287989"><span class="annot"><span class="annottext">initial :: Map Text (LVar a)
+</span><a href="#local-6989586621679287989"><span class="hs-identifier hs-var hs-var hs-var hs-var">initial</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Map Text (LVar a)
+forall k a. Map k a
+</span><span class="hs-identifier hs-var">M.empty</span></span></span><span>
+</span><span id="line-109"></span><span>
+</span><span id="line-110"></span><span class="hs-comment">-- | The literal</span><span>
+</span><span id="line-111"></span><span id="local-6989586621679287987"><span id="local-6989586621679287988"></span></span><span class="hs-keyword">data</span><span> </span><span id="Literal"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Literal"><span class="hs-identifier hs-var">Literal</span></a></span></span><span> </span><span id="local-6989586621679288155"><span class="annot"><a href="#local-6989586621679288155"><span class="hs-identifier hs-type">a</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="Literal"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Literal"><span class="hs-identifier hs-var">Literal</span></a></span></span><span> </span><span class="hs-comment">-- ^ The literal constructor</span><span>
+</span><span id="line-112"></span><span>    </span><span class="hs-special">{</span><span>
+</span><span id="line-113"></span><span>        </span><span id="litype"><span class="annot"><span class="annottext">Literal a -&gt; StorageClass a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#litype"><span class="hs-identifier hs-var hs-var">litype</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Htcc.CRules.Types.StorageClass.html#StorageClass"><span class="hs-identifier hs-type">CT.StorageClass</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288155"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">,</span><span> </span><span class="hs-comment">-- ^ The single literal type</span><span>
+</span><span id="line-114"></span><span>        </span><span id="ln"><span class="annot"><span class="annottext">Literal a -&gt; Natural
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#ln"><span class="hs-identifier hs-var hs-var">ln</span></a></span></span><span>     </span><span class="hs-glyph">::</span><span> </span><span class="hs-glyph">!</span><span class="annot"><span class="hs-identifier hs-type">Natural</span></span><span class="hs-special">,</span><span> </span><span class="hs-comment">-- ^ The number of labels placed in the @.data@ section</span><span>
+</span><span id="line-115"></span><span>        </span><span id="lcts"><span class="annot"><span class="annottext">Literal a -&gt; ByteString
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lcts"><span class="hs-identifier hs-var hs-var">lcts</span></a></span></span><span>   </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">B.ByteString</span></span><span> </span><span class="hs-comment">-- ^ The content</span><span>
+</span><span id="line-116"></span><span>    </span><span class="hs-special">}</span><span> </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679287979"><span id="local-6989586621679287981"><span class="annot"><span class="annottext">Literal a -&gt; Literal a -&gt; Bool
+(Literal a -&gt; Literal a -&gt; Bool)
+-&gt; (Literal a -&gt; Literal a -&gt; Bool) -&gt; Eq (Literal a)
+forall a. Eq a =&gt; Literal a -&gt; Literal a -&gt; Bool
+forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
+/= :: Literal a -&gt; Literal a -&gt; Bool
+$c/= :: forall a. Eq a =&gt; Literal a -&gt; Literal a -&gt; Bool
+== :: Literal a -&gt; Literal a -&gt; Bool
+$c== :: forall a. Eq a =&gt; Literal a -&gt; Literal a -&gt; Bool
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679287973"><span id="local-6989586621679287975"><span id="local-6989586621679287977"><span class="annot"><span class="annottext">Int -&gt; Literal a -&gt; ShowS
+[Literal a] -&gt; ShowS
+Literal a -&gt; String
+(Int -&gt; Literal a -&gt; ShowS)
+-&gt; (Literal a -&gt; String)
+-&gt; ([Literal a] -&gt; ShowS)
+-&gt; Show (Literal a)
+forall a. Show a =&gt; Int -&gt; Literal a -&gt; ShowS
+forall a. Show a =&gt; [Literal a] -&gt; ShowS
+forall a. Show a =&gt; Literal a -&gt; String
+forall a.
+(Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
+showList :: [Literal a] -&gt; ShowS
+$cshowList :: forall a. Show a =&gt; [Literal a] -&gt; ShowS
+show :: Literal a -&gt; String
+$cshow :: forall a. Show a =&gt; Literal a -&gt; String
+showsPrec :: Int -&gt; Literal a -&gt; ShowS
+$cshowsPrec :: forall a. Show a =&gt; Int -&gt; Literal a -&gt; ShowS
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">(forall x. Literal a -&gt; Rep (Literal a) x)
+-&gt; (forall x. Rep (Literal a) x -&gt; Literal a)
+-&gt; Generic (Literal a)
+forall x. Rep (Literal a) x -&gt; Literal a
+forall x. Literal a -&gt; Rep (Literal a) x
+forall a.
+(forall x. a -&gt; Rep a x) -&gt; (forall x. Rep a x -&gt; a) -&gt; Generic a
+forall a x. Rep (Literal a) x -&gt; Literal a
+forall a x. Literal a -&gt; Rep (Literal a) x
+$cto :: forall a x. Rep (Literal a) x -&gt; Literal a
+$cfrom :: forall a x. Literal a -&gt; Rep (Literal a) x
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">Generic</span></span><span class="hs-special">)</span><span>
+</span><span id="line-117"></span><span>
+</span><span id="line-118"></span><span id="local-6989586621679287970"><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679287968"><span class="annot"><span class="hs-identifier hs-type">NFData</span></span><span> </span><span class="annot"><a href="#local-6989586621679287970"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">NFData</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Literal"><span class="hs-identifier hs-type">Literal</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287970"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-119"></span><span>
+</span><span id="line-120"></span><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Var"><span class="hs-identifier hs-type">Var</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Literal"><span class="hs-identifier hs-type">Literal</span></a></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-121"></span><span>    </span><span id="local-6989586621679287966"><span class="annot"><span class="annottext">vtype :: Literal i -&gt; StorageClass i
+</span><a href="#local-6989586621679287966"><span class="hs-identifier hs-var hs-var hs-var hs-var">vtype</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Literal i -&gt; StorageClass i
+forall i. Literal i -&gt; StorageClass i
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#litype"><span class="hs-identifier hs-var hs-var">litype</span></a></span><span>
+</span><span id="line-122"></span><span>
+</span><span id="line-123"></span><span class="hs-comment">-- | The type of variables</span><span>
+</span><span id="line-124"></span><span class="hs-keyword">type</span><span> </span><span id="SomeVars"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#SomeVars"><span class="hs-identifier hs-var">SomeVars</span></a></span></span><span> </span><span id="local-6989586621679287965"><span class="annot"><a href="#local-6989586621679287965"><span class="hs-identifier hs-type">v</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-identifier hs-type">M.Map</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="annot"><a href="#local-6989586621679287965"><span class="hs-identifier hs-type">v</span></a></span><span>
+</span><span id="line-125"></span><span>
+</span><span id="line-126"></span><span class="hs-comment">-- | The type of global variables</span><span>
+</span><span id="line-127"></span><span class="hs-keyword">type</span><span> </span><span id="GlobalVars"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GlobalVars"><span class="hs-identifier hs-var">GlobalVars</span></a></span></span><span> </span><span id="local-6989586621679287964"><span class="annot"><a href="#local-6989586621679287964"><span class="hs-identifier hs-type">a</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#SomeVars"><span class="hs-identifier hs-type">SomeVars</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVar"><span class="hs-identifier hs-type">GVar</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287964"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-128"></span><span>
+</span><span id="line-129"></span><span class="hs-comment">-- | The type of global variables</span><span>
+</span><span id="line-130"></span><span class="hs-keyword">type</span><span> </span><span id="LocalVars"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#LocalVars"><span class="hs-identifier hs-var">LocalVars</span></a></span></span><span> </span><span id="local-6989586621679287963"><span class="annot"><a href="#local-6989586621679287963"><span class="hs-identifier hs-type">a</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#SomeVars"><span class="hs-identifier hs-type">SomeVars</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#LVar"><span class="hs-identifier hs-type">LVar</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287963"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-131"></span><span>
+</span><span id="line-132"></span><span class="hs-comment">-- | The type of literals</span><span>
+</span><span id="line-133"></span><span class="hs-keyword">type</span><span> </span><span id="Literals"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Literals"><span class="hs-identifier hs-var">Literals</span></a></span></span><span> </span><span id="local-6989586621679287962"><span class="annot"><a href="#local-6989586621679287962"><span class="hs-identifier hs-type">a</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Literal"><span class="hs-identifier hs-type">Literal</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287962"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-134"></span><span>
+</span><span id="line-135"></span><span class="hs-comment">-- | The data type of local variables</span><span>
+</span><span id="line-136"></span><span id="local-6989586621679287958"><span id="local-6989586621679287959"><span id="local-6989586621679287960"><span id="local-6989586621679287961"></span></span></span></span><span class="hs-keyword">data</span><span> </span><span id="Vars"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-var">Vars</span></a></span></span><span> </span><span id="local-6989586621679288221"><span class="annot"><a href="#local-6989586621679288221"><span class="hs-identifier hs-type">a</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="Vars"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-var">Vars</span></a></span></span><span> </span><span class="hs-comment">-- ^ The constructor of variables</span><span>
+</span><span id="line-137"></span><span>    </span><span class="hs-special">{</span><span>
+</span><span id="line-138"></span><span>        </span><span id="globals"><span class="annot"><span class="annottext">Vars a -&gt; GlobalVars a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#globals"><span class="hs-identifier hs-var hs-var">globals</span></a></span></span><span>  </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GlobalVars"><span class="hs-identifier hs-type">GlobalVars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288221"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">,</span><span> </span><span class="hs-comment">-- ^ The global variables</span><span>
+</span><span id="line-139"></span><span>        </span><span id="locals"><span class="annot"><span class="annottext">Vars a -&gt; LocalVars a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#locals"><span class="hs-identifier hs-var hs-var">locals</span></a></span></span><span>   </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#LocalVars"><span class="hs-identifier hs-type">LocalVars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288221"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">,</span><span> </span><span class="hs-comment">-- ^ The local variables</span><span>
+</span><span id="line-140"></span><span>        </span><span id="literals"><span class="annot"><span class="annottext">Vars a -&gt; Literals a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#literals"><span class="hs-identifier hs-var hs-var">literals</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Literals"><span class="hs-identifier hs-type">Literals</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288221"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-comment">-- ^ Literals</span><span>
+</span><span id="line-141"></span><span>    </span><span class="hs-special">}</span><span> </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679287948"><span id="local-6989586621679287950"><span id="local-6989586621679287952"><span class="annot"><span class="annottext">Int -&gt; Vars a -&gt; ShowS
+[Vars a] -&gt; ShowS
+Vars a -&gt; String
+(Int -&gt; Vars a -&gt; ShowS)
+-&gt; (Vars a -&gt; String) -&gt; ([Vars a] -&gt; ShowS) -&gt; Show (Vars a)
+forall a. Show a =&gt; Int -&gt; Vars a -&gt; ShowS
+forall a. Show a =&gt; [Vars a] -&gt; ShowS
+forall a. Show a =&gt; Vars a -&gt; String
+forall a.
+(Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
+showList :: [Vars a] -&gt; ShowS
+$cshowList :: forall a. Show a =&gt; [Vars a] -&gt; ShowS
+show :: Vars a -&gt; String
+$cshow :: forall a. Show a =&gt; Vars a -&gt; String
+showsPrec :: Int -&gt; Vars a -&gt; ShowS
+$cshowsPrec :: forall a. Show a =&gt; Int -&gt; Vars a -&gt; ShowS
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">(forall x. Vars a -&gt; Rep (Vars a) x)
+-&gt; (forall x. Rep (Vars a) x -&gt; Vars a) -&gt; Generic (Vars a)
+forall x. Rep (Vars a) x -&gt; Vars a
+forall x. Vars a -&gt; Rep (Vars a) x
+forall a.
+(forall x. a -&gt; Rep a x) -&gt; (forall x. Rep a x -&gt; a) -&gt; Generic a
+forall a x. Rep (Vars a) x -&gt; Vars a
+forall a x. Vars a -&gt; Rep (Vars a) x
+$cto :: forall a x. Rep (Vars a) x -&gt; Vars a
+$cfrom :: forall a x. Vars a -&gt; Rep (Vars a) x
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">Generic</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">(forall a. Vars a -&gt; Rep1 Vars a)
+-&gt; (forall a. Rep1 Vars a -&gt; Vars a) -&gt; Generic1 Vars
+forall a. Rep1 Vars a -&gt; Vars a
+forall a. Vars a -&gt; Rep1 Vars a
+forall k (f :: k -&gt; *).
+(forall (a :: k). f a -&gt; Rep1 f a)
+-&gt; (forall (a :: k). Rep1 f a -&gt; f a) -&gt; Generic1 f
+$cto1 :: forall a. Rep1 Vars a -&gt; Vars a
+$cfrom1 :: forall a. Vars a -&gt; Rep1 Vars a
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">Generic1</span></span><span class="hs-special">)</span><span>
+</span><span id="line-142"></span><span>
+</span><span id="line-143"></span><span id="local-6989586621679287942"><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679287940"><span class="annot"><span class="hs-identifier hs-type">NFData</span></span><span> </span><span class="annot"><a href="#local-6989586621679287942"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">NFData</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-type">Vars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287942"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-144"></span><span>
+</span><span id="line-145"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#initVars"><span class="hs-pragma hs-type">initVars</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-146"></span><span class="hs-comment">-- | Helper function representing an empty variables</span><span>
+</span><span id="line-147"></span><span id="local-6989586621679287939"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#initVars"><span class="hs-identifier hs-type">initVars</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-type">Vars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287939"><span class="hs-identifier hs-type">a</span></a></span></span><span>
+</span><span id="line-148"></span><span id="initVars"><span class="annot"><span class="annottext">initVars :: Vars a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#initVars"><span class="hs-identifier hs-var hs-var">initVars</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">GlobalVars a -&gt; LocalVars a -&gt; Literals a -&gt; Vars a
+forall a. GlobalVars a -&gt; LocalVars a -&gt; Literals a -&gt; Vars a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-var">Vars</span></a></span><span> </span><span class="annot"><span class="annottext">GlobalVars a
+forall a. ManagedScope a =&gt; Map Text a
+</span><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#initial"><span class="hs-identifier hs-var">SM.initial</span></a></span><span> </span><span class="annot"><span class="annottext">LocalVars a
+forall a. ManagedScope a =&gt; Map Text a
+</span><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#initial"><span class="hs-identifier hs-var">SM.initial</span></a></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>
+</span><span id="line-149"></span><span>
+</span><span id="line-150"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#resetLocal"><span class="hs-pragma hs-type">resetLocal</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-151"></span><span class="hs-comment">-- | `resetLocal` initialize the local variable list for `Vars`</span><span>
+</span><span id="line-152"></span><span id="local-6989586621679287938"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#resetLocal"><span class="hs-identifier hs-type">resetLocal</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-type">Vars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287938"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-type">Vars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287938"><span class="hs-identifier hs-type">a</span></a></span></span><span>
+</span><span id="line-153"></span><span id="resetLocal"><span class="annot"><span class="annottext">resetLocal :: Vars a -&gt; Vars a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#resetLocal"><span class="hs-identifier hs-var hs-var">resetLocal</span></a></span></span><span> </span><span id="local-6989586621679287937"><span class="annot"><span class="annottext">vs :: Vars a
+</span><a href="#local-6989586621679287937"><span class="hs-identifier hs-var">vs</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Vars a
+</span><a href="#local-6989586621679287937"><span class="hs-identifier hs-var">vs</span></a></span><span> </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">locals :: LocalVars a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#locals"><span class="hs-identifier hs-var">locals</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">LocalVars a
+forall k a. Map k a
+</span><span class="hs-identifier hs-var">M.empty</span></span><span> </span><span class="hs-special">}</span><span>
+</span><span id="line-154"></span><span>
+</span><span id="line-155"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lookupGVar"><span class="hs-pragma hs-type">lookupGVar</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-156"></span><span class="hs-comment">-- | Search for a global variable with a given name</span><span>
+</span><span id="line-157"></span><span id="local-6989586621679288206"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lookupGVar"><span class="hs-identifier hs-type">lookupGVar</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-type">Vars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288206"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVar"><span class="hs-identifier hs-type">GVar</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288206"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span></span><span>
+</span><span id="line-158"></span><span id="lookupGVar"><span class="annot"><span class="annottext">lookupGVar :: Text -&gt; Vars a -&gt; Maybe (GVar a)
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lookupGVar"><span class="hs-identifier hs-var hs-var">lookupGVar</span></a></span></span><span> </span><span id="local-6989586621679287936"><span class="annot"><span class="annottext">s :: Text
+</span><a href="#local-6989586621679287936"><span class="hs-identifier hs-var">s</span></a></span></span><span> </span><span id="local-6989586621679287935"><span class="annot"><span class="annottext">vars :: Vars a
+</span><a href="#local-6989586621679287935"><span class="hs-identifier hs-var">vars</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Map Text (GVar a) -&gt; Maybe (GVar a)
+forall a. ManagedScope a =&gt; Text -&gt; Map Text a -&gt; Maybe a
+</span><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#lookup"><span class="hs-identifier hs-var">SM.lookup</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287936"><span class="hs-identifier hs-var">s</span></a></span><span> </span><span class="annot"><span class="annottext">(Map Text (GVar a) -&gt; Maybe (GVar a))
+-&gt; Map Text (GVar a) -&gt; Maybe (GVar a)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Vars a -&gt; Map Text (GVar a)
+forall a. Vars a -&gt; GlobalVars a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#globals"><span class="hs-identifier hs-var hs-var">globals</span></a></span><span> </span><span class="annot"><span class="annottext">Vars a
+</span><a href="#local-6989586621679287935"><span class="hs-identifier hs-var">vars</span></a></span><span>
+</span><span id="line-159"></span><span>
+</span><span id="line-160"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lookupLVar"><span class="hs-pragma hs-type">lookupLVar</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-161"></span><span class="hs-comment">-- | Search for a local variable with a given name</span><span>
+</span><span id="line-162"></span><span id="local-6989586621679288201"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lookupLVar"><span class="hs-identifier hs-type">lookupLVar</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-type">Vars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288201"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#LVar"><span class="hs-identifier hs-type">LVar</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288201"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span></span><span>
+</span><span id="line-163"></span><span id="lookupLVar"><span class="annot"><span class="annottext">lookupLVar :: Text -&gt; Vars a -&gt; Maybe (LVar a)
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lookupLVar"><span class="hs-identifier hs-var hs-var">lookupLVar</span></a></span></span><span> </span><span id="local-6989586621679287934"><span class="annot"><span class="annottext">s :: Text
+</span><a href="#local-6989586621679287934"><span class="hs-identifier hs-var">s</span></a></span></span><span> </span><span id="local-6989586621679287933"><span class="annot"><span class="annottext">vars :: Vars a
+</span><a href="#local-6989586621679287933"><span class="hs-identifier hs-var">vars</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Map Text (LVar a) -&gt; Maybe (LVar a)
+forall a. ManagedScope a =&gt; Text -&gt; Map Text a -&gt; Maybe a
+</span><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#lookup"><span class="hs-identifier hs-var">SM.lookup</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287934"><span class="hs-identifier hs-var">s</span></a></span><span> </span><span class="annot"><span class="annottext">(Map Text (LVar a) -&gt; Maybe (LVar a))
+-&gt; Map Text (LVar a) -&gt; Maybe (LVar a)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Vars a -&gt; Map Text (LVar a)
+forall a. Vars a -&gt; LocalVars a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#locals"><span class="hs-identifier hs-var hs-var">locals</span></a></span><span> </span><span class="annot"><span class="annottext">Vars a
+</span><a href="#local-6989586621679287933"><span class="hs-identifier hs-var">vars</span></a></span><span>
+</span><span id="line-164"></span><span>
+</span><span id="line-165"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lookupVar"><span class="hs-pragma hs-type">lookupVar</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-166"></span><span class="hs-comment">-- | First, search for local variables, and if not found, search for global variables. If nothing is found, Nothing is returned</span><span>
+</span><span id="line-167"></span><span id="local-6989586621679287932"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lookupVar"><span class="hs-identifier hs-type">lookupVar</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-type">Vars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287932"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Either</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVar"><span class="hs-identifier hs-type">GVar</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287932"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#LVar"><span class="hs-identifier hs-type">LVar</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287932"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span></span><span>
+</span><span id="line-168"></span><span id="lookupVar"><span class="annot"><span class="annottext">lookupVar :: Text -&gt; Vars a -&gt; Maybe (Either (GVar a) (LVar a))
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lookupVar"><span class="hs-identifier hs-var hs-var">lookupVar</span></a></span></span><span> </span><span id="local-6989586621679287931"><span class="annot"><span class="annottext">s :: Text
+</span><a href="#local-6989586621679287931"><span class="hs-identifier hs-var">s</span></a></span></span><span> </span><span id="local-6989586621679287930"><span class="annot"><span class="annottext">vars :: Vars a
+</span><a href="#local-6989586621679287930"><span class="hs-identifier hs-var">vars</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe (Either (GVar a) (LVar a))
+-&gt; (LVar a -&gt; Maybe (Either (GVar a) (LVar a)))
+-&gt; Maybe (LVar a)
+-&gt; Maybe (Either (GVar a) (LVar a))
+forall b a. b -&gt; (a -&gt; b) -&gt; Maybe a -&gt; b
+</span><span class="hs-identifier hs-var">maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">GVar a -&gt; Either (GVar a) (LVar a)
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="annot"><span class="annottext">(GVar a -&gt; Either (GVar a) (LVar a))
+-&gt; Maybe (GVar a) -&gt; Maybe (Either (GVar a) (LVar a))
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Vars a -&gt; Maybe (GVar a)
+forall a. Text -&gt; Vars a -&gt; Maybe (GVar a)
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lookupGVar"><span class="hs-identifier hs-var">lookupGVar</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287931"><span class="hs-identifier hs-var">s</span></a></span><span> </span><span class="annot"><span class="annottext">Vars a
+</span><a href="#local-6989586621679287930"><span class="hs-identifier hs-var">vars</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Either (GVar a) (LVar a) -&gt; Maybe (Either (GVar a) (LVar a))
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">(Either (GVar a) (LVar a) -&gt; Maybe (Either (GVar a) (LVar a)))
+-&gt; (LVar a -&gt; Either (GVar a) (LVar a))
+-&gt; LVar a
+-&gt; Maybe (Either (GVar a) (LVar a))
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">LVar a -&gt; Either (GVar a) (LVar a)
+forall a b. b -&gt; Either a b
+</span><span class="hs-identifier hs-var">Right</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Maybe (LVar a) -&gt; Maybe (Either (GVar a) (LVar a)))
+-&gt; Maybe (LVar a) -&gt; Maybe (Either (GVar a) (LVar a))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Vars a -&gt; Maybe (LVar a)
+forall a. Text -&gt; Vars a -&gt; Maybe (LVar a)
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lookupLVar"><span class="hs-identifier hs-var">lookupLVar</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287931"><span class="hs-identifier hs-var">s</span></a></span><span> </span><span class="annot"><span class="annottext">Vars a
+</span><a href="#local-6989586621679287930"><span class="hs-identifier hs-var">vars</span></a></span><span>
+</span><span id="line-169"></span><span>
+</span><span id="line-170"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#maximumOffset"><span class="hs-pragma hs-type">maximumOffset</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-171"></span><span id="local-6989586621679288174"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#maximumOffset"><span class="hs-identifier hs-type">maximumOffset</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679288174"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Ord</span></span><span> </span><span class="annot"><a href="#local-6989586621679288174"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">M.Map</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#LVar"><span class="hs-identifier hs-type">LVar</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288174"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679288174"><span class="hs-identifier hs-type">a</span></a></span></span><span>
+</span><span id="line-172"></span><span id="maximumOffset"><span class="annot"><span class="annottext">maximumOffset :: Map Text (LVar a) -&gt; a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#maximumOffset"><span class="hs-identifier hs-var hs-var">maximumOffset</span></a></span></span><span> </span><span id="local-6989586621679287925"><span class="annot"><span class="annottext">m :: Map Text (LVar a)
+</span><a href="#local-6989586621679287925"><span class="hs-identifier hs-var">m</span></a></span></span><span>
+</span><span id="line-173"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Map Text (LVar a) -&gt; Bool
+forall k a. Map k a -&gt; Bool
+</span><span class="hs-identifier hs-var">M.null</span></span><span> </span><span class="annot"><span class="annottext">Map Text (LVar a)
+</span><a href="#local-6989586621679287925"><span class="hs-identifier hs-var">m</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-number">0</span></span><span>
+</span><span id="line-174"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[a] -&gt; a
+forall (t :: * -&gt; *) a. (Foldable t, Ord a) =&gt; t a -&gt; a
+</span><span class="hs-identifier hs-var">maximum</span></span><span> </span><span class="annot"><span class="annottext">([a] -&gt; a) -&gt; [a] -&gt; a
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(LVar a -&gt; a) -&gt; [LVar a] -&gt; [a]
+forall a b. (a -&gt; b) -&gt; [a] -&gt; [b]
+</span><span class="hs-identifier hs-var">map</span></span><span> </span><span class="annot"><span class="annottext">LVar a -&gt; a
+forall a. LVar a -&gt; a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#rbpOffset"><span class="hs-identifier hs-var hs-var">rbpOffset</span></a></span><span> </span><span class="annot"><span class="annottext">([LVar a] -&gt; [a]) -&gt; [LVar a] -&gt; [a]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Map Text (LVar a) -&gt; [LVar a]
+forall k a. Map k a -&gt; [a]
+</span><span class="hs-identifier hs-var">M.elems</span></span><span> </span><span class="annot"><span class="annottext">Map Text (LVar a)
+</span><a href="#local-6989586621679287925"><span class="hs-identifier hs-var">m</span></a></span><span>
+</span><span id="line-175"></span><span>
+</span><span id="line-176"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#fallBack"><span class="hs-pragma hs-type">fallBack</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-177"></span><span class="hs-comment">-- | Organize variable list state after scoping</span><span>
+</span><span id="line-178"></span><span id="local-6989586621679287921"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#fallBack"><span class="hs-identifier hs-type">fallBack</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-type">Vars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287921"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-type">Vars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287921"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-type">Vars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287921"><span class="hs-identifier hs-type">a</span></a></span></span><span>
+</span><span id="line-179"></span><span id="fallBack"><span class="annot"><span class="annottext">fallBack :: Vars a -&gt; Vars a -&gt; Vars a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#fallBack"><span class="hs-identifier hs-var hs-var">fallBack</span></a></span></span><span> </span><span id="local-6989586621679287920"><span class="annot"><span class="annottext">pre :: Vars a
+</span><a href="#local-6989586621679287920"><span class="hs-identifier hs-var">pre</span></a></span></span><span> </span><span id="local-6989586621679287919"><span class="annot"><span class="annottext">post :: Vars a
+</span><a href="#local-6989586621679287919"><span class="hs-identifier hs-var">post</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Vars a
+</span><a href="#local-6989586621679287920"><span class="hs-identifier hs-var">pre</span></a></span><span> </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">literals :: Literals a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#literals"><span class="hs-identifier hs-var">literals</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Vars a -&gt; Literals a
+forall a. Vars a -&gt; Literals a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#literals"><span class="hs-identifier hs-var hs-var">literals</span></a></span><span> </span><span class="annot"><span class="annottext">Vars a
+</span><a href="#local-6989586621679287919"><span class="hs-identifier hs-var">post</span></a></span><span> </span><span class="hs-special">}</span><span>
+</span><span id="line-180"></span><span>
+</span><span id="line-181"></span><span class="hs-comment">-- | If the specified token is `HT.TKIdent` and the local variable does not exist in the list, `addLVar` adds a new local variable to the list,</span><span>
+</span><span id="line-182"></span><span class="hs-comment">-- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.</span><span>
+</span><span id="line-183"></span><span id="local-6989586621679287918"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#addLVar"><span class="hs-identifier hs-type">addLVar</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Integral</span></span><span> </span><span class="annot"><a href="#local-6989586621679287918"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bits</span></span><span> </span><span class="annot"><a href="#local-6989586621679287918"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Natural</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.CRules.Types.StorageClass.html#StorageClass"><span class="hs-identifier hs-type">CT.StorageClass</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287918"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287918"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-type">Vars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287918"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Either</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ASTError"><span class="hs-identifier hs-type">SM.ASTError</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287918"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATree"><span class="hs-identifier hs-type">ATree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287918"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-type">Vars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287918"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span></span><span>
+</span><span id="line-184"></span><span id="addLVar"><span class="annot"><span class="annottext">addLVar :: Natural
+-&gt; StorageClass i
+-&gt; TokenLC i
+-&gt; Vars i
+-&gt; Either (ASTError i) (ATree i, Vars i)
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#addLVar"><span class="hs-identifier hs-var hs-var">addLVar</span></a></span></span><span> </span><span id="local-6989586621679287917"><span class="annot"><span class="annottext">cnd :: Natural
+</span><a href="#local-6989586621679287917"><span class="hs-identifier hs-var">cnd</span></a></span></span><span> </span><span id="local-6989586621679287916"><span class="annot"><span class="annottext">t :: StorageClass i
+</span><a href="#local-6989586621679287916"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679287915"><span class="annot"><span class="annottext">cur :: TokenLC i
+</span><a href="#local-6989586621679287915"><span class="hs-identifier hs-var">cur</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="hs-identifier">_</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TKIdent"><span class="hs-identifier hs-type">HT.TKIdent</span></a></span><span> </span><span id="local-6989586621679287913"><span class="annot"><span class="annottext">ident :: Text
+</span><a href="#local-6989586621679287913"><span class="hs-identifier hs-var">ident</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679287912"><span class="annot"><span class="annottext">vars :: Vars i
+</span><a href="#local-6989586621679287912"><span class="hs-identifier hs-var">vars</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Vars i -&gt; Maybe (LVar i)
+forall a. Text -&gt; Vars a -&gt; Maybe (LVar a)
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lookupLVar"><span class="hs-identifier hs-var">lookupLVar</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287913"><span class="hs-identifier hs-var">ident</span></a></span><span> </span><span class="annot"><span class="annottext">Vars i
+</span><a href="#local-6989586621679287912"><span class="hs-identifier hs-var">vars</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-185"></span><span>    </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span id="local-6989586621679287911"><span class="annot"><span class="annottext">foundedVar :: LVar i
+</span><a href="#local-6989586621679287911"><span class="hs-identifier hs-var">foundedVar</span></a></span></span><span>
+</span><span id="line-186"></span><span>        </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">LVar i -&gt; Natural
+forall a. LVar a -&gt; Natural
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#nestDepth"><span class="hs-identifier hs-var hs-var">nestDepth</span></a></span><span> </span><span class="annot"><span class="annottext">LVar i
+</span><a href="#local-6989586621679287911"><span class="hs-identifier hs-var">foundedVar</span></a></span><span> </span><span class="annot"><span class="annottext">Natural -&gt; Natural -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">/=</span></span><span> </span><span class="annot"><span class="annottext">Natural
+</span><a href="#local-6989586621679287917"><span class="hs-identifier hs-var">cnd</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Either (ASTError i) (ATree i, Vars i)
+forall a. Either a (ATree i, Vars i)
+</span><a href="#local-6989586621679287909"><span class="hs-identifier hs-var">varnat</span></a></span><span>
+</span><span id="line-187"></span><span>        </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">StorageClass i -&gt; Bool
+forall (a :: * -&gt; *) i. IncompleteBase a =&gt; a i -&gt; Bool
+</span><a href="Htcc.CRules.Types.TypeKind.html#isIncompleteArray"><span class="hs-identifier hs-var">CT.isIncompleteArray</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">LVar i -&gt; StorageClass i
+forall i. LVar i -&gt; StorageClass i
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lvtype"><span class="hs-identifier hs-var hs-var">lvtype</span></a></span><span> </span><span class="annot"><span class="annottext">LVar i
+</span><a href="#local-6989586621679287911"><span class="hs-identifier hs-var">foundedVar</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Either (ASTError i) (ATree i, Vars i)
+forall a. Either a (ATree i, Vars i)
+</span><a href="#local-6989586621679287909"><span class="hs-identifier hs-var">varnat</span></a></span><span>
+</span><span id="line-188"></span><span>        </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">ASTError i -&gt; Either (ASTError i) (ATree i, Vars i)
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;redeclaration of '&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287913"><span class="hs-identifier hs-var">ident</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;' with no linkage&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">TokenLC i
+</span><a href="#local-6989586621679287915"><span class="hs-identifier hs-var">cur</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-comment">-- ODR</span><span>
+</span><span id="line-189"></span><span>    </span><span class="annot"><span class="hs-identifier hs-type">Nothing</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Either (ASTError i) (ATree i, Vars i)
+forall a. Either a (ATree i, Vars i)
+</span><a href="#local-6989586621679287909"><span class="hs-identifier hs-var">varnat</span></a></span><span>
+</span><span id="line-190"></span><span>    </span><span class="hs-keyword">where</span><span>
+</span><span id="line-191"></span><span>        </span><span id="local-6989586621679287907"><span class="annot"><span class="annottext">ofs :: i
+</span><a href="#local-6989586621679287907"><span class="hs-identifier hs-var hs-var">ofs</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">i -&gt; i -&gt; i
+forall a. Num a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">(+)</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Natural -&gt; i
+forall a b. (Integral a, Num b) =&gt; a -&gt; b
+</span><span class="hs-identifier hs-var">fromIntegral</span></span><span> </span><span class="annot"><span class="annottext">(Natural -&gt; i) -&gt; Natural -&gt; i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">StorageClass i -&gt; Natural
+forall a. CType a =&gt; a -&gt; Natural
+</span><a href="Htcc.CRules.Types.CType.html#sizeof"><span class="hs-identifier hs-var">CT.sizeof</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679287916"><span class="hs-identifier hs-var">t</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(i -&gt; i) -&gt; i -&gt; i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">i -&gt; i -&gt; i
+forall a. (Bits a, Num a, Enum a) =&gt; a -&gt; a -&gt; a
+</span><a href="Htcc.CRules.Types.TypeKind.html#alignas"><span class="hs-identifier hs-var">CT.alignas</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Map Text (LVar i) -&gt; i
+forall a. (Num a, Ord a) =&gt; Map Text (LVar a) -&gt; a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#maximumOffset"><span class="hs-identifier hs-var">maximumOffset</span></a></span><span> </span><span class="annot"><span class="annottext">(Map Text (LVar i) -&gt; i) -&gt; Map Text (LVar i) -&gt; i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Vars i -&gt; Map Text (LVar i)
+forall a. Vars a -&gt; LocalVars a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#locals"><span class="hs-identifier hs-var hs-var">locals</span></a></span><span> </span><span class="annot"><span class="annottext">Vars i
+</span><a href="#local-6989586621679287912"><span class="hs-identifier hs-var">vars</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(i -&gt; i) -&gt; i -&gt; i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Natural -&gt; i
+forall a b. (Integral a, Num b) =&gt; a -&gt; b
+</span><span class="hs-identifier hs-var">fromIntegral</span></span><span> </span><span class="annot"><span class="annottext">(Natural -&gt; i) -&gt; Natural -&gt; i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">StorageClass i -&gt; Natural
+forall a. CType a =&gt; a -&gt; Natural
+</span><a href="Htcc.CRules.Types.CType.html#alignof"><span class="hs-identifier hs-var">CT.alignof</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679287916"><span class="hs-identifier hs-var">t</span></a></span><span>
+</span><span id="line-192"></span><span>        </span><span id="local-6989586621679287909"><span class="annot"><span class="annottext">varnat :: Either a (ATree i, Vars i)
+</span><a href="#local-6989586621679287909"><span class="hs-identifier hs-var hs-var">varnat</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679287902"><span class="annot"><span class="annottext">lvar :: LVar i
+</span><a href="#local-6989586621679287902"><span class="hs-identifier hs-var hs-var">lvar</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">StorageClass i -&gt; i -&gt; Natural -&gt; LVar i
+forall a. StorageClass a -&gt; a -&gt; Natural -&gt; LVar a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#LVar"><span class="hs-identifier hs-var">LVar</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679287916"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="annot"><span class="annottext">i
+</span><a href="#local-6989586621679287907"><span class="hs-identifier hs-var">ofs</span></a></span><span> </span><span class="annot"><span class="annottext">Natural
+</span><a href="#local-6989586621679287917"><span class="hs-identifier hs-var">cnd</span></a></span><span> </span><span class="hs-keyword">in</span><span>
+</span><span id="line-193"></span><span>            </span><span class="annot"><span class="annottext">(ATree i, Vars i) -&gt; Either a (ATree i, Vars i)
+forall a b. b -&gt; Either a b
+</span><span class="hs-identifier hs-var">Right</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; i -&gt; ATree i
+forall i. StorageClass i -&gt; i -&gt; ATree i
+</span><a href="Htcc.Parser.AST.Core.html#atLVar"><span class="hs-identifier hs-var">atLVar</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">LVar i -&gt; StorageClass i
+forall i. LVar i -&gt; StorageClass i
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lvtype"><span class="hs-identifier hs-var hs-var">lvtype</span></a></span><span> </span><span class="annot"><span class="annottext">LVar i
+</span><a href="#local-6989586621679287902"><span class="hs-identifier hs-var">lvar</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">LVar i -&gt; i
+forall a. LVar a -&gt; a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#rbpOffset"><span class="hs-identifier hs-var hs-var">rbpOffset</span></a></span><span> </span><span class="annot"><span class="annottext">LVar i
+</span><a href="#local-6989586621679287902"><span class="hs-identifier hs-var">lvar</span></a></span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Vars i
+</span><a href="#local-6989586621679287912"><span class="hs-identifier hs-var">vars</span></a></span><span> </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">locals :: Map Text (LVar i)
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#locals"><span class="hs-identifier hs-var">locals</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; LVar i -&gt; Map Text (LVar i) -&gt; Map Text (LVar i)
+forall k a. Ord k =&gt; k -&gt; a -&gt; Map k a -&gt; Map k a
+</span><span class="hs-identifier hs-var">M.insert</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287913"><span class="hs-identifier hs-var">ident</span></a></span><span> </span><span class="annot"><span class="annottext">LVar i
+</span><a href="#local-6989586621679287902"><span class="hs-identifier hs-var">lvar</span></a></span><span> </span><span class="annot"><span class="annottext">(Map Text (LVar i) -&gt; Map Text (LVar i))
+-&gt; Map Text (LVar i) -&gt; Map Text (LVar i)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Vars i -&gt; Map Text (LVar i)
+forall a. Vars a -&gt; LocalVars a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#locals"><span class="hs-identifier hs-var hs-var">locals</span></a></span><span> </span><span class="annot"><span class="annottext">Vars i
+</span><a href="#local-6989586621679287912"><span class="hs-identifier hs-var">vars</span></a></span><span> </span><span class="hs-special">}</span><span class="hs-special">)</span><span>
+</span><span id="line-194"></span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#addLVar"><span class="hs-identifier hs-var">addLVar</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ASTError i -&gt; Either (ASTError i) (ATree i, Vars i)
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text
+</span><a href="Htcc.Parser.ConstructionData.Scope.Utils.html#internalCE"><span class="hs-identifier hs-var">internalCE</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">TokenLC i
+forall i. Num i =&gt; TokenLC i
+</span><a href="Htcc.Tokenizer.Token.html#emptyToken"><span class="hs-identifier hs-var">HT.emptyToken</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-195"></span><span>
+</span><span id="line-196"></span><span>
+</span><span id="line-197"></span><span class="hs-comment">-- | If the specified token is `HT.TKIdent` and the global variable does not exist in the list, `addLVar` adds a new global variable to the list,</span><span>
+</span><span id="line-198"></span><span class="hs-comment">-- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.</span><span>
+</span><span id="line-199"></span><span id="local-6989586621679288159"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#addGVarWith"><span class="hs-identifier hs-type">addGVarWith</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679288159"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.CRules.Types.StorageClass.html#StorageClass"><span class="hs-identifier hs-type">CT.StorageClass</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288159"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288159"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVarInitWith"><span class="hs-identifier hs-type">GVarInitWith</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288159"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-type">Vars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288159"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Either</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ASTError"><span class="hs-identifier hs-type">SM.ASTError</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288159"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATree"><span class="hs-identifier hs-type">ATree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288159"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-type">Vars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288159"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span></span><span>
+</span><span id="line-200"></span><span id="addGVarWith"><span class="annot"><span class="annottext">addGVarWith :: StorageClass i
+-&gt; TokenLC i
+-&gt; GVarInitWith i
+-&gt; Vars i
+-&gt; Either (ASTError i) (ATree i, Vars i)
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#addGVarWith"><span class="hs-identifier hs-var hs-var">addGVarWith</span></a></span></span><span> </span><span id="local-6989586621679287899"><span class="annot"><span class="annottext">t :: StorageClass i
+</span><a href="#local-6989586621679287899"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679287898"><span class="annot"><span class="annottext">cur :: TokenLC i
+</span><a href="#local-6989586621679287898"><span class="hs-identifier hs-var">cur</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="hs-identifier">_</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TKIdent"><span class="hs-identifier hs-type">HT.TKIdent</span></a></span><span> </span><span id="local-6989586621679287897"><span class="annot"><span class="annottext">ident :: Text
+</span><a href="#local-6989586621679287897"><span class="hs-identifier hs-var">ident</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679287896"><span class="annot"><span class="annottext">iw :: GVarInitWith i
+</span><a href="#local-6989586621679287896"><span class="hs-identifier hs-var">iw</span></a></span></span><span> </span><span id="local-6989586621679287895"><span class="annot"><span class="annottext">vars :: Vars i
+</span><a href="#local-6989586621679287895"><span class="hs-identifier hs-var">vars</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Either (ASTError i) (ATree i, Vars i)
+ -&gt; Maybe (GVar i) -&gt; Either (ASTError i) (ATree i, Vars i))
+-&gt; Maybe (GVar i)
+-&gt; Either (ASTError i) (ATree i, Vars i)
+-&gt; Either (ASTError i) (ATree i, Vars i)
+forall a b c. (a -&gt; b -&gt; c) -&gt; b -&gt; a -&gt; c
+</span><span class="hs-identifier hs-var">flip</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(Either (ASTError i) (ATree i, Vars i)
+ -&gt; (GVar i -&gt; Either (ASTError i) (ATree i, Vars i))
+ -&gt; Maybe (GVar i)
+ -&gt; Either (ASTError i) (ATree i, Vars i))
+-&gt; (GVar i -&gt; Either (ASTError i) (ATree i, Vars i))
+-&gt; Either (ASTError i) (ATree i, Vars i)
+-&gt; Maybe (GVar i)
+-&gt; Either (ASTError i) (ATree i, Vars i)
+forall a b c. (a -&gt; b -&gt; c) -&gt; b -&gt; a -&gt; c
+</span><span class="hs-identifier hs-var">flip</span></span><span> </span><span class="annot"><span class="annottext">Either (ASTError i) (ATree i, Vars i)
+-&gt; (GVar i -&gt; Either (ASTError i) (ATree i, Vars i))
+-&gt; Maybe (GVar i)
+-&gt; Either (ASTError i) (ATree i, Vars i)
+forall b a. b -&gt; (a -&gt; b) -&gt; Maybe a -&gt; b
+</span><span class="hs-identifier hs-var">maybe</span></span><span> </span><span class="annot"><span class="annottext">((GVar i -&gt; Either (ASTError i) (ATree i, Vars i))
+ -&gt; Either (ASTError i) (ATree i, Vars i)
+ -&gt; Maybe (GVar i)
+ -&gt; Either (ASTError i) (ATree i, Vars i))
+-&gt; (GVar i -&gt; Either (ASTError i) (ATree i, Vars i))
+-&gt; Either (ASTError i) (ATree i, Vars i)
+-&gt; Maybe (GVar i)
+-&gt; Either (ASTError i) (ATree i, Vars i)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Either (ASTError i) (ATree i, Vars i)
+-&gt; GVar i -&gt; Either (ASTError i) (ATree i, Vars i)
+forall a b. a -&gt; b -&gt; a
+</span><span class="hs-identifier hs-var">const</span></span><span> </span><span class="annot"><span class="annottext">(Either (ASTError i) (ATree i, Vars i)
+ -&gt; GVar i -&gt; Either (ASTError i) (ATree i, Vars i))
+-&gt; Either (ASTError i) (ATree i, Vars i)
+-&gt; GVar i
+-&gt; Either (ASTError i) (ATree i, Vars i)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ASTError i -&gt; Either (ASTError i) (ATree i, Vars i)
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;redeclaration of '&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287897"><span class="hs-identifier hs-var">ident</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;' with no linkage&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">TokenLC i
+</span><a href="#local-6989586621679287898"><span class="hs-identifier hs-var">cur</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Vars i -&gt; Maybe (GVar i)
+forall a. Text -&gt; Vars a -&gt; Maybe (GVar a)
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#lookupGVar"><span class="hs-identifier hs-var">lookupGVar</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287897"><span class="hs-identifier hs-var">ident</span></a></span><span> </span><span class="annot"><span class="annottext">Vars i
+</span><a href="#local-6989586621679287895"><span class="hs-identifier hs-var">vars</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Either (ASTError i) (ATree i, Vars i)
+ -&gt; Either (ASTError i) (ATree i, Vars i))
+-&gt; Either (ASTError i) (ATree i, Vars i)
+-&gt; Either (ASTError i) (ATree i, Vars i)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-comment">-- ODR</span><span>
+</span><span id="line-201"></span><span>    </span><span class="annot"><span class="annottext">(ATree i, Vars i) -&gt; Either (ASTError i) (ATree i, Vars i)
+forall a b. b -&gt; Either a b
+</span><span class="hs-identifier hs-var">Right</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; Text -&gt; ATree i
+forall i. StorageClass i -&gt; Text -&gt; ATree i
+</span><a href="Htcc.Parser.AST.Core.html#atGVar"><span class="hs-identifier hs-var">atGVar</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">GVar i -&gt; StorageClass i
+forall i. GVar i -&gt; StorageClass i
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#gvtype"><span class="hs-identifier hs-var hs-var">gvtype</span></a></span><span> </span><span class="annot"><span class="annottext">GVar i
+</span><a href="#local-6989586621679287893"><span class="hs-identifier hs-var">gvar</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287897"><span class="hs-identifier hs-var">ident</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Vars i
+</span><a href="#local-6989586621679287895"><span class="hs-identifier hs-var">vars</span></a></span><span> </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">globals :: GlobalVars i
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#globals"><span class="hs-identifier hs-var">globals</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; GVar i -&gt; GlobalVars i -&gt; GlobalVars i
+forall k a. Ord k =&gt; k -&gt; a -&gt; Map k a -&gt; Map k a
+</span><span class="hs-identifier hs-var">M.insert</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287897"><span class="hs-identifier hs-var">ident</span></a></span><span> </span><span class="annot"><span class="annottext">GVar i
+</span><a href="#local-6989586621679287893"><span class="hs-identifier hs-var">gvar</span></a></span><span> </span><span class="annot"><span class="annottext">(GlobalVars i -&gt; GlobalVars i) -&gt; GlobalVars i -&gt; GlobalVars i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Vars i -&gt; GlobalVars i
+forall a. Vars a -&gt; GlobalVars a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#globals"><span class="hs-identifier hs-var hs-var">globals</span></a></span><span> </span><span class="annot"><span class="annottext">Vars i
+</span><a href="#local-6989586621679287895"><span class="hs-identifier hs-var">vars</span></a></span><span> </span><span class="hs-special">}</span><span class="hs-special">)</span><span>
+</span><span id="line-202"></span><span>    </span><span class="hs-keyword">where</span><span>
+</span><span id="line-203"></span><span>        </span><span id="local-6989586621679287893"><span class="annot"><span class="annottext">gvar :: GVar i
+</span><a href="#local-6989586621679287893"><span class="hs-identifier hs-var hs-var">gvar</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">StorageClass i -&gt; GVarInitWith i -&gt; GVar i
+forall i. StorageClass i -&gt; GVarInitWith i -&gt; GVar i
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVar"><span class="hs-identifier hs-var">GVar</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679287899"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="annot"><span class="annottext">GVarInitWith i
+</span><a href="#local-6989586621679287896"><span class="hs-identifier hs-var">iw</span></a></span><span>
+</span><span id="line-204"></span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#addGVarWith"><span class="hs-identifier hs-var">addGVarWith</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ASTError i -&gt; Either (ASTError i) (ATree i, Vars i)
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text
+</span><a href="Htcc.Parser.ConstructionData.Scope.Utils.html#internalCE"><span class="hs-identifier hs-var">internalCE</span></a></span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">i -&gt; i -&gt; TokenLCNums i
+forall i. i -&gt; i -&gt; TokenLCNums i
+</span><a href="Htcc.Tokenizer.Token.html#TokenLCNums"><span class="hs-identifier hs-var">HT.TokenLCNums</span></a></span><span> </span><span class="annot"><span class="hs-number">0</span></span><span> </span><span class="annot"><span class="hs-number">0</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Token i
+forall i. Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKEmpty"><span class="hs-identifier hs-var">HT.TKEmpty</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-205"></span><span>
+</span><span id="line-206"></span><span class="hs-comment">-- | If the specified token is `HT.TKIdent` and the global variable does not exist in the list, `addLVar` adds a new global variable that will be initialized by zero to the list,</span><span>
+</span><span id="line-207"></span><span class="hs-comment">-- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.</span><span>
+</span><span id="line-208"></span><span id="local-6989586621679287890"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#addGVar"><span class="hs-identifier hs-type">addGVar</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679287890"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.CRules.Types.StorageClass.html#StorageClass"><span class="hs-identifier hs-type">CT.StorageClass</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287890"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287890"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-type">Vars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287890"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Either</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ASTError"><span class="hs-identifier hs-type">SM.ASTError</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287890"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATree"><span class="hs-identifier hs-type">ATree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287890"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-type">Vars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287890"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span></span><span>
+</span><span id="line-209"></span><span id="addGVar"><span class="annot"><span class="annottext">addGVar :: StorageClass i
+-&gt; TokenLC i -&gt; Vars i -&gt; Either (ASTError i) (ATree i, Vars i)
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#addGVar"><span class="hs-identifier hs-var hs-var">addGVar</span></a></span></span><span> </span><span id="local-6989586621679287889"><span class="annot"><span class="annottext">t :: StorageClass i
+</span><a href="#local-6989586621679287889"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679287888"><span class="annot"><span class="annottext">ident :: TokenLC i
+</span><a href="#local-6989586621679287888"><span class="hs-identifier hs-var">ident</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">StorageClass i
+-&gt; TokenLC i
+-&gt; GVarInitWith i
+-&gt; Vars i
+-&gt; Either (ASTError i) (ATree i, Vars i)
+forall i.
+Num i =&gt;
+StorageClass i
+-&gt; TokenLC i
+-&gt; GVarInitWith i
+-&gt; Vars i
+-&gt; Either (ASTError i) (ATree i, Vars i)
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#addGVarWith"><span class="hs-identifier hs-var">addGVarWith</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679287889"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="annot"><span class="annottext">TokenLC i
+</span><a href="#local-6989586621679287888"><span class="hs-identifier hs-var">ident</span></a></span><span> </span><span class="annot"><span class="annottext">GVarInitWith i
+forall i. GVarInitWith i
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVarInitWithZero"><span class="hs-identifier hs-var">GVarInitWithZero</span></a></span><span>
+</span><span id="line-210"></span><span>
+</span><span id="line-211"></span><span class="hs-comment">-- | If the specified token is `HT.TKString`, `addLiteral` adds a new literal to the list,</span><span>
+</span><span id="line-212"></span><span class="hs-comment">-- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.</span><span>
+</span><span id="line-213"></span><span id="local-6989586621679287887"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#addLiteral"><span class="hs-identifier hs-type">addLiteral</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Ord</span></span><span> </span><span class="annot"><a href="#local-6989586621679287887"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679287887"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.CRules.Types.StorageClass.html#StorageClass"><span class="hs-identifier hs-type">CT.StorageClass</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287887"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287887"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-type">Vars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287887"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Either</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ASTError"><span class="hs-identifier hs-type">SM.ASTError</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287887"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATree"><span class="hs-identifier hs-type">ATree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287887"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Vars"><span class="hs-identifier hs-type">Vars</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287887"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span></span><span>
+</span><span id="line-214"></span><span id="addLiteral"><span class="annot"><span class="annottext">addLiteral :: StorageClass i
+-&gt; TokenLC i -&gt; Vars i -&gt; Either (ASTError i) (ATree i, Vars i)
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#addLiteral"><span class="hs-identifier hs-var hs-var">addLiteral</span></a></span></span><span> </span><span id="local-6989586621679287886"><span class="annot"><span class="annottext">t :: StorageClass i
+</span><a href="#local-6989586621679287886"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span class="hs-special">(</span><span class="hs-identifier">_</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TKString"><span class="hs-identifier hs-type">HT.TKString</span></a></span><span> </span><span id="local-6989586621679287884"><span class="annot"><span class="annottext">cont :: ByteString
+</span><a href="#local-6989586621679287884"><span class="hs-identifier hs-var">cont</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679287883"><span class="annot"><span class="annottext">vars :: Vars i
+</span><a href="#local-6989586621679287883"><span class="hs-identifier hs-var">vars</span></a></span></span><span>
+</span><span id="line-215"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">[Literal i] -&gt; Bool
+forall (t :: * -&gt; *) a. Foldable t =&gt; t a -&gt; Bool
+</span><span class="hs-identifier hs-var">null</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Vars i -&gt; [Literal i]
+forall a. Vars a -&gt; Literals a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#literals"><span class="hs-identifier hs-var hs-var">literals</span></a></span><span> </span><span class="annot"><span class="annottext">Vars i
+</span><a href="#local-6989586621679287883"><span class="hs-identifier hs-var">vars</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679287881"><span class="annot"><span class="annottext">lit :: Literal i
+</span><a href="#local-6989586621679287881"><span class="hs-identifier hs-var hs-var">lit</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">StorageClass i -&gt; Natural -&gt; ByteString -&gt; Literal i
+forall a. StorageClass a -&gt; Natural -&gt; ByteString -&gt; Literal a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Literal"><span class="hs-identifier hs-var">Literal</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; StorageClass i
+forall a. CType a =&gt; a -&gt; a
+</span><a href="Htcc.CRules.Types.CType.html#removeAllExtents"><span class="hs-identifier hs-var">CT.removeAllExtents</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679287886"><span class="hs-identifier hs-var">t</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="hs-number">0</span></span><span> </span><span class="annot"><span class="annottext">ByteString
+</span><a href="#local-6989586621679287884"><span class="hs-identifier hs-var">cont</span></a></span><span class="hs-special">;</span><span> </span><span id="local-6989586621679287879"><span class="annot"><span class="annottext">nat :: ATree i
+</span><a href="#local-6989586621679287879"><span class="hs-identifier hs-var hs-var">nat</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ATKind i -&gt; StorageClass i -&gt; ATree i -&gt; ATree i -&gt; ATree i
+forall a.
+ATKind a -&gt; StorageClass a -&gt; ATree a -&gt; ATree a -&gt; ATree a
+</span><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-var">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; Text -&gt; ATKind i
+forall a. StorageClass a -&gt; Text -&gt; ATKind a
+</span><a href="Htcc.Parser.AST.Core.html#ATGVar"><span class="hs-identifier hs-var">ATGVar</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679287886"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;.L.data.0&quot;</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679287886"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+forall a. ATree a
+</span><a href="Htcc.Parser.AST.Core.html#ATEmpty"><span class="hs-identifier hs-var">ATEmpty</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+forall a. ATree a
+</span><a href="Htcc.Parser.AST.Core.html#ATEmpty"><span class="hs-identifier hs-var">ATEmpty</span></a></span><span> </span><span class="hs-keyword">in</span><span>
+</span><span id="line-216"></span><span>        </span><span class="annot"><span class="annottext">(ATree i, Vars i) -&gt; Either (ASTError i) (ATree i, Vars i)
+forall a b. b -&gt; Either a b
+</span><span class="hs-identifier hs-var">Right</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287879"><span class="hs-identifier hs-var">nat</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Vars i
+</span><a href="#local-6989586621679287883"><span class="hs-identifier hs-var">vars</span></a></span><span> </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">literals :: [Literal i]
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#literals"><span class="hs-identifier hs-var">literals</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Literal i
+</span><a href="#local-6989586621679287881"><span class="hs-identifier hs-var">lit</span></a></span><span> </span><span class="annot"><span class="annottext">Literal i -&gt; [Literal i] -&gt; [Literal i]
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span> </span><span class="annot"><span class="annottext">Vars i -&gt; [Literal i]
+forall a. Vars a -&gt; Literals a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#literals"><span class="hs-identifier hs-var hs-var">literals</span></a></span><span> </span><span class="annot"><span class="annottext">Vars i
+</span><a href="#local-6989586621679287883"><span class="hs-identifier hs-var">vars</span></a></span><span> </span><span class="hs-special">}</span><span class="hs-special">)</span><span>
+</span><span id="line-217"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">let</span><span> </span><span id="local-6989586621679287875"><span class="annot"><span class="annottext">ln' :: Natural
+</span><a href="#local-6989586621679287875"><span class="hs-identifier hs-var hs-var">ln'</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Natural -&gt; Natural
+forall a. Enum a =&gt; a -&gt; a
+</span><span class="hs-identifier hs-var">succ</span></span><span> </span><span class="annot"><span class="annottext">(Natural -&gt; Natural) -&gt; Natural -&gt; Natural
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Literal i -&gt; Natural
+forall a. Literal a -&gt; Natural
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#ln"><span class="hs-identifier hs-var hs-var">ln</span></a></span><span> </span><span class="annot"><span class="annottext">(Literal i -&gt; Natural) -&gt; Literal i -&gt; Natural
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[Literal i] -&gt; Literal i
+forall a. [a] -&gt; a
+</span><span class="hs-identifier hs-var">head</span></span><span> </span><span class="annot"><span class="annottext">([Literal i] -&gt; Literal i) -&gt; [Literal i] -&gt; Literal i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Vars i -&gt; [Literal i]
+forall a. Vars a -&gt; Literals a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#literals"><span class="hs-identifier hs-var hs-var">literals</span></a></span><span> </span><span class="annot"><span class="annottext">Vars i
+</span><a href="#local-6989586621679287883"><span class="hs-identifier hs-var">vars</span></a></span><span class="hs-special">;</span><span> </span><span id="local-6989586621679287872"><span class="annot"><span class="annottext">lit :: Literal i
+</span><a href="#local-6989586621679287872"><span class="hs-identifier hs-var hs-var">lit</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">StorageClass i -&gt; Natural -&gt; ByteString -&gt; Literal i
+forall a. StorageClass a -&gt; Natural -&gt; ByteString -&gt; Literal a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#Literal"><span class="hs-identifier hs-var">Literal</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; StorageClass i
+forall a. CType a =&gt; a -&gt; a
+</span><a href="Htcc.CRules.Types.CType.html#removeAllExtents"><span class="hs-identifier hs-var">CT.removeAllExtents</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679287886"><span class="hs-identifier hs-var">t</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Natural
+</span><a href="#local-6989586621679287875"><span class="hs-identifier hs-var">ln'</span></a></span><span> </span><span class="annot"><span class="annottext">ByteString
+</span><a href="#local-6989586621679287884"><span class="hs-identifier hs-var">cont</span></a></span><span class="hs-special">;</span><span> </span><span id="local-6989586621679287871"><span class="annot"><span class="annottext">nat :: ATree i
+</span><a href="#local-6989586621679287871"><span class="hs-identifier hs-var hs-var">nat</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ATKind i -&gt; StorageClass i -&gt; ATree i -&gt; ATree i -&gt; ATree i
+forall a.
+ATKind a -&gt; StorageClass a -&gt; ATree a -&gt; ATree a -&gt; ATree a
+</span><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-var">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; Text -&gt; ATKind i
+forall a. StorageClass a -&gt; Text -&gt; ATKind a
+</span><a href="Htcc.Parser.AST.Core.html#ATGVar"><span class="hs-identifier hs-var">ATGVar</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679287886"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;.L.data.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Natural -&gt; Text
+forall a. Show a =&gt; a -&gt; Text
+</span><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier hs-var">tshow</span></a></span><span> </span><span class="annot"><span class="annottext">Natural
+</span><a href="#local-6989586621679287875"><span class="hs-identifier hs-var">ln'</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679287886"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+forall a. ATree a
+</span><a href="Htcc.Parser.AST.Core.html#ATEmpty"><span class="hs-identifier hs-var">ATEmpty</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+forall a. ATree a
+</span><a href="Htcc.Parser.AST.Core.html#ATEmpty"><span class="hs-identifier hs-var">ATEmpty</span></a></span><span> </span><span class="hs-keyword">in</span><span>
+</span><span id="line-218"></span><span>        </span><span class="annot"><span class="annottext">(ATree i, Vars i) -&gt; Either (ASTError i) (ATree i, Vars i)
+forall a b. b -&gt; Either a b
+</span><span class="hs-identifier hs-var">Right</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287871"><span class="hs-identifier hs-var">nat</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Vars i
+</span><a href="#local-6989586621679287883"><span class="hs-identifier hs-var">vars</span></a></span><span> </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">literals :: [Literal i]
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#literals"><span class="hs-identifier hs-var">literals</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Literal i
+</span><a href="#local-6989586621679287872"><span class="hs-identifier hs-var">lit</span></a></span><span> </span><span class="annot"><span class="annottext">Literal i -&gt; [Literal i] -&gt; [Literal i]
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span> </span><span class="annot"><span class="annottext">Vars i -&gt; [Literal i]
+forall a. Vars a -&gt; Literals a
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#literals"><span class="hs-identifier hs-var hs-var">literals</span></a></span><span> </span><span class="annot"><span class="annottext">Vars i
+</span><a href="#local-6989586621679287883"><span class="hs-identifier hs-var">vars</span></a></span><span> </span><span class="hs-special">}</span><span class="hs-special">)</span><span>
+</span><span id="line-219"></span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html#addLiteral"><span class="hs-identifier hs-var">addLiteral</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ASTError i -&gt; Either (ASTError i) (ATree i, Vars i)
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text
+</span><a href="Htcc.Parser.ConstructionData.Scope.Utils.html#internalCE"><span class="hs-identifier hs-var">internalCE</span></a></span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">i -&gt; i -&gt; TokenLCNums i
+forall i. i -&gt; i -&gt; TokenLCNums i
+</span><a href="Htcc.Tokenizer.Token.html#TokenLCNums"><span class="hs-identifier hs-var">HT.TokenLCNums</span></a></span><span> </span><span class="annot"><span class="hs-number">0</span></span><span> </span><span class="annot"><span class="hs-number">0</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Token i
+forall i. Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKEmpty"><span class="hs-identifier hs-var">HT.TKEmpty</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-220"></span></pre></body></html>

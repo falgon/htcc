@@ -1,0 +1,1287 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">{-|
+Module      : Htcc.Tokenizer.Core
+Description : Tokenizer
+Copyright   : (c) roki, 2019
+License     : MIT
+Maintainer  : falgon53@yahoo.co.jp
+Stability   : experimental
+Portability : POSIX
+
+The tokenizer
+-}</span><span>
+</span><span id="line-12"></span><span class="hs-pragma">{-# LANGUAGE LambdaCase, MultiWayIf, OverloadedStrings, TupleSections #-}</span><span>
+</span><span id="line-13"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Htcc.Tokenizer.Core</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-14"></span><span>    </span><span class="annot"><span class="hs-comment">-- * Tokenizer</span></span><span>
+</span><span id="line-15"></span><span>    </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#tokenize%27"><span class="hs-identifier">tokenize'</span></a></span><span>
+</span><span id="line-16"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-17"></span><span>
+</span><span id="line-18"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Control.Applicative</span></span><span>                             </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Alternative</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-19"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Control.Conditional</span></span><span>                             </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">ifM</span></span><span class="hs-special">)</span><span>
+</span><span id="line-20"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Control.Monad.Extra</span></span><span>                             </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">firstJustM</span></span><span class="hs-special">)</span><span>
+</span><span id="line-21"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Control.Monad.State</span></span><span>
+</span><span id="line-22"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.Char</span></span><span>                                       </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">digitToInt</span></span><span class="hs-special">,</span><span>
+</span><span id="line-23"></span><span>                                                                  </span><span class="annot"><span class="hs-identifier">isDigit</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">ord</span></span><span class="hs-special">)</span><span>
+</span><span id="line-24"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.List</span></span><span>                                       </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">find</span></span><span class="hs-special">)</span><span>
+</span><span id="line-25"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.Maybe</span></span><span>                                      </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">fromJust</span></span><span class="hs-special">,</span><span>
+</span><span id="line-26"></span><span>                                                                  </span><span class="annot"><span class="hs-identifier">isJust</span></span><span class="hs-special">,</span><span>
+</span><span id="line-27"></span><span>                                                                  </span><span class="annot"><span class="hs-identifier">isNothing</span></span><span class="hs-special">)</span><span>
+</span><span id="line-28"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text</span></span><span>                                       </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">T</span></span><span>
+</span><span id="line-29"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text.Encoding</span></span><span>                              </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">T</span></span><span>
+</span><span id="line-30"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Numeric</span></span><span>                                         </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">readHex</span></span><span class="hs-special">,</span><span>
+</span><span id="line-31"></span><span>                                                                  </span><span class="annot"><span class="hs-identifier">showHex</span></span><span class="hs-special">)</span><span>
+</span><span id="line-32"></span><span>
+</span><span id="line-33"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.CRules.html"><span class="hs-identifier">Htcc.CRules</span></a></span><span>                                     </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">CR</span></span><span>
+</span><span id="line-34"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.CRules.Preprocessor.Punctuators.html"><span class="hs-identifier">Htcc.CRules.Preprocessor.Punctuators</span></a></span><span>            </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">CP</span></span><span>
+</span><span id="line-35"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html"><span class="hs-identifier">Htcc.Parser.ConstructionData.Scope.ManagedScope</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ASTError"><span class="hs-identifier">ASTError</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-36"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Tokenizer.Token.html"><span class="hs-identifier">Htcc.Tokenizer.Token</span></a></span><span>
+</span><span id="line-37"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Utils.html"><span class="hs-identifier">Htcc.Utils</span></a></span><span>                                      </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Utils.html#isStrictSpace"><span class="hs-identifier">isStrictSpace</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-38"></span><span>                                                                  </span><span class="annot"><a href="Htcc.Utils.Bool.html#lor"><span class="hs-identifier">lor</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Utils.html#maybe%27"><span class="hs-identifier">maybe'</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-39"></span><span>                                                                  </span><span class="annot"><a href="Htcc.Utils.Text.html#spanLenT"><span class="hs-identifier">spanLenT</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-40"></span><span>                                                                  </span><span class="annot"><a href="Htcc.Utils.Text.html#subTextIndex"><span class="hs-identifier">subTextIndex</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-41"></span><span>                                                                  </span><span class="annot"><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier">tshow</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-42"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.Utils.CompilationState.html"><span class="hs-identifier">Htcc.Utils.CompilationState</span></a></span><span>                     </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">C</span></span><span>
+</span><span id="line-43"></span><span>
+</span><span id="line-44"></span><span>
+</span><span id="line-45"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#isNewLine"><span class="hs-pragma hs-type">isNewLine</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-46"></span><span class="annot"><a href="Htcc.Tokenizer.Core.html#isNewLine"><span class="hs-identifier hs-type">isNewLine</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Char</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span>
+</span><span id="line-47"></span><span id="isNewLine"><span class="annot"><span class="annottext">isNewLine :: Char -&gt; Bool
+</span><a href="Htcc.Tokenizer.Core.html#isNewLine"><span class="hs-identifier hs-var hs-var">isNewLine</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Char -&gt; Bool] -&gt; Char -&gt; Bool
+forall a. [a -&gt; Bool] -&gt; a -&gt; Bool
+</span><a href="Htcc.Utils.Bool.html#lor"><span class="hs-identifier hs-var">lor</span></a></span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="annottext">Char -&gt; Char -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span class="annot"><span class="hs-char">'\n'</span></span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Char -&gt; Char -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span class="annot"><span class="hs-char">'\r'</span></span><span class="hs-special">)</span><span class="hs-special">]</span><span>
+</span><span id="line-48"></span><span>
+</span><span id="line-49"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#headToken"><span class="hs-pragma hs-type">headToken</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-50"></span><span id="local-6989586621679289494"><span class="annot"><a href="Htcc.Tokenizer.Core.html#headToken"><span class="hs-identifier hs-type">headToken</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Char</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#Token"><span class="hs-identifier hs-type">Token</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289494"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#Token"><span class="hs-identifier hs-type">Token</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289494"><span class="hs-identifier hs-type">i</span></a></span></span><span>
+</span><span id="line-51"></span><span id="headToken"><span class="annot"><span class="annottext">headToken :: (Char -&gt; Token i) -&gt; Text -&gt; Token i
+</span><a href="Htcc.Tokenizer.Core.html#headToken"><span class="hs-identifier hs-var hs-var">headToken</span></a></span></span><span> </span><span id="local-6989586621679289430"><span class="annot"><span class="annottext">f :: Char -&gt; Token i
+</span><a href="#local-6989586621679289430"><span class="hs-identifier hs-var">f</span></a></span></span><span> </span><span id="local-6989586621679289429"><span class="annot"><span class="annottext">txt :: Text
+</span><a href="#local-6989586621679289429"><span class="hs-identifier hs-var">txt</span></a></span></span><span>
+</span><span id="line-52"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Bool
+</span><span class="hs-identifier hs-var">T.null</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289429"><span class="hs-identifier hs-var">txt</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Token i
+forall i. Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKEmpty"><span class="hs-identifier hs-var">TKEmpty</span></a></span><span>
+</span><span id="line-53"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Char -&gt; Token i
+</span><a href="#local-6989586621679289430"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">(Char -&gt; Token i) -&gt; Char -&gt; Token i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Char
+</span><span class="hs-identifier hs-var">T.head</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289429"><span class="hs-identifier hs-var">txt</span></a></span><span>
+</span><span id="line-54"></span><span>
+</span><span id="line-55"></span><span class="hs-keyword">type</span><span> </span><span id="Tokenizer"><span class="annot"><a href="Htcc.Tokenizer.Core.html#Tokenizer"><span class="hs-identifier hs-var">Tokenizer</span></a></span></span><span> </span><span id="local-6989586621679289425"><span class="annot"><a href="#local-6989586621679289425"><span class="hs-identifier hs-type">i</span></a></span></span><span> </span><span id="local-6989586621679289424"><span class="annot"><a href="#local-6989586621679289424"><span class="hs-identifier hs-type">a</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#CompilationState"><span class="hs-identifier hs-type">C.CompilationState</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLCNums"><span class="hs-identifier hs-type">TokenLCNums</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289425"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="annot"><a href="#local-6989586621679289425"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289424"><span class="hs-identifier hs-type">a</span></a></span><span>
+</span><span id="line-56"></span><span>
+</span><span id="line-57"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#advanceLC"><span class="hs-pragma hs-type">advanceLC</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-58"></span><span id="local-6989586621679289577"><span class="annot"><a href="Htcc.Tokenizer.Core.html#advanceLC"><span class="hs-identifier hs-type">advanceLC</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Enum</span></span><span> </span><span class="annot"><a href="#local-6989586621679289577"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679289577"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLCNums"><span class="hs-identifier hs-type">TokenLCNums</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289577"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Char</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLCNums"><span class="hs-identifier hs-type">TokenLCNums</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289577"><span class="hs-identifier hs-type">i</span></a></span></span><span>
+</span><span id="line-59"></span><span id="advanceLC"><span class="annot"><span class="annottext">advanceLC :: TokenLCNums i -&gt; Char -&gt; TokenLCNums i
+</span><a href="Htcc.Tokenizer.Core.html#advanceLC"><span class="hs-identifier hs-var hs-var">advanceLC</span></a></span></span><span> </span><span id="local-6989586621679289422"><span class="annot"><span class="annottext">lc :: TokenLCNums i
+</span><a href="#local-6989586621679289422"><span class="hs-identifier hs-var">lc</span></a></span></span><span> </span><span id="local-6989586621679289421"><span class="annot"><span class="annottext">e :: Char
+</span><a href="#local-6989586621679289421"><span class="hs-identifier hs-var">e</span></a></span></span><span>
+</span><span id="line-60"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Char -&gt; Bool
+</span><a href="Htcc.Tokenizer.Core.html#isNewLine"><span class="hs-identifier hs-var">isNewLine</span></a></span><span> </span><span class="annot"><span class="annottext">Char
+</span><a href="#local-6989586621679289421"><span class="hs-identifier hs-var">e</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289422"><span class="hs-identifier hs-var">lc</span></a></span><span> </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">tkCn :: i
+</span><a href="Htcc.Tokenizer.Token.html#tkCn"><span class="hs-identifier hs-var">tkCn</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-number">1</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">tkLn :: i
+</span><a href="Htcc.Tokenizer.Token.html#tkLn"><span class="hs-identifier hs-var">tkLn</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">i -&gt; i
+forall a. Enum a =&gt; a -&gt; a
+</span><span class="hs-identifier hs-var">succ</span></span><span> </span><span class="annot"><span class="annottext">(i -&gt; i) -&gt; i -&gt; i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">TokenLCNums i -&gt; i
+forall i. TokenLCNums i -&gt; i
+</span><a href="Htcc.Tokenizer.Token.html#tkLn"><span class="hs-identifier hs-var hs-var">tkLn</span></a></span><span> </span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289422"><span class="hs-identifier hs-var">lc</span></a></span><span> </span><span class="hs-special">}</span><span>
+</span><span id="line-61"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289422"><span class="hs-identifier hs-var">lc</span></a></span><span> </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">tkCn :: i
+</span><a href="Htcc.Tokenizer.Token.html#tkCn"><span class="hs-identifier hs-var">tkCn</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">i -&gt; i
+forall a. Enum a =&gt; a -&gt; a
+</span><span class="hs-identifier hs-var">succ</span></span><span> </span><span class="annot"><span class="annottext">(i -&gt; i) -&gt; i -&gt; i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">TokenLCNums i -&gt; i
+forall i. TokenLCNums i -&gt; i
+</span><a href="Htcc.Tokenizer.Token.html#tkCn"><span class="hs-identifier hs-var hs-var">tkCn</span></a></span><span> </span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289422"><span class="hs-identifier hs-var">lc</span></a></span><span> </span><span class="hs-special">}</span><span>
+</span><span id="line-62"></span><span>
+</span><span id="line-63"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#itemP"><span class="hs-pragma hs-type">itemP</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-64"></span><span id="local-6989586621679289507"><span class="annot"><a href="Htcc.Tokenizer.Core.html#itemP"><span class="hs-identifier hs-type">itemP</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#Tokenizer"><span class="hs-identifier hs-type">Tokenizer</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289507"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Char</span></span><span class="hs-special">)</span></span><span>
+</span><span id="line-65"></span><span id="itemP"><span class="annot"><span class="annottext">itemP :: Tokenizer i (Maybe Char)
+</span><a href="Htcc.Tokenizer.Core.html#itemP"><span class="hs-identifier hs-var hs-var">itemP</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Tokenizer i (Maybe Char)
+forall mono cd i.
+MonoFoldable mono =&gt;
+CompilationState cd mono i (Maybe (Element mono))
+</span><a href="Htcc.Utils.CompilationState.html#itemP"><span class="hs-identifier hs-var">C.itemP</span></a></span><span>
+</span><span id="line-66"></span><span>
+</span><span id="line-67"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#itemC"><span class="hs-pragma hs-type">itemC</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-68"></span><span id="local-6989586621679289526"><span class="annot"><a href="Htcc.Tokenizer.Core.html#itemC"><span class="hs-identifier hs-type">itemC</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Enum</span></span><span> </span><span class="annot"><a href="#local-6989586621679289526"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679289526"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#Tokenizer"><span class="hs-identifier hs-type">Tokenizer</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289526"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Char</span></span><span class="hs-special">)</span></span><span>
+</span><span id="line-69"></span><span id="itemC"><span class="annot"><span class="annottext">itemC :: Tokenizer i (Maybe Char)
+</span><a href="Htcc.Tokenizer.Core.html#itemC"><span class="hs-identifier hs-var hs-var">itemC</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(TokenLCNums i -&gt; Element Text -&gt; TokenLCNums i)
+-&gt; CompilationState (TokenLCNums i) Text i (Maybe (Element Text))
+forall mono cd i.
+IsSequence mono =&gt;
+(cd -&gt; Element mono -&gt; cd)
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+</span><a href="Htcc.Utils.CompilationState.html#itemC"><span class="hs-identifier hs-var">C.itemC</span></a></span><span> </span><span class="annot"><span class="annottext">TokenLCNums i -&gt; Element Text -&gt; TokenLCNums i
+forall i. (Enum i, Num i) =&gt; TokenLCNums i -&gt; Char -&gt; TokenLCNums i
+</span><a href="Htcc.Tokenizer.Core.html#advanceLC"><span class="hs-identifier hs-var">advanceLC</span></a></span><span>
+</span><span id="line-70"></span><span>
+</span><span id="line-71"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#itemsP"><span class="hs-pragma hs-type">itemsP</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-72"></span><span id="local-6989586621679289473"><span class="annot"><a href="Htcc.Tokenizer.Core.html#itemsP"><span class="hs-identifier hs-type">itemsP</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#Tokenizer"><span class="hs-identifier hs-type">Tokenizer</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289473"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span class="hs-special">)</span></span><span>
+</span><span id="line-73"></span><span id="itemsP"><span class="annot"><span class="annottext">itemsP :: Int -&gt; Tokenizer i (Maybe Text)
+</span><a href="Htcc.Tokenizer.Core.html#itemsP"><span class="hs-identifier hs-var hs-var">itemsP</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Int -&gt; Tokenizer i (Maybe Text)
+forall mono cd i.
+(MonoFoldable mono, IsSequence mono) =&gt;
+Index mono -&gt; CompilationState cd mono i (Maybe mono)
+</span><a href="Htcc.Utils.CompilationState.html#itemsP"><span class="hs-identifier hs-var">C.itemsP</span></a></span><span>
+</span><span id="line-74"></span><span>
+</span><span id="line-75"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#curLC"><span class="hs-pragma hs-type">curLC</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-76"></span><span id="local-6989586621679289529"><span class="annot"><a href="Htcc.Tokenizer.Core.html#curLC"><span class="hs-identifier hs-type">curLC</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#Tokenizer"><span class="hs-identifier hs-type">Tokenizer</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289529"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLCNums"><span class="hs-identifier hs-type">TokenLCNums</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289529"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span></span><span>
+</span><span id="line-77"></span><span id="curLC"><span class="annot"><span class="annottext">curLC :: Tokenizer i (TokenLCNums i)
+</span><a href="Htcc.Tokenizer.Core.html#curLC"><span class="hs-identifier hs-var hs-var">curLC</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Tokenizer i (TokenLCNums i)
+forall cd mono i. CompilationState cd mono i cd
+</span><a href="Htcc.Utils.CompilationState.html#curCD"><span class="hs-identifier hs-var">C.curCD</span></a></span><span>
+</span><span id="line-78"></span><span>
+</span><span id="line-79"></span><span id="local-6989586621679289486"><span class="annot"><a href="Htcc.Tokenizer.Core.html#char"><span class="hs-identifier hs-type">char</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Enum</span></span><span> </span><span class="annot"><a href="#local-6989586621679289486"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679289486"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Char</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#Tokenizer"><span class="hs-identifier hs-type">Tokenizer</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289486"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Char</span></span><span class="hs-special">)</span></span><span>
+</span><span id="line-80"></span><span id="char"><span class="annot"><span class="annottext">char :: (Char -&gt; Bool) -&gt; Tokenizer i (Maybe Char)
+</span><a href="Htcc.Tokenizer.Core.html#char"><span class="hs-identifier hs-var hs-var">char</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(TokenLCNums i -&gt; Element Text -&gt; TokenLCNums i)
+-&gt; (Element Text -&gt; Bool)
+-&gt; CompilationState (TokenLCNums i) Text i (Maybe (Element Text))
+forall mono cd i.
+(MonoFoldable mono, IsSequence mono) =&gt;
+(cd -&gt; Element mono -&gt; cd)
+-&gt; (Element mono -&gt; Bool)
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+</span><a href="Htcc.Utils.CompilationState.html#itemCWhen"><span class="hs-identifier hs-var">C.itemCWhen</span></a></span><span> </span><span class="annot"><span class="annottext">TokenLCNums i -&gt; Element Text -&gt; TokenLCNums i
+forall i. (Enum i, Num i) =&gt; TokenLCNums i -&gt; Char -&gt; TokenLCNums i
+</span><a href="Htcc.Tokenizer.Core.html#advanceLC"><span class="hs-identifier hs-var">advanceLC</span></a></span><span>
+</span><span id="line-81"></span><span>
+</span><span id="line-82"></span><span id="local-6989586621679289546"><span class="annot"><a href="Htcc.Tokenizer.Core.html#string"><span class="hs-identifier hs-type">string</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Enum</span></span><span> </span><span class="annot"><a href="#local-6989586621679289546"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679289546"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Char</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#Tokenizer"><span class="hs-identifier hs-type">Tokenizer</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289546"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span></span><span>
+</span><span id="line-83"></span><span id="string"><span class="annot"><span class="annottext">string :: (Char -&gt; Bool) -&gt; Tokenizer i Text
+</span><a href="Htcc.Tokenizer.Core.html#string"><span class="hs-identifier hs-var hs-var">string</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(TokenLCNums i -&gt; Element Text -&gt; TokenLCNums i)
+-&gt; (Element Text -&gt; Bool) -&gt; Tokenizer i Text
+forall mono cd i.
+(MonoFoldable mono, IsSequence mono) =&gt;
+(cd -&gt; Element mono -&gt; cd)
+-&gt; (Element mono -&gt; Bool) -&gt; CompilationState cd mono i mono
+</span><a href="Htcc.Utils.CompilationState.html#itemsCWhen"><span class="hs-identifier hs-var">C.itemsCWhen</span></a></span><span> </span><span class="annot"><span class="annottext">TokenLCNums i -&gt; Element Text -&gt; TokenLCNums i
+forall i. (Enum i, Num i) =&gt; TokenLCNums i -&gt; Char -&gt; TokenLCNums i
+</span><a href="Htcc.Tokenizer.Core.html#advanceLC"><span class="hs-identifier hs-var">advanceLC</span></a></span><span>
+</span><span id="line-84"></span><span>
+</span><span id="line-85"></span><span id="local-6989586621679289539"><span class="annot"><a href="Htcc.Tokenizer.Core.html#isPrefixOf"><span class="hs-identifier hs-type">isPrefixOf</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Enum</span></span><span> </span><span class="annot"><a href="#local-6989586621679289539"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#Tokenizer"><span class="hs-identifier hs-type">Tokenizer</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289539"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span></span><span>
+</span><span id="line-86"></span><span id="isPrefixOf"><span class="annot"><span class="annottext">isPrefixOf :: Text -&gt; Tokenizer i Bool
+</span><a href="Htcc.Tokenizer.Core.html#isPrefixOf"><span class="hs-identifier hs-var hs-var">isPrefixOf</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Bool) -&gt; Tokenizer i Bool
+forall mono cd i. (mono -&gt; Bool) -&gt; CompilationState cd mono i Bool
+</span><a href="Htcc.Utils.CompilationState.html#isSatisfied"><span class="hs-identifier hs-var">C.isSatisfied</span></a></span><span> </span><span class="annot"><span class="annottext">((Text -&gt; Bool) -&gt; Tokenizer i Bool)
+-&gt; (Text -&gt; Text -&gt; Bool) -&gt; Text -&gt; Tokenizer i Bool
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Bool
+</span><span class="hs-identifier hs-var">T.isPrefixOf</span></span><span>
+</span><span id="line-87"></span><span>
+</span><span id="line-88"></span><span id="local-6989586621679289458"><span class="annot"><a href="Htcc.Tokenizer.Core.html#consumeSpace"><span class="hs-identifier hs-type">consumeSpace</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Enum</span></span><span> </span><span class="annot"><a href="#local-6989586621679289458"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679289458"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#Tokenizer"><span class="hs-identifier hs-type">Tokenizer</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289458"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span></span><span>
+</span><span id="line-89"></span><span id="consumeSpace"><span class="annot"><span class="annottext">consumeSpace :: Tokenizer i Bool
+</span><a href="Htcc.Tokenizer.Core.html#consumeSpace"><span class="hs-identifier hs-var hs-var">consumeSpace</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool
+</span><span class="hs-identifier hs-var">not</span></span><span> </span><span class="annot"><span class="annottext">(Bool -&gt; Bool) -&gt; (Text -&gt; Bool) -&gt; Text -&gt; Bool
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Bool
+</span><span class="hs-identifier hs-var">T.null</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Bool)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) Text
+-&gt; Tokenizer i Bool
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">(Char -&gt; Bool)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) Text
+forall i. (Enum i, Num i) =&gt; (Char -&gt; Bool) -&gt; Tokenizer i Text
+</span><a href="Htcc.Tokenizer.Core.html#string"><span class="hs-identifier hs-var">string</span></a></span><span> </span><span class="annot"><span class="annottext">Char -&gt; Bool
+</span><a href="Htcc.Utils.html#isStrictSpace"><span class="hs-identifier hs-var">isStrictSpace</span></a></span><span>
+</span><span id="line-90"></span><span>
+</span><span id="line-91"></span><span id="local-6989586621679289398"><span class="annot"><a href="Htcc.Tokenizer.Core.html#consumeNewLine"><span class="hs-identifier hs-type">consumeNewLine</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Enum</span></span><span> </span><span class="annot"><a href="#local-6989586621679289398"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679289398"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#Tokenizer"><span class="hs-identifier hs-type">Tokenizer</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289398"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span></span><span>
+</span><span id="line-92"></span><span id="consumeNewLine"><span class="annot"><span class="annottext">consumeNewLine :: Tokenizer i Bool
+</span><a href="Htcc.Tokenizer.Core.html#consumeNewLine"><span class="hs-identifier hs-var hs-var">consumeNewLine</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool
+</span><span class="hs-identifier hs-var">not</span></span><span> </span><span class="annot"><span class="annottext">(Bool -&gt; Bool) -&gt; (Text -&gt; Bool) -&gt; Text -&gt; Bool
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Bool
+</span><span class="hs-identifier hs-var">T.null</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Bool)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) Text
+-&gt; Tokenizer i Bool
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">(Char -&gt; Bool)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) Text
+forall i. (Enum i, Num i) =&gt; (Char -&gt; Bool) -&gt; Tokenizer i Text
+</span><a href="Htcc.Tokenizer.Core.html#string"><span class="hs-identifier hs-var">string</span></a></span><span> </span><span class="annot"><span class="annottext">Char -&gt; Bool
+</span><a href="Htcc.Tokenizer.Core.html#isNewLine"><span class="hs-identifier hs-var">isNewLine</span></a></span><span>
+</span><span id="line-93"></span><span>
+</span><span id="line-94"></span><span id="local-6989586621679289396"><span class="annot"><a href="Htcc.Tokenizer.Core.html#consumeComment"><span class="hs-identifier hs-type">consumeComment</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Enum</span></span><span> </span><span class="annot"><a href="#local-6989586621679289396"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679289396"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#Tokenizer"><span class="hs-identifier hs-type">Tokenizer</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289396"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span></span><span>
+</span><span id="line-95"></span><span id="consumeComment"><span class="annot"><span class="annottext">consumeComment :: Tokenizer i Bool
+</span><a href="Htcc.Tokenizer.Core.html#consumeComment"><span class="hs-identifier hs-var hs-var">consumeComment</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Tokenizer i Bool
+-&gt; Tokenizer i Bool -&gt; Tokenizer i Bool -&gt; Tokenizer i Bool
+forall bool (m :: * -&gt; *) a.
+(ToBool bool, Monad m) =&gt;
+m bool -&gt; m a -&gt; m a -&gt; m a
+</span><span class="hs-identifier hs-var">ifM</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Tokenizer i Bool
+forall i. Enum i =&gt; Text -&gt; Tokenizer i Bool
+</span><a href="Htcc.Tokenizer.Core.html#isPrefixOf"><span class="hs-identifier hs-var">isPrefixOf</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;//&quot;</span></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span> </span><span class="annot"><span class="annottext">Bool
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) Text
+-&gt; Tokenizer i Bool
+forall (f :: * -&gt; *) a b. Functor f =&gt; a -&gt; f b -&gt; f a
+</span><span class="hs-operator hs-var">&lt;$</span></span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) Text
+forall i. (Enum i, Num i) =&gt; Tokenizer i Text
+</span><a href="Htcc.Tokenizer.Core.html#line"><span class="hs-identifier hs-var">line</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Tokenizer i Bool -&gt; Tokenizer i Bool)
+-&gt; Tokenizer i Bool -&gt; Tokenizer i Bool
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(Tokenizer i Bool -&gt; Tokenizer i Bool -&gt; Tokenizer i Bool)
+-&gt; Tokenizer i Bool -&gt; Tokenizer i Bool -&gt; Tokenizer i Bool
+forall a b c. (a -&gt; b -&gt; c) -&gt; b -&gt; a -&gt; c
+</span><span class="hs-identifier hs-var">flip</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Tokenizer i Bool
+-&gt; Tokenizer i Bool -&gt; Tokenizer i Bool -&gt; Tokenizer i Bool
+forall bool (m :: * -&gt; *) a.
+(ToBool bool, Monad m) =&gt;
+m bool -&gt; m a -&gt; m a -&gt; m a
+</span><span class="hs-identifier hs-var">ifM</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Tokenizer i Bool
+forall i. Enum i =&gt; Text -&gt; Tokenizer i Bool
+</span><a href="Htcc.Tokenizer.Core.html#isPrefixOf"><span class="hs-identifier hs-var">isPrefixOf</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;/*&quot;</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Bool -&gt; Tokenizer i Bool
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">False</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Tokenizer i Bool -&gt; Tokenizer i Bool)
+-&gt; Tokenizer i Bool -&gt; Tokenizer i Bool
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-96"></span><span>    </span><span id="local-6989586621679289391"><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289391"><span class="hs-identifier hs-var">cur</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">Tokenizer i (TokenLCNums i)
+forall i. Tokenizer i (TokenLCNums i)
+</span><a href="Htcc.Tokenizer.Core.html#curLC"><span class="hs-identifier hs-var">curLC</span></a></span><span>
+</span><span id="line-97"></span><span>    </span><span class="annot"><span class="annottext">Int
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+forall (m :: * -&gt; *) a. Applicative m =&gt; Int -&gt; m a -&gt; m ()
+</span><span class="hs-identifier hs-var">replicateM_</span></span><span> </span><span class="annot"><span class="hs-number">2</span></span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+forall i. (Enum i, Num i) =&gt; Tokenizer i (Maybe Char)
+</span><a href="Htcc.Tokenizer.Core.html#itemC"><span class="hs-identifier hs-var">itemC</span></a></span><span>
+</span><span id="line-98"></span><span>    </span><span id="local-6989586621679289389"><span class="annot"><span class="annottext">Maybe Int
+</span><a href="#local-6989586621679289389"><span class="hs-identifier hs-var">ind</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">((TokenLCNums i, Text) -&gt; Maybe Int)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Int)
+forall s (m :: * -&gt; *) a. MonadState s m =&gt; (s -&gt; a) -&gt; m a
+</span><span class="hs-identifier hs-var">gets</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Maybe Int
+</span><a href="Htcc.Utils.Text.html#subTextIndex"><span class="hs-identifier hs-var">subTextIndex</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;*/&quot;</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Maybe Int)
+-&gt; ((TokenLCNums i, Text) -&gt; Text)
+-&gt; (TokenLCNums i, Text)
+-&gt; Maybe Int
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">(TokenLCNums i, Text) -&gt; Text
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span class="hs-special">)</span><span>
+</span><span id="line-99"></span><span>    </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span> </span><span class="annot"><span class="annottext">Bool
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+-&gt; Tokenizer i Bool
+forall (f :: * -&gt; *) a b. Functor f =&gt; a -&gt; f b -&gt; f a
+</span><span class="hs-operator hs-var">&lt;$</span></span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+-&gt; Maybe Int
+-&gt; (Int -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ())
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+forall b a. b -&gt; Maybe a -&gt; (a -&gt; b) -&gt; b
+</span><a href="Htcc.Utils.html#maybe%27"><span class="hs-identifier hs-var">maybe'</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Either (ASTError i) ()
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+forall (t :: (* -&gt; *) -&gt; * -&gt; *) (m :: * -&gt; *) a.
+(MonadTrans t, Monad m) =&gt;
+m a -&gt; t m a
+</span><span class="hs-identifier hs-var">lift</span></span><span> </span><span class="annot"><span class="annottext">(Either (ASTError i) ()
+ -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ())
+-&gt; Either (ASTError i) ()
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ASTError i -&gt; Either (ASTError i) ()
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;unterminated comment, expected to '*/'&quot;</span></span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289391"><span class="hs-identifier hs-var">cur</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Token i
+forall i. Text -&gt; Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKReserved"><span class="hs-identifier hs-var">TKReserved</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;/&quot;</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Maybe Int
+</span><a href="#local-6989586621679289389"><span class="hs-identifier hs-var">ind</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(Int
+ -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+ -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ())
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+-&gt; Int
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+forall a b c. (a -&gt; b -&gt; c) -&gt; b -&gt; a -&gt; c
+</span><span class="hs-identifier hs-var">flip</span></span><span> </span><span class="annot"><span class="annottext">Int
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+forall (m :: * -&gt; *) a. Applicative m =&gt; Int -&gt; m a -&gt; m ()
+</span><span class="hs-identifier hs-var">replicateM_</span></span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+forall i. (Enum i, Num i) =&gt; Tokenizer i (Maybe Char)
+</span><a href="Htcc.Tokenizer.Core.html#itemC"><span class="hs-identifier hs-var">itemC</span></a></span><span> </span><span class="annot"><span class="annottext">(Int -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ())
+-&gt; (Int -&gt; Int)
+-&gt; Int
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Int
+forall a. Num a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">+</span></span><span class="annot"><span class="hs-number">2</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-100"></span><span>
+</span><span id="line-101"></span><span id="local-6989586621679289535"><span class="annot"><a href="Htcc.Tokenizer.Core.html#line"><span class="hs-identifier hs-type">line</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Enum</span></span><span> </span><span class="annot"><a href="#local-6989586621679289535"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679289535"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#Tokenizer"><span class="hs-identifier hs-type">Tokenizer</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289535"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span></span><span>
+</span><span id="line-102"></span><span id="line"><span class="annot"><span class="annottext">line :: Tokenizer i Text
+</span><a href="Htcc.Tokenizer.Core.html#line"><span class="hs-identifier hs-var hs-var">line</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Char -&gt; Bool) -&gt; Tokenizer i Text
+forall i. (Enum i, Num i) =&gt; (Char -&gt; Bool) -&gt; Tokenizer i Text
+</span><a href="Htcc.Tokenizer.Core.html#string"><span class="hs-identifier hs-var">string</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Bool -&gt; Bool
+</span><span class="hs-identifier hs-var">not</span></span><span> </span><span class="annot"><span class="annottext">(Bool -&gt; Bool) -&gt; (Char -&gt; Bool) -&gt; Char -&gt; Bool
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">Char -&gt; Bool
+</span><a href="Htcc.Tokenizer.Core.html#isNewLine"><span class="hs-identifier hs-var">isNewLine</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-103"></span><span>
+</span><span id="line-104"></span><span id="local-6989586621679289454"><span class="annot"><a href="Htcc.Tokenizer.Core.html#macro"><span class="hs-identifier hs-type">macro</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Enum</span></span><span> </span><span class="annot"><a href="#local-6989586621679289454"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679289454"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#Tokenizer"><span class="hs-identifier hs-type">Tokenizer</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289454"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#Token"><span class="hs-identifier hs-type">Token</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289454"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span></span><span>
+</span><span id="line-105"></span><span id="macro"><span class="annot"><span class="annottext">macro :: Tokenizer i (Maybe (Token i))
+</span><a href="Htcc.Tokenizer.Core.html#macro"><span class="hs-identifier hs-var hs-var">macro</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) Bool
+-&gt; Tokenizer i (Maybe (Token i))
+-&gt; Tokenizer i (Maybe (Token i))
+-&gt; Tokenizer i (Maybe (Token i))
+forall bool (m :: * -&gt; *) a.
+(ToBool bool, Monad m) =&gt;
+m bool -&gt; m a -&gt; m a -&gt; m a
+</span><span class="hs-identifier hs-var">ifM</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe Char -&gt; Maybe Char -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">/=</span></span><span> </span><span class="annot"><span class="annottext">Char -&gt; Maybe Char
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="hs-char">'#'</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Maybe Char -&gt; Bool)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) Bool
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+forall i. Tokenizer i (Maybe Char)
+</span><a href="Htcc.Tokenizer.Core.html#itemP"><span class="hs-identifier hs-var">itemP</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe (Token i) -&gt; Tokenizer i (Maybe (Token i))
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">Maybe (Token i)
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Tokenizer i (Maybe (Token i))
+forall i.
+StateT
+  (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+</span><a href="#local-6989586621679289382"><span class="hs-identifier hs-var">f</span></a></span><span>
+</span><span id="line-106"></span><span>    </span><span class="hs-keyword">where</span><span>
+</span><span id="line-107"></span><span>        </span><span id="local-6989586621679289382"><span class="annot"><span class="annottext">f :: StateT
+  (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+</span><a href="#local-6989586621679289382"><span class="hs-identifier hs-var hs-var">f</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+-&gt; (Maybe Char
+    -&gt; StateT
+         (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i)))
+-&gt; StateT
+     (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall (m :: * -&gt; *) a b. Monad m =&gt; m a -&gt; (a -&gt; m b) -&gt; m b
+</span><span class="hs-operator hs-var">(&gt;&gt;=)</span></span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+forall i. (Enum i, Num i) =&gt; Tokenizer i (Maybe Char)
+</span><a href="Htcc.Tokenizer.Core.html#itemC"><span class="hs-identifier hs-var">itemC</span></a></span><span> </span><span class="annot"><span class="annottext">((Maybe Char
+  -&gt; StateT
+       (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i)))
+ -&gt; StateT
+      (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i)))
+-&gt; (Maybe Char
+    -&gt; StateT
+         (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i)))
+-&gt; StateT
+     (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">StateT
+  (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+-&gt; (Char
+    -&gt; StateT
+         (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i)))
+-&gt; Maybe Char
+-&gt; StateT
+     (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall b a. b -&gt; (a -&gt; b) -&gt; Maybe a -&gt; b
+</span><span class="hs-identifier hs-var">maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe (Token i)
+-&gt; StateT
+     (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">Maybe (Token i)
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">((Char
+  -&gt; StateT
+       (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i)))
+ -&gt; Maybe Char
+ -&gt; StateT
+      (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i)))
+-&gt; (Char
+    -&gt; StateT
+         (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i)))
+-&gt; Maybe Char
+-&gt; StateT
+     (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span class="hs-glyph">case</span><span>
+</span><span id="line-108"></span><span>            </span><span class="hs-char">'#'</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-109"></span><span>                </span><span id="local-6989586621679289380"><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289380"><span class="hs-identifier hs-var">cur</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">Tokenizer i (TokenLCNums i)
+forall i. Tokenizer i (TokenLCNums i)
+</span><a href="Htcc.Tokenizer.Core.html#curLC"><span class="hs-identifier hs-var">curLC</span></a></span><span>
+</span><span id="line-110"></span><span>                </span><span id="local-6989586621679289379"><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289379"><span class="hs-identifier hs-var">ln</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">Tokenizer i Text
+forall i. (Enum i, Num i) =&gt; Tokenizer i Text
+</span><a href="Htcc.Tokenizer.Core.html#line"><span class="hs-identifier hs-var">line</span></a></span><span>
+</span><span id="line-111"></span><span>                </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Bool
+</span><span class="hs-identifier hs-var">T.null</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289379"><span class="hs-identifier hs-var">ln</span></a></span><span> </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="annottext">Maybe (Token i)
+-&gt; StateT
+     (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">Maybe (Token i)
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span> </span><span class="hs-keyword">else</span><span> </span><span class="hs-keyword">let</span><span> </span><span class="hs-special">(</span><span class="hs-identifier">_</span><span class="hs-special">,</span><span> </span><span id="local-6989586621679289378"><span class="annot"><span class="annottext">kmc :: Text
+</span><a href="#local-6989586621679289378"><span class="hs-identifier hs-var">kmc</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679289377"><span class="annot"><span class="annottext">ds :: Text
+</span><a href="#local-6989586621679289377"><span class="hs-identifier hs-var">ds</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Char -&gt; Bool) -&gt; Text -&gt; (Int, Text, Text)
+</span><a href="Htcc.Utils.Text.html#spanLenT"><span class="hs-identifier hs-var">spanLenT</span></a></span><span> </span><span class="annot"><span class="annottext">Char -&gt; Bool
+</span><a href="Htcc.CRules.Char.html#isValidChar"><span class="hs-identifier hs-var">CR.isValidChar</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289379"><span class="hs-identifier hs-var">ln</span></a></span><span> </span><span class="hs-keyword">in</span><span>
+</span><span id="line-112"></span><span>                    </span><span class="annot"><span class="annottext">StateT
+  (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+-&gt; Maybe Macros
+-&gt; (Macros
+    -&gt; StateT
+         (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i)))
+-&gt; StateT
+     (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall b a. b -&gt; Maybe a -&gt; (a -&gt; b) -&gt; b
+</span><a href="Htcc.Utils.html#maybe%27"><span class="hs-identifier hs-var">maybe'</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Either (ASTError i) (Maybe (Token i))
+-&gt; StateT
+     (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall (t :: (* -&gt; *) -&gt; * -&gt; *) (m :: * -&gt; *) a.
+(MonadTrans t, Monad m) =&gt;
+m a -&gt; t m a
+</span><span class="hs-identifier hs-var">lift</span></span><span> </span><span class="annot"><span class="annottext">(Either (ASTError i) (Maybe (Token i))
+ -&gt; StateT
+      (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i)))
+-&gt; Either (ASTError i) (Maybe (Token i))
+-&gt; StateT
+     (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ASTError i -&gt; Either (ASTError i) (Maybe (Token i))
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;invalid macro in program&quot;</span></span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289380"><span class="hs-identifier hs-var">cur</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Token i
+forall i. Text -&gt; Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKReserved"><span class="hs-identifier hs-var">TKReserved</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289379"><span class="hs-identifier hs-var">ln</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(Macros -&gt; Bool) -&gt; [Macros] -&gt; Maybe Macros
+forall (t :: * -&gt; *) a. Foldable t =&gt; (a -&gt; Bool) -&gt; t a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">find</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289378"><span class="hs-identifier hs-var">kmc</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Bool) -&gt; (Macros -&gt; Text) -&gt; Macros -&gt; Bool
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">Macros -&gt; Text
+forall a. Show a =&gt; a -&gt; Text
+</span><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier hs-var">tshow</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">[Macros]
+</span><a href="Htcc.CRules.Preprocessor.Punctuators.html#macros"><span class="hs-identifier hs-var">CP.macros</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">((Macros
+  -&gt; StateT
+       (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i)))
+ -&gt; StateT
+      (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i)))
+-&gt; (Macros
+    -&gt; StateT
+         (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i)))
+-&gt; StateT
+     (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679289374"><span class="annot"><span class="annottext">m :: Macros
+</span><a href="#local-6989586621679289374"><span class="hs-identifier hs-var">m</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Maybe (Token i)
+-&gt; StateT
+     (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">(Maybe (Token i)
+ -&gt; StateT
+      (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i)))
+-&gt; Maybe (Token i)
+-&gt; StateT
+     (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Token i -&gt; Maybe (Token i)
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">(Token i -&gt; Maybe (Token i)) -&gt; Token i -&gt; Maybe (Token i)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Macros -&gt; Text -&gt; Token i
+forall i. Macros -&gt; Text -&gt; Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKMacro"><span class="hs-identifier hs-var">TKMacro</span></a></span><span> </span><span class="annot"><span class="annottext">Macros
+</span><a href="#local-6989586621679289374"><span class="hs-identifier hs-var">m</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289377"><span class="hs-identifier hs-var">ds</span></a></span><span>
+</span><span id="line-113"></span><span>            </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Maybe (Token i)
+-&gt; StateT
+     (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">Maybe (Token i)
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-114"></span><span>
+</span><span id="line-115"></span><span id="local-6989586621679289453"><span class="annot"><a href="Htcc.Tokenizer.Core.html#natLit"><span class="hs-identifier hs-type">natLit</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Enum</span></span><span> </span><span class="annot"><a href="#local-6989586621679289453"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679289453"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Eq</span></span><span> </span><span class="annot"><a href="#local-6989586621679289453"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Read</span></span><span> </span><span class="annot"><a href="#local-6989586621679289453"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#Tokenizer"><span class="hs-identifier hs-type">Tokenizer</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289453"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#Token"><span class="hs-identifier hs-type">Token</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289453"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span></span><span>
+</span><span id="line-116"></span><span id="natLit"><span class="annot"><span class="annottext">natLit :: Tokenizer i (Maybe (Token i))
+</span><a href="Htcc.Tokenizer.Core.html#natLit"><span class="hs-identifier hs-var hs-var">natLit</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-117"></span><span>    </span><span id="local-6989586621679289371"><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289371"><span class="hs-identifier hs-var">lc</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">((TokenLCNums i, Text) -&gt; TokenLCNums i)
+-&gt; StateT
+     (TokenLCNums i, Text) (Either (ASTError i)) (TokenLCNums i)
+forall s (m :: * -&gt; *) a. MonadState s m =&gt; (s -&gt; a) -&gt; m a
+</span><span class="hs-identifier hs-var">gets</span></span><span> </span><span class="annot"><span class="annottext">(TokenLCNums i, Text) -&gt; TokenLCNums i
+forall a b. (a, b) -&gt; a
+</span><span class="hs-identifier hs-var">fst</span></span><span>
+</span><span id="line-118"></span><span>    </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) Bool
+-&gt; Tokenizer i (Maybe (Token i))
+-&gt; Tokenizer i (Maybe (Token i))
+-&gt; Tokenizer i (Maybe (Token i))
+forall bool (m :: * -&gt; *) a.
+(ToBool bool, Monad m) =&gt;
+m bool -&gt; m a -&gt; m a -&gt; m a
+</span><span class="hs-identifier hs-var">ifM</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Bool -&gt; (Char -&gt; Bool) -&gt; Maybe Char -&gt; Bool
+forall b a. b -&gt; (a -&gt; b) -&gt; Maybe a -&gt; b
+</span><span class="hs-identifier hs-var">maybe</span></span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">True</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Bool -&gt; Bool
+</span><span class="hs-identifier hs-var">not</span></span><span> </span><span class="annot"><span class="annottext">(Bool -&gt; Bool) -&gt; (Char -&gt; Bool) -&gt; Char -&gt; Bool
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">Char -&gt; Bool
+</span><span class="hs-identifier hs-var">isDigit</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Maybe Char -&gt; Bool)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) Bool
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+forall i. Tokenizer i (Maybe Char)
+</span><a href="Htcc.Tokenizer.Core.html#itemP"><span class="hs-identifier hs-var">itemP</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe (Token i) -&gt; Tokenizer i (Maybe (Token i))
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">Maybe (Token i)
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Tokenizer i (Maybe (Token i)) -&gt; Tokenizer i (Maybe (Token i)))
+-&gt; Tokenizer i (Maybe (Token i)) -&gt; Tokenizer i (Maybe (Token i))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-119"></span><span>        </span><span id="local-6989586621679289370"><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289370"><span class="hs-identifier hs-var">txt</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">((TokenLCNums i, Text) -&gt; Text)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) Text
+forall s (m :: * -&gt; *) a. MonadState s m =&gt; (s -&gt; a) -&gt; m a
+</span><span class="hs-identifier hs-var">gets</span></span><span> </span><span class="annot"><span class="annottext">(TokenLCNums i, Text) -&gt; Text
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span>
+</span><span id="line-120"></span><span>        </span><span class="annot"><span class="annottext">Tokenizer i (Maybe (Token i))
+-&gt; Maybe (Natural, Token i, Text)
+-&gt; ((Natural, Token i, Text) -&gt; Tokenizer i (Maybe (Token i)))
+-&gt; Tokenizer i (Maybe (Token i))
+forall b a. b -&gt; Maybe a -&gt; (a -&gt; b) -&gt; b
+</span><a href="Htcc.Utils.html#maybe%27"><span class="hs-identifier hs-var">maybe'</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Either (ASTError i) (Maybe (Token i))
+-&gt; Tokenizer i (Maybe (Token i))
+forall (t :: (* -&gt; *) -&gt; * -&gt; *) (m :: * -&gt; *) a.
+(MonadTrans t, Monad m) =&gt;
+m a -&gt; t m a
+</span><span class="hs-identifier hs-var">lift</span></span><span> </span><span class="annot"><span class="annottext">(Either (ASTError i) (Maybe (Token i))
+ -&gt; Tokenizer i (Maybe (Token i)))
+-&gt; Either (ASTError i) (Maybe (Token i))
+-&gt; Tokenizer i (Maybe (Token i))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ASTError i -&gt; Either (ASTError i) (Maybe (Token i))
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;invalid number in program&quot;</span></span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289371"><span class="hs-identifier hs-var">lc</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">(Char -&gt; Token i) -&gt; Text -&gt; Token i
+forall i. (Char -&gt; Token i) -&gt; Text -&gt; Token i
+</span><a href="Htcc.Tokenizer.Core.html#headToken"><span class="hs-identifier hs-var">headToken</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">i -&gt; Token i
+forall i. i -&gt; Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKNum"><span class="hs-identifier hs-var">TKNum</span></a></span><span> </span><span class="annot"><span class="annottext">(i -&gt; Token i) -&gt; (Char -&gt; i) -&gt; Char -&gt; Token i
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">Int -&gt; i
+forall a b. (Integral a, Num b) =&gt; a -&gt; b
+</span><span class="hs-identifier hs-var">fromIntegral</span></span><span> </span><span class="annot"><span class="annottext">(Int -&gt; i) -&gt; (Char -&gt; Int) -&gt; Char -&gt; i
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">Char -&gt; Int
+</span><span class="hs-identifier hs-var">digitToInt</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289370"><span class="hs-identifier hs-var">txt</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Maybe (Natural, Token i, Text)
+forall i.
+(Eq i, Num i, Read i) =&gt;
+Text -&gt; Maybe (Natural, Token i, Text)
+</span><a href="Htcc.Tokenizer.Token.html#spanIntLit"><span class="hs-identifier hs-var">spanIntLit</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289370"><span class="hs-identifier hs-var">txt</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(((Natural, Token i, Text) -&gt; Tokenizer i (Maybe (Token i)))
+ -&gt; Tokenizer i (Maybe (Token i)))
+-&gt; ((Natural, Token i, Text) -&gt; Tokenizer i (Maybe (Token i)))
+-&gt; Tokenizer i (Maybe (Token i))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span class="hs-special">(</span><span id="local-6989586621679289367"><span class="annot"><span class="annottext">n :: Natural
+</span><a href="#local-6989586621679289367"><span class="hs-identifier hs-var">n</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679289366"><span class="annot"><span class="annottext">tk :: Token i
+</span><a href="#local-6989586621679289366"><span class="hs-identifier hs-var">tk</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679289365"><span class="annot"><span class="annottext">ds :: Text
+</span><a href="#local-6989586621679289365"><span class="hs-identifier hs-var">ds</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-121"></span><span>            </span><span class="annot"><span class="annottext">Token i -&gt; Maybe (Token i)
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">Token i
+</span><a href="#local-6989586621679289366"><span class="hs-identifier hs-var">tk</span></a></span><span> </span><span class="annot"><span class="annottext">Maybe (Token i)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+-&gt; Tokenizer i (Maybe (Token i))
+forall (f :: * -&gt; *) a b. Functor f =&gt; a -&gt; f b -&gt; f a
+</span><span class="hs-operator hs-var">&lt;$</span></span><span> </span><span class="annot"><span class="annottext">(TokenLCNums i, Text)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+forall s (m :: * -&gt; *). MonadState s m =&gt; s -&gt; m ()
+</span><span class="hs-identifier hs-var">put</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289371"><span class="hs-identifier hs-var">lc</span></a></span><span> </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">tkCn :: i
+</span><a href="Htcc.Tokenizer.Token.html#tkCn"><span class="hs-identifier hs-var">tkCn</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">TokenLCNums i -&gt; i
+forall i. TokenLCNums i -&gt; i
+</span><a href="Htcc.Tokenizer.Token.html#tkCn"><span class="hs-identifier hs-var hs-var">tkCn</span></a></span><span> </span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289371"><span class="hs-identifier hs-var">lc</span></a></span><span> </span><span class="annot"><span class="annottext">i -&gt; i -&gt; i
+forall a. Num a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">+</span></span><span> </span><span class="annot"><span class="annottext">Natural -&gt; i
+forall a b. (Integral a, Num b) =&gt; a -&gt; b
+</span><span class="hs-identifier hs-var">fromIntegral</span></span><span> </span><span class="annot"><span class="annottext">Natural
+</span><a href="#local-6989586621679289367"><span class="hs-identifier hs-var">n</span></a></span><span> </span><span class="hs-special">}</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289365"><span class="hs-identifier hs-var">ds</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-122"></span><span>
+</span><span id="line-123"></span><span id="local-6989586621679289363"><span class="annot"><a href="Htcc.Tokenizer.Core.html#strLit"><span class="hs-identifier hs-type">strLit</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Enum</span></span><span> </span><span class="annot"><a href="#local-6989586621679289363"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679289363"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#Tokenizer"><span class="hs-identifier hs-type">Tokenizer</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289363"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#Token"><span class="hs-identifier hs-type">Token</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289363"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span></span><span>
+</span><span id="line-124"></span><span id="strLit"><span class="annot"><span class="annottext">strLit :: Tokenizer i (Maybe (Token i))
+</span><a href="Htcc.Tokenizer.Core.html#strLit"><span class="hs-identifier hs-var hs-var">strLit</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-125"></span><span>    </span><span id="local-6989586621679289361"><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289361"><span class="hs-identifier hs-var">lc</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">((TokenLCNums i, Text) -&gt; TokenLCNums i)
+-&gt; StateT
+     (TokenLCNums i, Text) (Either (ASTError i)) (TokenLCNums i)
+forall s (m :: * -&gt; *) a. MonadState s m =&gt; (s -&gt; a) -&gt; m a
+</span><span class="hs-identifier hs-var">gets</span></span><span> </span><span class="annot"><span class="annottext">(TokenLCNums i, Text) -&gt; TokenLCNums i
+forall a b. (a, b) -&gt; a
+</span><span class="hs-identifier hs-var">fst</span></span><span>
+</span><span id="line-126"></span><span>    </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) Bool
+-&gt; Tokenizer i (Maybe (Token i))
+-&gt; Tokenizer i (Maybe (Token i))
+-&gt; Tokenizer i (Maybe (Token i))
+forall bool (m :: * -&gt; *) a.
+(ToBool bool, Monad m) =&gt;
+m bool -&gt; m a -&gt; m a -&gt; m a
+</span><span class="hs-identifier hs-var">ifM</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe Char -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">isNothing</span></span><span> </span><span class="annot"><span class="annottext">(Maybe Char -&gt; Bool)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) Bool
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">(Char -&gt; Bool)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+forall i.
+(Enum i, Num i) =&gt;
+(Char -&gt; Bool) -&gt; Tokenizer i (Maybe Char)
+</span><a href="Htcc.Tokenizer.Core.html#char"><span class="hs-identifier hs-var">char</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Char -&gt; Char -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span class="annot"><span class="hs-char">'\&quot;'</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe (Token i) -&gt; Tokenizer i (Maybe (Token i))
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">Maybe (Token i)
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Tokenizer i (Maybe (Token i)) -&gt; Tokenizer i (Maybe (Token i)))
+-&gt; Tokenizer i (Maybe (Token i)) -&gt; Tokenizer i (Maybe (Token i))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-127"></span><span>        </span><span id="local-6989586621679289360"><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289360"><span class="hs-identifier hs-var">txt</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">((TokenLCNums i, Text) -&gt; Text)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) Text
+forall s (m :: * -&gt; *) a. MonadState s m =&gt; (s -&gt; a) -&gt; m a
+</span><span class="hs-identifier hs-var">gets</span></span><span> </span><span class="annot"><span class="annottext">(TokenLCNums i, Text) -&gt; Text
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span>
+</span><span id="line-128"></span><span>        </span><span class="annot"><span class="annottext">Tokenizer i (Maybe (Token i))
+-&gt; Maybe (Text, Text)
+-&gt; ((Text, Text) -&gt; Tokenizer i (Maybe (Token i)))
+-&gt; Tokenizer i (Maybe (Token i))
+forall b a. b -&gt; Maybe a -&gt; (a -&gt; b) -&gt; b
+</span><a href="Htcc.Utils.html#maybe%27"><span class="hs-identifier hs-var">maybe'</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Either (ASTError i) (Maybe (Token i))
+-&gt; Tokenizer i (Maybe (Token i))
+forall (t :: (* -&gt; *) -&gt; * -&gt; *) (m :: * -&gt; *) a.
+(MonadTrans t, Monad m) =&gt;
+m a -&gt; t m a
+</span><span class="hs-identifier hs-var">lift</span></span><span> </span><span class="annot"><span class="annottext">(Either (ASTError i) (Maybe (Token i))
+ -&gt; Tokenizer i (Maybe (Token i)))
+-&gt; Either (ASTError i) (Maybe (Token i))
+-&gt; Tokenizer i (Maybe (Token i))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ASTError i -&gt; Either (ASTError i) (Maybe (Token i))
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;invalid string literal in program&quot;</span></span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289361"><span class="hs-identifier hs-var">lc</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Token i
+forall i. Text -&gt; Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKReserved"><span class="hs-identifier hs-var">TKReserved</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;\&quot;&quot;</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Maybe (Text, Text)
+</span><a href="Htcc.Tokenizer.Token.html#spanStrLiteral"><span class="hs-identifier hs-var">spanStrLiteral</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289360"><span class="hs-identifier hs-var">txt</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(((Text, Text) -&gt; Tokenizer i (Maybe (Token i)))
+ -&gt; Tokenizer i (Maybe (Token i)))
+-&gt; ((Text, Text) -&gt; Tokenizer i (Maybe (Token i)))
+-&gt; Tokenizer i (Maybe (Token i))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span class="hs-special">(</span><span id="local-6989586621679289358"><span class="annot"><span class="annottext">lit :: Text
+</span><a href="#local-6989586621679289358"><span class="hs-identifier hs-var">lit</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679289357"><span class="annot"><span class="annottext">ds :: Text
+</span><a href="#local-6989586621679289357"><span class="hs-identifier hs-var">ds</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-129"></span><span>            </span><span class="hs-comment">-- The meaning of adding 2 is to add the two &quot;characters surrounding the string literal.</span><span>
+</span><span id="line-130"></span><span>            </span><span class="annot"><span class="annottext">Token i -&gt; Maybe (Token i)
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ByteString -&gt; Token i
+forall i. ByteString -&gt; Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKString"><span class="hs-identifier hs-var">TKString</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; ByteString
+</span><span class="hs-identifier hs-var">T.encodeUtf8</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; ByteString) -&gt; Text -&gt; ByteString
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+</span><span class="hs-identifier hs-var">T.append</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289358"><span class="hs-identifier hs-var">lit</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;\0&quot;</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Maybe (Token i)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+-&gt; Tokenizer i (Maybe (Token i))
+forall (f :: * -&gt; *) a b. Functor f =&gt; a -&gt; f b -&gt; f a
+</span><span class="hs-operator hs-var">&lt;$</span></span><span> </span><span class="annot"><span class="annottext">(TokenLCNums i, Text)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+forall s (m :: * -&gt; *). MonadState s m =&gt; s -&gt; m ()
+</span><span class="hs-identifier hs-var">put</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289361"><span class="hs-identifier hs-var">lc</span></a></span><span> </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">tkCn :: i
+</span><a href="Htcc.Tokenizer.Token.html#tkCn"><span class="hs-identifier hs-var">tkCn</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-number">2</span></span><span> </span><span class="annot"><span class="annottext">i -&gt; i -&gt; i
+forall a. Num a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">+</span></span><span> </span><span class="annot"><span class="annottext">TokenLCNums i -&gt; i
+forall i. TokenLCNums i -&gt; i
+</span><a href="Htcc.Tokenizer.Token.html#tkCn"><span class="hs-identifier hs-var hs-var">tkCn</span></a></span><span> </span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289361"><span class="hs-identifier hs-var">lc</span></a></span><span> </span><span class="annot"><span class="annottext">i -&gt; i -&gt; i
+forall a. Num a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">+</span></span><span> </span><span class="annot"><span class="annottext">Int -&gt; i
+forall a b. (Integral a, Num b) =&gt; a -&gt; b
+</span><span class="hs-identifier hs-var">fromIntegral</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Int
+</span><span class="hs-identifier hs-var">T.length</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289358"><span class="hs-identifier hs-var">lit</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">}</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289357"><span class="hs-identifier hs-var">ds</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-131"></span><span>
+</span><span id="line-132"></span><span id="local-6989586621679289452"><span class="annot"><a href="Htcc.Tokenizer.Core.html#charLit"><span class="hs-identifier hs-type">charLit</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Enum</span></span><span> </span><span class="annot"><a href="#local-6989586621679289452"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679289452"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Eq</span></span><span> </span><span class="annot"><a href="#local-6989586621679289452"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#Tokenizer"><span class="hs-identifier hs-type">Tokenizer</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289452"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#Token"><span class="hs-identifier hs-type">Token</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289452"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span></span><span>
+</span><span id="line-133"></span><span id="charLit"><span class="annot"><span class="annottext">charLit :: Tokenizer i (Maybe (Token i))
+</span><a href="Htcc.Tokenizer.Core.html#charLit"><span class="hs-identifier hs-var hs-var">charLit</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-134"></span><span>    </span><span id="local-6989586621679289351"><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289351"><span class="hs-identifier hs-var">lc</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">((TokenLCNums i, Text) -&gt; TokenLCNums i)
+-&gt; StateT
+     (TokenLCNums i, Text) (Either (ASTError i)) (TokenLCNums i)
+forall s (m :: * -&gt; *) a. MonadState s m =&gt; (s -&gt; a) -&gt; m a
+</span><span class="hs-identifier hs-var">gets</span></span><span> </span><span class="annot"><span class="annottext">(TokenLCNums i, Text) -&gt; TokenLCNums i
+forall a b. (a, b) -&gt; a
+</span><span class="hs-identifier hs-var">fst</span></span><span>
+</span><span id="line-135"></span><span>    </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) Bool
+-&gt; Tokenizer i (Maybe (Token i))
+-&gt; Tokenizer i (Maybe (Token i))
+-&gt; Tokenizer i (Maybe (Token i))
+forall bool (m :: * -&gt; *) a.
+(ToBool bool, Monad m) =&gt;
+m bool -&gt; m a -&gt; m a -&gt; m a
+</span><span class="hs-identifier hs-var">ifM</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe Char -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">isNothing</span></span><span> </span><span class="annot"><span class="annottext">(Maybe Char -&gt; Bool)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) Bool
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">(Char -&gt; Bool)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+forall i.
+(Enum i, Num i) =&gt;
+(Char -&gt; Bool) -&gt; Tokenizer i (Maybe Char)
+</span><a href="Htcc.Tokenizer.Core.html#char"><span class="hs-identifier hs-var">char</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Char -&gt; Char -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span class="annot"><span class="hs-char">'\''</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe (Token i) -&gt; Tokenizer i (Maybe (Token i))
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">Maybe (Token i)
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Tokenizer i (Maybe (Token i)) -&gt; Tokenizer i (Maybe (Token i)))
+-&gt; Tokenizer i (Maybe (Token i)) -&gt; Tokenizer i (Maybe (Token i))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-136"></span><span>        </span><span id="local-6989586621679289350"><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289350"><span class="hs-identifier hs-var">txt</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">((TokenLCNums i, Text) -&gt; Text)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) Text
+forall s (m :: * -&gt; *) a. MonadState s m =&gt; (s -&gt; a) -&gt; m a
+</span><span class="hs-identifier hs-var">gets</span></span><span> </span><span class="annot"><span class="annottext">(TokenLCNums i, Text) -&gt; Text
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span>
+</span><span id="line-137"></span><span>        </span><span class="annot"><span class="annottext">Tokenizer i (Maybe (Token i))
+-&gt; Maybe (Text, Text)
+-&gt; ((Text, Text) -&gt; Tokenizer i (Maybe (Token i)))
+-&gt; Tokenizer i (Maybe (Token i))
+forall b a. b -&gt; Maybe a -&gt; (a -&gt; b) -&gt; b
+</span><a href="Htcc.Utils.html#maybe%27"><span class="hs-identifier hs-var">maybe'</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Either (ASTError i) (Maybe (Token i))
+-&gt; Tokenizer i (Maybe (Token i))
+forall (t :: (* -&gt; *) -&gt; * -&gt; *) (m :: * -&gt; *) a.
+(MonadTrans t, Monad m) =&gt;
+m a -&gt; t m a
+</span><span class="hs-identifier hs-var">lift</span></span><span> </span><span class="annot"><span class="annottext">(Either (ASTError i) (Maybe (Token i))
+ -&gt; Tokenizer i (Maybe (Token i)))
+-&gt; Either (ASTError i) (Maybe (Token i))
+-&gt; Tokenizer i (Maybe (Token i))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ASTError i -&gt; Either (ASTError i) (Maybe (Token i))
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;invalid char literal in program&quot;</span></span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289351"><span class="hs-identifier hs-var">lc</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Token i
+forall i. Text -&gt; Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKReserved"><span class="hs-identifier hs-var">TKReserved</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;\'&quot;</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Maybe (Text, Text)
+</span><a href="Htcc.Tokenizer.Token.html#spanCharLiteral"><span class="hs-identifier hs-var">spanCharLiteral</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289350"><span class="hs-identifier hs-var">txt</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(((Text, Text) -&gt; Tokenizer i (Maybe (Token i)))
+ -&gt; Tokenizer i (Maybe (Token i)))
+-&gt; ((Text, Text) -&gt; Tokenizer i (Maybe (Token i)))
+-&gt; Tokenizer i (Maybe (Token i))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span class="hs-special">(</span><span id="local-6989586621679289348"><span class="annot"><span class="annottext">lit :: Text
+</span><a href="#local-6989586621679289348"><span class="hs-identifier hs-var">lit</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679289347"><span class="annot"><span class="annottext">ds :: Text
+</span><a href="#local-6989586621679289347"><span class="hs-identifier hs-var">ds</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span>
+</span><span id="line-138"></span><span>            </span><span class="hs-comment">-- Adding 3 means to add a single character literal and two @&quot;@</span><span>
+</span><span id="line-139"></span><span>            </span><span class="hs-keyword">if</span><span>  </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Int
+</span><span class="hs-identifier hs-var">T.length</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289348"><span class="hs-identifier hs-var">lit</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="hs-number">1</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Token i -&gt; Maybe (Token i)
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">i -&gt; Token i
+forall i. i -&gt; Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKNum"><span class="hs-identifier hs-var">TKNum</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Int -&gt; i
+forall a b. (Integral a, Num b) =&gt; a -&gt; b
+</span><span class="hs-identifier hs-var">fromIntegral</span></span><span> </span><span class="annot"><span class="annottext">(Int -&gt; i) -&gt; Int -&gt; i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Char -&gt; Int
+</span><span class="hs-identifier hs-var">ord</span></span><span> </span><span class="annot"><span class="annottext">(Char -&gt; Int) -&gt; Char -&gt; Int
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Char
+</span><span class="hs-identifier hs-var">T.head</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289348"><span class="hs-identifier hs-var">lit</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Maybe (Token i)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+-&gt; Tokenizer i (Maybe (Token i))
+forall (f :: * -&gt; *) a b. Functor f =&gt; a -&gt; f b -&gt; f a
+</span><span class="hs-operator hs-var">&lt;$</span></span><span> </span><span class="annot"><span class="annottext">(TokenLCNums i, Text)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+forall s (m :: * -&gt; *). MonadState s m =&gt; s -&gt; m ()
+</span><span class="hs-identifier hs-var">put</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289351"><span class="hs-identifier hs-var">lc</span></a></span><span> </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">tkCn :: i
+</span><a href="Htcc.Tokenizer.Token.html#tkCn"><span class="hs-identifier hs-var">tkCn</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-number">3</span></span><span> </span><span class="annot"><span class="annottext">i -&gt; i -&gt; i
+forall a. Num a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">+</span></span><span> </span><span class="annot"><span class="annottext">TokenLCNums i -&gt; i
+forall i. TokenLCNums i -&gt; i
+</span><a href="Htcc.Tokenizer.Token.html#tkCn"><span class="hs-identifier hs-var hs-var">tkCn</span></a></span><span> </span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289351"><span class="hs-identifier hs-var">lc</span></a></span><span> </span><span class="hs-special">}</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289347"><span class="hs-identifier hs-var">ds</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-140"></span><span>                </span><span class="hs-comment">-- For multi-character constants.</span><span>
+</span><span id="line-141"></span><span>                </span><span class="hs-comment">-- The standard states that this is an implementation definition.</span><span>
+</span><span id="line-142"></span><span>                </span><span class="hs-comment">-- Here it follows the implementation definitions of GCC and Clang.</span><span>
+</span><span id="line-143"></span><span>                </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Token i -&gt; Maybe (Token i)
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">i -&gt; Token i
+forall i. i -&gt; Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKNum"><span class="hs-identifier hs-var">TKNum</span></a></span><span> </span><span class="annot"><span class="annottext">(i -&gt; Token i) -&gt; i -&gt; Token i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(i, String) -&gt; i
+forall a b. (a, b) -&gt; a
+</span><span class="hs-identifier hs-var">fst</span></span><span> </span><span class="annot"><span class="annottext">((i, String) -&gt; i) -&gt; (i, String) -&gt; i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[(i, String)] -&gt; (i, String)
+forall a. [a] -&gt; a
+</span><span class="hs-identifier hs-var">head</span></span><span> </span><span class="annot"><span class="annottext">([(i, String)] -&gt; (i, String)) -&gt; [(i, String)] -&gt; (i, String)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ReadS i
+forall a. (Eq a, Num a) =&gt; ReadS a
+</span><span class="hs-identifier hs-var">readHex</span></span><span> </span><span class="annot"><span class="annottext">ReadS i -&gt; ReadS i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(Char -&gt; String -&gt; String) -&gt; String -&gt; String -&gt; String
+forall (t :: * -&gt; *) a b.
+Foldable t =&gt;
+(a -&gt; b -&gt; b) -&gt; b -&gt; t a -&gt; b
+</span><span class="hs-identifier hs-var">foldr</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">\</span><span id="local-6989586621679289344"><span class="annot"><span class="annottext">x :: Char
+</span><a href="#local-6989586621679289344"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span id="local-6989586621679289343"><span class="annot"><span class="annottext">acc :: String
+</span><a href="#local-6989586621679289343"><span class="hs-identifier hs-var">acc</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Int -&gt; String -&gt; String
+forall a. (Integral a, Show a) =&gt; a -&gt; String -&gt; String
+</span><span class="hs-identifier hs-var">showHex</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Char -&gt; Int
+</span><span class="hs-identifier hs-var">ord</span></span><span> </span><span class="annot"><span class="annottext">Char
+</span><a href="#local-6989586621679289344"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="hs-string">&quot;&quot;</span></span><span> </span><span class="annot"><span class="annottext">String -&gt; String -&gt; String
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="#local-6989586621679289343"><span class="hs-identifier hs-var">acc</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span> </span><span class="annot"><span class="annottext">(String -&gt; String) -&gt; String -&gt; String
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; String
+</span><span class="hs-identifier hs-var">T.unpack</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289348"><span class="hs-identifier hs-var">lit</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Maybe (Token i)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+-&gt; Tokenizer i (Maybe (Token i))
+forall (f :: * -&gt; *) a b. Functor f =&gt; a -&gt; f b -&gt; f a
+</span><span class="hs-operator hs-var">&lt;$</span></span><span>
+</span><span id="line-144"></span><span>                    </span><span class="annot"><span class="annottext">(TokenLCNums i, Text)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+forall s (m :: * -&gt; *). MonadState s m =&gt; s -&gt; m ()
+</span><span class="hs-identifier hs-var">put</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289351"><span class="hs-identifier hs-var">lc</span></a></span><span> </span><span class="hs-special">{</span><span> </span><span class="annot"><span class="annottext">tkCn :: i
+</span><a href="Htcc.Tokenizer.Token.html#tkCn"><span class="hs-identifier hs-var">tkCn</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-number">2</span></span><span> </span><span class="annot"><span class="annottext">i -&gt; i -&gt; i
+forall a. Num a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">+</span></span><span> </span><span class="annot"><span class="annottext">Int -&gt; i
+forall a b. (Integral a, Num b) =&gt; a -&gt; b
+</span><span class="hs-identifier hs-var">fromIntegral</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Int
+</span><span class="hs-identifier hs-var">T.length</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289348"><span class="hs-identifier hs-var">lit</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">i -&gt; i -&gt; i
+forall a. Num a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">+</span></span><span> </span><span class="annot"><span class="annottext">TokenLCNums i -&gt; i
+forall i. TokenLCNums i -&gt; i
+</span><a href="Htcc.Tokenizer.Token.html#tkCn"><span class="hs-identifier hs-var hs-var">tkCn</span></a></span><span> </span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289351"><span class="hs-identifier hs-var">lc</span></a></span><span> </span><span class="hs-special">}</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289347"><span class="hs-identifier hs-var">ds</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-145"></span><span>
+</span><span id="line-146"></span><span id="local-6989586621679289341"><span class="annot"><a href="Htcc.Tokenizer.Core.html#operators"><span class="hs-identifier hs-type">operators</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Enum</span></span><span> </span><span class="annot"><a href="#local-6989586621679289341"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679289341"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#Tokenizer"><span class="hs-identifier hs-type">Tokenizer</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289341"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#Token"><span class="hs-identifier hs-type">Token</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289341"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span></span><span>
+</span><span id="line-147"></span><span id="operators"><span class="annot"><span class="annottext">operators :: Tokenizer i (Maybe (Token i))
+</span><a href="Htcc.Tokenizer.Core.html#operators"><span class="hs-identifier hs-var hs-var">operators</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-148"></span><span>    </span><span id="local-6989586621679289339"><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679289339"><span class="hs-identifier hs-var">s3</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">Int -&gt; Tokenizer i (Maybe Text)
+forall i. Int -&gt; Tokenizer i (Maybe Text)
+</span><a href="Htcc.Tokenizer.Core.html#itemsP"><span class="hs-identifier hs-var">itemsP</span></a></span><span> </span><span class="annot"><span class="hs-number">3</span></span><span>
+</span><span id="line-149"></span><span>    </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">Maybe Text -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">isJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679289339"><span class="hs-identifier hs-var">s3</span></a></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
+</span><span class="hs-operator hs-var">&amp;&amp;</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text -&gt; Text
+forall a. HasCallStack =&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679289339"><span class="hs-identifier hs-var">s3</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; [Text] -&gt; Bool
+forall (t :: * -&gt; *) a. (Foldable t, Eq a) =&gt; a -&gt; t a -&gt; Bool
+</span><span class="hs-operator hs-var">`elem`</span></span><span> </span><span class="annot"><span class="annottext">[Text]
+</span><a href="Htcc.CRules.LexicalElements.html#strOps3"><span class="hs-identifier hs-var">CR.strOps3</span></a></span><span> </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="annottext">Token i -&gt; Maybe (Token i)
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Token i
+forall i. Text -&gt; Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKReserved"><span class="hs-identifier hs-var">TKReserved</span></a></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Token i) -&gt; Text -&gt; Token i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text -&gt; Text
+forall a. HasCallStack =&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679289339"><span class="hs-identifier hs-var">s3</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Maybe (Token i)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+-&gt; Tokenizer i (Maybe (Token i))
+forall (f :: * -&gt; *) a b. Functor f =&gt; a -&gt; f b -&gt; f a
+</span><span class="hs-operator hs-var">&lt;$</span></span><span> </span><span class="annot"><span class="annottext">Int
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+forall (m :: * -&gt; *) a. Applicative m =&gt; Int -&gt; m a -&gt; m ()
+</span><span class="hs-identifier hs-var">replicateM_</span></span><span> </span><span class="annot"><span class="hs-number">3</span></span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+forall i. (Enum i, Num i) =&gt; Tokenizer i (Maybe Char)
+</span><a href="Htcc.Tokenizer.Core.html#itemC"><span class="hs-identifier hs-var">itemC</span></a></span><span> </span><span class="hs-keyword">else</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-150"></span><span>        </span><span id="local-6989586621679289335"><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679289335"><span class="hs-identifier hs-var">s2</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">Int -&gt; Tokenizer i (Maybe Text)
+forall i. Int -&gt; Tokenizer i (Maybe Text)
+</span><a href="Htcc.Tokenizer.Core.html#itemsP"><span class="hs-identifier hs-var">itemsP</span></a></span><span> </span><span class="annot"><span class="hs-number">2</span></span><span>
+</span><span id="line-151"></span><span>        </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">Maybe Text -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">isJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679289335"><span class="hs-identifier hs-var">s2</span></a></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
+</span><span class="hs-operator hs-var">&amp;&amp;</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text -&gt; Text
+forall a. HasCallStack =&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679289335"><span class="hs-identifier hs-var">s2</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; [Text] -&gt; Bool
+forall (t :: * -&gt; *) a. (Foldable t, Eq a) =&gt; a -&gt; t a -&gt; Bool
+</span><span class="hs-operator hs-var">`elem`</span></span><span> </span><span class="annot"><span class="annottext">[Text]
+</span><a href="Htcc.CRules.LexicalElements.html#strOps2"><span class="hs-identifier hs-var">CR.strOps2</span></a></span><span> </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="annottext">Token i -&gt; Maybe (Token i)
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Token i
+forall i. Text -&gt; Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKReserved"><span class="hs-identifier hs-var">TKReserved</span></a></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Token i) -&gt; Text -&gt; Token i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text -&gt; Text
+forall a. HasCallStack =&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679289335"><span class="hs-identifier hs-var">s2</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Maybe (Token i)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+-&gt; Tokenizer i (Maybe (Token i))
+forall (f :: * -&gt; *) a b. Functor f =&gt; a -&gt; f b -&gt; f a
+</span><span class="hs-operator hs-var">&lt;$</span></span><span> </span><span class="annot"><span class="annottext">Int
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) ()
+forall (m :: * -&gt; *) a. Applicative m =&gt; Int -&gt; m a -&gt; m ()
+</span><span class="hs-identifier hs-var">replicateM_</span></span><span> </span><span class="annot"><span class="hs-number">2</span></span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+forall i. (Enum i, Num i) =&gt; Tokenizer i (Maybe Char)
+</span><a href="Htcc.Tokenizer.Core.html#itemC"><span class="hs-identifier hs-var">itemC</span></a></span><span> </span><span class="hs-keyword">else</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-152"></span><span>            </span><span id="local-6989586621679289333"><span class="annot"><span class="annottext">Maybe Char
+</span><a href="#local-6989586621679289333"><span class="hs-identifier hs-var">s1</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+forall i. Tokenizer i (Maybe Char)
+</span><a href="Htcc.Tokenizer.Core.html#itemP"><span class="hs-identifier hs-var">itemP</span></a></span><span>
+</span><span id="line-153"></span><span>            </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">Maybe Char -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">isJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Char
+</span><a href="#local-6989586621679289333"><span class="hs-identifier hs-var">s1</span></a></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
+</span><span class="hs-operator hs-var">&amp;&amp;</span></span><span> </span><span class="annot"><span class="annottext">Maybe Char -&gt; Char
+forall a. HasCallStack =&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Char
+</span><a href="#local-6989586621679289333"><span class="hs-identifier hs-var">s1</span></a></span><span> </span><span class="annot"><span class="annottext">Char -&gt; String -&gt; Bool
+forall (t :: * -&gt; *) a. (Foldable t, Eq a) =&gt; a -&gt; t a -&gt; Bool
+</span><span class="hs-operator hs-var">`elem`</span></span><span> </span><span class="annot"><span class="annottext">String
+</span><a href="Htcc.CRules.LexicalElements.html#charOps"><span class="hs-identifier hs-var">CR.charOps</span></a></span><span> </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="annottext">Token i -&gt; Maybe (Token i)
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Token i
+forall i. Text -&gt; Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKReserved"><span class="hs-identifier hs-var">TKReserved</span></a></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Token i) -&gt; Text -&gt; Token i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Char -&gt; Text
+</span><span class="hs-identifier hs-var">T.singleton</span></span><span> </span><span class="annot"><span class="annottext">(Char -&gt; Text) -&gt; Char -&gt; Text
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Maybe Char -&gt; Char
+forall a. HasCallStack =&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Char
+</span><a href="#local-6989586621679289333"><span class="hs-identifier hs-var">s1</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Maybe (Token i)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+-&gt; Tokenizer i (Maybe (Token i))
+forall (f :: * -&gt; *) a b. Functor f =&gt; a -&gt; f b -&gt; f a
+</span><span class="hs-operator hs-var">&lt;$</span></span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+forall i. (Enum i, Num i) =&gt; Tokenizer i (Maybe Char)
+</span><a href="Htcc.Tokenizer.Core.html#itemC"><span class="hs-identifier hs-var">itemC</span></a></span><span> </span><span class="hs-keyword">else</span><span>
+</span><span id="line-154"></span><span>                </span><span class="annot"><span class="annottext">Maybe (Token i) -&gt; Tokenizer i (Maybe (Token i))
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">Maybe (Token i)
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-155"></span><span>
+</span><span id="line-156"></span><span id="local-6989586621679289451"><span class="annot"><a href="Htcc.Tokenizer.Core.html#keyWordOrIdent"><span class="hs-identifier hs-type">keyWordOrIdent</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Enum</span></span><span> </span><span class="annot"><a href="#local-6989586621679289451"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679289451"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679289451"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Core.html#Tokenizer"><span class="hs-identifier hs-type">Tokenizer</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289451"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#Token"><span class="hs-identifier hs-type">Token</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289451"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span></span><span>
+</span><span id="line-157"></span><span id="keyWordOrIdent"><span class="annot"><span class="annottext">keyWordOrIdent :: Tokenizer i (Maybe (Token i))
+</span><a href="Htcc.Tokenizer.Core.html#keyWordOrIdent"><span class="hs-identifier hs-var hs-var">keyWordOrIdent</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-158"></span><span>    </span><span class="hs-special">(</span><span id="local-6989586621679289329"><span class="annot"><span class="annottext">lc :: TokenLCNums i
+</span><a href="#local-6989586621679289329"><span class="hs-identifier hs-var">lc</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679289328"><span class="annot"><span class="annottext">txt :: Text
+</span><a href="#local-6989586621679289328"><span class="hs-identifier hs-var">txt</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">StateT
+  (TokenLCNums i, Text) (Either (ASTError i)) (TokenLCNums i, Text)
+forall s (m :: * -&gt; *). MonadState s m =&gt; m s
+</span><span class="hs-identifier hs-var">get</span></span><span>
+</span><span id="line-159"></span><span>    </span><span class="annot"><span class="annottext">(Char -&gt; Bool) -&gt; Tokenizer i Text
+forall i. (Enum i, Num i) =&gt; (Char -&gt; Bool) -&gt; Tokenizer i Text
+</span><a href="Htcc.Tokenizer.Core.html#string"><span class="hs-identifier hs-var">string</span></a></span><span> </span><span class="annot"><span class="annottext">Char -&gt; Bool
+</span><a href="Htcc.CRules.Char.html#isValidChar"><span class="hs-identifier hs-var">CR.isValidChar</span></a></span><span> </span><span class="annot"><span class="annottext">Tokenizer i Text
+-&gt; (Text -&gt; Tokenizer i (Maybe (Token i)))
+-&gt; Tokenizer i (Maybe (Token i))
+forall (m :: * -&gt; *) a b. Monad m =&gt; m a -&gt; (a -&gt; m b) -&gt; m b
+</span><span class="hs-operator hs-var">&gt;&gt;=</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679289326"><span class="annot"><span class="annottext">s :: Text
+</span><a href="#local-6989586621679289326"><span class="hs-identifier hs-var">s</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Bool
+</span><span class="hs-identifier hs-var">T.null</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289326"><span class="hs-identifier hs-var">s</span></a></span><span> </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="annottext">Either (ASTError i) (Maybe (Token i))
+-&gt; Tokenizer i (Maybe (Token i))
+forall (t :: (* -&gt; *) -&gt; * -&gt; *) (m :: * -&gt; *) a.
+(MonadTrans t, Monad m) =&gt;
+m a -&gt; t m a
+</span><span class="hs-identifier hs-var">lift</span></span><span> </span><span class="annot"><span class="annottext">(Either (ASTError i) (Maybe (Token i))
+ -&gt; Tokenizer i (Maybe (Token i)))
+-&gt; Either (ASTError i) (Maybe (Token i))
+-&gt; Tokenizer i (Maybe (Token i))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ASTError i -&gt; Either (ASTError i) (Maybe (Token i))
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;stray token in program&quot;</span></span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289329"><span class="hs-identifier hs-var">lc</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Token i
+forall i. Text -&gt; Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKReserved"><span class="hs-identifier hs-var">TKReserved</span></a></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Token i) -&gt; Text -&gt; Token i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(Char -&gt; Bool) -&gt; Text -&gt; Text
+</span><span class="hs-identifier hs-var">T.takeWhile</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Bool -&gt; Bool
+</span><span class="hs-identifier hs-var">not</span></span><span> </span><span class="annot"><span class="annottext">(Bool -&gt; Bool) -&gt; (Char -&gt; Bool) -&gt; Char -&gt; Bool
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">Char -&gt; Bool
+</span><a href="Htcc.CRules.Char.html#isValidChar"><span class="hs-identifier hs-var">CR.isValidChar</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289328"><span class="hs-identifier hs-var">txt</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-keyword">else</span><span>
+</span><span id="line-160"></span><span>        </span><span class="annot"><span class="annottext">Maybe (Token i) -&gt; Tokenizer i (Maybe (Token i))
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">(Maybe (Token i) -&gt; Tokenizer i (Maybe (Token i)))
+-&gt; Maybe (Token i) -&gt; Tokenizer i (Maybe (Token i))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Maybe (Token i)
+forall i. Show i =&gt; Text -&gt; Maybe (Token i)
+</span><a href="Htcc.Tokenizer.Token.html#lookupKeyword"><span class="hs-identifier hs-var">lookupKeyword</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289326"><span class="hs-identifier hs-var">s</span></a></span><span> </span><span class="annot"><span class="annottext">Maybe (Token i) -&gt; Maybe (Token i) -&gt; Maybe (Token i)
+forall (f :: * -&gt; *) a. Alternative f =&gt; f a -&gt; f a -&gt; f a
+</span><span class="hs-operator hs-var">&lt;|&gt;</span></span><span> </span><span class="annot"><span class="annottext">Token i -&gt; Maybe (Token i)
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Token i
+forall i. Text -&gt; Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKIdent"><span class="hs-identifier hs-var">TKIdent</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679289326"><span class="hs-identifier hs-var">s</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-161"></span><span>
+</span><span id="line-162"></span><span class="hs-comment">-- | The core function of `Htcc.Tokenizer.tokenize`</span><span>
+</span><span id="line-163"></span><span id="local-6989586621679289321"><span class="annot"><a href="Htcc.Tokenizer.Core.html#tokenize%27"><span class="hs-identifier hs-type">tokenize'</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Enum</span></span><span> </span><span class="annot"><a href="#local-6989586621679289321"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679289321"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Eq</span></span><span> </span><span class="annot"><a href="#local-6989586621679289321"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Read</span></span><span> </span><span class="annot"><a href="#local-6989586621679289321"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679289321"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Either</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ASTError"><span class="hs-identifier hs-type">ASTError</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289321"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679289321"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span></span><span>
+</span><span id="line-164"></span><span id="tokenize%27"><span class="annot"><span class="annottext">tokenize' :: Text -&gt; Either (ASTError i) [TokenLC i]
+</span><a href="Htcc.Tokenizer.Core.html#tokenize%27"><span class="hs-identifier hs-var hs-var">tokenize'</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+-&gt; (TokenLCNums i, Text) -&gt; Either (ASTError i) [TokenLC i]
+forall (m :: * -&gt; *) s a. Monad m =&gt; StateT s m a -&gt; s -&gt; m a
+</span><span class="hs-identifier hs-var">evalStateT</span></span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+</span><a href="#local-6989586621679289319"><span class="hs-identifier hs-var">runTokenizer'</span></a></span><span> </span><span class="annot"><span class="annottext">((TokenLCNums i, Text) -&gt; Either (ASTError i) [TokenLC i])
+-&gt; (Text -&gt; (TokenLCNums i, Text))
+-&gt; Text
+-&gt; Either (ASTError i) [TokenLC i]
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">i -&gt; i -&gt; TokenLCNums i
+forall i. i -&gt; i -&gt; TokenLCNums i
+</span><a href="Htcc.Tokenizer.Token.html#TokenLCNums"><span class="hs-identifier hs-var">TokenLCNums</span></a></span><span> </span><span class="annot"><span class="hs-number">1</span></span><span> </span><span class="annot"><span class="hs-number">1</span></span><span class="hs-special">,</span><span class="hs-special">)</span><span>
+</span><span id="line-165"></span><span>    </span><span class="hs-keyword">where</span><span>
+</span><span id="line-166"></span><span>        </span><span id="local-6989586621679289317"><span class="annot"><span class="annottext">next :: StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+</span><a href="#local-6989586621679289317"><span class="hs-identifier hs-var hs-var">next</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">StateT
+  (TokenLCNums i, Text) (Either (ASTError i)) (TokenLCNums i, Text)
+forall s (m :: * -&gt; *). MonadState s m =&gt; m s
+</span><span class="hs-identifier hs-var">get</span></span><span> </span><span class="annot"><span class="annottext">StateT
+  (TokenLCNums i, Text) (Either (ASTError i)) (TokenLCNums i, Text)
+-&gt; ((TokenLCNums i, Text)
+    -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i])
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+forall (m :: * -&gt; *) a b. Monad m =&gt; m a -&gt; (a -&gt; m b) -&gt; m b
+</span><span class="hs-operator hs-var">&gt;&gt;=</span></span><span> </span><span class="annot"><span class="annottext">Either (ASTError i) [TokenLC i]
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+forall (t :: (* -&gt; *) -&gt; * -&gt; *) (m :: * -&gt; *) a.
+(MonadTrans t, Monad m) =&gt;
+m a -&gt; t m a
+</span><span class="hs-identifier hs-var">lift</span></span><span> </span><span class="annot"><span class="annottext">(Either (ASTError i) [TokenLC i]
+ -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i])
+-&gt; ((TokenLCNums i, Text) -&gt; Either (ASTError i) [TokenLC i])
+-&gt; (TokenLCNums i, Text)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+-&gt; (TokenLCNums i, Text) -&gt; Either (ASTError i) [TokenLC i]
+forall (m :: * -&gt; *) s a. Monad m =&gt; StateT s m a -&gt; s -&gt; m a
+</span><span class="hs-identifier hs-var">evalStateT</span></span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+</span><a href="#local-6989586621679289319"><span class="hs-identifier hs-var">runTokenizer'</span></a></span><span>
+</span><span id="line-167"></span><span>        </span><span id="local-6989586621679289319"><span class="annot"><span class="annottext">runTokenizer' :: StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+</span><a href="#local-6989586621679289319"><span class="hs-identifier hs-var hs-var">runTokenizer'</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(StateT (TokenLCNums i, Text) (Either (ASTError i)) Bool
+ -&gt; (StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+     -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i])
+ -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+ -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i])
+-&gt; (StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+    -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i])
+-&gt; [StateT (TokenLCNums i, Text) (Either (ASTError i)) Bool]
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+forall (t :: * -&gt; *) a b.
+Foldable t =&gt;
+(a -&gt; b -&gt; b) -&gt; b -&gt; t a -&gt; b
+</span><span class="hs-identifier hs-var">foldr</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+ -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i])
+-&gt; (StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+    -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i])
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">(.)</span></span><span> </span><span class="annot"><span class="annottext">((StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+  -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i])
+ -&gt; (StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+     -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i])
+ -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+ -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i])
+-&gt; (StateT (TokenLCNums i, Text) (Either (ASTError i)) Bool
+    -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+    -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i])
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) Bool
+-&gt; (StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+    -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i])
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) Bool
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+forall bool (m :: * -&gt; *) a.
+(ToBool bool, Monad m) =&gt;
+m bool -&gt; m a -&gt; m a -&gt; m a
+</span><span class="hs-operator hs-var">`ifM`</span></span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+</span><a href="#local-6989586621679289317"><span class="hs-identifier hs-var">next</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+forall a. a -&gt; a
+</span><span class="hs-identifier hs-var">id</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) Bool
+forall i. (Enum i, Num i) =&gt; Tokenizer i Bool
+</span><a href="Htcc.Tokenizer.Core.html#consumeSpace"><span class="hs-identifier hs-var">consumeSpace</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) Bool
+forall i. (Enum i, Num i) =&gt; Tokenizer i Bool
+</span><a href="Htcc.Tokenizer.Core.html#consumeNewLine"><span class="hs-identifier hs-var">consumeNewLine</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) Bool
+forall i. (Enum i, Num i) =&gt; Tokenizer i Bool
+</span><a href="Htcc.Tokenizer.Core.html#consumeComment"><span class="hs-identifier hs-var">consumeComment</span></a></span><span class="hs-special">]</span><span> </span><span class="annot"><span class="annottext">(StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+ -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i])
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-168"></span><span>            </span><span id="local-6989586621679289315"><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289315"><span class="hs-identifier hs-var">cur</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">Tokenizer i (TokenLCNums i)
+forall i. Tokenizer i (TokenLCNums i)
+</span><a href="Htcc.Tokenizer.Core.html#curLC"><span class="hs-identifier hs-var">curLC</span></a></span><span>
+</span><span id="line-169"></span><span>            </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) Bool
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+forall bool (m :: * -&gt; *) a.
+(ToBool bool, Monad m) =&gt;
+m bool -&gt; m a -&gt; m a -&gt; m a
+</span><span class="hs-identifier hs-var">ifM</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe Char -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">isNothing</span></span><span> </span><span class="annot"><span class="annottext">(Maybe Char -&gt; Bool)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) Bool
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) (Maybe Char)
+forall i. Tokenizer i (Maybe Char)
+</span><a href="Htcc.Tokenizer.Core.html#itemP"><span class="hs-identifier hs-var">itemP</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Either (ASTError i) [TokenLC i]
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+forall (t :: (* -&gt; *) -&gt; * -&gt; *) (m :: * -&gt; *) a.
+(MonadTrans t, Monad m) =&gt;
+m a -&gt; t m a
+</span><span class="hs-identifier hs-var">lift</span></span><span> </span><span class="annot"><span class="annottext">(Either (ASTError i) [TokenLC i]
+ -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i])
+-&gt; Either (ASTError i) [TokenLC i]
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; Either (ASTError i) [TokenLC i]
+forall a b. b -&gt; Either a b
+</span><span class="hs-identifier hs-var">Right</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+ -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i])
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span>
+</span><span id="line-170"></span><span>                </span><span class="annot"><span class="annottext">(StateT
+   (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+ -&gt; StateT
+      (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i)))
+-&gt; [StateT
+      (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))]
+-&gt; StateT
+     (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall (m :: * -&gt; *) a b.
+Monad m =&gt;
+(a -&gt; m (Maybe b)) -&gt; [a] -&gt; m (Maybe b)
+</span><span class="hs-identifier hs-var">firstJustM</span></span><span> </span><span class="annot"><span class="annottext">StateT
+  (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+-&gt; StateT
+     (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall a. a -&gt; a
+</span><span class="hs-identifier hs-var">id</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">StateT
+  (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall i. (Enum i, Num i) =&gt; Tokenizer i (Maybe (Token i))
+</span><a href="Htcc.Tokenizer.Core.html#macro"><span class="hs-identifier hs-var">macro</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">StateT
+  (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall i.
+(Enum i, Num i, Eq i, Read i) =&gt;
+Tokenizer i (Maybe (Token i))
+</span><a href="Htcc.Tokenizer.Core.html#natLit"><span class="hs-identifier hs-var">natLit</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">StateT
+  (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall i. (Enum i, Num i) =&gt; Tokenizer i (Maybe (Token i))
+</span><a href="Htcc.Tokenizer.Core.html#strLit"><span class="hs-identifier hs-var">strLit</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">StateT
+  (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall i. (Enum i, Num i, Eq i) =&gt; Tokenizer i (Maybe (Token i))
+</span><a href="Htcc.Tokenizer.Core.html#charLit"><span class="hs-identifier hs-var">charLit</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">StateT
+  (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall i. (Enum i, Num i) =&gt; Tokenizer i (Maybe (Token i))
+</span><a href="Htcc.Tokenizer.Core.html#operators"><span class="hs-identifier hs-var">operators</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">StateT
+  (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+forall i. (Enum i, Num i, Show i) =&gt; Tokenizer i (Maybe (Token i))
+</span><a href="Htcc.Tokenizer.Core.html#keyWordOrIdent"><span class="hs-identifier hs-var">keyWordOrIdent</span></a></span><span class="hs-special">]</span><span> </span><span class="annot"><span class="annottext">StateT
+  (TokenLCNums i, Text) (Either (ASTError i)) (Maybe (Token i))
+-&gt; (Maybe (Token i)
+    -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i])
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+forall (m :: * -&gt; *) a b. Monad m =&gt; m a -&gt; (a -&gt; m b) -&gt; m b
+</span><span class="hs-operator hs-var">&gt;&gt;=</span></span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+-&gt; (Token i
+    -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i])
+-&gt; Maybe (Token i)
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+forall b a. b -&gt; (a -&gt; b) -&gt; Maybe a -&gt; b
+</span><span class="hs-identifier hs-var">maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Either (ASTError i) [TokenLC i]
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+forall (t :: (* -&gt; *) -&gt; * -&gt; *) (m :: * -&gt; *) a.
+(MonadTrans t, Monad m) =&gt;
+m a -&gt; t m a
+</span><span class="hs-identifier hs-var">lift</span></span><span> </span><span class="annot"><span class="annottext">(Either (ASTError i) [TokenLC i]
+ -&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i])
+-&gt; Either (ASTError i) [TokenLC i]
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; Either (ASTError i) [TokenLC i]
+forall a b. b -&gt; Either a b
+</span><span class="hs-identifier hs-var">Right</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="hs-glyph">\</span><span id="local-6989586621679289314"><span class="annot"><span class="annottext">tk :: Token i
+</span><a href="#local-6989586621679289314"><span class="hs-identifier hs-var">tk</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="hs-special">(</span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679289315"><span class="hs-identifier hs-var">cur</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Token i
+</span><a href="#local-6989586621679289314"><span class="hs-identifier hs-var">tk</span></a></span><span class="hs-special">)</span><span class="annot"><span class="annottext">TokenLC i -&gt; [TokenLC i] -&gt; [TokenLC i]
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">([TokenLC i] -&gt; [TokenLC i])
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+-&gt; StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">StateT (TokenLCNums i, Text) (Either (ASTError i)) [TokenLC i]
+</span><a href="#local-6989586621679289317"><span class="hs-identifier hs-var">next</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-171"></span></pre></body></html>

@@ -1,0 +1,328 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">{-|
+Module      : Htcc.Utils.CompilationState
+Description : Utilities
+Copyright   : (c) roki, 2019
+License     : MIT
+Maintainer  : falgon53@yahoo.co.jp
+Stability   : experimental
+Portability : POSIX
+
+General-purpose utilities
+-}</span><span>
+</span><span id="line-12"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Htcc.Utils.CompilationState</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-13"></span><span>    </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#CompilationState"><span class="hs-identifier">CompilationState</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-14"></span><span>    </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#itemP"><span class="hs-identifier">itemP</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-15"></span><span>    </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#itemsP"><span class="hs-identifier">itemsP</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-16"></span><span>    </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#itemC"><span class="hs-identifier">itemC</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-17"></span><span>    </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#itemsC"><span class="hs-identifier">itemsC</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-18"></span><span>    </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#curCD"><span class="hs-identifier">curCD</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-19"></span><span>    </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#itemCWhen"><span class="hs-identifier">itemCWhen</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-20"></span><span>    </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#itemsCWhen"><span class="hs-identifier">itemsCWhen</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-21"></span><span>    </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#isSatisfied"><span class="hs-identifier">isSatisfied</span></a></span><span>
+</span><span id="line-22"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-23"></span><span>
+</span><span id="line-24"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Control.Monad</span></span><span>                                   </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">replicateM</span></span><span class="hs-special">)</span><span>
+</span><span id="line-25"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Control.Monad.Loops</span></span><span>                             </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">unfoldM</span></span><span class="hs-special">)</span><span>
+</span><span id="line-26"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Control.Monad.State</span></span><span>                             </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">StateT</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">get</span></span><span class="hs-special">,</span><span>
+</span><span id="line-27"></span><span>                                                                  </span><span class="annot"><span class="hs-identifier">gets</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">put</span></span><span class="hs-special">)</span><span>
+</span><span id="line-28"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.Bool</span></span><span>                                       </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">bool</span></span><span class="hs-special">)</span><span>
+</span><span id="line-29"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.Maybe</span></span><span>                                      </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">catMaybes</span></span><span class="hs-special">)</span><span>
+</span><span id="line-30"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.MonoTraversable</span></span><span>                            </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Element</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">MonoFoldable</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-31"></span><span>                                                                  </span><span class="annot"><span class="hs-identifier">headMay</span></span><span class="hs-special">)</span><span>
+</span><span id="line-32"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Sequences</span></span><span>                                  </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">S</span></span><span>
+</span><span id="line-33"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.Tuple.Extra</span></span><span>                                </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">first</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">second</span></span><span class="hs-special">)</span><span>
+</span><span id="line-34"></span><span>
+</span><span id="line-35"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html"><span class="hs-identifier">Htcc.Parser.ConstructionData.Scope.ManagedScope</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ASTError"><span class="hs-identifier">ASTError</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-36"></span><span>
+</span><span id="line-37"></span><span class="hs-comment">-- | The state type handled during compilation.</span><span>
+</span><span id="line-38"></span><span class="hs-comment">-- It has informations required during the compilation process and input data consumed.</span><span>
+</span><span id="line-39"></span><span class="hs-keyword">type</span><span> </span><span id="CompilationState"><span class="annot"><a href="Htcc.Utils.CompilationState.html#CompilationState"><span class="hs-identifier hs-var">CompilationState</span></a></span></span><span> </span><span id="local-6989586621679287640"><span class="annot"><a href="#local-6989586621679287640"><span class="hs-identifier hs-type">cd</span></a></span></span><span> </span><span id="local-6989586621679287639"><span class="annot"><a href="#local-6989586621679287639"><span class="hs-identifier hs-type">inp</span></a></span></span><span> </span><span id="local-6989586621679287638"><span class="annot"><a href="#local-6989586621679287638"><span class="hs-identifier hs-type">i</span></a></span></span><span> </span><span id="local-6989586621679287637"><span class="annot"><a href="#local-6989586621679287637"><span class="hs-identifier hs-type">r</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-identifier hs-type">StateT</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679287640"><span class="hs-identifier hs-type">cd</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="#local-6989586621679287639"><span class="hs-identifier hs-type">inp</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Either</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ASTError"><span class="hs-identifier hs-type">ASTError</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287638"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="annot"><a href="#local-6989586621679287637"><span class="hs-identifier hs-type">r</span></a></span><span>
+</span><span id="line-40"></span><span>
+</span><span id="line-41"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#itemP"><span class="hs-pragma hs-type">itemP</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-42"></span><span class="hs-comment">-- | `itemP` peeks at one item from input data</span><span>
+</span><span id="line-43"></span><span id="local-6989586621679287711"><span id="local-6989586621679287712"><span id="local-6989586621679287713"><span class="annot"><a href="Htcc.Utils.CompilationState.html#itemP"><span class="hs-identifier hs-type">itemP</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">MonoFoldable</span></span><span> </span><span class="annot"><a href="#local-6989586621679287713"><span class="hs-identifier hs-type">mono</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#CompilationState"><span class="hs-identifier hs-type">CompilationState</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287712"><span class="hs-identifier hs-type">cd</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287713"><span class="hs-identifier hs-type">mono</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287711"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Element</span></span><span> </span><span class="annot"><a href="#local-6989586621679287713"><span class="hs-identifier hs-type">mono</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span></span></span></span><span>
+</span><span id="line-44"></span><span id="itemP"><span class="annot"><span class="annottext">itemP :: CompilationState cd mono i (Maybe (Element mono))
+</span><a href="Htcc.Utils.CompilationState.html#itemP"><span class="hs-identifier hs-var hs-var">itemP</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">((cd, mono) -&gt; Maybe (Element mono))
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+forall s (m :: * -&gt; *) a. MonadState s m =&gt; (s -&gt; a) -&gt; m a
+</span><span class="hs-identifier hs-var">gets</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">mono -&gt; Maybe (Element mono)
+forall mono. MonoFoldable mono =&gt; mono -&gt; Maybe (Element mono)
+</span><span class="hs-identifier hs-var">headMay</span></span><span> </span><span class="annot"><span class="annottext">(mono -&gt; Maybe (Element mono))
+-&gt; ((cd, mono) -&gt; mono) -&gt; (cd, mono) -&gt; Maybe (Element mono)
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">(cd, mono) -&gt; mono
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span class="hs-special">)</span><span>
+</span><span id="line-45"></span><span>
+</span><span id="line-46"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#itemsP"><span class="hs-pragma hs-type">itemsP</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-47"></span><span class="hs-comment">-- | `itemsP` peeks at items from input data</span><span>
+</span><span id="line-48"></span><span id="local-6989586621679287633"><span id="local-6989586621679287634"><span id="local-6989586621679287635"><span class="annot"><a href="Htcc.Utils.CompilationState.html#itemsP"><span class="hs-identifier hs-type">itemsP</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">MonoFoldable</span></span><span> </span><span class="annot"><a href="#local-6989586621679287635"><span class="hs-identifier hs-type">mono</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">S.IsSequence</span></span><span> </span><span class="annot"><a href="#local-6989586621679287635"><span class="hs-identifier hs-type">mono</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">S.Index</span></span><span> </span><span class="annot"><a href="#local-6989586621679287635"><span class="hs-identifier hs-type">mono</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#CompilationState"><span class="hs-identifier hs-type">CompilationState</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287634"><span class="hs-identifier hs-type">cd</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287635"><span class="hs-identifier hs-type">mono</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287633"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><a href="#local-6989586621679287635"><span class="hs-identifier hs-type">mono</span></a></span><span class="hs-special">)</span></span></span></span><span>
+</span><span id="line-49"></span><span id="itemsP"><span class="annot"><span class="annottext">itemsP :: Index mono -&gt; CompilationState cd mono i (Maybe mono)
+</span><a href="Htcc.Utils.CompilationState.html#itemsP"><span class="hs-identifier hs-var hs-var">itemsP</span></a></span></span><span> </span><span id="local-6989586621679287632"><span class="annot"><span class="annottext">n :: Index mono
+</span><a href="#local-6989586621679287632"><span class="hs-identifier hs-var">n</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-50"></span><span>    </span><span id="local-6989586621679287631"><span class="annot"><span class="annottext">mono
+</span><a href="#local-6989586621679287631"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">((cd, mono) -&gt; mono)
+-&gt; StateT (cd, mono) (Either (ASTError i)) mono
+forall s (m :: * -&gt; *) a. MonadState s m =&gt; (s -&gt; a) -&gt; m a
+</span><span class="hs-identifier hs-var">gets</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Index mono -&gt; mono -&gt; mono
+forall seq. IsSequence seq =&gt; Index seq -&gt; seq -&gt; seq
+</span><span class="hs-identifier hs-var">S.take</span></span><span> </span><span class="annot"><span class="annottext">Index mono
+</span><a href="#local-6989586621679287632"><span class="hs-identifier hs-var">n</span></a></span><span> </span><span class="annot"><span class="annottext">(mono -&gt; mono) -&gt; ((cd, mono) -&gt; mono) -&gt; (cd, mono) -&gt; mono
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">(cd, mono) -&gt; mono
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span class="hs-special">)</span><span>
+</span><span id="line-51"></span><span>    </span><span class="annot"><span class="annottext">Maybe mono -&gt; CompilationState cd mono i (Maybe mono)
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">(Maybe mono -&gt; CompilationState cd mono i (Maybe mono))
+-&gt; Maybe mono -&gt; CompilationState cd mono i (Maybe mono)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">mono -&gt; Int
+forall mono. MonoFoldable mono =&gt; mono -&gt; Int
+</span><span class="hs-identifier hs-var">olength</span></span><span> </span><span class="annot"><span class="annottext">mono
+</span><a href="#local-6989586621679287631"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">Index mono -&gt; Int
+forall a b. (Integral a, Num b) =&gt; a -&gt; b
+</span><span class="hs-identifier hs-var">fromIntegral</span></span><span> </span><span class="annot"><span class="annottext">Index mono
+</span><a href="#local-6989586621679287632"><span class="hs-identifier hs-var">n</span></a></span><span> </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="annottext">mono -&gt; Maybe mono
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">mono
+</span><a href="#local-6989586621679287631"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="hs-keyword">else</span><span> </span><span class="annot"><span class="annottext">Maybe mono
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-52"></span><span>
+</span><span id="line-53"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#itemC"><span class="hs-pragma hs-type">itemC</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-54"></span><span class="hs-comment">-- | `itemC` consumes at one item from input data.</span><span>
+</span><span id="line-55"></span><span class="hs-comment">-- Defines information updates by providing a function that</span><span>
+</span><span id="line-56"></span><span class="hs-comment">-- accepts the current information and one item to be consumed and returns the information</span><span>
+</span><span id="line-57"></span><span id="local-6989586621679287684"><span id="local-6989586621679287685"><span id="local-6989586621679287686"><span class="annot"><a href="Htcc.Utils.CompilationState.html#itemC"><span class="hs-identifier hs-type">itemC</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">S.IsSequence</span></span><span> </span><span class="annot"><a href="#local-6989586621679287686"><span class="hs-identifier hs-type">mono</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679287685"><span class="hs-identifier hs-type">cd</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Element</span></span><span> </span><span class="annot"><a href="#local-6989586621679287686"><span class="hs-identifier hs-type">mono</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679287685"><span class="hs-identifier hs-type">cd</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#CompilationState"><span class="hs-identifier hs-type">CompilationState</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287685"><span class="hs-identifier hs-type">cd</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287686"><span class="hs-identifier hs-type">mono</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287684"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Element</span></span><span> </span><span class="annot"><a href="#local-6989586621679287686"><span class="hs-identifier hs-type">mono</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span></span></span></span><span>
+</span><span id="line-58"></span><span id="itemC"><span class="annot"><span class="annottext">itemC :: (cd -&gt; Element mono -&gt; cd)
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+</span><a href="Htcc.Utils.CompilationState.html#itemC"><span class="hs-identifier hs-var hs-var">itemC</span></a></span></span><span> </span><span id="local-6989586621679287628"><span class="annot"><span class="annottext">f :: cd -&gt; Element mono -&gt; cd
+</span><a href="#local-6989586621679287628"><span class="hs-identifier hs-var">f</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">CompilationState cd mono i (Maybe (Element mono))
+forall mono cd i.
+MonoFoldable mono =&gt;
+CompilationState cd mono i (Maybe (Element mono))
+</span><a href="Htcc.Utils.CompilationState.html#itemP"><span class="hs-identifier hs-var">itemP</span></a></span><span> </span><span class="annot"><span class="annottext">CompilationState cd mono i (Maybe (Element mono))
+-&gt; (Maybe (Element mono)
+    -&gt; CompilationState cd mono i (Maybe (Element mono)))
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+forall (m :: * -&gt; *) a b. Monad m =&gt; m a -&gt; (a -&gt; m b) -&gt; m b
+</span><span class="hs-operator hs-var">&gt;&gt;=</span></span><span> </span><span class="annot"><span class="annottext">CompilationState cd mono i (Maybe (Element mono))
+-&gt; (Element mono
+    -&gt; CompilationState cd mono i (Maybe (Element mono)))
+-&gt; Maybe (Element mono)
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+forall b a. b -&gt; (a -&gt; b) -&gt; Maybe a -&gt; b
+</span><span class="hs-identifier hs-var">maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe (Element mono)
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">Maybe (Element mono)
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="hs-glyph">\</span><span id="local-6989586621679287626"><span class="annot"><span class="annottext">itp :: Element mono
+</span><a href="#local-6989586621679287626"><span class="hs-identifier hs-var">itp</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Element mono -&gt; Maybe (Element mono)
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">Element mono
+</span><a href="#local-6989586621679287626"><span class="hs-identifier hs-var">itp</span></a></span><span> </span><span class="annot"><span class="annottext">Maybe (Element mono)
+-&gt; StateT (cd, mono) (Either (ASTError i)) ()
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+forall (f :: * -&gt; *) a b. Functor f =&gt; a -&gt; f b -&gt; f a
+</span><span class="hs-operator hs-var">&lt;$</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StateT (cd, mono) (Either (ASTError i)) (cd, mono)
+forall s (m :: * -&gt; *). MonadState s m =&gt; m s
+</span><span class="hs-identifier hs-var">get</span></span><span> </span><span class="annot"><span class="annottext">StateT (cd, mono) (Either (ASTError i)) (cd, mono)
+-&gt; ((cd, mono) -&gt; StateT (cd, mono) (Either (ASTError i)) ())
+-&gt; StateT (cd, mono) (Either (ASTError i)) ()
+forall (m :: * -&gt; *) a b. Monad m =&gt; m a -&gt; (a -&gt; m b) -&gt; m b
+</span><span class="hs-operator hs-var">&gt;&gt;=</span></span><span> </span><span class="annot"><span class="annottext">(cd, mono) -&gt; StateT (cd, mono) (Either (ASTError i)) ()
+forall s (m :: * -&gt; *). MonadState s m =&gt; s -&gt; m ()
+</span><span class="hs-identifier hs-var">put</span></span><span> </span><span class="annot"><span class="annottext">((cd, mono) -&gt; StateT (cd, mono) (Either (ASTError i)) ())
+-&gt; ((cd, mono) -&gt; (cd, mono))
+-&gt; (cd, mono)
+-&gt; StateT (cd, mono) (Either (ASTError i)) ()
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">(cd -&gt; cd) -&gt; (cd, mono) -&gt; (cd, mono)
+forall a a' b. (a -&gt; a') -&gt; (a, b) -&gt; (a', b)
+</span><span class="hs-identifier hs-var">first</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">cd -&gt; Element mono -&gt; cd
+</span><a href="#local-6989586621679287628"><span class="hs-operator hs-var">`f`</span></a></span><span> </span><span class="annot"><span class="annottext">Element mono
+</span><a href="#local-6989586621679287626"><span class="hs-identifier hs-var">itp</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">((cd, mono) -&gt; (cd, mono))
+-&gt; ((cd, mono) -&gt; (cd, mono)) -&gt; (cd, mono) -&gt; (cd, mono)
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">(mono -&gt; mono) -&gt; (cd, mono) -&gt; (cd, mono)
+forall b b' a. (b -&gt; b') -&gt; (a, b) -&gt; (a, b')
+</span><span class="hs-identifier hs-var">second</span></span><span> </span><span class="annot"><span class="annottext">mono -&gt; mono
+forall seq. IsSequence seq =&gt; seq -&gt; seq
+</span><span class="hs-identifier hs-var">S.tailEx</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-59"></span><span>
+</span><span id="line-60"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#itemsC"><span class="hs-pragma hs-type">itemsC</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-61"></span><span class="hs-comment">-- | `itemsC` consumes at items from input data.</span><span>
+</span><span id="line-62"></span><span class="hs-comment">-- Defines information updates by providing a function that</span><span>
+</span><span id="line-63"></span><span class="hs-comment">-- accepts the current information and one item to be consumed and returns the information</span><span>
+</span><span id="line-64"></span><span id="local-6989586621679287621"><span id="local-6989586621679287622"><span id="local-6989586621679287623"><span class="annot"><a href="Htcc.Utils.CompilationState.html#itemsC"><span class="hs-identifier hs-type">itemsC</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">S.IsSequence</span></span><span> </span><span class="annot"><a href="#local-6989586621679287623"><span class="hs-identifier hs-type">mono</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679287622"><span class="hs-identifier hs-type">cd</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Element</span></span><span> </span><span class="annot"><a href="#local-6989586621679287623"><span class="hs-identifier hs-type">mono</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679287622"><span class="hs-identifier hs-type">cd</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#CompilationState"><span class="hs-identifier hs-type">CompilationState</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287622"><span class="hs-identifier hs-type">cd</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287623"><span class="hs-identifier hs-type">mono</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287621"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><a href="#local-6989586621679287623"><span class="hs-identifier hs-type">mono</span></a></span><span class="hs-special">)</span></span></span></span><span>
+</span><span id="line-65"></span><span id="itemsC"><span class="annot"><span class="annottext">itemsC :: (cd -&gt; Element mono -&gt; cd)
+-&gt; Int -&gt; CompilationState cd mono i (Maybe mono)
+</span><a href="Htcc.Utils.CompilationState.html#itemsC"><span class="hs-identifier hs-var hs-var">itemsC</span></a></span></span><span> </span><span id="local-6989586621679287620"><span class="annot"><span class="annottext">f :: cd -&gt; Element mono -&gt; cd
+</span><a href="#local-6989586621679287620"><span class="hs-identifier hs-var">f</span></a></span></span><span> </span><span id="local-6989586621679287619"><span class="annot"><span class="annottext">n :: Int
+</span><a href="#local-6989586621679287619"><span class="hs-identifier hs-var">n</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-66"></span><span>    </span><span id="local-6989586621679287618"><span class="annot"><span class="annottext">[Element mono]
+</span><a href="#local-6989586621679287618"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">[Maybe (Element mono)] -&gt; [Element mono]
+forall a. [Maybe a] -&gt; [a]
+</span><span class="hs-identifier hs-var">catMaybes</span></span><span> </span><span class="annot"><span class="annottext">([Maybe (Element mono)] -&gt; [Element mono])
+-&gt; StateT (cd, mono) (Either (ASTError i)) [Maybe (Element mono)]
+-&gt; StateT (cd, mono) (Either (ASTError i)) [Element mono]
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">Int
+-&gt; StateT (cd, mono) (Either (ASTError i)) (Maybe (Element mono))
+-&gt; StateT (cd, mono) (Either (ASTError i)) [Maybe (Element mono)]
+forall (m :: * -&gt; *) a. Applicative m =&gt; Int -&gt; m a -&gt; m [a]
+</span><span class="hs-identifier hs-var">replicateM</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287619"><span class="hs-identifier hs-var">n</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(cd -&gt; Element mono -&gt; cd)
+-&gt; StateT (cd, mono) (Either (ASTError i)) (Maybe (Element mono))
+forall mono cd i.
+IsSequence mono =&gt;
+(cd -&gt; Element mono -&gt; cd)
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+</span><a href="Htcc.Utils.CompilationState.html#itemC"><span class="hs-identifier hs-var">itemC</span></a></span><span> </span><span class="annot"><span class="annottext">cd -&gt; Element mono -&gt; cd
+</span><a href="#local-6989586621679287620"><span class="hs-identifier hs-var">f</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-67"></span><span>    </span><span class="annot"><span class="annottext">Maybe mono -&gt; CompilationState cd mono i (Maybe mono)
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">(Maybe mono -&gt; CompilationState cd mono i (Maybe mono))
+-&gt; Maybe mono -&gt; CompilationState cd mono i (Maybe mono)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">[Element mono] -&gt; Int
+forall (t :: * -&gt; *) a. Foldable t =&gt; t a -&gt; Int
+</span><span class="hs-identifier hs-var">length</span></span><span> </span><span class="annot"><span class="annottext">[Element mono]
+</span><a href="#local-6989586621679287618"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287619"><span class="hs-identifier hs-var">n</span></a></span><span> </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="annottext">mono -&gt; Maybe mono
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">(mono -&gt; Maybe mono) -&gt; mono -&gt; Maybe mono
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[Element mono] -&gt; mono
+forall seq. IsSequence seq =&gt; [Element seq] -&gt; seq
+</span><span class="hs-identifier hs-var">S.pack</span></span><span> </span><span class="annot"><span class="annottext">[Element mono]
+</span><a href="#local-6989586621679287618"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="hs-keyword">else</span><span> </span><span class="annot"><span class="annottext">Maybe mono
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-68"></span><span>
+</span><span id="line-69"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#curCD"><span class="hs-pragma hs-type">curCD</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-70"></span><span class="hs-comment">-- | `curCD` gets current information</span><span>
+</span><span id="line-71"></span><span id="local-6989586621679287612"><span id="local-6989586621679287613"><span id="local-6989586621679287614"><span class="annot"><a href="Htcc.Utils.CompilationState.html#curCD"><span class="hs-identifier hs-type">curCD</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#CompilationState"><span class="hs-identifier hs-type">CompilationState</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287614"><span class="hs-identifier hs-type">cd</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287613"><span class="hs-identifier hs-type">mono</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287612"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287614"><span class="hs-identifier hs-type">cd</span></a></span></span></span></span><span>
+</span><span id="line-72"></span><span id="curCD"><span class="annot"><span class="annottext">curCD :: CompilationState cd mono i cd
+</span><a href="Htcc.Utils.CompilationState.html#curCD"><span class="hs-identifier hs-var hs-var">curCD</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">((cd, mono) -&gt; cd) -&gt; CompilationState cd mono i cd
+forall s (m :: * -&gt; *) a. MonadState s m =&gt; (s -&gt; a) -&gt; m a
+</span><span class="hs-identifier hs-var">gets</span></span><span> </span><span class="annot"><span class="annottext">(cd, mono) -&gt; cd
+forall a b. (a, b) -&gt; a
+</span><span class="hs-identifier hs-var">fst</span></span><span>
+</span><span id="line-73"></span><span>
+</span><span id="line-74"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#itemCWhen"><span class="hs-pragma hs-type">itemCWhen</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-75"></span><span class="hs-comment">-- | `itemCWhen` consumes an item when the unary function satisfies the given condition.</span><span>
+</span><span id="line-76"></span><span class="hs-comment">-- Defines information updates by providing a function that</span><span>
+</span><span id="line-77"></span><span class="hs-comment">-- accepts the current information and one item to be consumed and returns the information</span><span>
+</span><span id="line-78"></span><span id="local-6989586621679287662"><span id="local-6989586621679287663"><span id="local-6989586621679287664"><span class="annot"><a href="Htcc.Utils.CompilationState.html#itemCWhen"><span class="hs-identifier hs-type">itemCWhen</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">MonoFoldable</span></span><span> </span><span class="annot"><a href="#local-6989586621679287664"><span class="hs-identifier hs-type">mono</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">S.IsSequence</span></span><span> </span><span class="annot"><a href="#local-6989586621679287664"><span class="hs-identifier hs-type">mono</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679287663"><span class="hs-identifier hs-type">cd</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Element</span></span><span> </span><span class="annot"><a href="#local-6989586621679287664"><span class="hs-identifier hs-type">mono</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679287663"><span class="hs-identifier hs-type">cd</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Element</span></span><span> </span><span class="annot"><a href="#local-6989586621679287664"><span class="hs-identifier hs-type">mono</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#CompilationState"><span class="hs-identifier hs-type">CompilationState</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287663"><span class="hs-identifier hs-type">cd</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287664"><span class="hs-identifier hs-type">mono</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287662"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Element</span></span><span> </span><span class="annot"><a href="#local-6989586621679287664"><span class="hs-identifier hs-type">mono</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span></span></span></span><span>
+</span><span id="line-79"></span><span id="itemCWhen"><span class="annot"><span class="annottext">itemCWhen :: (cd -&gt; Element mono -&gt; cd)
+-&gt; (Element mono -&gt; Bool)
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+</span><a href="Htcc.Utils.CompilationState.html#itemCWhen"><span class="hs-identifier hs-var hs-var">itemCWhen</span></a></span></span><span> </span><span id="local-6989586621679287611"><span class="annot"><span class="annottext">cf :: cd -&gt; Element mono -&gt; cd
+</span><a href="#local-6989586621679287611"><span class="hs-identifier hs-var">cf</span></a></span></span><span> </span><span id="local-6989586621679287610"><span class="annot"><span class="annottext">f :: Element mono -&gt; Bool
+</span><a href="#local-6989586621679287610"><span class="hs-identifier hs-var">f</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">CompilationState cd mono i (Maybe (Element mono))
+forall mono cd i.
+MonoFoldable mono =&gt;
+CompilationState cd mono i (Maybe (Element mono))
+</span><a href="Htcc.Utils.CompilationState.html#itemP"><span class="hs-identifier hs-var">itemP</span></a></span><span> </span><span class="annot"><span class="annottext">CompilationState cd mono i (Maybe (Element mono))
+-&gt; (Maybe (Element mono)
+    -&gt; CompilationState cd mono i (Maybe (Element mono)))
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+forall (m :: * -&gt; *) a b. Monad m =&gt; m a -&gt; (a -&gt; m b) -&gt; m b
+</span><span class="hs-operator hs-var">&gt;&gt;=</span></span><span> </span><span class="annot"><span class="annottext">CompilationState cd mono i (Maybe (Element mono))
+-&gt; (Element mono
+    -&gt; CompilationState cd mono i (Maybe (Element mono)))
+-&gt; Maybe (Element mono)
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+forall b a. b -&gt; (a -&gt; b) -&gt; Maybe a -&gt; b
+</span><span class="hs-identifier hs-var">maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe (Element mono)
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">Maybe (Element mono)
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">CompilationState cd mono i (Maybe (Element mono))
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+-&gt; Bool
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+forall a. a -&gt; a -&gt; Bool -&gt; a
+</span><span class="hs-identifier hs-var">bool</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe (Element mono)
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">Maybe (Element mono)
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(cd -&gt; Element mono -&gt; cd)
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+forall mono cd i.
+IsSequence mono =&gt;
+(cd -&gt; Element mono -&gt; cd)
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+</span><a href="Htcc.Utils.CompilationState.html#itemC"><span class="hs-identifier hs-var">itemC</span></a></span><span> </span><span class="annot"><span class="annottext">cd -&gt; Element mono -&gt; cd
+</span><a href="#local-6989586621679287611"><span class="hs-identifier hs-var">cf</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Bool -&gt; CompilationState cd mono i (Maybe (Element mono)))
+-&gt; (Element mono -&gt; Bool)
+-&gt; Element mono
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">Element mono -&gt; Bool
+</span><a href="#local-6989586621679287610"><span class="hs-identifier hs-var">f</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-80"></span><span>
+</span><span id="line-81"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#itemsCWhen"><span class="hs-pragma hs-type">itemsCWhen</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-82"></span><span class="hs-comment">-- | `itemsCWhen` consumes items when the unary function satisfies the given condition.</span><span>
+</span><span id="line-83"></span><span class="hs-comment">-- Defines information updates by providing a function that</span><span>
+</span><span id="line-84"></span><span class="hs-comment">-- accepts the current information and one item to be consumed and returns the information</span><span>
+</span><span id="line-85"></span><span id="local-6989586621679287607"><span id="local-6989586621679287608"><span id="local-6989586621679287609"><span class="annot"><a href="Htcc.Utils.CompilationState.html#itemsCWhen"><span class="hs-identifier hs-type">itemsCWhen</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">MonoFoldable</span></span><span> </span><span class="annot"><a href="#local-6989586621679287609"><span class="hs-identifier hs-type">mono</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">S.IsSequence</span></span><span> </span><span class="annot"><a href="#local-6989586621679287609"><span class="hs-identifier hs-type">mono</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679287608"><span class="hs-identifier hs-type">cd</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Element</span></span><span> </span><span class="annot"><a href="#local-6989586621679287609"><span class="hs-identifier hs-type">mono</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679287608"><span class="hs-identifier hs-type">cd</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Element</span></span><span> </span><span class="annot"><a href="#local-6989586621679287609"><span class="hs-identifier hs-type">mono</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#CompilationState"><span class="hs-identifier hs-type">CompilationState</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287608"><span class="hs-identifier hs-type">cd</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287609"><span class="hs-identifier hs-type">mono</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287607"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287609"><span class="hs-identifier hs-type">mono</span></a></span></span></span></span><span>
+</span><span id="line-86"></span><span id="itemsCWhen"><span class="annot"><span class="annottext">itemsCWhen :: (cd -&gt; Element mono -&gt; cd)
+-&gt; (Element mono -&gt; Bool) -&gt; CompilationState cd mono i mono
+</span><a href="Htcc.Utils.CompilationState.html#itemsCWhen"><span class="hs-identifier hs-var hs-var">itemsCWhen</span></a></span></span><span> </span><span id="local-6989586621679287606"><span class="annot"><span class="annottext">cf :: cd -&gt; Element mono -&gt; cd
+</span><a href="#local-6989586621679287606"><span class="hs-identifier hs-var">cf</span></a></span></span><span> </span><span id="local-6989586621679287605"><span class="annot"><span class="annottext">f :: Element mono -&gt; Bool
+</span><a href="#local-6989586621679287605"><span class="hs-identifier hs-var">f</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">([Element mono] -&gt; mono)
+-&gt; StateT (cd, mono) (Either (ASTError i)) [Element mono]
+-&gt; CompilationState cd mono i mono
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-identifier hs-var">fmap</span></span><span> </span><span class="annot"><span class="annottext">[Element mono] -&gt; mono
+forall seq. IsSequence seq =&gt; [Element seq] -&gt; seq
+</span><span class="hs-identifier hs-var">S.pack</span></span><span> </span><span class="annot"><span class="annottext">(StateT (cd, mono) (Either (ASTError i)) [Element mono]
+ -&gt; CompilationState cd mono i mono)
+-&gt; StateT (cd, mono) (Either (ASTError i)) [Element mono]
+-&gt; CompilationState cd mono i mono
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">StateT (cd, mono) (Either (ASTError i)) (Maybe (Element mono))
+-&gt; StateT (cd, mono) (Either (ASTError i)) [Element mono]
+forall (m :: * -&gt; *) a. Monad m =&gt; m (Maybe a) -&gt; m [a]
+</span><span class="hs-identifier hs-var">unfoldM</span></span><span> </span><span class="annot"><span class="annottext">(StateT (cd, mono) (Either (ASTError i)) (Maybe (Element mono))
+ -&gt; StateT (cd, mono) (Either (ASTError i)) [Element mono])
+-&gt; StateT (cd, mono) (Either (ASTError i)) (Maybe (Element mono))
+-&gt; StateT (cd, mono) (Either (ASTError i)) [Element mono]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">(cd -&gt; Element mono -&gt; cd)
+-&gt; (Element mono -&gt; Bool)
+-&gt; StateT (cd, mono) (Either (ASTError i)) (Maybe (Element mono))
+forall mono cd i.
+(MonoFoldable mono, IsSequence mono) =&gt;
+(cd -&gt; Element mono -&gt; cd)
+-&gt; (Element mono -&gt; Bool)
+-&gt; CompilationState cd mono i (Maybe (Element mono))
+</span><a href="Htcc.Utils.CompilationState.html#itemCWhen"><span class="hs-identifier hs-var">itemCWhen</span></a></span><span> </span><span class="annot"><span class="annottext">cd -&gt; Element mono -&gt; cd
+</span><a href="#local-6989586621679287606"><span class="hs-identifier hs-var">cf</span></a></span><span> </span><span class="annot"><span class="annottext">Element mono -&gt; Bool
+</span><a href="#local-6989586621679287605"><span class="hs-identifier hs-var">f</span></a></span><span>
+</span><span id="line-87"></span><span>
+</span><span id="line-88"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#isSatisfied"><span class="hs-pragma hs-type">isSatisfied</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-89"></span><span class="hs-comment">-- | `isSatisfied` returns `True` if the input data satisfies the condition of given unary function, otherwise returns `False`.</span><span>
+</span><span id="line-90"></span><span id="local-6989586621679287602"><span id="local-6989586621679287603"><span id="local-6989586621679287604"><span class="annot"><a href="Htcc.Utils.CompilationState.html#isSatisfied"><span class="hs-identifier hs-type">isSatisfied</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679287604"><span class="hs-identifier hs-type">mono</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Utils.CompilationState.html#CompilationState"><span class="hs-identifier hs-type">CompilationState</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287603"><span class="hs-identifier hs-type">cd</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287604"><span class="hs-identifier hs-type">mono</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287602"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span></span></span></span><span>
+</span><span id="line-91"></span><span id="isSatisfied"><span class="annot"><span class="annottext">isSatisfied :: (mono -&gt; Bool) -&gt; CompilationState cd mono i Bool
+</span><a href="Htcc.Utils.CompilationState.html#isSatisfied"><span class="hs-identifier hs-var hs-var">isSatisfied</span></a></span></span><span> </span><span id="local-6989586621679287601"><span class="annot"><span class="annottext">f :: mono -&gt; Bool
+</span><a href="#local-6989586621679287601"><span class="hs-identifier hs-var">f</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">((cd, mono) -&gt; Bool) -&gt; CompilationState cd mono i Bool
+forall s (m :: * -&gt; *) a. MonadState s m =&gt; (s -&gt; a) -&gt; m a
+</span><span class="hs-identifier hs-var">gets</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">mono -&gt; Bool
+</span><a href="#local-6989586621679287601"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">(mono -&gt; Bool) -&gt; ((cd, mono) -&gt; mono) -&gt; (cd, mono) -&gt; Bool
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">(cd, mono) -&gt; mono
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span class="hs-special">)</span><span>
+</span><span id="line-92"></span><span>
+</span><span id="line-93"></span></pre></body></html>

@@ -1,0 +1,719 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">{-|
+Module      : Htcc.Asm.Intrinsic.Structure.Section.Text.Directive
+Description : The modules of intrinsic (x86_64) assembly
+Copyright   : (c) roki, 2019
+License     : MIT
+Maintainer  : falgon53@yahoo.co.jp
+Stability   : experimental
+Portability : POSIX
+
+The modules of intrinsic (x86_64) assembly
+-}</span><span>
+</span><span id="line-12"></span><span class="hs-pragma">{-# LANGUAGE LambdaCase, OverloadedStrings #-}</span><span>
+</span><span id="line-13"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Htcc.Asm.Intrinsic.Structure.Section.Text.Directive</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-14"></span><span>    </span><span class="annot"><span class="hs-comment">-- * Context type</span></span><span>
+</span><span id="line-15"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TextSectionCtx"><span class="hs-identifier">TextSectionCtx</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-16"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TextLabelCtx"><span class="hs-identifier">TextLabelCtx</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-17"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TargetLabelCtx"><span class="hs-identifier">TargetLabelCtx</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-18"></span><span>    </span><span class="annot"><span class="hs-comment">-- * Directives</span></span><span>
+</span><span id="line-19"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#text"><span class="hs-identifier">text</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-20"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#global"><span class="hs-identifier">global</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-21"></span><span>    </span><span class="annot"><span class="hs-comment">-- * Labels</span></span><span>
+</span><span id="line-22"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#fn"><span class="hs-identifier">fn</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-23"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#label"><span class="hs-keyword">label</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-24"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#begin"><span class="hs-identifier">begin</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-25"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#end"><span class="hs-identifier">end</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-26"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#eLse"><span class="hs-identifier">eLse</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-27"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#cAse"><span class="hs-identifier">cAse</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-28"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#break"><span class="hs-identifier">break</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-29"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#continue"><span class="hs-identifier">continue</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-30"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#gotoLabel"><span class="hs-identifier">gotoLabel</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-31"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#ref"><span class="hs-identifier">ref</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-32"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refBegin"><span class="hs-identifier">refBegin</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-33"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refEnd"><span class="hs-identifier">refEnd</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-34"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refElse"><span class="hs-identifier">refElse</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-35"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refBreak"><span class="hs-identifier">refBreak</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-36"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refHBreak"><span class="hs-identifier">refHBreak</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-37"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refContinue"><span class="hs-identifier">refContinue</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-38"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refHContinue"><span class="hs-identifier">refHContinue</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-39"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refReturn"><span class="hs-identifier">refReturn</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-40"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refGoto"><span class="hs-identifier">refGoto</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-41"></span><span>    </span><span class="annot"><span class="hs-comment">-- * Generator</span></span><span>
+</span><span id="line-42"></span><span>    </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#makeCases"><span class="hs-identifier">makeCases</span></a></span><span>
+</span><span id="line-43"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-44"></span><span>
+</span><span id="line-45"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Control.Monad</span></span><span>                         </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">forM</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">unless</span></span><span class="hs-special">)</span><span>
+</span><span id="line-46"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.IORef</span></span><span>                            </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">IORef</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">modifyIORef</span></span><span class="hs-special">,</span><span>
+</span><span id="line-47"></span><span>                                                        </span><span class="annot"><span class="hs-identifier">readIORef</span></span><span class="hs-special">)</span><span>
+</span><span id="line-48"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.Maybe</span></span><span>                            </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">fromJust</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier">isJust</span></span><span class="hs-special">)</span><span>
+</span><span id="line-49"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text</span></span><span>                             </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">T</span></span><span>
+</span><span id="line-50"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text.IO</span></span><span>                          </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">T</span></span><span>
+</span><span id="line-51"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Prelude</span></span><span>                               </span><span class="hs-keyword">hiding</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">break</span></span><span class="hs-special">)</span><span>
+</span><span id="line-52"></span><span>
+</span><span id="line-53"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html"><span class="hs-identifier">Htcc.Asm.Intrinsic.Structure.Internal</span></a></span><span> </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">C</span></span><span>
+</span><span id="line-54"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.AST.Core.html"><span class="hs-identifier">Htcc.Parser.AST.Core</span></a></span><span>                  </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATKind"><span class="hs-identifier">ATKind</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATree"><span class="hs-identifier">ATree</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-55"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Utils.html"><span class="hs-identifier">Htcc.Utils</span></a></span><span>                            </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Utils.Print.html#err"><span class="hs-identifier">err</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier">tshow</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-56"></span><span>
+</span><span id="line-57"></span><span class="hs-comment">-- | the type representing the context inside the text section</span><span>
+</span><span id="line-58"></span><span class="hs-keyword">data</span><span> </span><span id="TextSectionCtx"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TextSectionCtx"><span class="hs-identifier hs-var">TextSectionCtx</span></a></span></span><span>
+</span><span id="line-59"></span><span>
+</span><span id="line-60"></span><span class="hs-comment">-- | the type representing the context inside the label</span><span>
+</span><span id="line-61"></span><span class="hs-keyword">data</span><span> </span><span id="TextLabelCtx"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TextLabelCtx"><span class="hs-identifier hs-var">TextLabelCtx</span></a></span></span><span>
+</span><span id="line-62"></span><span>
+</span><span id="line-63"></span><span class="hs-comment">-- | the type representing the context inside the instruction that needs to be specified,</span><span>
+</span><span id="line-64"></span><span class="hs-comment">-- such as a @jmp@ instruction.</span><span>
+</span><span id="line-65"></span><span class="hs-keyword">data</span><span> </span><span id="TargetLabelCtx"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TargetLabelCtx"><span class="hs-identifier hs-var">TargetLabelCtx</span></a></span></span><span>
+</span><span id="line-66"></span><span>
+</span><span id="line-67"></span><span class="hs-comment">-- | @text@ section</span><span>
+</span><span id="line-68"></span><span id="local-6989586621679292567"><span id="local-6989586621679292568"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#text"><span class="hs-identifier hs-type">text</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TextSectionCtx"><span class="hs-identifier hs-type">TextSectionCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292568"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292567"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#AsmCodeCtx"><span class="hs-identifier hs-type">C.AsmCodeCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292568"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292567"><span class="hs-identifier hs-type">a</span></a></span></span></span><span>
+</span><span id="line-69"></span><span id="text"><span class="annot"><span class="annottext">text :: Asm TextSectionCtx e a -&gt; Asm AsmCodeCtx e a
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#text"><span class="hs-identifier hs-var hs-var">text</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Asm TextSectionCtx e a -&gt; Asm AsmCodeCtx e a
+forall ctx e a. Text -&gt; Asm ctx e a -&gt; Asm AsmCodeCtx e a
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#section"><span class="hs-identifier hs-var">C.section</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;text&quot;</span></span><span>
+</span><span id="line-70"></span><span>
+</span><span id="line-71"></span><span class="hs-comment">-- | @global@ directive</span><span>
+</span><span id="line-72"></span><span id="local-6989586621679292565"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#global"><span class="hs-identifier hs-type">global</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TextSectionCtx"><span class="hs-identifier hs-type">TextSectionCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292565"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span><span>
+</span><span id="line-73"></span><span id="global"><span class="annot"><span class="annottext">global :: Text -&gt; Asm TextSectionCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#global"><span class="hs-identifier hs-var hs-var">global</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Asm TextSectionCtx e ()
+forall ctx e. Text -&gt; Asm ctx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#putStrLnWithIndent"><span class="hs-identifier hs-var">C.putStrLnWithIndent</span></a></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; Asm TextSectionCtx e ())
+-&gt; (Text -&gt; Text) -&gt; Text -&gt; Asm TextSectionCtx e ()
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+</span><span class="hs-identifier hs-var">T.append</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.global &quot;</span></span><span>
+</span><span id="line-74"></span><span>
+</span><span id="line-75"></span><span class="hs-comment">-- | the label as function definition in text section</span><span>
+</span><span id="line-76"></span><span id="local-6989586621679292560"><span id="local-6989586621679292561"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#fn"><span class="hs-identifier hs-type">fn</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TextLabelCtx"><span class="hs-identifier hs-type">TextLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292561"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292560"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TextSectionCtx"><span class="hs-identifier hs-type">TextSectionCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292561"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292560"><span class="hs-identifier hs-type">a</span></a></span></span></span><span>
+</span><span id="line-77"></span><span id="fn"><span class="annot"><span class="annottext">fn :: Text -&gt; Asm TextLabelCtx e a -&gt; Asm TextSectionCtx e a
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#fn"><span class="hs-identifier hs-var hs-var">fn</span></a></span></span><span> </span><span id="local-6989586621679292559"><span class="annot"><span class="annottext">fname :: Text
+</span><a href="#local-6989586621679292559"><span class="hs-identifier hs-var">fname</span></a></span></span><span> </span><span id="local-6989586621679292558"><span class="annot"><span class="annottext">asm :: Asm TextLabelCtx e a
+</span><a href="#local-6989586621679292558"><span class="hs-identifier hs-var">asm</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe Text -&gt; Asm TextSectionCtx e ()
+forall ctx e. Maybe Text -&gt; Asm ctx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#writeCurFn"><span class="hs-identifier hs-var">C.writeCurFn</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; Maybe Text
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679292559"><span class="hs-identifier hs-var">fname</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Asm TextSectionCtx e ()
+-&gt; Asm TextSectionCtx e () -&gt; Asm TextSectionCtx e ()
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f a -&gt; f b -&gt; f b
+</span><span class="hs-operator hs-var">*&gt;</span></span><span>
+</span><span id="line-78"></span><span>    </span><span class="annot"><span class="annottext">Text -&gt; Asm TextSectionCtx e ()
+forall ctx e. Text -&gt; Asm ctx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#putStrLnWithIndent"><span class="hs-identifier hs-var">C.putStrLnWithIndent</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679292559"><span class="hs-identifier hs-var">fname</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;:&quot;</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Asm TextSectionCtx e ()
+-&gt; Asm TextSectionCtx e a -&gt; Asm TextSectionCtx e a
+forall (f :: * -&gt; *) a b. Applicative f =&gt; f a -&gt; f b -&gt; f b
+</span><span class="hs-operator hs-var">*&gt;</span></span><span>
+</span><span id="line-79"></span><span>    </span><span class="annot"><span class="annottext">Asm TextLabelCtx e a -&gt; Asm TextSectionCtx e a
+forall ctx e a ctx'. Asm ctx e a -&gt; Asm ctx' e a
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#unCtx"><span class="hs-identifier hs-var">C.unCtx</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Asm TextLabelCtx e a -&gt; Asm TextLabelCtx e a
+forall ctx e a. Asm ctx e a -&gt; Asm ctx e a
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#labeled"><span class="hs-identifier hs-var">C.labeled</span></a></span><span> </span><span class="annot"><span class="annottext">Asm TextLabelCtx e a
+</span><a href="#local-6989586621679292558"><span class="hs-identifier hs-var">asm</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-80"></span><span>
+</span><span id="line-81"></span><span class="hs-comment">-- | the label in text section</span><span>
+</span><span id="line-82"></span><span id="local-6989586621679292652"><span id="local-6989586621679292653"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#label"><span class="hs-keyword hs-type">label</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292653"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292652"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679292653"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TextLabelCtx"><span class="hs-identifier hs-type">TextLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292652"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-83"></span><span id="label"><span class="annot"><span class="annottext">label :: Text -&gt; i -&gt; Asm TextLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#label"><span class="hs-keyword hs-var hs-var">label</span></a></span></span><span> </span><span id="local-6989586621679292554"><span class="annot"><span class="annottext">lbl :: Text
+</span><a href="#local-6989586621679292554"><span class="hs-identifier hs-var">lbl</span></a></span></span><span> </span><span id="local-6989586621679292553"><span class="annot"><span class="annottext">n :: i
+</span><a href="#local-6989586621679292553"><span class="hs-identifier hs-var">n</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(AsmInfo e -&gt; IO ()) -&gt; Asm TextLabelCtx e ()
+forall ctx e a. (AsmInfo e -&gt; IO a) -&gt; Asm ctx e a
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-var">C.Asm</span></a></span><span> </span><span class="annot"><span class="annottext">((AsmInfo e -&gt; IO ()) -&gt; Asm TextLabelCtx e ())
+-&gt; (AsmInfo e -&gt; IO ()) -&gt; Asm TextLabelCtx e ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679292551"><span class="annot"><span class="annottext">x :: AsmInfo e
+</span><a href="#local-6989586621679292551"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-84"></span><span>    </span><span id="local-6989586621679292550"><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292550"><span class="hs-identifier hs-var">cf</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">IORef (Maybe Text) -&gt; IO (Maybe Text)
+forall a. IORef a -&gt; IO a
+</span><span class="hs-identifier hs-var">readIORef</span></span><span> </span><span class="annot"><span class="annottext">(IORef (Maybe Text) -&gt; IO (Maybe Text))
+-&gt; IORef (Maybe Text) -&gt; IO (Maybe Text)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">AsmInfo e -&gt; IORef (Maybe Text)
+forall e. AsmInfo e -&gt; IORef (Maybe Text)
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#curFn"><span class="hs-identifier hs-var hs-var">C.curFn</span></a></span><span> </span><span class="annot"><span class="annottext">AsmInfo e
+</span><a href="#local-6989586621679292551"><span class="hs-identifier hs-var">x</span></a></span><span>
+</span><span id="line-85"></span><span>    </span><span class="annot"><span class="annottext">Bool -&gt; IO () -&gt; IO ()
+forall (f :: * -&gt; *). Applicative f =&gt; Bool -&gt; f () -&gt; f ()
+</span><span class="hs-identifier hs-var">unless</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe Text -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">isJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292550"><span class="hs-identifier hs-var">cf</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(IO () -&gt; IO ()) -&gt; IO () -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; IO ()
+</span><a href="Htcc.Utils.Print.html#err"><span class="hs-identifier hs-var">err</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;stray label&quot;</span></span><span>
+</span><span id="line-86"></span><span>    </span><span class="annot"><span class="annottext">Text -&gt; IO ()
+</span><span class="hs-identifier hs-var">T.putStrLn</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; IO ()) -&gt; Text -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.L.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679292554"><span class="hs-identifier hs-var">lbl</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text -&gt; Text
+forall a. HasCallStack =&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292550"><span class="hs-identifier hs-var">cf</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">i -&gt; Text
+forall a. Show a =&gt; a -&gt; Text
+</span><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier hs-var">tshow</span></a></span><span> </span><span class="annot"><span class="annottext">i
+</span><a href="#local-6989586621679292553"><span class="hs-identifier hs-var">n</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;:&quot;</span></span><span>
+</span><span id="line-87"></span><span>
+</span><span id="line-88"></span><span class="hs-comment">-- | goto label</span><span>
+</span><span id="line-89"></span><span id="local-6989586621679292547"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#gotoLabel"><span class="hs-identifier hs-type">gotoLabel</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TextLabelCtx"><span class="hs-identifier hs-type">TextLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292547"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span><span>
+</span><span id="line-90"></span><span id="gotoLabel"><span class="annot"><span class="annottext">gotoLabel :: Text -&gt; Asm TextLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#gotoLabel"><span class="hs-identifier hs-var hs-var">gotoLabel</span></a></span></span><span> </span><span id="local-6989586621679292546"><span class="annot"><span class="annottext">ident :: Text
+</span><a href="#local-6989586621679292546"><span class="hs-identifier hs-var">ident</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(AsmInfo e -&gt; IO ()) -&gt; Asm TextLabelCtx e ()
+forall ctx e a. (AsmInfo e -&gt; IO a) -&gt; Asm ctx e a
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-var">C.Asm</span></a></span><span> </span><span class="annot"><span class="annottext">((AsmInfo e -&gt; IO ()) -&gt; Asm TextLabelCtx e ())
+-&gt; (AsmInfo e -&gt; IO ()) -&gt; Asm TextLabelCtx e ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679292545"><span class="annot"><span class="annottext">x :: AsmInfo e
+</span><a href="#local-6989586621679292545"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-91"></span><span>    </span><span id="local-6989586621679292544"><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292544"><span class="hs-identifier hs-var">cf</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">IORef (Maybe Text) -&gt; IO (Maybe Text)
+forall a. IORef a -&gt; IO a
+</span><span class="hs-identifier hs-var">readIORef</span></span><span> </span><span class="annot"><span class="annottext">(IORef (Maybe Text) -&gt; IO (Maybe Text))
+-&gt; IORef (Maybe Text) -&gt; IO (Maybe Text)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">AsmInfo e -&gt; IORef (Maybe Text)
+forall e. AsmInfo e -&gt; IORef (Maybe Text)
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#curFn"><span class="hs-identifier hs-var hs-var">C.curFn</span></a></span><span> </span><span class="annot"><span class="annottext">AsmInfo e
+</span><a href="#local-6989586621679292545"><span class="hs-identifier hs-var">x</span></a></span><span>
+</span><span id="line-92"></span><span>    </span><span class="annot"><span class="annottext">Bool -&gt; IO () -&gt; IO ()
+forall (f :: * -&gt; *). Applicative f =&gt; Bool -&gt; f () -&gt; f ()
+</span><span class="hs-identifier hs-var">unless</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe Text -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">isJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292544"><span class="hs-identifier hs-var">cf</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(IO () -&gt; IO ()) -&gt; IO () -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; IO ()
+</span><a href="Htcc.Utils.Print.html#err"><span class="hs-identifier hs-var">err</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;stray goto label&quot;</span></span><span>
+</span><span id="line-93"></span><span>    </span><span class="annot"><span class="annottext">Text -&gt; IO ()
+</span><span class="hs-identifier hs-var">T.putStrLn</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; IO ()) -&gt; Text -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.L.label.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text -&gt; Text
+forall a. HasCallStack =&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292544"><span class="hs-identifier hs-var">cf</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679292546"><span class="hs-identifier hs-var">ident</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;:&quot;</span></span><span>
+</span><span id="line-94"></span><span>
+</span><span id="line-95"></span><span class="hs-comment">-- | begin label</span><span>
+</span><span id="line-96"></span><span id="local-6989586621679292542"><span id="local-6989586621679292543"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#begin"><span class="hs-identifier hs-type">begin</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292543"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292542"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679292542"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TextLabelCtx"><span class="hs-identifier hs-type">TextLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292543"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-97"></span><span id="begin"><span class="annot"><span class="annottext">begin :: i -&gt; Asm TextLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#begin"><span class="hs-identifier hs-var hs-var">begin</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; i -&gt; Asm TextLabelCtx e ()
+forall i e. (Show i, Show e) =&gt; Text -&gt; i -&gt; Asm TextLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#label"><span class="hs-keyword hs-var">label</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;begin&quot;</span></span><span>
+</span><span id="line-98"></span><span>
+</span><span id="line-99"></span><span class="hs-comment">-- | end label</span><span>
+</span><span id="line-100"></span><span id="local-6989586621679292540"><span id="local-6989586621679292541"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#end"><span class="hs-identifier hs-type">end</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292541"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292540"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679292540"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TextLabelCtx"><span class="hs-identifier hs-type">TextLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292541"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-101"></span><span id="end"><span class="annot"><span class="annottext">end :: i -&gt; Asm TextLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#end"><span class="hs-identifier hs-var hs-var">end</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; i -&gt; Asm TextLabelCtx e ()
+forall i e. (Show i, Show e) =&gt; Text -&gt; i -&gt; Asm TextLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#label"><span class="hs-keyword hs-var">label</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;end&quot;</span></span><span>
+</span><span id="line-102"></span><span>
+</span><span id="line-103"></span><span class="hs-comment">-- | else label</span><span>
+</span><span id="line-104"></span><span id="local-6989586621679292538"><span id="local-6989586621679292539"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#eLse"><span class="hs-identifier hs-type">eLse</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292539"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292538"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679292538"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TextLabelCtx"><span class="hs-identifier hs-type">TextLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292539"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-105"></span><span id="eLse"><span class="annot"><span class="annottext">eLse :: i -&gt; Asm TextLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#eLse"><span class="hs-identifier hs-var hs-var">eLse</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; i -&gt; Asm TextLabelCtx e ()
+forall i e. (Show i, Show e) =&gt; Text -&gt; i -&gt; Asm TextLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#label"><span class="hs-keyword hs-var">label</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;else&quot;</span></span><span>
+</span><span id="line-106"></span><span>
+</span><span id="line-107"></span><span class="hs-comment">-- | case label</span><span>
+</span><span id="line-108"></span><span id="local-6989586621679292536"><span id="local-6989586621679292537"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#cAse"><span class="hs-identifier hs-type">cAse</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292537"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292536"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679292536"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TextLabelCtx"><span class="hs-identifier hs-type">TextLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292537"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-109"></span><span id="cAse"><span class="annot"><span class="annottext">cAse :: i -&gt; Asm TextLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#cAse"><span class="hs-identifier hs-var hs-var">cAse</span></a></span></span><span> </span><span id="local-6989586621679292535"><span class="annot"><span class="annottext">n :: i
+</span><a href="#local-6989586621679292535"><span class="hs-identifier hs-var">n</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(AsmInfo e -&gt; IO ()) -&gt; Asm TextLabelCtx e ()
+forall ctx e a. (AsmInfo e -&gt; IO a) -&gt; Asm ctx e a
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-var">C.Asm</span></a></span><span> </span><span class="annot"><span class="annottext">((AsmInfo e -&gt; IO ()) -&gt; Asm TextLabelCtx e ())
+-&gt; (AsmInfo e -&gt; IO ()) -&gt; Asm TextLabelCtx e ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679292534"><span class="annot"><span class="annottext">x :: AsmInfo e
+</span><a href="#local-6989586621679292534"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-110"></span><span>    </span><span id="local-6989586621679292533"><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292533"><span class="hs-identifier hs-var">cf</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">IORef (Maybe Text) -&gt; IO (Maybe Text)
+forall a. IORef a -&gt; IO a
+</span><span class="hs-identifier hs-var">readIORef</span></span><span> </span><span class="annot"><span class="annottext">(IORef (Maybe Text) -&gt; IO (Maybe Text))
+-&gt; IORef (Maybe Text) -&gt; IO (Maybe Text)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">AsmInfo e -&gt; IORef (Maybe Text)
+forall e. AsmInfo e -&gt; IORef (Maybe Text)
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#curFn"><span class="hs-identifier hs-var hs-var">C.curFn</span></a></span><span> </span><span class="annot"><span class="annottext">AsmInfo e
+</span><a href="#local-6989586621679292534"><span class="hs-identifier hs-var">x</span></a></span><span>
+</span><span id="line-111"></span><span>    </span><span class="annot"><span class="annottext">Bool -&gt; IO () -&gt; IO ()
+forall (f :: * -&gt; *). Applicative f =&gt; Bool -&gt; f () -&gt; f ()
+</span><span class="hs-identifier hs-var">unless</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe Text -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">isJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292533"><span class="hs-identifier hs-var">cf</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(IO () -&gt; IO ()) -&gt; IO () -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; IO ()
+</span><a href="Htcc.Utils.Print.html#err"><span class="hs-identifier hs-var">err</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;stray case&quot;</span></span><span>
+</span><span id="line-112"></span><span>    </span><span class="annot"><span class="annottext">Text -&gt; IO ()
+</span><span class="hs-identifier hs-var">T.putStrLn</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; IO ()) -&gt; Text -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.L.case.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text -&gt; Text
+forall a. HasCallStack =&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292533"><span class="hs-identifier hs-var">cf</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">i -&gt; Text
+forall a. Show a =&gt; a -&gt; Text
+</span><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier hs-var">tshow</span></a></span><span> </span><span class="annot"><span class="annottext">i
+</span><a href="#local-6989586621679292535"><span class="hs-identifier hs-var">n</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;:&quot;</span></span><span>
+</span><span id="line-113"></span><span>
+</span><span id="line-114"></span><span class="hs-comment">-- | break label</span><span>
+</span><span id="line-115"></span><span id="local-6989586621679292531"><span id="local-6989586621679292532"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#break"><span class="hs-identifier hs-type">break</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292532"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292531"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679292531"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TextLabelCtx"><span class="hs-identifier hs-type">TextLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292532"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-116"></span><span id="break"><span class="annot"><span class="annottext">break :: i -&gt; Asm TextLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#break"><span class="hs-identifier hs-var hs-var">break</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; i -&gt; Asm TextLabelCtx e ()
+forall i e. (Show i, Show e) =&gt; Text -&gt; i -&gt; Asm TextLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#label"><span class="hs-keyword hs-var">label</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;break&quot;</span></span><span>
+</span><span id="line-117"></span><span>
+</span><span id="line-118"></span><span class="hs-comment">-- | continue label</span><span>
+</span><span id="line-119"></span><span id="local-6989586621679292529"><span id="local-6989586621679292530"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#continue"><span class="hs-identifier hs-type">continue</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292530"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292529"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679292529"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TextLabelCtx"><span class="hs-identifier hs-type">TextLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292530"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-120"></span><span id="continue"><span class="annot"><span class="annottext">continue :: i -&gt; Asm TextLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#continue"><span class="hs-identifier hs-var hs-var">continue</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; i -&gt; Asm TextLabelCtx e ()
+forall i e. (Show i, Show e) =&gt; Text -&gt; i -&gt; Asm TextLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#label"><span class="hs-keyword hs-var">label</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;continue&quot;</span></span><span>
+</span><span id="line-121"></span><span>
+</span><span id="line-122"></span><span class="hs-comment">-- | reference for return label</span><span>
+</span><span id="line-123"></span><span id="local-6989586621679292528"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refReturn"><span class="hs-identifier hs-type">refReturn</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292528"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TargetLabelCtx"><span class="hs-identifier hs-type">TargetLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292528"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span><span>
+</span><span id="line-124"></span><span id="refReturn"><span class="annot"><span class="annottext">refReturn :: Asm TargetLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refReturn"><span class="hs-identifier hs-var hs-var">refReturn</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(AsmInfo e -&gt; IO ()) -&gt; Asm TargetLabelCtx e ()
+forall ctx e a. (AsmInfo e -&gt; IO a) -&gt; Asm ctx e a
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-var">C.Asm</span></a></span><span> </span><span class="annot"><span class="annottext">((AsmInfo e -&gt; IO ()) -&gt; Asm TargetLabelCtx e ())
+-&gt; (AsmInfo e -&gt; IO ()) -&gt; Asm TargetLabelCtx e ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679292527"><span class="annot"><span class="annottext">x :: AsmInfo e
+</span><a href="#local-6989586621679292527"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-125"></span><span>    </span><span id="local-6989586621679292526"><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292526"><span class="hs-identifier hs-var">cf</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">IORef (Maybe Text) -&gt; IO (Maybe Text)
+forall a. IORef a -&gt; IO a
+</span><span class="hs-identifier hs-var">readIORef</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">AsmInfo e -&gt; IORef (Maybe Text)
+forall e. AsmInfo e -&gt; IORef (Maybe Text)
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#curFn"><span class="hs-identifier hs-var hs-var">C.curFn</span></a></span><span> </span><span class="annot"><span class="annottext">AsmInfo e
+</span><a href="#local-6989586621679292527"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-126"></span><span>    </span><span class="annot"><span class="annottext">Bool -&gt; IO () -&gt; IO ()
+forall (f :: * -&gt; *). Applicative f =&gt; Bool -&gt; f () -&gt; f ()
+</span><span class="hs-identifier hs-var">unless</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe Text -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">isJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292526"><span class="hs-identifier hs-var">cf</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(IO () -&gt; IO ()) -&gt; IO () -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; IO ()
+</span><a href="Htcc.Utils.Print.html#err"><span class="hs-identifier hs-var">err</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;stray label&quot;</span></span><span>
+</span><span id="line-127"></span><span>    </span><span class="annot"><span class="annottext">Text -&gt; IO ()
+</span><span class="hs-identifier hs-var">T.putStrLn</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; IO ()) -&gt; Text -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.L.return.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text -&gt; Text
+forall a. HasCallStack =&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292526"><span class="hs-identifier hs-var">cf</span></a></span><span>
+</span><span id="line-128"></span><span>
+</span><span id="line-129"></span><span id="local-6989586621679292629"><span id="local-6989586621679292630"><span id="local-6989586621679292631"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refCnt"><span class="hs-identifier hs-type">refCnt</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292631"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#AsmInfo"><span class="hs-identifier hs-type">C.AsmInfo</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292630"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">IORef</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><a href="#local-6989586621679292631"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292629"><span class="hs-identifier hs-type">ctx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292630"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span></span></span><span>
+</span><span id="line-130"></span><span id="refCnt"><span class="annot"><span class="annottext">refCnt :: (AsmInfo a -&gt; IORef (Maybe e)) -&gt; Text -&gt; Asm ctx a ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refCnt"><span class="hs-identifier hs-var hs-var">refCnt</span></a></span></span><span> </span><span id="local-6989586621679292524"><span class="annot"><span class="annottext">f :: AsmInfo a -&gt; IORef (Maybe e)
+</span><a href="#local-6989586621679292524"><span class="hs-identifier hs-var">f</span></a></span></span><span> </span><span id="local-6989586621679292523"><span class="annot"><span class="annottext">mes :: Text
+</span><a href="#local-6989586621679292523"><span class="hs-identifier hs-var">mes</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(AsmInfo a -&gt; IO ()) -&gt; Asm ctx a ()
+forall ctx e a. (AsmInfo e -&gt; IO a) -&gt; Asm ctx e a
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-var">C.Asm</span></a></span><span> </span><span class="annot"><span class="annottext">((AsmInfo a -&gt; IO ()) -&gt; Asm ctx a ())
+-&gt; (AsmInfo a -&gt; IO ()) -&gt; Asm ctx a ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679292522"><span class="annot"><span class="annottext">x :: AsmInfo a
+</span><a href="#local-6989586621679292522"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-131"></span><span>    </span><span id="local-6989586621679292521"><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292521"><span class="hs-identifier hs-var">cf</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">IORef (Maybe Text) -&gt; IO (Maybe Text)
+forall a. IORef a -&gt; IO a
+</span><span class="hs-identifier hs-var">readIORef</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">AsmInfo a -&gt; IORef (Maybe Text)
+forall e. AsmInfo e -&gt; IORef (Maybe Text)
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#curFn"><span class="hs-identifier hs-var hs-var">C.curFn</span></a></span><span> </span><span class="annot"><span class="annottext">AsmInfo a
+</span><a href="#local-6989586621679292522"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-132"></span><span>    </span><span class="annot"><span class="annottext">Bool -&gt; IO () -&gt; IO ()
+forall (f :: * -&gt; *). Applicative f =&gt; Bool -&gt; f () -&gt; f ()
+</span><span class="hs-identifier hs-var">unless</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe Text -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">isJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292521"><span class="hs-identifier hs-var">cf</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(IO () -&gt; IO ()) -&gt; IO () -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; IO ()
+</span><a href="Htcc.Utils.Print.html#err"><span class="hs-identifier hs-var">err</span></a></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; IO ()) -&gt; Text -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="hs-string">&quot;stray &quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679292523"><span class="hs-identifier hs-var">mes</span></a></span><span>
+</span><span id="line-133"></span><span>    </span><span id="local-6989586621679292520"><span class="annot"><span class="annottext">Maybe e
+</span><a href="#local-6989586621679292520"><span class="hs-identifier hs-var">n</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">IORef (Maybe e) -&gt; IO (Maybe e)
+forall a. IORef a -&gt; IO a
+</span><span class="hs-identifier hs-var">readIORef</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">AsmInfo a -&gt; IORef (Maybe e)
+</span><a href="#local-6989586621679292524"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">AsmInfo a
+</span><a href="#local-6989586621679292522"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-134"></span><span>    </span><span class="annot"><span class="annottext">Bool -&gt; IO () -&gt; IO ()
+forall (f :: * -&gt; *). Applicative f =&gt; Bool -&gt; f () -&gt; f ()
+</span><span class="hs-identifier hs-var">unless</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe e -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">isJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe e
+</span><a href="#local-6989586621679292520"><span class="hs-identifier hs-var">n</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(IO () -&gt; IO ()) -&gt; IO () -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; IO ()
+</span><a href="Htcc.Utils.Print.html#err"><span class="hs-identifier hs-var">err</span></a></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; IO ()) -&gt; Text -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="hs-string">&quot;stray &quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679292523"><span class="hs-identifier hs-var">mes</span></a></span><span>
+</span><span id="line-135"></span><span>    </span><span class="annot"><span class="annottext">Text -&gt; IO ()
+</span><span class="hs-identifier hs-var">T.putStrLn</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; IO ()) -&gt; Text -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.L.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679292523"><span class="hs-identifier hs-var">mes</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text -&gt; Text
+forall a. HasCallStack =&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292521"><span class="hs-identifier hs-var">cf</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">e -&gt; Text
+forall a. Show a =&gt; a -&gt; Text
+</span><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier hs-var">tshow</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe e -&gt; e
+forall a. HasCallStack =&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe e
+</span><a href="#local-6989586621679292520"><span class="hs-identifier hs-var">n</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-136"></span><span>
+</span><span id="line-137"></span><span class="hs-comment">-- | reference for break label</span><span>
+</span><span id="line-138"></span><span id="local-6989586621679292518"><span id="local-6989586621679292519"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refBreak"><span class="hs-identifier hs-type">refBreak</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292519"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292518"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679292518"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TargetLabelCtx"><span class="hs-identifier hs-type">TargetLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292519"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-139"></span><span id="refBreak"><span class="annot"><span class="annottext">refBreak :: i -&gt; Asm TargetLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refBreak"><span class="hs-identifier hs-var hs-var">refBreak</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; i -&gt; Asm TargetLabelCtx e ()
+forall e i.
+(Show e, Show i) =&gt;
+Text -&gt; i -&gt; Asm TargetLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#ref"><span class="hs-identifier hs-var">ref</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;break&quot;</span></span><span>
+</span><span id="line-140"></span><span>
+</span><span id="line-141"></span><span class="hs-comment">-- | reference for break label (applying value by `Htcc.Asm.Intrinsic.Structure.Internal.brkCnt`)</span><span>
+</span><span id="line-142"></span><span id="local-6989586621679292517"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refHBreak"><span class="hs-identifier hs-type">refHBreak</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292517"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TargetLabelCtx"><span class="hs-identifier hs-type">TargetLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292517"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span><span>
+</span><span id="line-143"></span><span id="refHBreak"><span class="annot"><span class="annottext">refHBreak :: Asm TargetLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refHBreak"><span class="hs-identifier hs-var hs-var">refHBreak</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(AsmInfo e -&gt; IORef (Maybe e)) -&gt; Text -&gt; Asm TargetLabelCtx e ()
+forall e a ctx.
+Show e =&gt;
+(AsmInfo a -&gt; IORef (Maybe e)) -&gt; Text -&gt; Asm ctx a ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refCnt"><span class="hs-identifier hs-var">refCnt</span></a></span><span> </span><span class="annot"><span class="annottext">AsmInfo e -&gt; IORef (Maybe e)
+forall e. AsmInfo e -&gt; IORef (Maybe e)
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#brkCnt"><span class="hs-identifier hs-var hs-var">C.brkCnt</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;break&quot;</span></span><span>
+</span><span id="line-144"></span><span>
+</span><span id="line-145"></span><span class="hs-comment">-- | reference for continue label</span><span>
+</span><span id="line-146"></span><span id="local-6989586621679292514"><span id="local-6989586621679292515"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refContinue"><span class="hs-identifier hs-type">refContinue</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292515"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292514"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679292514"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TargetLabelCtx"><span class="hs-identifier hs-type">TargetLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292515"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-147"></span><span id="refContinue"><span class="annot"><span class="annottext">refContinue :: i -&gt; Asm TargetLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refContinue"><span class="hs-identifier hs-var hs-var">refContinue</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; i -&gt; Asm TargetLabelCtx e ()
+forall e i.
+(Show e, Show i) =&gt;
+Text -&gt; i -&gt; Asm TargetLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#ref"><span class="hs-identifier hs-var">ref</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;continue&quot;</span></span><span>
+</span><span id="line-148"></span><span>
+</span><span id="line-149"></span><span class="hs-comment">-- | reference for break label (applying value by `Htcc.Asm.Intrinsic.Structure.Internal.cntCnt`)</span><span>
+</span><span id="line-150"></span><span id="local-6989586621679292513"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refHContinue"><span class="hs-identifier hs-type">refHContinue</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292513"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TargetLabelCtx"><span class="hs-identifier hs-type">TargetLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292513"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span><span>
+</span><span id="line-151"></span><span id="refHContinue"><span class="annot"><span class="annottext">refHContinue :: Asm TargetLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refHContinue"><span class="hs-identifier hs-var hs-var">refHContinue</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(AsmInfo e -&gt; IORef (Maybe e)) -&gt; Text -&gt; Asm TargetLabelCtx e ()
+forall e a ctx.
+Show e =&gt;
+(AsmInfo a -&gt; IORef (Maybe e)) -&gt; Text -&gt; Asm ctx a ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refCnt"><span class="hs-identifier hs-var">refCnt</span></a></span><span> </span><span class="annot"><span class="annottext">AsmInfo e -&gt; IORef (Maybe e)
+forall e. AsmInfo e -&gt; IORef (Maybe e)
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#cntCnt"><span class="hs-identifier hs-var hs-var">C.cntCnt</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;continue&quot;</span></span><span>
+</span><span id="line-152"></span><span>
+</span><span id="line-153"></span><span class="hs-comment">-- | reference for goto label</span><span>
+</span><span id="line-154"></span><span id="local-6989586621679292511"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refGoto"><span class="hs-identifier hs-type">refGoto</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TargetLabelCtx"><span class="hs-identifier hs-type">TargetLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292511"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span><span>
+</span><span id="line-155"></span><span id="refGoto"><span class="annot"><span class="annottext">refGoto :: Text -&gt; Asm TargetLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refGoto"><span class="hs-identifier hs-var hs-var">refGoto</span></a></span></span><span> </span><span id="local-6989586621679292510"><span class="annot"><span class="annottext">ident :: Text
+</span><a href="#local-6989586621679292510"><span class="hs-identifier hs-var">ident</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(AsmInfo e -&gt; IO ()) -&gt; Asm TargetLabelCtx e ()
+forall ctx e a. (AsmInfo e -&gt; IO a) -&gt; Asm ctx e a
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-var">C.Asm</span></a></span><span> </span><span class="annot"><span class="annottext">((AsmInfo e -&gt; IO ()) -&gt; Asm TargetLabelCtx e ())
+-&gt; (AsmInfo e -&gt; IO ()) -&gt; Asm TargetLabelCtx e ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679292509"><span class="annot"><span class="annottext">x :: AsmInfo e
+</span><a href="#local-6989586621679292509"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-156"></span><span>    </span><span id="local-6989586621679292508"><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292508"><span class="hs-identifier hs-var">cf</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">IORef (Maybe Text) -&gt; IO (Maybe Text)
+forall a. IORef a -&gt; IO a
+</span><span class="hs-identifier hs-var">readIORef</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">AsmInfo e -&gt; IORef (Maybe Text)
+forall e. AsmInfo e -&gt; IORef (Maybe Text)
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#curFn"><span class="hs-identifier hs-var hs-var">C.curFn</span></a></span><span> </span><span class="annot"><span class="annottext">AsmInfo e
+</span><a href="#local-6989586621679292509"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-157"></span><span>    </span><span class="annot"><span class="annottext">Bool -&gt; IO () -&gt; IO ()
+forall (f :: * -&gt; *). Applicative f =&gt; Bool -&gt; f () -&gt; f ()
+</span><span class="hs-identifier hs-var">unless</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe Text -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">isJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292508"><span class="hs-identifier hs-var">cf</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(IO () -&gt; IO ()) -&gt; IO () -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; IO ()
+</span><a href="Htcc.Utils.Print.html#err"><span class="hs-identifier hs-var">err</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;stray label&quot;</span></span><span>
+</span><span id="line-158"></span><span>    </span><span class="annot"><span class="annottext">Text -&gt; IO ()
+</span><span class="hs-identifier hs-var">T.putStrLn</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; IO ()) -&gt; Text -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.L.label.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text -&gt; Text
+forall a. HasCallStack =&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292508"><span class="hs-identifier hs-var">cf</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679292510"><span class="hs-identifier hs-var">ident</span></a></span><span>
+</span><span id="line-159"></span><span>
+</span><span id="line-160"></span><span class="hs-comment">-- | reference to begin label</span><span>
+</span><span id="line-161"></span><span id="local-6989586621679292506"><span id="local-6989586621679292507"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refBegin"><span class="hs-identifier hs-type">refBegin</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292507"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292506"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679292506"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TargetLabelCtx"><span class="hs-identifier hs-type">TargetLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292507"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-162"></span><span id="refBegin"><span class="annot"><span class="annottext">refBegin :: i -&gt; Asm TargetLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refBegin"><span class="hs-identifier hs-var hs-var">refBegin</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; i -&gt; Asm TargetLabelCtx e ()
+forall e i.
+(Show e, Show i) =&gt;
+Text -&gt; i -&gt; Asm TargetLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#ref"><span class="hs-identifier hs-var">ref</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;begin&quot;</span></span><span>
+</span><span id="line-163"></span><span>
+</span><span id="line-164"></span><span class="hs-comment">-- | reference to end label</span><span>
+</span><span id="line-165"></span><span id="local-6989586621679292504"><span id="local-6989586621679292505"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refEnd"><span class="hs-identifier hs-type">refEnd</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292505"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292504"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679292504"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TargetLabelCtx"><span class="hs-identifier hs-type">TargetLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292505"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-166"></span><span id="refEnd"><span class="annot"><span class="annottext">refEnd :: i -&gt; Asm TargetLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refEnd"><span class="hs-identifier hs-var hs-var">refEnd</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; i -&gt; Asm TargetLabelCtx e ()
+forall e i.
+(Show e, Show i) =&gt;
+Text -&gt; i -&gt; Asm TargetLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#ref"><span class="hs-identifier hs-var">ref</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;end&quot;</span></span><span>
+</span><span id="line-167"></span><span>
+</span><span id="line-168"></span><span class="hs-comment">-- | reference to else label</span><span>
+</span><span id="line-169"></span><span id="local-6989586621679292502"><span id="local-6989586621679292503"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refElse"><span class="hs-identifier hs-type">refElse</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292503"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292502"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679292502"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TargetLabelCtx"><span class="hs-identifier hs-type">TargetLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292503"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-170"></span><span id="refElse"><span class="annot"><span class="annottext">refElse :: i -&gt; Asm TargetLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#refElse"><span class="hs-identifier hs-var hs-var">refElse</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; i -&gt; Asm TargetLabelCtx e ()
+forall e i.
+(Show e, Show i) =&gt;
+Text -&gt; i -&gt; Asm TargetLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#ref"><span class="hs-identifier hs-var">ref</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;else&quot;</span></span><span>
+</span><span id="line-171"></span><span>
+</span><span id="line-172"></span><span class="hs-comment">-- | reference to general label</span><span>
+</span><span id="line-173"></span><span id="local-6989586621679292633"><span id="local-6989586621679292634"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#ref"><span class="hs-identifier hs-type">ref</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292634"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292633"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679292633"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TargetLabelCtx"><span class="hs-identifier hs-type">TargetLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292634"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-174"></span><span id="ref"><span class="annot"><span class="annottext">ref :: Text -&gt; i -&gt; Asm TargetLabelCtx e ()
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#ref"><span class="hs-identifier hs-var hs-var">ref</span></a></span></span><span> </span><span id="local-6989586621679292501"><span class="annot"><span class="annottext">lbl :: Text
+</span><a href="#local-6989586621679292501"><span class="hs-identifier hs-var">lbl</span></a></span></span><span> </span><span id="local-6989586621679292500"><span class="annot"><span class="annottext">n :: i
+</span><a href="#local-6989586621679292500"><span class="hs-identifier hs-var">n</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(AsmInfo e -&gt; IO ()) -&gt; Asm TargetLabelCtx e ()
+forall ctx e a. (AsmInfo e -&gt; IO a) -&gt; Asm ctx e a
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-var">C.Asm</span></a></span><span> </span><span class="annot"><span class="annottext">((AsmInfo e -&gt; IO ()) -&gt; Asm TargetLabelCtx e ())
+-&gt; (AsmInfo e -&gt; IO ()) -&gt; Asm TargetLabelCtx e ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679292499"><span class="annot"><span class="annottext">x :: AsmInfo e
+</span><a href="#local-6989586621679292499"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-175"></span><span>    </span><span id="local-6989586621679292498"><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292498"><span class="hs-identifier hs-var">cf</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">IORef (Maybe Text) -&gt; IO (Maybe Text)
+forall a. IORef a -&gt; IO a
+</span><span class="hs-identifier hs-var">readIORef</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">AsmInfo e -&gt; IORef (Maybe Text)
+forall e. AsmInfo e -&gt; IORef (Maybe Text)
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#curFn"><span class="hs-identifier hs-var hs-var">C.curFn</span></a></span><span> </span><span class="annot"><span class="annottext">AsmInfo e
+</span><a href="#local-6989586621679292499"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-176"></span><span>    </span><span class="annot"><span class="annottext">Bool -&gt; IO () -&gt; IO ()
+forall (f :: * -&gt; *). Applicative f =&gt; Bool -&gt; f () -&gt; f ()
+</span><span class="hs-identifier hs-var">unless</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe Text -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">isJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292498"><span class="hs-identifier hs-var">cf</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(IO () -&gt; IO ()) -&gt; IO () -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; IO ()
+</span><a href="Htcc.Utils.Print.html#err"><span class="hs-identifier hs-var">err</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;stray label&quot;</span></span><span>
+</span><span id="line-177"></span><span>    </span><span class="annot"><span class="annottext">Text -&gt; IO ()
+</span><span class="hs-identifier hs-var">T.putStrLn</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; IO ()) -&gt; Text -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.L.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679292501"><span class="hs-identifier hs-var">lbl</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text -&gt; Text
+forall a. HasCallStack =&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292498"><span class="hs-identifier hs-var">cf</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">i -&gt; Text
+forall a. Show a =&gt; a -&gt; Text
+</span><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier hs-var">tshow</span></a></span><span> </span><span class="annot"><span class="annottext">i
+</span><a href="#local-6989586621679292500"><span class="hs-identifier hs-var">n</span></a></span><span>
+</span><span id="line-178"></span><span>
+</span><span id="line-179"></span><span class="hs-comment">-- | generate cases and return abstract tree</span><span>
+</span><span id="line-180"></span><span id="local-6989586621679292496"><span id="local-6989586621679292497"><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#makeCases"><span class="hs-identifier hs-type">makeCases</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292497"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Enum</span></span><span> </span><span class="annot"><a href="#local-6989586621679292497"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Integral</span></span><span> </span><span class="annot"><a href="#local-6989586621679292497"><span class="hs-identifier hs-type">e</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679292496"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679292496"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATree"><span class="hs-identifier hs-type">ATree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292496"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-type">C.Asm</span></a></span><span> </span><span class="annot"><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#TextLabelCtx"><span class="hs-identifier hs-type">TextLabelCtx</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292497"><span class="hs-identifier hs-type">e</span></a></span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATree"><span class="hs-identifier hs-type">ATree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679292496"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span></span></span><span>
+</span><span id="line-181"></span><span id="makeCases"><span class="annot"><span class="annottext">makeCases :: [ATree i] -&gt; Asm TextLabelCtx e [ATree i]
+</span><a href="Htcc.Asm.Intrinsic.Structure.Section.Text.Directive.html#makeCases"><span class="hs-identifier hs-var hs-var">makeCases</span></a></span></span><span> </span><span id="local-6989586621679292495"><span class="annot"><span class="annottext">cases :: [ATree i]
+</span><a href="#local-6989586621679292495"><span class="hs-identifier hs-var">cases</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(AsmInfo e -&gt; IO [ATree i]) -&gt; Asm TextLabelCtx e [ATree i]
+forall ctx e a. (AsmInfo e -&gt; IO a) -&gt; Asm ctx e a
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#Asm"><span class="hs-identifier hs-var">C.Asm</span></a></span><span> </span><span class="annot"><span class="annottext">((AsmInfo e -&gt; IO [ATree i]) -&gt; Asm TextLabelCtx e [ATree i])
+-&gt; (AsmInfo e -&gt; IO [ATree i]) -&gt; Asm TextLabelCtx e [ATree i]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span id="local-6989586621679292494"><span class="annot"><span class="annottext">x :: AsmInfo e
+</span><a href="#local-6989586621679292494"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-182"></span><span>    </span><span id="local-6989586621679292493"><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292493"><span class="hs-identifier hs-var">cf</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">IORef (Maybe Text) -&gt; IO (Maybe Text)
+forall a. IORef a -&gt; IO a
+</span><span class="hs-identifier hs-var">readIORef</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">AsmInfo e -&gt; IORef (Maybe Text)
+forall e. AsmInfo e -&gt; IORef (Maybe Text)
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#curFn"><span class="hs-identifier hs-var hs-var">C.curFn</span></a></span><span> </span><span class="annot"><span class="annottext">AsmInfo e
+</span><a href="#local-6989586621679292494"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-183"></span><span>    </span><span class="annot"><span class="annottext">[ATree i] -&gt; (ATree i -&gt; IO (ATree i)) -&gt; IO [ATree i]
+forall (t :: * -&gt; *) (m :: * -&gt; *) a b.
+(Traversable t, Monad m) =&gt;
+t a -&gt; (a -&gt; m b) -&gt; m (t b)
+</span><span class="hs-identifier hs-var">forM</span></span><span> </span><span class="annot"><span class="annottext">[ATree i]
+</span><a href="#local-6989586621679292495"><span class="hs-identifier hs-var">cases</span></a></span><span> </span><span class="annot"><span class="annottext">((ATree i -&gt; IO (ATree i)) -&gt; IO [ATree i])
+-&gt; (ATree i -&gt; IO (ATree i)) -&gt; IO [ATree i]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-glyph">\</span><span class="hs-glyph">case</span><span>
+</span><span id="line-184"></span><span>        </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATCase"><span class="hs-identifier hs-type">ATCase</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679292490"><span class="annot"><span class="annottext">cn :: i
+</span><a href="#local-6989586621679292490"><span class="hs-identifier hs-var">cn</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679292489"><span class="annot"><span class="annottext">t :: StorageClass i
+</span><a href="#local-6989586621679292489"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679292488"><span class="annot"><span class="annottext">lhs :: ATree i
+</span><a href="#local-6989586621679292488"><span class="hs-identifier hs-var">lhs</span></a></span></span><span> </span><span id="local-6989586621679292487"><span class="annot"><span class="annottext">rhs :: ATree i
+</span><a href="#local-6989586621679292487"><span class="hs-identifier hs-var">rhs</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-185"></span><span>            </span><span class="annot"><span class="annottext">IORef e -&gt; (e -&gt; e) -&gt; IO ()
+forall a. IORef a -&gt; (a -&gt; a) -&gt; IO ()
+</span><span class="hs-identifier hs-var">modifyIORef</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">AsmInfo e -&gt; IORef e
+forall e. AsmInfo e -&gt; IORef e
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#lblCnt"><span class="hs-identifier hs-var hs-var">C.lblCnt</span></a></span><span> </span><span class="annot"><span class="annottext">AsmInfo e
+</span><a href="#local-6989586621679292494"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">e -&gt; e
+forall a. Enum a =&gt; a -&gt; a
+</span><span class="hs-identifier hs-var">succ</span></span><span>
+</span><span id="line-186"></span><span>            </span><span id="local-6989586621679292484"><span class="annot"><span class="annottext">e
+</span><a href="#local-6989586621679292484"><span class="hs-identifier hs-var">n'</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">IORef e -&gt; IO e
+forall a. IORef a -&gt; IO a
+</span><span class="hs-identifier hs-var">readIORef</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">AsmInfo e -&gt; IORef e
+forall e. AsmInfo e -&gt; IORef e
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#lblCnt"><span class="hs-identifier hs-var hs-var">C.lblCnt</span></a></span><span> </span><span class="annot"><span class="annottext">AsmInfo e
+</span><a href="#local-6989586621679292494"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-187"></span><span>            </span><span class="annot"><span class="annottext">Text -&gt; IO ()
+</span><span class="hs-identifier hs-var">T.putStrLn</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; IO ()) -&gt; Text -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="hs-string">&quot;\tcmp rax, &quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">i -&gt; Text
+forall a. Show a =&gt; a -&gt; Text
+</span><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier hs-var">tshow</span></a></span><span> </span><span class="annot"><span class="annottext">i
+</span><a href="#local-6989586621679292490"><span class="hs-identifier hs-var">cn</span></a></span><span>
+</span><span id="line-188"></span><span>            </span><span class="annot"><span class="annottext">Text -&gt; IO ()
+</span><span class="hs-identifier hs-var">T.putStrLn</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; IO ()) -&gt; Text -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="hs-string">&quot;\tje .L.case.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text -&gt; Text
+forall a. HasCallStack =&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292493"><span class="hs-identifier hs-var">cf</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">e -&gt; Text
+forall a. Show a =&gt; a -&gt; Text
+</span><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier hs-var">tshow</span></a></span><span> </span><span class="annot"><span class="annottext">e
+</span><a href="#local-6989586621679292484"><span class="hs-identifier hs-var">n'</span></a></span><span>
+</span><span id="line-189"></span><span>            </span><span class="annot"><span class="annottext">ATree i -&gt; IO (ATree i)
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">(ATree i -&gt; IO (ATree i)) -&gt; ATree i -&gt; IO (ATree i)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ATKind i -&gt; StorageClass i -&gt; ATree i -&gt; ATree i -&gt; ATree i
+forall a.
+ATKind a -&gt; StorageClass a -&gt; ATree a -&gt; ATree a -&gt; ATree a
+</span><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-var">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">i -&gt; i -&gt; ATKind i
+forall a. a -&gt; a -&gt; ATKind a
+</span><a href="Htcc.Parser.AST.Core.html#ATCase"><span class="hs-identifier hs-var">ATCase</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">e -&gt; i
+forall a b. (Integral a, Num b) =&gt; a -&gt; b
+</span><span class="hs-identifier hs-var">fromIntegral</span></span><span> </span><span class="annot"><span class="annottext">e
+</span><a href="#local-6989586621679292484"><span class="hs-identifier hs-var">n'</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">i
+</span><a href="#local-6989586621679292490"><span class="hs-identifier hs-var">cn</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679292489"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679292488"><span class="hs-identifier hs-var">lhs</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679292487"><span class="hs-identifier hs-var">rhs</span></a></span><span>
+</span><span id="line-190"></span><span>        </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-type">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATDefault"><span class="hs-identifier hs-type">ATDefault</span></a></span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span id="local-6989586621679292482"><span class="annot"><span class="annottext">t :: StorageClass i
+</span><a href="#local-6989586621679292482"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679292481"><span class="annot"><span class="annottext">lhs :: ATree i
+</span><a href="#local-6989586621679292481"><span class="hs-identifier hs-var">lhs</span></a></span></span><span> </span><span id="local-6989586621679292480"><span class="annot"><span class="annottext">rhs :: ATree i
+</span><a href="#local-6989586621679292480"><span class="hs-identifier hs-var">rhs</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-191"></span><span>            </span><span class="annot"><span class="annottext">IORef e -&gt; (e -&gt; e) -&gt; IO ()
+forall a. IORef a -&gt; (a -&gt; a) -&gt; IO ()
+</span><span class="hs-identifier hs-var">modifyIORef</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">AsmInfo e -&gt; IORef e
+forall e. AsmInfo e -&gt; IORef e
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#lblCnt"><span class="hs-identifier hs-var hs-var">C.lblCnt</span></a></span><span> </span><span class="annot"><span class="annottext">AsmInfo e
+</span><a href="#local-6989586621679292494"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">e -&gt; e
+forall a. Enum a =&gt; a -&gt; a
+</span><span class="hs-identifier hs-var">succ</span></span><span>
+</span><span id="line-192"></span><span>            </span><span id="local-6989586621679292479"><span class="annot"><span class="annottext">e
+</span><a href="#local-6989586621679292479"><span class="hs-identifier hs-var">n'</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">IORef e -&gt; IO e
+forall a. IORef a -&gt; IO a
+</span><span class="hs-identifier hs-var">readIORef</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">AsmInfo e -&gt; IORef e
+forall e. AsmInfo e -&gt; IORef e
+</span><a href="Htcc.Asm.Intrinsic.Structure.Internal.html#lblCnt"><span class="hs-identifier hs-var hs-var">C.lblCnt</span></a></span><span> </span><span class="annot"><span class="annottext">AsmInfo e
+</span><a href="#local-6989586621679292494"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-193"></span><span>            </span><span class="annot"><span class="annottext">Text -&gt; IO ()
+</span><span class="hs-identifier hs-var">T.putStrLn</span></span><span> </span><span class="annot"><span class="annottext">(Text -&gt; IO ()) -&gt; Text -&gt; IO ()
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="hs-string">&quot;\tjmp .L.case.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text -&gt; Text
+forall a. HasCallStack =&gt; Maybe a -&gt; a
+</span><span class="hs-identifier hs-var">fromJust</span></span><span> </span><span class="annot"><span class="annottext">Maybe Text
+</span><a href="#local-6989586621679292493"><span class="hs-identifier hs-var">cf</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;.&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">e -&gt; Text
+forall a. Show a =&gt; a -&gt; Text
+</span><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier hs-var">tshow</span></a></span><span> </span><span class="annot"><span class="annottext">e
+</span><a href="#local-6989586621679292479"><span class="hs-identifier hs-var">n'</span></a></span><span>
+</span><span id="line-194"></span><span>            </span><span class="annot"><span class="annottext">ATree i -&gt; IO (ATree i)
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">(ATree i -&gt; IO (ATree i)) -&gt; ATree i -&gt; IO (ATree i)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ATKind i -&gt; StorageClass i -&gt; ATree i -&gt; ATree i -&gt; ATree i
+forall a.
+ATKind a -&gt; StorageClass a -&gt; ATree a -&gt; ATree a -&gt; ATree a
+</span><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-var">ATNode</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">i -&gt; ATKind i
+forall a. a -&gt; ATKind a
+</span><a href="Htcc.Parser.AST.Core.html#ATDefault"><span class="hs-identifier hs-var">ATDefault</span></a></span><span> </span><span class="annot"><span class="annottext">(i -&gt; ATKind i) -&gt; i -&gt; ATKind i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">e -&gt; i
+forall a b. (Integral a, Num b) =&gt; a -&gt; b
+</span><span class="hs-identifier hs-var">fromIntegral</span></span><span> </span><span class="annot"><span class="annottext">e
+</span><a href="#local-6989586621679292479"><span class="hs-identifier hs-var">n'</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679292482"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679292481"><span class="hs-identifier hs-var">lhs</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679292480"><span class="hs-identifier hs-var">rhs</span></a></span><span>
+</span><span id="line-195"></span><span>        </span><span id="local-6989586621679292478"><span class="annot"><span class="annottext">at :: ATree i
+</span><a href="#local-6989586621679292478"><span class="hs-identifier hs-var">at</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; IO (ATree i)
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679292478"><span class="hs-identifier hs-var">at</span></a></span><span>
+</span><span id="line-196"></span></pre></body></html>

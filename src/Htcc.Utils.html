@@ -1,0 +1,190 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">{-|
+Module      : Htcc.Utils
+Description : Utilities
+Copyright   : (c) roki, 2019
+License     : MIT
+Maintainer  : falgon53@yahoo.co.jp
+Stability   : experimental
+Portability : POSIX
+
+General-purpose utilities
+-}</span><span>
+</span><span id="line-12"></span><span class="hs-pragma">{-# LANGUAGE BangPatterns, Rank2Types, ScopedTypeVariables, TupleSections,
+             TypeOperators #-}</span><span>
+</span><span id="line-14"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Htcc.Utils</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-15"></span><span>    </span><span class="annot"><span class="hs-comment">-- * Extra functions for lists</span></span><span>
+</span><span id="line-16"></span><span>    </span><span class="hs-keyword">module</span><span> </span><span class="annot"><a href="Htcc.Utils.List.html"><span class="hs-identifier">Htcc.Utils.List</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-17"></span><span>    </span><span class="annot"><span class="hs-comment">-- * For Monad</span></span><span>
+</span><span id="line-18"></span><span>    </span><span class="annot"><a href="Htcc.Utils.html#bothM"><span class="hs-identifier">bothM</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Utils.html#%2A%5E%2A"><span class="hs-operator">(*^*)</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-19"></span><span>    </span><span class="annot"><span class="hs-comment">-- * For Data.Maybe</span></span><span>
+</span><span id="line-20"></span><span>    </span><span class="annot"><a href="Htcc.Utils.html#maybe%27"><span class="hs-identifier">maybe'</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-21"></span><span>    </span><span class="annot"><span class="hs-comment">-- * For Char</span></span><span>
+</span><span id="line-22"></span><span>    </span><span class="annot"><a href="Htcc.Utils.html#isStrictSpace"><span class="hs-identifier">isStrictSpace</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-23"></span><span>    </span><span class="annot"><span class="hs-comment">-- * For Data.Text</span></span><span>
+</span><span id="line-24"></span><span>    </span><span class="hs-keyword">module</span><span> </span><span class="annot"><a href="Htcc.Utils.Text.html"><span class="hs-identifier">Htcc.Utils.Text</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-25"></span><span>    </span><span class="annot"><span class="hs-comment">-- * For Numeric.Natural</span></span><span>
+</span><span id="line-26"></span><span>    </span><span class="annot"><a href="Htcc.Utils.html#toNatural"><span class="hs-identifier">toNatural</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Utils.html#toInteger"><span class="hs-identifier">toInteger</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-27"></span><span>    </span><span class="annot"><span class="hs-comment">-- * For print shortcuts</span></span><span>
+</span><span id="line-28"></span><span>    </span><span class="hs-keyword">module</span><span> </span><span class="annot"><a href="Htcc.Utils.Print.html"><span class="hs-identifier">Htcc.Utils.Print</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-29"></span><span>    </span><span class="annot"><span class="hs-comment">-- * For triples and quadruple</span></span><span>
+</span><span id="line-30"></span><span>    </span><span class="hs-keyword">module</span><span> </span><span class="annot"><a href="Htcc.Utils.Tuple.html"><span class="hs-identifier">Htcc.Utils.Tuple</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-31"></span><span>    </span><span class="annot"><span class="hs-comment">-- * Boolean methods</span></span><span>
+</span><span id="line-32"></span><span>    </span><span class="hs-keyword">module</span><span> </span><span class="annot"><a href="Htcc.Utils.Bool.html"><span class="hs-identifier">Htcc.Utils.Bool</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-33"></span><span>    </span><span class="annot"><span class="hs-comment">-- * Natural transformations</span></span><span>
+</span><span id="line-34"></span><span>    </span><span class="hs-keyword">module</span><span> </span><span class="annot"><a href="Htcc.Utils.NaturalTransformations.html"><span class="hs-identifier">Htcc.Utils.NaturalTransformations</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-35"></span><span>    </span><span class="annot"><span class="hs-comment">-- * For data type</span></span><span>
+</span><span id="line-36"></span><span>    </span><span class="annot"><a href="Htcc.Utils.html#toInts"><span class="hs-identifier">toInts</span></a></span><span>
+</span><span id="line-37"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-38"></span><span>
+</span><span id="line-39"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.Char</span></span><span>                         </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">isSpace</span></span><span class="hs-special">)</span><span>
+</span><span id="line-40"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.Tuple.Extra</span></span><span>                  </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">both</span></span><span class="hs-special">)</span><span>
+</span><span id="line-41"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Numeric.Natural</span></span><span>
+</span><span id="line-42"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Prelude</span></span><span>                           </span><span class="hs-keyword">hiding</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">toInteger</span></span><span class="hs-special">)</span><span>
+</span><span id="line-43"></span><span>
+</span><span id="line-44"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Utils.Bool.html"><span class="hs-identifier">Htcc.Utils.Bool</span></a></span><span>
+</span><span id="line-45"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Utils.List.html"><span class="hs-identifier">Htcc.Utils.List</span></a></span><span>
+</span><span id="line-46"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Utils.NaturalTransformations.html"><span class="hs-identifier">Htcc.Utils.NaturalTransformations</span></a></span><span>
+</span><span id="line-47"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Utils.Print.html"><span class="hs-identifier">Htcc.Utils.Print</span></a></span><span>
+</span><span id="line-48"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Utils.Text.html"><span class="hs-identifier">Htcc.Utils.Text</span></a></span><span>
+</span><span id="line-49"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Utils.Tuple.html"><span class="hs-identifier">Htcc.Utils.Tuple</span></a></span><span>
+</span><span id="line-50"></span><span>
+</span><span id="line-51"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Utils.html#maybe%27"><span class="hs-pragma hs-type">maybe'</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-52"></span><span class="hs-comment">-- | `maybe'` is `maybe` with changed argument order.</span><span>
+</span><span id="line-53"></span><span id="local-6989586621679285872"><span id="local-6989586621679285873"><span class="annot"><a href="Htcc.Utils.html#maybe%27"><span class="hs-identifier hs-type">maybe'</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="#local-6989586621679285873"><span class="hs-identifier hs-type">b</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="annot"><a href="#local-6989586621679285872"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679285872"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679285873"><span class="hs-identifier hs-type">b</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679285873"><span class="hs-identifier hs-type">b</span></a></span></span></span><span>
+</span><span id="line-54"></span><span id="maybe%27"><span class="annot"><span class="annottext">maybe' :: b -&gt; Maybe a -&gt; (a -&gt; b) -&gt; b
+</span><a href="Htcc.Utils.html#maybe%27"><span class="hs-identifier hs-var hs-var">maybe'</span></a></span></span><span> </span><span id="local-6989586621679285871"><span class="annot"><span class="annottext">n :: b
+</span><a href="#local-6989586621679285871"><span class="hs-identifier hs-var">n</span></a></span></span><span> </span><span id="local-6989586621679285870"><span class="annot"><span class="annottext">m :: Maybe a
+</span><a href="#local-6989586621679285870"><span class="hs-identifier hs-var">m</span></a></span></span><span> </span><span id="local-6989586621679285869"><span class="annot"><span class="annottext">f :: a -&gt; b
+</span><a href="#local-6989586621679285869"><span class="hs-identifier hs-var">f</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">b -&gt; (a -&gt; b) -&gt; Maybe a -&gt; b
+forall b a. b -&gt; (a -&gt; b) -&gt; Maybe a -&gt; b
+</span><span class="hs-identifier hs-var">maybe</span></span><span> </span><span class="annot"><span class="annottext">b
+</span><a href="#local-6989586621679285871"><span class="hs-identifier hs-var">n</span></a></span><span> </span><span class="annot"><span class="annottext">a -&gt; b
+</span><a href="#local-6989586621679285869"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">Maybe a
+</span><a href="#local-6989586621679285870"><span class="hs-identifier hs-var">m</span></a></span><span>
+</span><span id="line-55"></span><span>
+</span><span id="line-56"></span><span class="hs-comment">-- | `toNatural` is a shortcut for @fromIntegral :: Integral i =&gt; i -&gt; Natural@</span><span>
+</span><span id="line-57"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Utils.html#toNatural"><span class="hs-pragma hs-type">toNatural</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-58"></span><span id="local-6989586621679285867"><span class="annot"><a href="Htcc.Utils.html#toNatural"><span class="hs-identifier hs-type">toNatural</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Integral</span></span><span> </span><span class="annot"><a href="#local-6989586621679285867"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679285867"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Natural</span></span></span><span>
+</span><span id="line-59"></span><span id="toNatural"><span class="annot"><span class="annottext">toNatural :: i -&gt; Natural
+</span><a href="Htcc.Utils.html#toNatural"><span class="hs-identifier hs-var hs-var">toNatural</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">i -&gt; Natural
+forall a b. (Integral a, Num b) =&gt; a -&gt; b
+</span><span class="hs-identifier hs-var">fromIntegral</span></span><span>
+</span><span id="line-60"></span><span>
+</span><span id="line-61"></span><span class="hs-comment">-- | `toInteger` is a shortcut for @fromIntegral :: Natural -&gt; Integer@</span><span>
+</span><span id="line-62"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Utils.html#toInteger"><span class="hs-pragma hs-type">toInteger</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-63"></span><span class="annot"><a href="Htcc.Utils.html#toInteger"><span class="hs-identifier hs-type">toInteger</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Natural</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Integer</span></span><span>
+</span><span id="line-64"></span><span id="toInteger"><span class="annot"><span class="annottext">toInteger :: Natural -&gt; Integer
+</span><a href="Htcc.Utils.html#toInteger"><span class="hs-identifier hs-var hs-var">toInteger</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Natural -&gt; Integer
+forall a b. (Integral a, Num b) =&gt; a -&gt; b
+</span><span class="hs-identifier hs-var">fromIntegral</span></span><span>
+</span><span id="line-65"></span><span>
+</span><span id="line-66"></span><span class="hs-comment">-- | Convert the instance of `Integral` to Int. When it cause overflow, express it as a list of `Int`s divided into multiple values.</span><span>
+</span><span id="line-67"></span><span class="hs-comment">-- `toInts` is useful for functions that have an `Int` type as an argument. e.g.:</span><span>
+</span><span id="line-68"></span><span class="hs-comment">--</span><span>
+</span><span id="line-69"></span><span class="hs-comment">-- &gt;&gt;&gt; toInts (fromIntegral (maxBound :: Int) + 1 :: Integer)</span><span>
+</span><span id="line-70"></span><span class="hs-comment">-- [9223372036854775807,1]</span><span>
+</span><span id="line-71"></span><span class="hs-comment">-- &gt;&gt;&gt; toInts (fromIntegral (maxBound :: Int) * 3 + 4 :: Integer)</span><span>
+</span><span id="line-72"></span><span class="hs-comment">-- [9223372036854775807,9223372036854775807,9223372036854775807,4]</span><span>
+</span><span id="line-73"></span><span id="local-6989586621679285866"><span class="annot"><a href="Htcc.Utils.html#toInts"><span class="hs-identifier hs-type">toInts</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Integral</span></span><span> </span><span class="annot"><a href="#local-6989586621679285866"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679285866"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span class="hs-special">]</span></span><span>
+</span><span id="line-74"></span><span id="toInts"><span class="annot"><span class="annottext">toInts :: i -&gt; [Int]
+</span><a href="Htcc.Utils.html#toInts"><span class="hs-identifier hs-var hs-var">toInts</span></a></span></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679285865"><span class="annot"><span class="annottext">i
+</span><a href="#local-6989586621679285865"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679285864"><span class="hs-identifier hs-var">xd</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Bool
+forall a. Ord a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">&gt;=</span></span><span> </span><span class="annot"><span class="hs-number">1</span></span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
+</span><span class="hs-operator hs-var">&amp;&amp;</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679285862"><span class="hs-identifier hs-var">xm</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="hs-number">0</span></span><span> </span><span class="hs-keyword">then</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">i -&gt; Int
+forall a b. (Integral a, Num b) =&gt; a -&gt; b
+</span><span class="hs-identifier hs-var">fromIntegral</span></span><span> </span><span class="annot"><span class="annottext">i
+</span><a href="#local-6989586621679285865"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-keyword">else</span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; [Int]
+forall a. Int -&gt; a -&gt; [a]
+</span><span class="hs-identifier hs-var">replicate</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679285864"><span class="hs-identifier hs-var">xd</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Int
+forall a. Bounded a =&gt; a
+</span><span class="hs-identifier hs-var">maxBound</span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">[Int] -&gt; [Int] -&gt; [Int]
+forall a. [a] -&gt; [a] -&gt; [a]
+</span><span class="hs-operator hs-var">++</span></span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679285862"><span class="hs-identifier hs-var">xm</span></a></span><span class="hs-special">]</span><span>
+</span><span id="line-75"></span><span>    </span><span class="hs-keyword">where</span><span>
+</span><span id="line-76"></span><span>        </span><span class="hs-special">(</span><span class="hs-glyph">!</span><span id="local-6989586621679285864"><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679285864"><span class="hs-identifier hs-var">xd</span></a></span></span><span class="hs-special">,</span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679285862"><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679285862"><span class="hs-identifier hs-var">xm</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(i -&gt; Int) -&gt; (i, i) -&gt; (Int, Int)
+forall a b. (a -&gt; b) -&gt; (a, a) -&gt; (b, b)
+</span><span class="hs-identifier hs-var">both</span></span><span> </span><span class="annot"><span class="annottext">i -&gt; Int
+forall a b. (Integral a, Num b) =&gt; a -&gt; b
+</span><span class="hs-identifier hs-var">fromIntegral</span></span><span> </span><span class="annot"><span class="annottext">((i, i) -&gt; (Int, Int)) -&gt; (i, i) -&gt; (Int, Int)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">i
+</span><a href="#local-6989586621679285865"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">i -&gt; i -&gt; (i, i)
+forall a. Integral a =&gt; a -&gt; a -&gt; (a, a)
+</span><span class="hs-operator hs-var">`divMod`</span></span><span> </span><span class="annot"><span class="annottext">Int -&gt; i
+forall a b. (Integral a, Num b) =&gt; a -&gt; b
+</span><span class="hs-identifier hs-var">fromIntegral</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Int
+forall a. Bounded a =&gt; a
+</span><span class="hs-identifier hs-var">maxBound</span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span class="hs-special">)</span><span>
+</span><span id="line-77"></span><span>
+</span><span id="line-78"></span><span class="hs-comment">-- | `isStrictSpace` returns True only if the given string is not a linefeed code and `Data.Char.isSpace` returns `True`, otherwise returns `False`.</span><span>
+</span><span id="line-79"></span><span class="annot"><a href="Htcc.Utils.html#isStrictSpace"><span class="hs-identifier hs-type">isStrictSpace</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Char</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bool</span></span><span>
+</span><span id="line-80"></span><span id="isStrictSpace"><span class="annot"><span class="annottext">isStrictSpace :: Char -&gt; Bool
+</span><a href="Htcc.Utils.html#isStrictSpace"><span class="hs-identifier hs-var hs-var">isStrictSpace</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[Char -&gt; Bool] -&gt; Char -&gt; Bool
+forall a. [a -&gt; Bool] -&gt; a -&gt; Bool
+</span><a href="Htcc.Utils.Bool.html#land"><span class="hs-identifier hs-var">land</span></a></span><span> </span><span class="hs-special">[</span><span class="hs-special">(</span><span class="annot"><span class="annottext">Char -&gt; Char -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">/=</span></span><span class="annot"><span class="hs-char">'\n'</span></span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Char -&gt; Char -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">/=</span></span><span class="annot"><span class="hs-char">'\r'</span></span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Char -&gt; Bool
+</span><span class="hs-identifier hs-var">isSpace</span></span><span class="hs-special">]</span><span>
+</span><span id="line-81"></span><span>
+</span><span id="line-82"></span><span class="hs-comment">-- | The monadic `Data.Tuple.Extra.both`.</span><span>
+</span><span id="line-83"></span><span class="hs-comment">-- e.g.:</span><span>
+</span><span id="line-84"></span><span class="hs-comment">--</span><span>
+</span><span id="line-85"></span><span class="hs-comment">-- &gt;&gt;&gt; a &lt;- newIORef (42 :: Int)</span><span>
+</span><span id="line-86"></span><span class="hs-comment">-- &gt;&gt;&gt; b &lt;- newIORef (53 :: Int)</span><span>
+</span><span id="line-87"></span><span class="hs-comment">-- &gt;&gt;&gt; bothM readIORef (a, b) &gt;&gt;= print</span><span>
+</span><span id="line-88"></span><span class="hs-comment">-- (42,53)</span><span>
+</span><span id="line-89"></span><span id="local-6989586621679285854"><span id="local-6989586621679285855"><span id="local-6989586621679285856"><span class="annot"><a href="Htcc.Utils.html#bothM"><span class="hs-identifier hs-type">bothM</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Monad</span></span><span> </span><span class="annot"><a href="#local-6989586621679285856"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679285855"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679285856"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679285854"><span class="hs-identifier hs-type">b</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679285855"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="#local-6989586621679285855"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679285856"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679285854"><span class="hs-identifier hs-type">b</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="#local-6989586621679285854"><span class="hs-identifier hs-type">b</span></a></span><span class="hs-special">)</span></span></span></span><span>
+</span><span id="line-90"></span><span id="bothM"><span class="annot"><span class="annottext">bothM :: (a -&gt; m b) -&gt; (a, a) -&gt; m (b, b)
+</span><a href="Htcc.Utils.html#bothM"><span class="hs-identifier hs-var hs-var">bothM</span></a></span></span><span> </span><span id="local-6989586621679285853"><span class="annot"><span class="annottext">f :: a -&gt; m b
+</span><a href="#local-6989586621679285853"><span class="hs-identifier hs-var">f</span></a></span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679285852"><span class="annot"><span class="annottext">x :: a
+</span><a href="#local-6989586621679285852"><span class="hs-identifier hs-var">x</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679285851"><span class="annot"><span class="annottext">y :: a
+</span><a href="#local-6989586621679285851"><span class="hs-identifier hs-var">y</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-91"></span><span>    </span><span id="local-6989586621679285850"><span class="annot"><span class="annottext">b
+</span><a href="#local-6989586621679285850"><span class="hs-identifier hs-var">x'</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">a -&gt; m b
+</span><a href="#local-6989586621679285853"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679285852"><span class="hs-identifier hs-var">x</span></a></span><span>
+</span><span id="line-92"></span><span>    </span><span class="hs-special">(</span><span class="annot"><span class="annottext">b
+</span><a href="#local-6989586621679285850"><span class="hs-identifier hs-var">x'</span></a></span><span class="hs-special">,</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(b -&gt; (b, b)) -&gt; m b -&gt; m (b, b)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; m b
+</span><a href="#local-6989586621679285853"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679285851"><span class="hs-identifier hs-var">y</span></a></span><span>
+</span><span id="line-93"></span><span>
+</span><span id="line-94"></span><span class="hs-keyword">infixr</span><span> </span><span class="hs-number">3</span><span> </span><span class="annot"><a href="Htcc.Utils.html#%2A%5E%2A"><span class="hs-operator hs-type">*^*</span></a></span><span>
+</span><span id="line-95"></span><span>
+</span><span id="line-96"></span><span class="hs-comment">-- | The monadic `Data.Tuple.Extra.***`.</span><span>
+</span><span id="line-97"></span><span class="hs-comment">-- e.g.:</span><span>
+</span><span id="line-98"></span><span class="hs-comment">--</span><span>
+</span><span id="line-99"></span><span class="hs-comment">-- &gt;&gt;&gt; a &lt;- newIORef 1</span><span>
+</span><span id="line-100"></span><span class="hs-comment">-- &gt;&gt;&gt; b &lt;- newIORef 2</span><span>
+</span><span id="line-101"></span><span class="hs-comment">-- &gt;&gt;&gt; (writeIORef a *^* writeIORef b) (42, 53) &gt;&gt; bothM readIORef (a, b) &gt;&gt;= print</span><span>
+</span><span id="line-102"></span><span class="hs-comment">-- (42,53)</span><span>
+</span><span id="line-103"></span><span id="local-6989586621679285844"><span id="local-6989586621679285845"><span id="local-6989586621679285846"><span id="local-6989586621679285847"><span id="local-6989586621679285848"><span class="annot"><a href="Htcc.Utils.html#%2A%5E%2A"><span class="hs-operator hs-type">(*^*)</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Monad</span></span><span> </span><span class="annot"><a href="#local-6989586621679285848"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679285847"><span class="hs-identifier hs-type">a</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679285848"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679285846"><span class="hs-identifier hs-type">c</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679285845"><span class="hs-identifier hs-type">b</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679285848"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679285844"><span class="hs-identifier hs-type">d</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679285847"><span class="hs-identifier hs-type">a</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="#local-6989586621679285845"><span class="hs-identifier hs-type">b</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679285848"><span class="hs-identifier hs-type">m</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="#local-6989586621679285846"><span class="hs-identifier hs-type">c</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="#local-6989586621679285844"><span class="hs-identifier hs-type">d</span></a></span><span class="hs-special">)</span></span></span></span></span></span><span>
+</span><span id="line-104"></span><span id="%2A%5E%2A"><span class="annot"><span class="annottext">*^* :: (a -&gt; m c) -&gt; (b -&gt; m d) -&gt; (a, b) -&gt; m (c, d)
+</span><a href="Htcc.Utils.html#%2A%5E%2A"><span class="hs-operator hs-var hs-var">(*^*)</span></a></span></span><span> </span><span id="local-6989586621679285843"><span class="annot"><span class="annottext">f :: a -&gt; m c
+</span><a href="#local-6989586621679285843"><span class="hs-identifier hs-var">f</span></a></span></span><span> </span><span id="local-6989586621679285842"><span class="annot"><span class="annottext">g :: b -&gt; m d
+</span><a href="#local-6989586621679285842"><span class="hs-identifier hs-var">g</span></a></span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679285841"><span class="annot"><span class="annottext">x :: a
+</span><a href="#local-6989586621679285841"><span class="hs-identifier hs-var">x</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679285840"><span class="annot"><span class="annottext">y :: b
+</span><a href="#local-6989586621679285840"><span class="hs-identifier hs-var">y</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-105"></span><span>    </span><span id="local-6989586621679285839"><span class="annot"><span class="annottext">c
+</span><a href="#local-6989586621679285839"><span class="hs-identifier hs-var">x'</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">a -&gt; m c
+</span><a href="#local-6989586621679285843"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679285841"><span class="hs-identifier hs-var">x</span></a></span><span>
+</span><span id="line-106"></span><span>    </span><span class="hs-special">(</span><span class="annot"><span class="annottext">c
+</span><a href="#local-6989586621679285839"><span class="hs-identifier hs-var">x'</span></a></span><span class="hs-special">,</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(d -&gt; (c, d)) -&gt; m d -&gt; m (c, d)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">b -&gt; m d
+</span><a href="#local-6989586621679285842"><span class="hs-identifier hs-var">g</span></a></span><span> </span><span class="annot"><span class="annottext">b
+</span><a href="#local-6989586621679285840"><span class="hs-identifier hs-var">y</span></a></span><span>
+</span><span id="line-107"></span></pre></body></html>

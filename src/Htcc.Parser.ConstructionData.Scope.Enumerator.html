@@ -1,0 +1,201 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">{-|
+Module      : Htcc.Parser.ConstructionData.Scope.Enumerator
+Description : The Data type of typedef and its utilities used in parsing
+Copyright   : (c) roki, 2019
+License     : MIT
+Maintainer  : falgon53@yahoo.co.jp
+Stability   : experimental
+Portability : POSIX
+
+The Data type of variables and its utilities used in parsing
+-}</span><span>
+</span><span id="line-12"></span><span class="hs-pragma">{-# LANGUAGE DeriveGeneric, OverloadedStrings #-}</span><span>
+</span><span id="line-13"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Htcc.Parser.ConstructionData.Scope.Enumerator</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-14"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Enumerator.html#Enumerator"><span class="hs-identifier">Enumerator</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-15"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Enumerator.html#Enumerators"><span class="hs-identifier">Enumerators</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-16"></span><span>    </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Enumerator.html#add"><span class="hs-identifier">add</span></a></span><span>
+</span><span id="line-17"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-18"></span><span>
+</span><span id="line-19"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Control.DeepSeq</span></span><span>                                 </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">NFData</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-20"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Map</span></span><span>                                        </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">M</span></span><span>
+</span><span id="line-21"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text</span></span><span>                                       </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">T</span></span><span>
+</span><span id="line-22"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">GHC.Generics</span></span><span>                                    </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">Generic</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-23"></span><span>
+</span><span id="line-24"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.CRules.Types.html"><span class="hs-identifier">Htcc.CRules.Types</span></a></span><span>                               </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">CT</span></span><span>
+</span><span id="line-25"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.AST.Core.html"><span class="hs-identifier">Htcc.Parser.AST.Core</span></a></span><span>                            </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#Treealizable"><span class="hs-identifier">Treealizable</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span>
+</span><span id="line-26"></span><span>                                                                  </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#atNumLit"><span class="hs-identifier">atNumLit</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-27"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html"><span class="hs-identifier">Htcc.Parser.ConstructionData.Scope.ManagedScope</span></a></span><span>
+</span><span id="line-28"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Utils.html"><span class="hs-identifier">Htcc.Parser.ConstructionData.Scope.Utils</span></a></span><span>        </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Utils.html#internalCE"><span class="hs-identifier">internalCE</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-29"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html"><span class="hs-identifier">Htcc.Tokenizer.Token</span></a></span><span>                            </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">HT</span></span><span>
+</span><span id="line-30"></span><span>
+</span><span id="line-31"></span><span class="hs-comment">-- | The data type of a enumerator</span><span>
+</span><span id="line-32"></span><span id="local-6989586621679288750"><span id="local-6989586621679288751"></span></span><span class="hs-keyword">data</span><span> </span><span id="Enumerator"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Enumerator.html#Enumerator"><span class="hs-identifier hs-var">Enumerator</span></a></span></span><span> </span><span id="local-6989586621679288759"><span class="annot"><a href="#local-6989586621679288759"><span class="hs-identifier hs-type">i</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span id="Enumerator"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Enumerator.html#Enumerator"><span class="hs-identifier hs-var">Enumerator</span></a></span></span><span>
+</span><span id="line-33"></span><span>    </span><span class="hs-special">{</span><span>
+</span><span id="line-34"></span><span>        </span><span id="enVal"><span class="annot"><span class="annottext">Enumerator i -&gt; i
+</span><a href="Htcc.Parser.ConstructionData.Scope.Enumerator.html#enVal"><span class="hs-identifier hs-var hs-var">enVal</span></a></span></span><span>        </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="#local-6989586621679288759"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="hs-comment">-- ^ The value of enumerator</span><span>
+</span><span id="line-35"></span><span>        </span><span id="enUnderlying"><span class="annot"><span class="annottext">Enumerator i -&gt; StorageClass i
+</span><a href="Htcc.Parser.ConstructionData.Scope.Enumerator.html#enUnderlying"><span class="hs-identifier hs-var hs-var">enUnderlying</span></a></span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><a href="Htcc.CRules.Types.StorageClass.html#StorageClass"><span class="hs-identifier hs-type">CT.StorageClass</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288759"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-comment">-- ^ The underlying type of this enumerator</span><span>
+</span><span id="line-36"></span><span>    </span><span class="hs-special">}</span><span> </span><span class="hs-keyword">deriving</span><span> </span><span class="hs-special">(</span><span id="local-6989586621679288743"><span id="local-6989586621679288745"><span class="annot"><span class="annottext">Enumerator i -&gt; Enumerator i -&gt; Bool
+(Enumerator i -&gt; Enumerator i -&gt; Bool)
+-&gt; (Enumerator i -&gt; Enumerator i -&gt; Bool) -&gt; Eq (Enumerator i)
+forall i. Eq i =&gt; Enumerator i -&gt; Enumerator i -&gt; Bool
+forall a. (a -&gt; a -&gt; Bool) -&gt; (a -&gt; a -&gt; Bool) -&gt; Eq a
+/= :: Enumerator i -&gt; Enumerator i -&gt; Bool
+$c/= :: forall i. Eq i =&gt; Enumerator i -&gt; Enumerator i -&gt; Bool
+== :: Enumerator i -&gt; Enumerator i -&gt; Bool
+$c== :: forall i. Eq i =&gt; Enumerator i -&gt; Enumerator i -&gt; Bool
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var">Eq</span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679288727"><span id="local-6989586621679288729"><span id="local-6989586621679288731"><span id="local-6989586621679288733"><span id="local-6989586621679288735"><span id="local-6989586621679288737"><span id="local-6989586621679288739"><span class="annot"><span class="annottext">Eq (Enumerator i)
+Eq (Enumerator i) =&gt;
+(Enumerator i -&gt; Enumerator i -&gt; Ordering)
+-&gt; (Enumerator i -&gt; Enumerator i -&gt; Bool)
+-&gt; (Enumerator i -&gt; Enumerator i -&gt; Bool)
+-&gt; (Enumerator i -&gt; Enumerator i -&gt; Bool)
+-&gt; (Enumerator i -&gt; Enumerator i -&gt; Bool)
+-&gt; (Enumerator i -&gt; Enumerator i -&gt; Enumerator i)
+-&gt; (Enumerator i -&gt; Enumerator i -&gt; Enumerator i)
+-&gt; Ord (Enumerator i)
+Enumerator i -&gt; Enumerator i -&gt; Bool
+Enumerator i -&gt; Enumerator i -&gt; Ordering
+Enumerator i -&gt; Enumerator i -&gt; Enumerator i
+forall a.
+Eq a =&gt;
+(a -&gt; a -&gt; Ordering)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; Bool)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; (a -&gt; a -&gt; a)
+-&gt; Ord a
+forall i. Ord i =&gt; Eq (Enumerator i)
+forall i. Ord i =&gt; Enumerator i -&gt; Enumerator i -&gt; Bool
+forall i. Ord i =&gt; Enumerator i -&gt; Enumerator i -&gt; Ordering
+forall i. Ord i =&gt; Enumerator i -&gt; Enumerator i -&gt; Enumerator i
+min :: Enumerator i -&gt; Enumerator i -&gt; Enumerator i
+$cmin :: forall i. Ord i =&gt; Enumerator i -&gt; Enumerator i -&gt; Enumerator i
+max :: Enumerator i -&gt; Enumerator i -&gt; Enumerator i
+$cmax :: forall i. Ord i =&gt; Enumerator i -&gt; Enumerator i -&gt; Enumerator i
+&gt;= :: Enumerator i -&gt; Enumerator i -&gt; Bool
+$c&gt;= :: forall i. Ord i =&gt; Enumerator i -&gt; Enumerator i -&gt; Bool
+&gt; :: Enumerator i -&gt; Enumerator i -&gt; Bool
+$c&gt; :: forall i. Ord i =&gt; Enumerator i -&gt; Enumerator i -&gt; Bool
+&lt;= :: Enumerator i -&gt; Enumerator i -&gt; Bool
+$c&lt;= :: forall i. Ord i =&gt; Enumerator i -&gt; Enumerator i -&gt; Bool
+&lt; :: Enumerator i -&gt; Enumerator i -&gt; Bool
+$c&lt; :: forall i. Ord i =&gt; Enumerator i -&gt; Enumerator i -&gt; Bool
+compare :: Enumerator i -&gt; Enumerator i -&gt; Ordering
+$ccompare :: forall i. Ord i =&gt; Enumerator i -&gt; Enumerator i -&gt; Ordering
+$cp1Ord :: forall i. Ord i =&gt; Eq (Enumerator i)
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Ord</span></span></span></span></span></span></span></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679288720"><span id="local-6989586621679288722"><span id="local-6989586621679288724"><span class="annot"><span class="annottext">Int -&gt; Enumerator i -&gt; ShowS
+[Enumerator i] -&gt; ShowS
+Enumerator i -&gt; String
+(Int -&gt; Enumerator i -&gt; ShowS)
+-&gt; (Enumerator i -&gt; String)
+-&gt; ([Enumerator i] -&gt; ShowS)
+-&gt; Show (Enumerator i)
+forall i. Show i =&gt; Int -&gt; Enumerator i -&gt; ShowS
+forall i. Show i =&gt; [Enumerator i] -&gt; ShowS
+forall i. Show i =&gt; Enumerator i -&gt; String
+forall a.
+(Int -&gt; a -&gt; ShowS) -&gt; (a -&gt; String) -&gt; ([a] -&gt; ShowS) -&gt; Show a
+showList :: [Enumerator i] -&gt; ShowS
+$cshowList :: forall i. Show i =&gt; [Enumerator i] -&gt; ShowS
+show :: Enumerator i -&gt; String
+$cshow :: forall i. Show i =&gt; Enumerator i -&gt; String
+showsPrec :: Int -&gt; Enumerator i -&gt; ShowS
+$cshowsPrec :: forall i. Show i =&gt; Int -&gt; Enumerator i -&gt; ShowS
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var hs-var hs-var hs-var hs-var">Show</span></span></span></span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">(forall x. Enumerator i -&gt; Rep (Enumerator i) x)
+-&gt; (forall x. Rep (Enumerator i) x -&gt; Enumerator i)
+-&gt; Generic (Enumerator i)
+forall x. Rep (Enumerator i) x -&gt; Enumerator i
+forall x. Enumerator i -&gt; Rep (Enumerator i) x
+forall a.
+(forall x. a -&gt; Rep a x) -&gt; (forall x. Rep a x -&gt; a) -&gt; Generic a
+forall i x. Rep (Enumerator i) x -&gt; Enumerator i
+forall i x. Enumerator i -&gt; Rep (Enumerator i) x
+$cto :: forall i x. Rep (Enumerator i) x -&gt; Enumerator i
+$cfrom :: forall i x. Enumerator i -&gt; Rep (Enumerator i) x
+</span><span class="hs-identifier hs-var hs-var hs-var hs-var">Generic</span></span><span class="hs-special">)</span><span>
+</span><span id="line-37"></span><span>
+</span><span id="line-38"></span><span id="local-6989586621679288715"><span class="hs-keyword">instance</span><span> </span><span id="local-6989586621679288713"><span class="annot"><span class="hs-identifier hs-type">NFData</span></span><span> </span><span class="annot"><a href="#local-6989586621679288715"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">NFData</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Enumerator.html#Enumerator"><span class="hs-identifier hs-type">Enumerator</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288715"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span></span></span><span>
+</span><span id="line-39"></span><span>
+</span><span id="line-40"></span><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#Treealizable"><span class="hs-identifier hs-type">Treealizable</span></a></span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Enumerator.html#Enumerator"><span class="hs-identifier hs-type">Enumerator</span></a></span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-41"></span><span>    </span><span id="local-6989586621679288709"><span class="annot"><span class="annottext">treealize :: Enumerator i -&gt; ATree i
+</span><a href="Htcc.Parser.AST.Core.html#treealize"><span class="hs-identifier hs-var hs-var hs-var hs-var">treealize</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Enumerator.html#Enumerator"><span class="hs-identifier hs-type">Enumerator</span></a></span><span> </span><span id="local-6989586621679288707"><span class="annot"><span class="annottext">val :: i
+</span><a href="#local-6989586621679288707"><span class="hs-identifier hs-var">val</span></a></span></span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">i -&gt; ATree i
+forall i. i -&gt; ATree i
+</span><a href="Htcc.Parser.AST.Core.html#atNumLit"><span class="hs-identifier hs-var">atNumLit</span></a></span><span> </span><span class="annot"><span class="annottext">i
+</span><a href="#local-6989586621679288707"><span class="hs-identifier hs-var">val</span></a></span><span>
+</span><span id="line-42"></span><span>
+</span><span id="line-43"></span><span id="local-6989586621679288706"><span class="hs-keyword">instance</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ManagedScope"><span class="hs-identifier hs-type">ManagedScope</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Enumerator.html#Enumerator"><span class="hs-identifier hs-type">Enumerator</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288706"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-44"></span><span>    </span><span id="local-6989586621679288701"><span class="annot"><span class="annottext">lookup :: Text -&gt; Map Text (Enumerator i) -&gt; Maybe (Enumerator i)
+</span><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#lookup"><span class="hs-identifier hs-var hs-var hs-var hs-var">lookup</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Map Text (Enumerator i) -&gt; Maybe (Enumerator i)
+forall k a. Ord k =&gt; k -&gt; Map k a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">M.lookup</span></span><span>
+</span><span id="line-45"></span><span>    </span><span id="local-6989586621679288698"><span class="annot"><span class="annottext">fallBack :: Map Text (Enumerator i)
+-&gt; Map Text (Enumerator i) -&gt; Map Text (Enumerator i)
+</span><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#fallBack"><span class="hs-identifier hs-var hs-var hs-var hs-var">fallBack</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Map Text (Enumerator i)
+-&gt; Map Text (Enumerator i) -&gt; Map Text (Enumerator i)
+forall a b. a -&gt; b -&gt; a
+</span><span class="hs-identifier hs-var">const</span></span><span>
+</span><span id="line-46"></span><span>    </span><span id="local-6989586621679288695"><span class="annot"><span class="annottext">initial :: Map Text (Enumerator i)
+</span><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#initial"><span class="hs-identifier hs-var hs-var hs-var hs-var">initial</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Map Text (Enumerator i)
+forall k a. Map k a
+</span><span class="hs-identifier hs-var">M.empty</span></span></span><span>
+</span><span id="line-47"></span><span>
+</span><span id="line-48"></span><span class="hs-comment">-- | The typedefs data typedefs</span><span>
+</span><span id="line-49"></span><span class="hs-keyword">type</span><span> </span><span id="Enumerators"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Enumerator.html#Enumerators"><span class="hs-identifier hs-var">Enumerators</span></a></span></span><span> </span><span id="local-6989586621679288692"><span class="annot"><a href="#local-6989586621679288692"><span class="hs-identifier hs-type">i</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="hs-identifier hs-type">M.Map</span></span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Enumerator.html#Enumerator"><span class="hs-identifier hs-type">Enumerator</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288692"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-50"></span><span>
+</span><span id="line-51"></span><span class="hs-comment">-- | Given the flag (when that is added function, it is `True`. otherwise `False`), type, identifier token, and `Enumerators`,</span><span>
+</span><span id="line-52"></span><span class="hs-comment">-- if the specified identifier already exists in the same scope,</span><span>
+</span><span id="line-53"></span><span class="hs-comment">-- return an error message and its location as a pair.</span><span>
+</span><span id="line-54"></span><span class="hs-comment">-- Otherwise, add a new tag to `Enumerators` and return it.</span><span>
+</span><span id="line-55"></span><span class="hs-comment">-- If the token does not indicate an identifier, an error indicating internal compiler error is returned.</span><span>
+</span><span id="line-56"></span><span id="local-6989586621679288691"><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Enumerator.html#add"><span class="hs-identifier hs-type">add</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Num</span></span><span> </span><span class="annot"><a href="#local-6989586621679288691"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.CRules.Types.StorageClass.html#StorageClass"><span class="hs-identifier hs-type">CT.StorageClass</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288691"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288691"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="#local-6989586621679288691"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Enumerator.html#Enumerators"><span class="hs-identifier hs-type">Enumerators</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288691"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Either</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ASTError"><span class="hs-identifier hs-type">ASTError</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288691"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Enumerator.html#Enumerators"><span class="hs-identifier hs-type">Enumerators</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679288691"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span></span><span>
+</span><span id="line-57"></span><span id="add"><span class="annot"><span class="annottext">add :: StorageClass i
+-&gt; TokenLC i
+-&gt; i
+-&gt; Enumerators i
+-&gt; Either (ASTError i) (Enumerators i)
+</span><a href="Htcc.Parser.ConstructionData.Scope.Enumerator.html#add"><span class="hs-identifier hs-var hs-var">add</span></a></span></span><span> </span><span id="local-6989586621679288690"><span class="annot"><span class="annottext">t :: StorageClass i
+</span><a href="#local-6989586621679288690"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679288689"><span class="annot"><span class="annottext">cur :: TokenLC i
+</span><a href="#local-6989586621679288689"><span class="hs-identifier hs-var">cur</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="hs-identifier">_</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TKIdent"><span class="hs-identifier hs-type">HT.TKIdent</span></a></span><span> </span><span id="local-6989586621679288687"><span class="annot"><span class="annottext">ident :: Text
+</span><a href="#local-6989586621679288687"><span class="hs-identifier hs-var">ident</span></a></span></span><span class="hs-special">)</span><span> </span><span id="local-6989586621679288686"><span class="annot"><span class="annottext">val :: i
+</span><a href="#local-6989586621679288686"><span class="hs-identifier hs-var">val</span></a></span></span><span> </span><span id="local-6989586621679288685"><span class="annot"><span class="annottext">sts :: Enumerators i
+</span><a href="#local-6989586621679288685"><span class="hs-identifier hs-var">sts</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Enumerators i -&gt; Maybe (Enumerator i)
+forall k a. Ord k =&gt; k -&gt; Map k a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">M.lookup</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679288687"><span class="hs-identifier hs-var">ident</span></a></span><span> </span><span class="annot"><span class="annottext">Enumerators i
+</span><a href="#local-6989586621679288685"><span class="hs-identifier hs-var">sts</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-58"></span><span>    </span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span class="hs-identifier">_</span><span>  </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">ASTError i -&gt; Either (ASTError i) (Enumerators i)
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;redeclaration of enumerator '&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679288687"><span class="hs-identifier hs-var">ident</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;'&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">TokenLC i
+</span><a href="#local-6989586621679288689"><span class="hs-identifier hs-var">cur</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-comment">-- ODR</span><span>
+</span><span id="line-59"></span><span>    </span><span class="annot"><span class="hs-identifier hs-type">Nothing</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">Enumerators i -&gt; Either (ASTError i) (Enumerators i)
+forall a b. b -&gt; Either a b
+</span><span class="hs-identifier hs-var">Right</span></span><span> </span><span class="annot"><span class="annottext">(Enumerators i -&gt; Either (ASTError i) (Enumerators i))
+-&gt; Enumerators i -&gt; Either (ASTError i) (Enumerators i)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Enumerator i -&gt; Enumerators i -&gt; Enumerators i
+forall k a. Ord k =&gt; k -&gt; a -&gt; Map k a -&gt; Map k a
+</span><span class="hs-identifier hs-var">M.insert</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679288687"><span class="hs-identifier hs-var">ident</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">i -&gt; StorageClass i -&gt; Enumerator i
+forall i. i -&gt; StorageClass i -&gt; Enumerator i
+</span><a href="Htcc.Parser.ConstructionData.Scope.Enumerator.html#Enumerator"><span class="hs-identifier hs-var">Enumerator</span></a></span><span> </span><span class="annot"><span class="annottext">i
+</span><a href="#local-6989586621679288686"><span class="hs-identifier hs-var">val</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679288690"><span class="hs-identifier hs-var">t</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Enumerators i
+</span><a href="#local-6989586621679288685"><span class="hs-identifier hs-var">sts</span></a></span><span>
+</span><span id="line-60"></span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Enumerator.html#add"><span class="hs-identifier hs-var">add</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ASTError i -&gt; Either (ASTError i) (Enumerators i)
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text
+</span><a href="Htcc.Parser.ConstructionData.Scope.Utils.html#internalCE"><span class="hs-identifier hs-var">internalCE</span></a></span><span class="hs-special">,</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">i -&gt; i -&gt; TokenLCNums i
+forall i. i -&gt; i -&gt; TokenLCNums i
+</span><a href="Htcc.Tokenizer.Token.html#TokenLCNums"><span class="hs-identifier hs-var">HT.TokenLCNums</span></a></span><span> </span><span class="annot"><span class="hs-number">0</span></span><span> </span><span class="annot"><span class="hs-number">0</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Token i
+forall i. Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKEmpty"><span class="hs-identifier hs-var">HT.TKEmpty</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-61"></span></pre></body></html>

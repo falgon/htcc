@@ -1,0 +1,494 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-pragma">{-# LANGUAGE BangPatterns, OverloadedStrings, ScopedTypeVariables #-}</span><span>
+</span><span id="line-2"></span><span class="hs-comment">{-|
+Module      : Htcc.Parser.Utils.Core
+Description : The AST data type and its utilities
+Copyright   : (c) roki, 2019
+License     : MIT
+Maintainer  : falgon53@yahoo.co.jp
+Stability   : experimental
+Portability : POSIX
+
+The utilities of parsing
+-}</span><span>
+</span><span id="line-13"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Htcc.Parser.Utils.Core</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-14"></span><span>    </span><span class="annot"><span class="hs-comment">-- * General utilities of parser</span></span><span>
+</span><span id="line-15"></span><span>    </span><span class="annot"><a href="Htcc.Parser.Utils.Core.html#expectedMessage"><span class="hs-identifier">expectedMessage</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-16"></span><span>    </span><span class="annot"><span class="hs-comment">-- * Utilities of the token</span></span><span>
+</span><span id="line-17"></span><span>    </span><span class="annot"><a href="Htcc.Parser.Utils.Core.html#takeBrace"><span class="hs-identifier">takeBrace</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-18"></span><span>    </span><span class="annot"><a href="Htcc.Parser.Utils.Core.html#takeExps"><span class="hs-identifier">takeExps</span></a></span><span>
+</span><span id="line-19"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-20"></span><span>
+</span><span id="line-21"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><span class="hs-identifier">Data.Text</span></span><span>                                       </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">T</span></span><span>
+</span><span id="line-22"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.Tuple.Extra</span></span><span>                                </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">first</span></span><span class="hs-special">)</span><span>
+</span><span id="line-23"></span><span>
+</span><span id="line-24"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html"><span class="hs-identifier">Htcc.Parser.ConstructionData.Scope.ManagedScope</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ASTError"><span class="hs-identifier">ASTError</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-25"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html"><span class="hs-identifier">Htcc.Tokenizer.Token</span></a></span><span>                            </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">HT</span></span><span>
+</span><span id="line-26"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Utils.html"><span class="hs-identifier">Htcc.Utils</span></a></span><span>                                      </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Utils.List.html#lastInit"><span class="hs-identifier">lastInit</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-27"></span><span>                                                                  </span><span class="annot"><a href="Htcc.Utils.html#maybe%27"><span class="hs-identifier">maybe'</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier">tshow</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-28"></span><span>
+</span><span id="line-29"></span><span class="hs-comment">-- | &quot;expected&quot; error message</span><span>
+</span><span id="line-30"></span><span id="local-6989586621679287812"><span class="annot"><a href="Htcc.Parser.Utils.Core.html#expectedMessage"><span class="hs-identifier hs-type">expectedMessage</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679287812"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287812"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287812"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ASTError"><span class="hs-identifier hs-type">ASTError</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287812"><span class="hs-identifier hs-type">i</span></a></span></span><span>
+</span><span id="line-31"></span><span id="expectedMessage"><span class="annot"><span class="annottext">expectedMessage :: Text -&gt; TokenLC i -&gt; [TokenLC i] -&gt; ASTError i
+</span><a href="Htcc.Parser.Utils.Core.html#expectedMessage"><span class="hs-identifier hs-var hs-var">expectedMessage</span></a></span></span><span> </span><span id="local-6989586621679287811"><span class="annot"><span class="annottext">x :: Text
+</span><a href="#local-6989586621679287811"><span class="hs-identifier hs-var">x</span></a></span></span><span> </span><span id="local-6989586621679287810"><span class="annot"><span class="annottext">t :: TokenLC i
+</span><a href="#local-6989586621679287810"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679287809"><span class="annot"><span class="annottext">xs :: [TokenLC i]
+</span><a href="#local-6989586621679287809"><span class="hs-identifier hs-var">xs</span></a></span></span><span>
+</span><span id="line-32"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; Int
+forall (t :: * -&gt; *) a. Foldable t =&gt; t a -&gt; Int
+</span><span class="hs-identifier hs-var">length</span></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679287809"><span class="hs-identifier hs-var">xs</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Bool
+forall a. Ord a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">&gt;</span></span><span> </span><span class="annot"><span class="hs-number">1</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;expected '&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287811"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;' token before '&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Token i -&gt; Text
+forall a. Show a =&gt; a -&gt; Text
+</span><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier hs-var">tshow</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TokenLC i -&gt; Token i
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679287809"><span class="hs-identifier hs-var">xs</span></a></span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; Int -&gt; TokenLC i
+forall a. [a] -&gt; Int -&gt; a
+</span><span class="hs-operator hs-var">!!</span></span><span> </span><span class="annot"><span class="hs-number">1</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;'&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; TokenLC i
+forall a. [a] -&gt; a
+</span><span class="hs-identifier hs-var">head</span></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679287809"><span class="hs-identifier hs-var">xs</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-33"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;expected '&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287811"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;' token&quot;</span></span><span class="hs-special">,</span><span> </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; Bool
+forall (t :: * -&gt; *) a. Foldable t =&gt; t a -&gt; Bool
+</span><span class="hs-identifier hs-var">null</span></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679287809"><span class="hs-identifier hs-var">xs</span></a></span><span> </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="annottext">TokenLC i
+</span><a href="#local-6989586621679287810"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="hs-keyword">else</span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; TokenLC i
+forall a. [a] -&gt; a
+</span><span class="hs-identifier hs-var">head</span></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679287809"><span class="hs-identifier hs-var">xs</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-34"></span><span>
+</span><span id="line-35"></span><span class="hs-comment">-- | Extract the partial token enclosed in parentheses from the token sequence. If it is invalid, `takeBrace` returns @(i, Text)@ indicating the error location.</span><span>
+</span><span id="line-36"></span><span class="hs-comment">-- Otherwise, `takeBrace` returns a partial token enclosed in parentheses and subsequent tokens.</span><span>
+</span><span id="line-37"></span><span class="annot"><a href="Htcc.Parser.Utils.Core.html#takeBrace"><span class="hs-identifier hs-type">takeBrace</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-keyword">forall</span><span> </span><span id="local-6989586621679287803"><span class="annot"><a href="#local-6989586621679287803"><span class="hs-identifier hs-type">i</span></a></span></span><span class="hs-operator">.</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Integral</span></span><span> </span><span class="annot"><a href="#local-6989586621679287803"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Read</span></span><span> </span><span class="annot"><a href="#local-6989586621679287803"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679287803"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">T.Text</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287803"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Either</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287803"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287803"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span><span class="hs-special">,</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287803"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-38"></span><span id="takeBrace"><span class="annot"><span class="annottext">takeBrace :: Text
+-&gt; Text
+-&gt; [TokenLC i]
+-&gt; Maybe (Either (TokenLC i) ([TokenLC i], [TokenLC i]))
+</span><a href="Htcc.Parser.Utils.Core.html#takeBrace"><span class="hs-identifier hs-var hs-var">takeBrace</span></a></span></span><span> </span><span id="local-6989586621679287802"><span class="annot"><span class="annottext">leftb :: Text
+</span><a href="#local-6989586621679287802"><span class="hs-identifier hs-var">leftb</span></a></span></span><span> </span><span id="local-6989586621679287801"><span class="annot"><span class="annottext">rightb :: Text
+</span><a href="#local-6989586621679287801"><span class="hs-identifier hs-var">rightb</span></a></span></span><span> </span><span id="local-6989586621679287800"><span class="annot"><span class="annottext">xxs :: [TokenLC i]
+</span><a href="#local-6989586621679287800"><span class="hs-identifier hs-var">xxs</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="hs-special">(</span><span class="hs-identifier">_</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TKReserved"><span class="hs-identifier hs-type">HT.TKReserved</span></a></span><span> </span><span id="local-6989586621679287798"><span class="annot"><span class="annottext">y :: Text
+</span><a href="#local-6989586621679287798"><span class="hs-identifier hs-var">y</span></a></span></span><span class="hs-special">)</span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span class="hs-identifier">_</span><span class="hs-special">)</span><span>
+</span><span id="line-39"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287798"><span class="hs-identifier hs-var">y</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287802"><span class="hs-identifier hs-var">leftb</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Either (TokenLC i) ([TokenLC i], [TokenLC i])
+-&gt; Maybe (Either (TokenLC i) ([TokenLC i], [TokenLC i]))
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">(Either (TokenLC i) ([TokenLC i], [TokenLC i])
+ -&gt; Maybe (Either (TokenLC i) ([TokenLC i], [TokenLC i])))
+-&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+-&gt; Maybe (Either (TokenLC i) ([TokenLC i], [TokenLC i]))
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">Int
+-&gt; Int
+-&gt; [TokenLC i]
+-&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+</span><a href="#local-6989586621679287797"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="hs-number">0</span></span><span> </span><span class="annot"><span class="hs-number">0</span></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679287800"><span class="hs-identifier hs-var">xxs</span></a></span><span>
+</span><span id="line-40"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe (Either (TokenLC i) ([TokenLC i], [TokenLC i]))
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-41"></span><span>    </span><span class="hs-keyword">where</span><span>
+</span><span id="line-42"></span><span>        </span><span class="annot"><a href="#local-6989586621679287797"><span class="hs-identifier hs-type">f</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287803"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Either</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287803"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287803"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span><span class="hs-special">,</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287803"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span><span class="hs-special">)</span><span>
+</span><span id="line-43"></span><span>        </span><span id="local-6989586621679287797"><span class="annot"><span class="annottext">f :: Int
+-&gt; Int
+-&gt; [TokenLC i]
+-&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+</span><a href="#local-6989586621679287797"><span class="hs-identifier hs-var hs-var">f</span></a></span></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679287796"><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287796"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679287795"><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287795"><span class="hs-identifier hs-var">r</span></a></span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>
+</span><span id="line-44"></span><span>            </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287796"><span class="hs-identifier hs-var">l</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">/=</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287795"><span class="hs-identifier hs-var">r</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">TokenLC i -&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="annot"><span class="annottext">(TokenLC i -&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i]))
+-&gt; TokenLC i -&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; TokenLC i
+forall a. [a] -&gt; a
+</span><span class="hs-identifier hs-var">head</span></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679287800"><span class="hs-identifier hs-var">xxs</span></a></span><span>
+</span><span id="line-45"></span><span>            </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">([TokenLC i], [TokenLC i])
+-&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+forall a b. b -&gt; Either a b
+</span><span class="hs-identifier hs-var">Right</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">[</span><span class="hs-special">]</span><span class="hs-special">,</span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span class="hs-special">)</span><span>
+</span><span id="line-46"></span><span>        </span><span class="annot"><a href="#local-6989586621679287797"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679287793"><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287793"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679287792"><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287792"><span class="hs-identifier hs-var">r</span></a></span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679287791"><span class="annot"><span class="annottext">c :: TokenLC i
+</span><a href="#local-6989586621679287791"><span class="hs-identifier hs-var">c</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span id="local-6989586621679287790"><span class="annot"><span class="annottext">p :: TokenLCNums i
+</span><a href="#local-6989586621679287790"><span class="hs-identifier hs-var">p</span></a></span></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TKReserved"><span class="hs-identifier hs-type">HT.TKReserved</span></a></span><span> </span><span id="local-6989586621679287789"><span class="annot"><span class="annottext">x :: Text
+</span><a href="#local-6989586621679287789"><span class="hs-identifier hs-var">x</span></a></span></span><span class="hs-special">)</span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679287788"><span class="annot"><span class="annottext">xs' :: [TokenLC i]
+</span><a href="#local-6989586621679287788"><span class="hs-identifier hs-var">xs'</span></a></span></span><span class="hs-special">)</span><span>
+</span><span id="line-47"></span><span>            </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287789"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287801"><span class="hs-identifier hs-var">rightb</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287793"><span class="hs-identifier hs-var">l</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int
+forall a. Enum a =&gt; a -&gt; a
+</span><span class="hs-identifier hs-var">succ</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287792"><span class="hs-identifier hs-var">r</span></a></span><span> </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="annottext">([TokenLC i], [TokenLC i])
+-&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+forall a b. b -&gt; Either a b
+</span><span class="hs-identifier hs-var">Right</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">[</span><span class="annot"><span class="annottext">TokenLC i
+</span><a href="#local-6989586621679287791"><span class="hs-identifier hs-var">c</span></a></span><span class="hs-special">]</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679287788"><span class="hs-identifier hs-var">xs'</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">else</span><span> </span><span class="annot"><span class="annottext">Int
+-&gt; Int
+-&gt; [TokenLC i]
+-&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+</span><a href="#local-6989586621679287786"><span class="hs-identifier hs-var">g</span></a></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287793"><span class="hs-identifier hs-var">l</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Int -&gt; Int
+forall a. Enum a =&gt; a -&gt; a
+</span><span class="hs-identifier hs-var">succ</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287792"><span class="hs-identifier hs-var">r</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679287788"><span class="hs-identifier hs-var">xs'</span></a></span><span>
+</span><span id="line-48"></span><span>            </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287789"><span class="hs-identifier hs-var">x</span></a></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287802"><span class="hs-identifier hs-var">leftb</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int
+forall a. Enum a =&gt; a -&gt; a
+</span><span class="hs-identifier hs-var">succ</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287793"><span class="hs-identifier hs-var">l</span></a></span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287792"><span class="hs-identifier hs-var">r</span></a></span><span> </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="annottext">([TokenLC i], [TokenLC i])
+-&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+forall a b. b -&gt; Either a b
+</span><span class="hs-identifier hs-var">Right</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">[</span><span class="annot"><span class="annottext">TokenLC i
+</span><a href="#local-6989586621679287791"><span class="hs-identifier hs-var">c</span></a></span><span class="hs-special">]</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679287788"><span class="hs-identifier hs-var">xs'</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">else</span><span> </span><span class="annot"><span class="annottext">Int
+-&gt; Int
+-&gt; [TokenLC i]
+-&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+</span><a href="#local-6989586621679287786"><span class="hs-identifier hs-var">g</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Int -&gt; Int
+forall a. Enum a =&gt; a -&gt; a
+</span><span class="hs-identifier hs-var">succ</span></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287793"><span class="hs-identifier hs-var">l</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287792"><span class="hs-identifier hs-var">r</span></a></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679287788"><span class="hs-identifier hs-var">xs'</span></a></span><span>
+</span><span id="line-49"></span><span>            </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Int
+-&gt; Int
+-&gt; [TokenLC i]
+-&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+</span><a href="#local-6989586621679287786"><span class="hs-identifier hs-var">g</span></a></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287793"><span class="hs-identifier hs-var">l</span></a></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287792"><span class="hs-identifier hs-var">r</span></a></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679287788"><span class="hs-identifier hs-var">xs'</span></a></span><span>
+</span><span id="line-50"></span><span>            </span><span class="hs-keyword">where</span><span>
+</span><span id="line-51"></span><span>                </span><span id="local-6989586621679287786"><span class="annot"><span class="annottext">g :: Int
+-&gt; Int
+-&gt; [TokenLC i]
+-&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+</span><a href="#local-6989586621679287786"><span class="hs-identifier hs-var hs-var">g</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(([TokenLC i] -&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i]))
+ -&gt; [TokenLC i] -&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i]))
+-&gt; (Int
+    -&gt; [TokenLC i] -&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i]))
+-&gt; Int
+-&gt; [TokenLC i]
+-&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">(.)</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(([TokenLC i], [TokenLC i]) -&gt; ([TokenLC i], [TokenLC i]))
+-&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+-&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-identifier hs-var">fmap</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">([TokenLC i] -&gt; [TokenLC i])
+-&gt; ([TokenLC i], [TokenLC i]) -&gt; ([TokenLC i], [TokenLC i])
+forall a a' b. (a -&gt; a') -&gt; (a, b) -&gt; (a', b)
+</span><span class="hs-identifier hs-var">first</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">(</span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679287790"><span class="hs-identifier hs-var">p</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Token i
+forall i. Text -&gt; Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKReserved"><span class="hs-identifier hs-var">HT.TKReserved</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679287789"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span class="annot"><span class="annottext">TokenLC i -&gt; [TokenLC i] -&gt; [TokenLC i]
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Either (TokenLC i) ([TokenLC i], [TokenLC i])
+ -&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i]))
+-&gt; ([TokenLC i] -&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i]))
+-&gt; [TokenLC i]
+-&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">((Int
+  -&gt; [TokenLC i] -&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i]))
+ -&gt; Int
+ -&gt; [TokenLC i]
+ -&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i]))
+-&gt; (Int
+    -&gt; Int
+    -&gt; [TokenLC i]
+    -&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i]))
+-&gt; Int
+-&gt; Int
+-&gt; [TokenLC i]
+-&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">Int
+-&gt; Int
+-&gt; [TokenLC i]
+-&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+</span><a href="#local-6989586621679287797"><span class="hs-identifier hs-var">f</span></a></span><span>
+</span><span id="line-52"></span><span>        </span><span class="annot"><a href="#local-6989586621679287797"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679287784"><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287784"><span class="hs-identifier hs-var">l</span></a></span></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679287783"><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287783"><span class="hs-identifier hs-var">r</span></a></span></span><span> </span><span class="hs-special">(</span><span class="hs-special">(</span><span id="local-6989586621679287782"><span class="annot"><span class="annottext">p :: TokenLCNums i
+</span><a href="#local-6989586621679287782"><span class="hs-identifier hs-var">p</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679287781"><span class="annot"><span class="annottext">x :: Token i
+</span><a href="#local-6989586621679287781"><span class="hs-identifier hs-var">x</span></a></span></span><span class="hs-special">)</span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679287780"><span class="annot"><span class="annottext">xs' :: [TokenLC i]
+</span><a href="#local-6989586621679287780"><span class="hs-identifier hs-var">xs'</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">([TokenLC i] -&gt; [TokenLC i])
+-&gt; ([TokenLC i], [TokenLC i]) -&gt; ([TokenLC i], [TokenLC i])
+forall a a' b. (a -&gt; a') -&gt; (a, b) -&gt; (a', b)
+</span><span class="hs-identifier hs-var">first</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">(</span><span class="hs-glyph">:</span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TokenLCNums i
+</span><a href="#local-6989586621679287782"><span class="hs-identifier hs-var">p</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">Token i
+</span><a href="#local-6989586621679287781"><span class="hs-identifier hs-var">x</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(([TokenLC i], [TokenLC i]) -&gt; ([TokenLC i], [TokenLC i]))
+-&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+-&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">Int
+-&gt; Int
+-&gt; [TokenLC i]
+-&gt; Either (TokenLC i) ([TokenLC i], [TokenLC i])
+</span><a href="#local-6989586621679287797"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287784"><span class="hs-identifier hs-var">l</span></a></span><span> </span><span class="annot"><span class="annottext">Int
+</span><a href="#local-6989586621679287783"><span class="hs-identifier hs-var">r</span></a></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679287780"><span class="hs-identifier hs-var">xs'</span></a></span><span>
+</span><span id="line-53"></span><span class="annot"><a href="Htcc.Parser.Utils.Core.html#takeBrace"><span class="hs-identifier hs-var">takeBrace</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe (Either (TokenLC i) ([TokenLC i], [TokenLC i]))
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-54"></span><span>
+</span><span id="line-55"></span><span class="hs-comment">-- | Get an argument from list of `Htcc.Tokenizer.Token` (e.g: Given the token of @f(g(a, b)), 42@, return the token of @f(g(a, b))@).</span><span>
+</span><span id="line-56"></span><span id="local-6989586621679287820"><span class="annot"><a href="Htcc.Parser.Utils.Core.html#readFn"><span class="hs-identifier hs-type">readFn</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Eq</span></span><span> </span><span class="annot"><a href="#local-6989586621679287820"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287820"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287820"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span><span class="hs-special">,</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287820"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span><span class="hs-special">)</span></span><span>
+</span><span id="line-57"></span><span id="readFn"><span class="annot"><span class="annottext">readFn :: [TokenLC i] -&gt; Maybe ([TokenLC i], [TokenLC i])
+</span><a href="Htcc.Parser.Utils.Core.html#readFn"><span class="hs-identifier hs-var hs-var">readFn</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Int -&gt; Int -&gt; [TokenLC i] -&gt; Maybe ([TokenLC i], [TokenLC i])
+forall a a i.
+(Eq a, Enum a) =&gt;
+a -&gt; a -&gt; [(a, Token i)] -&gt; Maybe ([(a, Token i)], [(a, Token i)])
+</span><a href="#local-6989586621679287777"><span class="hs-identifier hs-var">readFn'</span></a></span><span> </span><span class="annot"><span class="hs-number">0</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-number">0</span></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Int</span></span><span class="hs-special">)</span><span>
+</span><span id="line-58"></span><span>    </span><span class="hs-keyword">where</span><span>
+</span><span id="line-59"></span><span>        </span><span id="local-6989586621679287777"><span class="annot"><span class="annottext">readFn' :: a -&gt; a -&gt; [(a, Token i)] -&gt; Maybe ([(a, Token i)], [(a, Token i)])
+</span><a href="#local-6989586621679287777"><span class="hs-identifier hs-var hs-var">readFn'</span></a></span></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679287776"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287776"><span class="hs-identifier hs-var">li</span></a></span></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679287775"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287775"><span class="hs-identifier hs-var">ri</span></a></span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679287774"><span class="annot"><span class="annottext">cur :: (a, Token i)
+</span><a href="#local-6989586621679287774"><span class="hs-identifier hs-var">cur</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="hs-identifier">_</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TKReserved"><span class="hs-identifier hs-type">HT.TKReserved</span></a></span><span> </span><span class="hs-string">&quot;,&quot;</span><span class="hs-special">)</span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679287773"><span class="annot"><span class="annottext">xs :: [(a, Token i)]
+</span><a href="#local-6989586621679287773"><span class="hs-identifier hs-var">xs</span></a></span></span><span class="hs-special">)</span><span>
+</span><span id="line-60"></span><span>            </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287776"><span class="hs-identifier hs-var">li</span></a></span><span> </span><span class="annot"><span class="annottext">a -&gt; a -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287775"><span class="hs-identifier hs-var">ri</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">([(a, Token i)], [(a, Token i)])
+-&gt; Maybe ([(a, Token i)], [(a, Token i)])
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">[</span><span class="hs-special">]</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">[(a, Token i)]
+</span><a href="#local-6989586621679287773"><span class="hs-identifier hs-var">xs</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-61"></span><span>            </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">([(a, Token i)] -&gt; [(a, Token i)])
+-&gt; ([(a, Token i)], [(a, Token i)])
+-&gt; ([(a, Token i)], [(a, Token i)])
+forall a a' b. (a -&gt; a') -&gt; (a, b) -&gt; (a', b)
+</span><span class="hs-identifier hs-var">first</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(a, Token i)
+</span><a href="#local-6989586621679287774"><span class="hs-identifier hs-var">cur</span></a></span><span class="annot"><span class="annottext">(a, Token i) -&gt; [(a, Token i)] -&gt; [(a, Token i)]
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(([(a, Token i)], [(a, Token i)])
+ -&gt; ([(a, Token i)], [(a, Token i)]))
+-&gt; Maybe ([(a, Token i)], [(a, Token i)])
+-&gt; Maybe ([(a, Token i)], [(a, Token i)])
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; a -&gt; [(a, Token i)] -&gt; Maybe ([(a, Token i)], [(a, Token i)])
+</span><a href="#local-6989586621679287777"><span class="hs-identifier hs-var">readFn'</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287776"><span class="hs-identifier hs-var">li</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287775"><span class="hs-identifier hs-var">ri</span></a></span><span> </span><span class="annot"><span class="annottext">[(a, Token i)]
+</span><a href="#local-6989586621679287773"><span class="hs-identifier hs-var">xs</span></a></span><span>
+</span><span id="line-62"></span><span>        </span><span class="annot"><a href="#local-6989586621679287777"><span class="hs-identifier hs-var">readFn'</span></a></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679287772"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287772"><span class="hs-identifier hs-var">li</span></a></span></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679287771"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287771"><span class="hs-identifier hs-var">ri</span></a></span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679287770"><span class="annot"><span class="annottext">cur :: (a, Token i)
+</span><a href="#local-6989586621679287770"><span class="hs-identifier hs-var">cur</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="hs-identifier">_</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TKReserved"><span class="hs-identifier hs-type">HT.TKReserved</span></a></span><span> </span><span class="hs-string">&quot;)&quot;</span><span class="hs-special">)</span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679287769"><span class="annot"><span class="annottext">xs :: [(a, Token i)]
+</span><a href="#local-6989586621679287769"><span class="hs-identifier hs-var">xs</span></a></span></span><span class="hs-special">)</span><span>
+</span><span id="line-63"></span><span>            </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287772"><span class="hs-identifier hs-var">li</span></a></span><span> </span><span class="annot"><span class="annottext">a -&gt; a -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287771"><span class="hs-identifier hs-var">ri</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">([(a, Token i)], [(a, Token i)])
+-&gt; Maybe ([(a, Token i)], [(a, Token i)])
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">[</span><span class="hs-special">]</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">[(a, Token i)]
+</span><a href="#local-6989586621679287769"><span class="hs-identifier hs-var">xs</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-64"></span><span>            </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">([(a, Token i)] -&gt; [(a, Token i)])
+-&gt; ([(a, Token i)], [(a, Token i)])
+-&gt; ([(a, Token i)], [(a, Token i)])
+forall a a' b. (a -&gt; a') -&gt; (a, b) -&gt; (a', b)
+</span><span class="hs-identifier hs-var">first</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(a, Token i)
+</span><a href="#local-6989586621679287770"><span class="hs-identifier hs-var">cur</span></a></span><span class="annot"><span class="annottext">(a, Token i) -&gt; [(a, Token i)] -&gt; [(a, Token i)]
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(([(a, Token i)], [(a, Token i)])
+ -&gt; ([(a, Token i)], [(a, Token i)]))
+-&gt; Maybe ([(a, Token i)], [(a, Token i)])
+-&gt; Maybe ([(a, Token i)], [(a, Token i)])
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; a -&gt; [(a, Token i)] -&gt; Maybe ([(a, Token i)], [(a, Token i)])
+</span><a href="#local-6989586621679287777"><span class="hs-identifier hs-var">readFn'</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287772"><span class="hs-identifier hs-var">li</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a -&gt; a
+forall a. Enum a =&gt; a -&gt; a
+</span><span class="hs-identifier hs-var">succ</span></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287771"><span class="hs-identifier hs-var">ri</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">[(a, Token i)]
+</span><a href="#local-6989586621679287769"><span class="hs-identifier hs-var">xs</span></a></span><span>
+</span><span id="line-65"></span><span>        </span><span class="annot"><a href="#local-6989586621679287777"><span class="hs-identifier hs-var">readFn'</span></a></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679287768"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287768"><span class="hs-identifier hs-var">li</span></a></span></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679287767"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287767"><span class="hs-identifier hs-var">ri</span></a></span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679287766"><span class="annot"><span class="annottext">cur :: (a, Token i)
+</span><a href="#local-6989586621679287766"><span class="hs-identifier hs-var">cur</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="hs-identifier">_</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TKReserved"><span class="hs-identifier hs-type">HT.TKReserved</span></a></span><span> </span><span class="hs-string">&quot;(&quot;</span><span class="hs-special">)</span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679287765"><span class="annot"><span class="annottext">xs :: [(a, Token i)]
+</span><a href="#local-6989586621679287765"><span class="hs-identifier hs-var">xs</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">([(a, Token i)] -&gt; [(a, Token i)])
+-&gt; ([(a, Token i)], [(a, Token i)])
+-&gt; ([(a, Token i)], [(a, Token i)])
+forall a a' b. (a -&gt; a') -&gt; (a, b) -&gt; (a', b)
+</span><span class="hs-identifier hs-var">first</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(a, Token i)
+</span><a href="#local-6989586621679287766"><span class="hs-identifier hs-var">cur</span></a></span><span class="annot"><span class="annottext">(a, Token i) -&gt; [(a, Token i)] -&gt; [(a, Token i)]
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(([(a, Token i)], [(a, Token i)])
+ -&gt; ([(a, Token i)], [(a, Token i)]))
+-&gt; Maybe ([(a, Token i)], [(a, Token i)])
+-&gt; Maybe ([(a, Token i)], [(a, Token i)])
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; a -&gt; [(a, Token i)] -&gt; Maybe ([(a, Token i)], [(a, Token i)])
+</span><a href="#local-6989586621679287777"><span class="hs-identifier hs-var">readFn'</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">a -&gt; a
+forall a. Enum a =&gt; a -&gt; a
+</span><span class="hs-identifier hs-var">succ</span></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287768"><span class="hs-identifier hs-var">li</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287767"><span class="hs-identifier hs-var">ri</span></a></span><span> </span><span class="annot"><span class="annottext">[(a, Token i)]
+</span><a href="#local-6989586621679287765"><span class="hs-identifier hs-var">xs</span></a></span><span>
+</span><span id="line-66"></span><span>        </span><span class="annot"><a href="#local-6989586621679287777"><span class="hs-identifier hs-var">readFn'</span></a></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679287764"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287764"><span class="hs-identifier hs-var">li</span></a></span></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679287763"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287763"><span class="hs-identifier hs-var">ri</span></a></span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>
+</span><span id="line-67"></span><span>            </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287764"><span class="hs-identifier hs-var">li</span></a></span><span> </span><span class="annot"><span class="annottext">a -&gt; a -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287763"><span class="hs-identifier hs-var">ri</span></a></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">([(a, Token i)], [(a, Token i)])
+-&gt; Maybe ([(a, Token i)], [(a, Token i)])
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="hs-special">(</span><span class="hs-special">[</span><span class="hs-special">]</span><span class="hs-special">,</span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span class="hs-special">)</span><span>
+</span><span id="line-68"></span><span>            </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe ([(a, Token i)], [(a, Token i)])
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-69"></span><span>        </span><span class="annot"><a href="#local-6989586621679287777"><span class="hs-identifier hs-var">readFn'</span></a></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679287762"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287762"><span class="hs-identifier hs-var">li</span></a></span></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679287761"><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287761"><span class="hs-identifier hs-var">ri</span></a></span></span><span> </span><span class="hs-special">(</span><span id="local-6989586621679287760"><span class="annot"><span class="annottext">x :: (a, Token i)
+</span><a href="#local-6989586621679287760"><span class="hs-identifier hs-var">x</span></a></span></span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679287759"><span class="annot"><span class="annottext">xs :: [(a, Token i)]
+</span><a href="#local-6989586621679287759"><span class="hs-identifier hs-var">xs</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">([(a, Token i)] -&gt; [(a, Token i)])
+-&gt; ([(a, Token i)], [(a, Token i)])
+-&gt; ([(a, Token i)], [(a, Token i)])
+forall a a' b. (a -&gt; a') -&gt; (a, b) -&gt; (a', b)
+</span><span class="hs-identifier hs-var">first</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(a, Token i)
+</span><a href="#local-6989586621679287760"><span class="hs-identifier hs-var">x</span></a></span><span class="annot"><span class="annottext">(a, Token i) -&gt; [(a, Token i)] -&gt; [(a, Token i)]
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(([(a, Token i)], [(a, Token i)])
+ -&gt; ([(a, Token i)], [(a, Token i)]))
+-&gt; Maybe ([(a, Token i)], [(a, Token i)])
+-&gt; Maybe ([(a, Token i)], [(a, Token i)])
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">a -&gt; a -&gt; [(a, Token i)] -&gt; Maybe ([(a, Token i)], [(a, Token i)])
+</span><a href="#local-6989586621679287777"><span class="hs-identifier hs-var">readFn'</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287762"><span class="hs-identifier hs-var">li</span></a></span><span> </span><span class="annot"><span class="annottext">a
+</span><a href="#local-6989586621679287761"><span class="hs-identifier hs-var">ri</span></a></span><span> </span><span class="annot"><span class="annottext">[(a, Token i)]
+</span><a href="#local-6989586621679287759"><span class="hs-identifier hs-var">xs</span></a></span><span>
+</span><span id="line-70"></span><span>
+</span><span id="line-71"></span><span class="hs-comment">-- | Get arguments from list of `Htcc.Tokenizer.Token` (e.g: Given the token of @f(f(g(a, b)), 42);@,</span><span>
+</span><span id="line-72"></span><span class="hs-comment">-- return expressions that are the token of &quot;f(g(a, b))&quot; and the token of &quot;42&quot;.</span><span>
+</span><span id="line-73"></span><span id="local-6989586621679287758"><span class="annot"><a href="Htcc.Parser.Utils.Core.html#takeExps"><span class="hs-identifier hs-type">takeExps</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Eq</span></span><span> </span><span class="annot"><a href="#local-6989586621679287758"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287758"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287758"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span><span class="hs-special">]</span></span><span>
+</span><span id="line-74"></span><span id="takeExps"><span class="annot"><span class="annottext">takeExps :: [TokenLC i] -&gt; Maybe [[TokenLC i]]
+</span><a href="Htcc.Parser.Utils.Core.html#takeExps"><span class="hs-identifier hs-var hs-var">takeExps</span></a></span></span><span> </span><span class="hs-special">(</span><span class="hs-special">(</span><span class="hs-identifier">_</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TKReserved"><span class="hs-identifier hs-type">HT.TKReserved</span></a></span><span> </span><span class="hs-string">&quot;(&quot;</span><span class="hs-special">)</span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679287757"><span class="annot"><span class="annottext">xs :: [TokenLC i]
+</span><a href="#local-6989586621679287757"><span class="hs-identifier hs-var">xs</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe [[TokenLC i]]
+-&gt; Maybe [TokenLC i]
+-&gt; ([TokenLC i] -&gt; Maybe [[TokenLC i]])
+-&gt; Maybe [[TokenLC i]]
+forall b a. b -&gt; Maybe a -&gt; (a -&gt; b) -&gt; b
+</span><a href="Htcc.Utils.html#maybe%27"><span class="hs-identifier hs-var">maybe'</span></a></span><span> </span><span class="annot"><span class="annottext">Maybe [[TokenLC i]]
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">(TokenLC i -&gt; Bool) -&gt; [TokenLC i] -&gt; Maybe [TokenLC i]
+forall a. (a -&gt; Bool) -&gt; [a] -&gt; Maybe [a]
+</span><a href="Htcc.Utils.List.html#lastInit"><span class="hs-identifier hs-var">lastInit</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-special">(</span><span class="annot"><span class="annottext">Token i -&gt; Token i -&gt; Bool
+forall a. Eq a =&gt; a -&gt; a -&gt; Bool
+</span><span class="hs-operator hs-var">==</span></span><span class="annot"><span class="annottext">Text -&gt; Token i
+forall i. Text -&gt; Token i
+</span><a href="Htcc.Tokenizer.Token.html#TKReserved"><span class="hs-identifier hs-var">HT.TKReserved</span></a></span><span> </span><span class="annot"><span class="hs-string">&quot;)&quot;</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Token i -&gt; Bool) -&gt; (TokenLC i -&gt; Token i) -&gt; TokenLC i -&gt; Bool
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">TokenLC i -&gt; Token i
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679287757"><span class="hs-identifier hs-var">xs</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(([TokenLC i] -&gt; Maybe [[TokenLC i]]) -&gt; Maybe [[TokenLC i]])
+-&gt; ([TokenLC i] -&gt; Maybe [[TokenLC i]]) -&gt; Maybe [[TokenLC i]]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">([[TokenLC i]] -&gt; [[TokenLC i]])
+-&gt; Maybe [[TokenLC i]] -&gt; Maybe [[TokenLC i]]
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-identifier hs-var">fmap</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">([TokenLC i] -&gt; Bool) -&gt; [[TokenLC i]] -&gt; [[TokenLC i]]
+forall a. (a -&gt; Bool) -&gt; [a] -&gt; [a]
+</span><span class="hs-identifier hs-var">filter</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Bool -&gt; Bool
+</span><span class="hs-identifier hs-var">not</span></span><span> </span><span class="annot"><span class="annottext">(Bool -&gt; Bool) -&gt; ([TokenLC i] -&gt; Bool) -&gt; [TokenLC i] -&gt; Bool
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; Bool
+forall (t :: * -&gt; *) a. Foldable t =&gt; t a -&gt; Bool
+</span><span class="hs-identifier hs-var">null</span></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Maybe [[TokenLC i]] -&gt; Maybe [[TokenLC i]])
+-&gt; ([TokenLC i] -&gt; Maybe [[TokenLC i]])
+-&gt; [TokenLC i]
+-&gt; Maybe [[TokenLC i]]
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; Maybe [[TokenLC i]]
+forall i. Eq i =&gt; [TokenLC i] -&gt; Maybe [[TokenLC i]]
+</span><a href="#local-6989586621679287755"><span class="hs-identifier hs-var">f</span></a></span><span>
+</span><span id="line-75"></span><span>    </span><span class="hs-keyword">where</span><span>
+</span><span id="line-76"></span><span>        </span><span id="local-6989586621679287755"><span class="annot"><span class="annottext">f :: [TokenLC i] -&gt; Maybe [[TokenLC i]]
+</span><a href="#local-6989586621679287755"><span class="hs-identifier hs-var hs-var">f</span></a></span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>   </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">[[TokenLC i]] -&gt; Maybe [[TokenLC i]]
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="hs-special">[</span><span class="hs-special">]</span><span>
+</span><span id="line-77"></span><span>        </span><span class="annot"><a href="#local-6989586621679287755"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span id="local-6989586621679287754"><span class="annot"><span class="annottext">args :: [TokenLC i]
+</span><a href="#local-6989586621679287754"><span class="hs-identifier hs-var">args</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe [[TokenLC i]]
+-&gt; (([TokenLC i], [TokenLC i]) -&gt; Maybe [[TokenLC i]])
+-&gt; Maybe ([TokenLC i], [TokenLC i])
+-&gt; Maybe [[TokenLC i]]
+forall b a. b -&gt; (a -&gt; b) -&gt; Maybe a -&gt; b
+</span><span class="hs-identifier hs-var">maybe</span></span><span> </span><span class="annot"><span class="annottext">Maybe [[TokenLC i]]
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">\</span><span class="hs-special">(</span><span id="local-6989586621679287752"><span class="annot"><span class="annottext">ex :: [TokenLC i]
+</span><a href="#local-6989586621679287752"><span class="hs-identifier hs-var">ex</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679287751"><span class="annot"><span class="annottext">ds :: [TokenLC i]
+</span><a href="#local-6989586621679287751"><span class="hs-identifier hs-var">ds</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679287752"><span class="hs-identifier hs-var">ex</span></a></span><span class="annot"><span class="annottext">[TokenLC i] -&gt; [[TokenLC i]] -&gt; [[TokenLC i]]
+forall a. a -&gt; [a] -&gt; [a]
+</span><span class="hs-glyph hs-var">:</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">([[TokenLC i]] -&gt; [[TokenLC i]])
+-&gt; Maybe [[TokenLC i]] -&gt; Maybe [[TokenLC i]]
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; Maybe [[TokenLC i]]
+</span><a href="#local-6989586621679287755"><span class="hs-identifier hs-var">f</span></a></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679287751"><span class="hs-identifier hs-var">ds</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(Maybe ([TokenLC i], [TokenLC i]) -&gt; Maybe [[TokenLC i]])
+-&gt; Maybe ([TokenLC i], [TokenLC i]) -&gt; Maybe [[TokenLC i]]
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; Maybe ([TokenLC i], [TokenLC i])
+forall i. Eq i =&gt; [TokenLC i] -&gt; Maybe ([TokenLC i], [TokenLC i])
+</span><a href="Htcc.Parser.Utils.Core.html#readFn"><span class="hs-identifier hs-var">readFn</span></a></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679287754"><span class="hs-identifier hs-var">args</span></a></span><span>
+</span><span id="line-78"></span><span class="annot"><a href="Htcc.Parser.Utils.Core.html#takeExps"><span class="hs-identifier hs-var">takeExps</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe [[TokenLC i]]
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-79"></span><span>
+</span><span id="line-80"></span></pre></body></html>

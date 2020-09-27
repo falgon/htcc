@@ -1,0 +1,421 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-pragma">{-# LANGUAGE BangPatterns, OverloadedStrings, ScopedTypeVariables,
+             TupleSections #-}</span><span>
+</span><span id="line-3"></span><span class="hs-comment">{-|
+Module      : Htcc.Parser.Parsing.Global.Var
+Description : The C languge parser and AST constructor
+Copyright   : (c) roki, 2019
+License     : MIT
+Maintainer  : falgon53@yahoo.co.jp
+Stability   : experimental
+Portability : POSIX
+
+The Global variable declaration
+-}</span><span>
+</span><span id="line-14"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Htcc.Parser.Parsing.Global.Var</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-15"></span><span>    </span><span class="annot"><a href="Htcc.Parser.Parsing.Global.Var.html#var"><span class="hs-identifier">var</span></a></span><span>
+</span><span id="line-16"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-17"></span><span>
+</span><span id="line-18"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.Bits</span></span><span>                                       </span><span class="hs-keyword">hiding</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">shift</span></span><span class="hs-special">)</span><span>
+</span><span id="line-19"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Prelude</span></span><span>                                         </span><span class="hs-keyword">hiding</span><span>
+</span><span id="line-20"></span><span>                                                                  </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">toInteger</span></span><span class="hs-special">)</span><span>
+</span><span id="line-21"></span><span>
+</span><span id="line-22"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.CRules.Types.html"><span class="hs-identifier">Htcc.CRules.Types</span></a></span><span>                               </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">CT</span></span><span>
+</span><span id="line-23"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.AST.html"><span class="hs-identifier">Htcc.Parser.AST</span></a></span><span>
+</span><span id="line-24"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.ConstructionData.html"><span class="hs-identifier">Htcc.Parser.ConstructionData</span></a></span><span>
+</span><span id="line-25"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html"><span class="hs-identifier">Htcc.Parser.ConstructionData.Scope.ManagedScope</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ASTError"><span class="hs-identifier">ASTError</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-26"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Utils.html"><span class="hs-identifier">Htcc.Parser.ConstructionData.Scope.Utils</span></a></span><span>        </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Utils.html#internalCE"><span class="hs-identifier">internalCE</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-27"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.Var.html"><span class="hs-identifier">Htcc.Parser.ConstructionData.Scope.Var</span></a></span><span>          </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">PV</span></span><span>
+</span><span id="line-28"></span><span class="hs-keyword">import</span><span> </span><span class="hs-pragma">{-# SOURCE</span><span> </span><span class="hs-pragma">#-}</span><span> </span><span class="annot"><a href="Htcc.Parser.Parsing.Core.html"><span class="hs-identifier">Htcc.Parser.Parsing.Core</span></a></span><span>                        </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.Parsing.Core.html#conditional"><span class="hs-identifier">conditional</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-29"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.Parsing.Type.html"><span class="hs-identifier">Htcc.Parser.Parsing.Type</span></a></span><span>
+</span><span id="line-30"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.html"><span class="hs-identifier">Htcc.Tokenizer</span></a></span><span>                                  </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">HT</span></span><span>
+</span><span id="line-31"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Utils.html"><span class="hs-identifier">Htcc.Utils</span></a></span><span>                                      </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Utils.NaturalTransformations.html#maybeToRight"><span class="hs-identifier">maybeToRight</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-32"></span><span>                                                                  </span><span class="annot"><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier">tshow</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-33"></span><span>
+</span><span id="line-34"></span><span id="local-6989586621679290916"><span class="annot"><a href="Htcc.Parser.Parsing.Global.Var.html#gvarInit"><span class="hs-identifier hs-type">gvarInit</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679290916"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Read</span></span><span> </span><span class="annot"><a href="#local-6989586621679290916"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Integral</span></span><span> </span><span class="annot"><a href="#local-6989586621679290916"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bits</span></span><span> </span><span class="annot"><a href="#local-6989586621679290916"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679290916"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.CRules.Types.StorageClass.html#StorageClass"><span class="hs-identifier hs-type">CT.StorageClass</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679290916"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679290916"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Core.html#ConstructionData"><span class="hs-identifier hs-type">ConstructionData</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679290916"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Either</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.ConstructionData.Scope.ManagedScope.html#ASTError"><span class="hs-identifier hs-type">ASTError</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679290916"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679290916"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Core.html#ConstructionData"><span class="hs-identifier hs-type">ConstructionData</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679290916"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span></span><span>
+</span><span id="line-35"></span><span id="gvarInit"><span class="annot"><span class="annottext">gvarInit :: [TokenLC i]
+-&gt; StorageClass i
+-&gt; TokenLC i
+-&gt; ConstructionData i
+-&gt; Either (ASTError i) ([TokenLC i], ConstructionData i)
+</span><a href="Htcc.Parser.Parsing.Global.Var.html#gvarInit"><span class="hs-identifier hs-var hs-var">gvarInit</span></a></span></span><span> </span><span id="local-6989586621679290899"><span class="annot"><span class="annottext">xs :: [TokenLC i]
+</span><a href="#local-6989586621679290899"><span class="hs-identifier hs-var">xs</span></a></span></span><span> </span><span id="local-6989586621679290898"><span class="annot"><span class="annottext">ty :: StorageClass i
+</span><a href="#local-6989586621679290898"><span class="hs-identifier hs-var">ty</span></a></span></span><span> </span><span id="local-6989586621679290897"><span class="annot"><span class="annottext">ident :: TokenLC i
+</span><a href="#local-6989586621679290897"><span class="hs-identifier hs-var">ident</span></a></span></span><span> </span><span id="local-6989586621679290896"><span class="annot"><span class="annottext">sc :: ConstructionData i
+</span><a href="#local-6989586621679290896"><span class="hs-identifier hs-var">sc</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-36"></span><span>    </span><span class="hs-special">(</span><span id="local-6989586621679290895"><span class="annot"><span class="annottext">ds :: [TokenLC i]
+</span><a href="#local-6989586621679290895"><span class="hs-identifier hs-var">ds</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679290894"><span class="annot"><span class="annottext">ast :: ATree i
+</span><a href="#local-6989586621679290894"><span class="hs-identifier hs-var">ast</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679290893"><span class="annot"><span class="annottext">sc' :: ConstructionData i
+</span><a href="#local-6989586621679290893"><span class="hs-identifier hs-var">sc'</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; ATree i -&gt; ConstructionData i -&gt; ASTConstruction i
+forall i.
+(Show i, Read i, Integral i, Bits i) =&gt;
+[TokenLC i] -&gt; ATree i -&gt; ConstructionData i -&gt; ASTConstruction i
+</span><a href="Htcc.Parser.Parsing.Core.html#conditional"><span class="hs-identifier hs-var">conditional</span></a></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290899"><span class="hs-identifier hs-var">xs</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+forall a. ATree a
+</span><a href="Htcc.Parser.AST.Core.html#ATEmpty"><span class="hs-identifier hs-var">ATEmpty</span></a></span><span> </span><span class="annot"><span class="annottext">ConstructionData i
+</span><a href="#local-6989586621679290896"><span class="hs-identifier hs-var">sc</span></a></span><span>
+</span><span id="line-37"></span><span>    </span><span class="hs-keyword">case</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ATree i -&gt; ATKind i
+forall a. ATree a -&gt; ATKind a
+</span><a href="Htcc.Parser.AST.Core.html#atkind"><span class="hs-identifier hs-var hs-var">atkind</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679290894"><span class="hs-identifier hs-var">ast</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; ATKind i
+forall a. ATree a -&gt; ATKind a
+</span><a href="Htcc.Parser.AST.Core.html#atkind"><span class="hs-identifier hs-var hs-var">atkind</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ATree i -&gt; ATree i
+forall a. ATree a -&gt; ATree a
+</span><a href="Htcc.Parser.AST.Core.html#atL"><span class="hs-identifier hs-var hs-var">atL</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679290894"><span class="hs-identifier hs-var">ast</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-38"></span><span>        </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATAddr"><span class="hs-identifier hs-type">ATAddr</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATGVar"><span class="hs-identifier hs-type">ATGVar</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679290887"><span class="annot"><span class="annottext">name :: Text
+</span><a href="#local-6989586621679290887"><span class="hs-identifier hs-var">name</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290895"><span class="hs-identifier hs-var">ds</span></a></span><span class="hs-special">,</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(ConstructionData i -&gt; ([TokenLC i], ConstructionData i))
+-&gt; ((ATree i, ConstructionData i) -&gt; ConstructionData i)
+-&gt; (ATree i, ConstructionData i)
+-&gt; ([TokenLC i], ConstructionData i)
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">(ATree i, ConstructionData i) -&gt; ConstructionData i
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span> </span><span class="annot"><span class="annottext">((ATree i, ConstructionData i)
+ -&gt; ([TokenLC i], ConstructionData i))
+-&gt; Either (ASTError i) (ATree i, ConstructionData i)
+-&gt; Either (ASTError i) ([TokenLC i], ConstructionData i)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+-&gt; TokenLC i
+-&gt; Text
+-&gt; ConstructionData i
+-&gt; Either (ASTError i) (ATree i, ConstructionData i)
+forall i.
+(Integral i, Bits i) =&gt;
+StorageClass i
+-&gt; TokenLC i
+-&gt; Text
+-&gt; ConstructionData i
+-&gt; Either (ASTError i) (ATree i, ConstructionData i)
+</span><a href="#local-6989586621679290884"><span class="hs-identifier hs-var">gvarInitWithOG</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679290898"><span class="hs-identifier hs-var">ty</span></a></span><span> </span><span class="annot"><span class="annottext">TokenLC i
+</span><a href="#local-6989586621679290897"><span class="hs-identifier hs-var">ident</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679290887"><span class="hs-identifier hs-var">name</span></a></span><span> </span><span class="annot"><span class="annottext">ConstructionData i
+</span><a href="#local-6989586621679290893"><span class="hs-identifier hs-var">sc'</span></a></span><span>
+</span><span id="line-39"></span><span>        </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATAddr"><span class="hs-identifier hs-type">ATAddr</span></a></span><span class="hs-special">,</span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">ASTError i -&gt; Either (ASTError i) ([TokenLC i], ConstructionData i)
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;invalid initializer in global variable&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; TokenLC i
+forall i. Num i =&gt; [TokenLC i] -&gt; TokenLC i
+</span><a href="Htcc.Tokenizer.Token.html#altEmptyToken"><span class="hs-identifier hs-var">HT.altEmptyToken</span></a></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290895"><span class="hs-identifier hs-var">ds</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-40"></span><span>        </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATGVar"><span class="hs-identifier hs-type">ATGVar</span></a></span><span> </span><span id="local-6989586621679290882"><span class="annot"><span class="annottext">t :: StorageClass i
+</span><a href="#local-6989586621679290882"><span class="hs-identifier hs-var">t</span></a></span></span><span> </span><span id="local-6989586621679290881"><span class="annot"><span class="annottext">name :: Text
+</span><a href="#local-6989586621679290881"><span class="hs-identifier hs-var">name</span></a></span></span><span class="hs-special">,</span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span>
+</span><span id="line-41"></span><span>            </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">StorageClass i -&gt; Bool
+forall (a :: * -&gt; *) i. TypeKindBase a =&gt; a i -&gt; Bool
+</span><a href="Htcc.CRules.Types.TypeKind.html#isCTArray"><span class="hs-identifier hs-var">CT.isCTArray</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679290882"><span class="hs-identifier hs-var">t</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290895"><span class="hs-identifier hs-var">ds</span></a></span><span class="hs-special">,</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(ConstructionData i -&gt; ([TokenLC i], ConstructionData i))
+-&gt; ((ATree i, ConstructionData i) -&gt; ConstructionData i)
+-&gt; (ATree i, ConstructionData i)
+-&gt; ([TokenLC i], ConstructionData i)
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">(ATree i, ConstructionData i) -&gt; ConstructionData i
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span> </span><span class="annot"><span class="annottext">((ATree i, ConstructionData i)
+ -&gt; ([TokenLC i], ConstructionData i))
+-&gt; Either (ASTError i) (ATree i, ConstructionData i)
+-&gt; Either (ASTError i) ([TokenLC i], ConstructionData i)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+-&gt; TokenLC i
+-&gt; Text
+-&gt; ConstructionData i
+-&gt; Either (ASTError i) (ATree i, ConstructionData i)
+forall i.
+(Integral i, Bits i) =&gt;
+StorageClass i
+-&gt; TokenLC i
+-&gt; Text
+-&gt; ConstructionData i
+-&gt; Either (ASTError i) (ATree i, ConstructionData i)
+</span><a href="#local-6989586621679290884"><span class="hs-identifier hs-var">gvarInitWithOG</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679290898"><span class="hs-identifier hs-var">ty</span></a></span><span> </span><span class="annot"><span class="annottext">TokenLC i
+</span><a href="#local-6989586621679290897"><span class="hs-identifier hs-var">ident</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679290881"><span class="hs-identifier hs-var">name</span></a></span><span> </span><span class="annot"><span class="annottext">ConstructionData i
+</span><a href="#local-6989586621679290893"><span class="hs-identifier hs-var">sc'</span></a></span><span>
+</span><span id="line-42"></span><span>            </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+-&gt; ConstructionData i
+-&gt; Either (ASTError i) ([TokenLC i], ConstructionData i)
+</span><a href="#local-6989586621679290879"><span class="hs-identifier hs-var">gvarInitWithVal</span></a></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290895"><span class="hs-identifier hs-var">ds</span></a></span><span> </span><span class="annot"><span class="annottext">ConstructionData i
+</span><a href="#local-6989586621679290893"><span class="hs-identifier hs-var">sc'</span></a></span><span>
+</span><span id="line-43"></span><span>        </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+-&gt; ConstructionData i
+-&gt; Either (ASTError i) ([TokenLC i], ConstructionData i)
+</span><a href="#local-6989586621679290879"><span class="hs-identifier hs-var">gvarInitWithVal</span></a></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290895"><span class="hs-identifier hs-var">ds</span></a></span><span> </span><span class="annot"><span class="annottext">ConstructionData i
+</span><a href="#local-6989586621679290893"><span class="hs-identifier hs-var">sc'</span></a></span><span>
+</span><span id="line-44"></span><span>    </span><span class="hs-keyword">where</span><span>
+</span><span id="line-45"></span><span>        </span><span id="local-6989586621679290884"><span class="annot"><span class="annottext">gvarInitWithOG :: StorageClass i
+-&gt; TokenLC i
+-&gt; Text
+-&gt; ConstructionData i
+-&gt; Either (ASTError i) (ATree i, ConstructionData i)
+</span><a href="#local-6989586621679290884"><span class="hs-identifier hs-var hs-var">gvarInitWithOG</span></a></span></span><span> </span><span id="local-6989586621679290878"><span class="annot"><span class="annottext">ty' :: StorageClass i
+</span><a href="#local-6989586621679290878"><span class="hs-identifier hs-var">ty'</span></a></span></span><span> </span><span id="local-6989586621679290877"><span class="annot"><span class="annottext">from :: TokenLC i
+</span><a href="#local-6989586621679290877"><span class="hs-identifier hs-var">from</span></a></span></span><span> </span><span id="local-6989586621679290876"><span class="annot"><span class="annottext">to :: Text
+</span><a href="#local-6989586621679290876"><span class="hs-identifier hs-var">to</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">StorageClass i
+-&gt; TokenLC i
+-&gt; GVarInitWith i
+-&gt; ConstructionData i
+-&gt; Either (ASTError i) (ATree i, ConstructionData i)
+forall i.
+(Integral i, Bits i) =&gt;
+StorageClass i
+-&gt; TokenLC i
+-&gt; GVarInitWith i
+-&gt; ConstructionData i
+-&gt; Either (ASTError i) (ATree i, ConstructionData i)
+</span><a href="Htcc.Parser.ConstructionData.Core.html#addGVarWith"><span class="hs-identifier hs-var">addGVarWith</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679290878"><span class="hs-identifier hs-var">ty'</span></a></span><span> </span><span class="annot"><span class="annottext">TokenLC i
+</span><a href="#local-6989586621679290877"><span class="hs-identifier hs-var">from</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text -&gt; GVarInitWith i
+forall i. Text -&gt; GVarInitWith i
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVarInitWithOG"><span class="hs-identifier hs-var">PV.GVarInitWithOG</span></a></span><span> </span><span class="annot"><span class="annottext">Text
+</span><a href="#local-6989586621679290876"><span class="hs-identifier hs-var">to</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-46"></span><span>        </span><span id="local-6989586621679290879"><span class="annot"><span class="annottext">gvarInitWithVal :: [TokenLC i]
+-&gt; ConstructionData i
+-&gt; Either (ASTError i) ([TokenLC i], ConstructionData i)
+</span><a href="#local-6989586621679290879"><span class="hs-identifier hs-var hs-var">gvarInitWithVal</span></a></span></span><span> </span><span id="local-6989586621679290873"><span class="annot"><span class="annottext">ds :: [TokenLC i]
+</span><a href="#local-6989586621679290873"><span class="hs-identifier hs-var">ds</span></a></span></span><span> </span><span id="local-6989586621679290872"><span class="annot"><span class="annottext">sc' :: ConstructionData i
+</span><a href="#local-6989586621679290872"><span class="hs-identifier hs-var">sc'</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">do</span><span>
+</span><span id="line-47"></span><span>            </span><span class="hs-special">(</span><span id="local-6989586621679290871"><span class="annot"><span class="annottext">ds' :: [TokenLC i]
+</span><a href="#local-6989586621679290871"><span class="hs-identifier hs-var">ds'</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679290870"><span class="annot"><span class="annottext">cval :: i
+</span><a href="#local-6989586621679290870"><span class="hs-identifier hs-var">cval</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">(Maybe (ASTError i) -&gt; Either (ASTError i) ([TokenLC i], i))
+-&gt; (([TokenLC i], i) -&gt; Either (ASTError i) ([TokenLC i], i))
+-&gt; Either (Maybe (ASTError i)) ([TokenLC i], i)
+-&gt; Either (ASTError i) ([TokenLC i], i)
+forall a c b. (a -&gt; c) -&gt; (b -&gt; c) -&gt; Either a b -&gt; c
+</span><span class="hs-identifier hs-var">either</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Either (ASTError i) ([TokenLC i], i)
+-&gt; (ASTError i -&gt; Either (ASTError i) ([TokenLC i], i))
+-&gt; Maybe (ASTError i)
+-&gt; Either (ASTError i) ([TokenLC i], i)
+forall b a. b -&gt; (a -&gt; b) -&gt; Maybe a -&gt; b
+</span><span class="hs-identifier hs-var">maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ASTError i -&gt; Either (ASTError i) ([TokenLC i], i)
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;initializer element is not constant&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; TokenLC i
+forall i. Num i =&gt; [TokenLC i] -&gt; TokenLC i
+</span><a href="Htcc.Tokenizer.Token.html#altEmptyToken"><span class="hs-identifier hs-var">HT.altEmptyToken</span></a></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290873"><span class="hs-identifier hs-var">ds</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">ASTError i -&gt; Either (ASTError i) ([TokenLC i], i)
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">([TokenLC i], i) -&gt; Either (ASTError i) ([TokenLC i], i)
+forall a b. b -&gt; Either a b
+</span><span class="hs-identifier hs-var">Right</span></span><span> </span><span class="annot"><span class="annottext">(Either (Maybe (ASTError i)) ([TokenLC i], i)
+ -&gt; Either (ASTError i) ([TokenLC i], i))
+-&gt; Either (Maybe (ASTError i)) ([TokenLC i], i)
+-&gt; Either (ASTError i) ([TokenLC i], i)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+-&gt; ConstructionData i
+-&gt; Either (Maybe (ASTError i)) ([TokenLC i], i)
+forall i.
+(Bits i, Integral i, Show i, Read i) =&gt;
+[TokenLC i]
+-&gt; ConstructionData i -&gt; Either (ConstantResult i) ([TokenLC i], i)
+</span><a href="Htcc.Parser.Parsing.Type.html#constantExp"><span class="hs-identifier hs-var">constantExp</span></a></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290899"><span class="hs-identifier hs-var">xs</span></a></span><span> </span><span class="annot"><span class="annottext">ConstructionData i
+</span><a href="#local-6989586621679290872"><span class="hs-identifier hs-var">sc'</span></a></span><span>
+</span><span id="line-48"></span><span>            </span><span class="hs-special">(</span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290871"><span class="hs-identifier hs-var">ds'</span></a></span><span class="hs-special">,</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(ConstructionData i -&gt; ([TokenLC i], ConstructionData i))
+-&gt; ((ATree i, ConstructionData i) -&gt; ConstructionData i)
+-&gt; (ATree i, ConstructionData i)
+-&gt; ([TokenLC i], ConstructionData i)
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">(ATree i, ConstructionData i) -&gt; ConstructionData i
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span> </span><span class="annot"><span class="annottext">((ATree i, ConstructionData i)
+ -&gt; ([TokenLC i], ConstructionData i))
+-&gt; Either (ASTError i) (ATree i, ConstructionData i)
+-&gt; Either (ASTError i) ([TokenLC i], ConstructionData i)
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+-&gt; TokenLC i
+-&gt; GVarInitWith i
+-&gt; ConstructionData i
+-&gt; Either (ASTError i) (ATree i, ConstructionData i)
+forall i.
+(Integral i, Bits i) =&gt;
+StorageClass i
+-&gt; TokenLC i
+-&gt; GVarInitWith i
+-&gt; ConstructionData i
+-&gt; Either (ASTError i) (ATree i, ConstructionData i)
+</span><a href="Htcc.Parser.ConstructionData.Core.html#addGVarWith"><span class="hs-identifier hs-var">addGVarWith</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679290898"><span class="hs-identifier hs-var">ty</span></a></span><span> </span><span class="annot"><span class="annottext">TokenLC i
+</span><a href="#local-6989586621679290897"><span class="hs-identifier hs-var">ident</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">i -&gt; GVarInitWith i
+forall i. i -&gt; GVarInitWith i
+</span><a href="Htcc.Parser.ConstructionData.Scope.Var.html#GVarInitWithVal"><span class="hs-identifier hs-var">PV.GVarInitWithVal</span></a></span><span> </span><span class="annot"><span class="annottext">i
+</span><a href="#local-6989586621679290870"><span class="hs-identifier hs-var">cval</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">ConstructionData i
+</span><a href="#local-6989586621679290872"><span class="hs-identifier hs-var">sc'</span></a></span><span>
+</span><span id="line-49"></span><span>
+</span><span id="line-50"></span><span class="hs-comment">-- | \[</span><span>
+</span><span id="line-51"></span><span class="hs-comment">-- \text{global-var} = \text{pre-type}\ \text{declaration}\ \text{array-decl-suffix}\ \text{&quot;;&quot;}</span><span>
+</span><span id="line-52"></span><span class="hs-comment">-- \]</span><span>
+</span><span id="line-53"></span><span id="local-6989586621679290865"><span class="annot"><a href="Htcc.Parser.Parsing.Global.Var.html#var"><span class="hs-identifier hs-type">var</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679290865"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Read</span></span><span> </span><span class="annot"><a href="#local-6989586621679290865"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Integral</span></span><span> </span><span class="annot"><a href="#local-6989586621679290865"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Bits</span></span><span> </span><span class="annot"><a href="#local-6989586621679290865"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.CRules.Types.StorageClass.html#StorageClass"><span class="hs-identifier hs-type">CT.StorageClass</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679290865"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679290865"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-special">[</span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TokenLC"><span class="hs-identifier hs-type">HT.TokenLC</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679290865"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.ConstructionData.Core.html#ConstructionData"><span class="hs-identifier hs-type">ConstructionData</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679290865"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Type.html#ASTConstruction"><span class="hs-identifier hs-type">ASTConstruction</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679290865"><span class="hs-identifier hs-type">i</span></a></span></span><span>
+</span><span id="line-54"></span><span id="var"><span class="annot"><span class="annottext">var :: StorageClass i
+-&gt; Maybe (TokenLC i)
+-&gt; [TokenLC i]
+-&gt; ConstructionData i
+-&gt; ASTConstruction i
+</span><a href="Htcc.Parser.Parsing.Global.Var.html#var"><span class="hs-identifier hs-var hs-var">var</span></a></span></span><span> </span><span id="local-6989586621679290864"><span class="annot"><span class="annottext">ty :: StorageClass i
+</span><a href="#local-6989586621679290864"><span class="hs-identifier hs-var">ty</span></a></span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Just</span></span><span> </span><span id="local-6989586621679290863"><span class="annot"><span class="annottext">cur :: TokenLC i
+</span><a href="#local-6989586621679290863"><span class="hs-identifier hs-var">cur</span></a></span></span><span class="hs-glyph">@</span><span class="hs-special">(</span><span class="hs-identifier">_</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TKIdent"><span class="hs-identifier hs-type">HT.TKIdent</span></a></span><span> </span><span class="hs-identifier">_</span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span id="local-6989586621679290861"><span class="annot"><span class="annottext">xs :: [TokenLC i]
+</span><a href="#local-6989586621679290861"><span class="hs-identifier hs-var">xs</span></a></span></span><span> </span><span class="hs-glyph">!</span><span id="local-6989586621679290860"><span class="annot"><span class="annottext">ConstructionData i
+</span><a href="#local-6989586621679290860"><span class="hs-identifier hs-var">scp</span></a></span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290861"><span class="hs-identifier hs-var">xs</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-55"></span><span>    </span><span class="hs-special">(</span><span class="hs-identifier">_</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TKReserved"><span class="hs-identifier hs-type">HT.TKReserved</span></a></span><span> </span><span class="hs-string">&quot;=&quot;</span><span class="hs-special">)</span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679290858"><span class="annot"><span class="annottext">ds :: [TokenLC i]
+</span><a href="#local-6989586621679290858"><span class="hs-identifier hs-var">ds</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span> </span><span class="hs-comment">-- for initializing</span><span>
+</span><span id="line-56"></span><span>        </span><span id="local-6989586621679290857"><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679290857"><span class="hs-identifier hs-var">ty'</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">(Text, TokenLC i)
+-&gt; Maybe (StorageClass i)
+-&gt; Either (Text, TokenLC i) (StorageClass i)
+forall e. e -&gt; Maybe ~&gt; Either e
+</span><a href="Htcc.Utils.NaturalTransformations.html#maybeToRight"><span class="hs-identifier hs-var">maybeToRight</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;defining global variables with a incomplete type&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">TokenLC i
+</span><a href="#local-6989586621679290863"><span class="hs-identifier hs-var">cur</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; ConstructionData i -&gt; Maybe (StorageClass i)
+forall i.
+StorageClass i -&gt; ConstructionData i -&gt; Maybe (StorageClass i)
+</span><a href="Htcc.Parser.ConstructionData.Core.html#incomplete"><span class="hs-identifier hs-var">incomplete</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679290864"><span class="hs-identifier hs-var">ty</span></a></span><span> </span><span class="annot"><span class="annottext">ConstructionData i
+</span><a href="#local-6989586621679290860"><span class="hs-identifier hs-var">scp</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-57"></span><span>        </span><span class="hs-special">(</span><span id="local-6989586621679290855"><span class="annot"><span class="annottext">ds' :: [TokenLC i]
+</span><a href="#local-6989586621679290855"><span class="hs-identifier hs-var">ds'</span></a></span></span><span class="hs-special">,</span><span> </span><span id="local-6989586621679290854"><span class="annot"><span class="annottext">nsc :: ConstructionData i
+</span><a href="#local-6989586621679290854"><span class="hs-identifier hs-var">nsc</span></a></span></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+-&gt; StorageClass i
+-&gt; TokenLC i
+-&gt; ConstructionData i
+-&gt; Either (Text, TokenLC i) ([TokenLC i], ConstructionData i)
+forall i.
+(Show i, Read i, Integral i, Bits i) =&gt;
+[TokenLC i]
+-&gt; StorageClass i
+-&gt; TokenLC i
+-&gt; ConstructionData i
+-&gt; Either (ASTError i) ([TokenLC i], ConstructionData i)
+</span><a href="Htcc.Parser.Parsing.Global.Var.html#gvarInit"><span class="hs-identifier hs-var">gvarInit</span></a></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290858"><span class="hs-identifier hs-var">ds</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679290857"><span class="hs-identifier hs-var">ty'</span></a></span><span> </span><span class="annot"><span class="annottext">TokenLC i
+</span><a href="#local-6989586621679290863"><span class="hs-identifier hs-var">cur</span></a></span><span> </span><span class="annot"><span class="annottext">ConstructionData i
+</span><a href="#local-6989586621679290860"><span class="hs-identifier hs-var">scp</span></a></span><span>
+</span><span id="line-58"></span><span>        </span><span class="hs-keyword">case</span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290855"><span class="hs-identifier hs-var">ds'</span></a></span><span> </span><span class="hs-keyword">of</span><span>
+</span><span id="line-59"></span><span>            </span><span class="hs-special">(</span><span class="hs-identifier">_</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TKReserved"><span class="hs-identifier hs-type">HT.TKReserved</span></a></span><span> </span><span class="hs-string">&quot;;&quot;</span><span class="hs-special">)</span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679290853"><span class="annot"><span class="annottext">ds'' :: [TokenLC i]
+</span><a href="#local-6989586621679290853"><span class="hs-identifier hs-var">ds''</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">([TokenLC i], ATree i, ConstructionData i) -&gt; ASTConstruction i
+forall (m :: * -&gt; *) a. Monad m =&gt; a -&gt; m a
+</span><span class="hs-identifier hs-var">return</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290853"><span class="hs-identifier hs-var">ds''</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i
+forall a. ATree a
+</span><a href="Htcc.Parser.AST.Core.html#ATEmpty"><span class="hs-identifier hs-var">ATEmpty</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ConstructionData i
+</span><a href="#local-6989586621679290854"><span class="hs-identifier hs-var">nsc</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-60"></span><span>            </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(Text, TokenLC i) -&gt; ASTConstruction i
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="annot"><span class="annottext">((Text, TokenLC i) -&gt; ASTConstruction i)
+-&gt; (Text, TokenLC i) -&gt; ASTConstruction i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; Bool
+forall (t :: * -&gt; *) a. Foldable t =&gt; t a -&gt; Bool
+</span><span class="hs-identifier hs-var">null</span></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290855"><span class="hs-identifier hs-var">ds'</span></a></span><span> </span><span class="hs-keyword">then</span><span>
+</span><span id="line-61"></span><span>                </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;expected ';' token after '&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Token i -&gt; Text
+forall a. Show a =&gt; a -&gt; Text
+</span><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier hs-var">tshow</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TokenLC i -&gt; Token i
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span> </span><span class="annot"><span class="annottext">TokenLC i
+</span><a href="#local-6989586621679290863"><span class="hs-identifier hs-var">cur</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;' token&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; TokenLC i
+forall i. Num i =&gt; [TokenLC i] -&gt; TokenLC i
+</span><a href="Htcc.Tokenizer.Token.html#altEmptyToken"><span class="hs-identifier hs-var">HT.altEmptyToken</span></a></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290855"><span class="hs-identifier hs-var">ds'</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">else</span><span>
+</span><span id="line-62"></span><span>                    </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;expected ';' token&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="hs-special">(</span><span class="hs-keyword">if</span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; Bool
+forall (t :: * -&gt; *) a. Foldable t =&gt; t a -&gt; Bool
+</span><span class="hs-identifier hs-var">null</span></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290855"><span class="hs-identifier hs-var">ds'</span></a></span><span> </span><span class="hs-keyword">then</span><span> </span><span class="annot"><span class="hs-string">&quot;&quot;</span></span><span> </span><span class="hs-keyword">else</span><span> </span><span class="annot"><span class="hs-string">&quot; before '&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Token i -&gt; Text
+forall a. Show a =&gt; a -&gt; Text
+</span><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier hs-var">tshow</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TokenLC i -&gt; Token i
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span> </span><span class="annot"><span class="annottext">(TokenLC i -&gt; Token i) -&gt; TokenLC i -&gt; Token i
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; TokenLC i
+forall a. [a] -&gt; a
+</span><span class="hs-identifier hs-var">head</span></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290855"><span class="hs-identifier hs-var">ds'</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;' token&quot;</span></span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; TokenLC i
+forall i. Num i =&gt; [TokenLC i] -&gt; TokenLC i
+</span><a href="Htcc.Tokenizer.Token.html#altEmptyToken"><span class="hs-identifier hs-var">HT.altEmptyToken</span></a></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290855"><span class="hs-identifier hs-var">ds'</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-63"></span><span>    </span><span class="hs-special">(</span><span class="hs-identifier">_</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Tokenizer.Token.html#TKReserved"><span class="hs-identifier hs-type">HT.TKReserved</span></a></span><span> </span><span class="hs-string">&quot;;&quot;</span><span class="hs-special">)</span><span class="annot"><span class="hs-glyph hs-type">:</span></span><span id="local-6989586621679290850"><span class="annot"><span class="annottext">ds :: [TokenLC i]
+</span><a href="#local-6989586621679290850"><span class="hs-identifier hs-var">ds</span></a></span></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="hs-keyword">do</span><span> </span><span class="hs-comment">-- for non initializing</span><span>
+</span><span id="line-64"></span><span>        </span><span id="local-6989586621679290849"><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679290849"><span class="hs-identifier hs-var">ty'</span></a></span></span><span> </span><span class="hs-glyph">&lt;-</span><span> </span><span class="annot"><span class="annottext">(Text, TokenLC i)
+-&gt; Maybe (StorageClass i)
+-&gt; Either (Text, TokenLC i) (StorageClass i)
+forall e. e -&gt; Maybe ~&gt; Either e
+</span><a href="Htcc.Utils.NaturalTransformations.html#maybeToRight"><span class="hs-identifier hs-var">maybeToRight</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;defining global variables with a incomplete type&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">TokenLC i
+</span><a href="#local-6989586621679290863"><span class="hs-identifier hs-var">cur</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; ConstructionData i -&gt; Maybe (StorageClass i)
+forall i.
+StorageClass i -&gt; ConstructionData i -&gt; Maybe (StorageClass i)
+</span><a href="Htcc.Parser.ConstructionData.Core.html#incomplete"><span class="hs-identifier hs-var">incomplete</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679290864"><span class="hs-identifier hs-var">ty</span></a></span><span> </span><span class="annot"><span class="annottext">ConstructionData i
+</span><a href="#local-6989586621679290860"><span class="hs-identifier hs-var">scp</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-65"></span><span>        </span><span class="hs-special">(</span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290850"><span class="hs-identifier hs-var">ds</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i
+forall a. ATree a
+</span><a href="Htcc.Parser.AST.Core.html#ATEmpty"><span class="hs-identifier hs-var">ATEmpty</span></a></span><span class="hs-special">,</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">(ConstructionData i -&gt; ([TokenLC i], ATree i, ConstructionData i))
+-&gt; ((ATree i, ConstructionData i) -&gt; ConstructionData i)
+-&gt; (ATree i, ConstructionData i)
+-&gt; ([TokenLC i], ATree i, ConstructionData i)
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">(ATree i, ConstructionData i) -&gt; ConstructionData i
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span> </span><span class="annot"><span class="annottext">((ATree i, ConstructionData i)
+ -&gt; ([TokenLC i], ATree i, ConstructionData i))
+-&gt; Either (Text, TokenLC i) (ATree i, ConstructionData i)
+-&gt; ASTConstruction i
+forall (f :: * -&gt; *) a b. Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
+</span><span class="hs-operator hs-var">&lt;$&gt;</span></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+-&gt; TokenLC i
+-&gt; ConstructionData i
+-&gt; Either (Text, TokenLC i) (ATree i, ConstructionData i)
+forall i.
+(Integral i, Bits i) =&gt;
+StorageClass i
+-&gt; TokenLC i
+-&gt; ConstructionData i
+-&gt; Either (ASTError i) (ATree i, ConstructionData i)
+</span><a href="Htcc.Parser.ConstructionData.Core.html#addGVar"><span class="hs-identifier hs-var">addGVar</span></a></span><span> </span><span class="annot"><span class="annottext">StorageClass i
+</span><a href="#local-6989586621679290849"><span class="hs-identifier hs-var">ty'</span></a></span><span> </span><span class="annot"><span class="annottext">TokenLC i
+</span><a href="#local-6989586621679290863"><span class="hs-identifier hs-var">cur</span></a></span><span> </span><span class="annot"><span class="annottext">ConstructionData i
+</span><a href="#local-6989586621679290860"><span class="hs-identifier hs-var">scp</span></a></span><span>
+</span><span id="line-66"></span><span>    </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="annottext">(Text, TokenLC i) -&gt; ASTConstruction i
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-string">&quot;expected ';' token after '&quot;</span></span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="annottext">Token i -&gt; Text
+forall a. Show a =&gt; a -&gt; Text
+</span><a href="Htcc.Utils.Text.html#tshow"><span class="hs-identifier hs-var">tshow</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">TokenLC i -&gt; Token i
+forall a b. (a, b) -&gt; b
+</span><span class="hs-identifier hs-var">snd</span></span><span> </span><span class="annot"><span class="annottext">TokenLC i
+</span><a href="#local-6989586621679290863"><span class="hs-identifier hs-var">cur</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Text -&gt; Text -&gt; Text
+forall a. Semigroup a =&gt; a -&gt; a -&gt; a
+</span><span class="hs-operator hs-var">&lt;&gt;</span></span><span> </span><span class="annot"><span class="hs-string">&quot;' token&quot;</span></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">TokenLC i
+</span><a href="#local-6989586621679290863"><span class="hs-identifier hs-var">cur</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-67"></span><span class="annot"><a href="Htcc.Parser.Parsing.Global.Var.html#var"><span class="hs-identifier hs-var">var</span></a></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-identifier">_</span><span> </span><span id="local-6989586621679290847"><span class="annot"><span class="annottext">xs :: [TokenLC i]
+</span><a href="#local-6989586621679290847"><span class="hs-identifier hs-var">xs</span></a></span></span><span> </span><span class="hs-identifier">_</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">(Text, TokenLC i) -&gt; ASTConstruction i
+forall a b. a -&gt; Either a b
+</span><span class="hs-identifier hs-var">Left</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Text
+</span><a href="Htcc.Parser.ConstructionData.Scope.Utils.html#internalCE"><span class="hs-identifier hs-var">internalCE</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">[TokenLC i] -&gt; TokenLC i
+forall i. Num i =&gt; [TokenLC i] -&gt; TokenLC i
+</span><a href="Htcc.Tokenizer.Token.html#altEmptyToken"><span class="hs-identifier hs-var">HT.altEmptyToken</span></a></span><span> </span><span class="annot"><span class="annottext">[TokenLC i]
+</span><a href="#local-6989586621679290847"><span class="hs-identifier hs-var">xs</span></a></span><span class="hs-special">)</span><span>
+</span><span id="line-68"></span><span>
+</span><span id="line-69"></span></pre></body></html>

@@ -1,0 +1,231 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><link rel="stylesheet" type="text/css" href="style.css" /><script type="text/javascript" src="highlight.js"></script></head><body><pre><span class="hs-comment">{-|
+Module      : Htcc.Parser.AST.DeduceKind
+Description : Data types and type synonyms used during AST construction
+Copyright   : (c) roki, 2019
+License     : MIT
+Maintainer  : falgon53@yahoo.co.jp
+Stability   : experimental
+Portability : POSIX
+
+Data types and type synonyms used during AST construction
+-}</span><span>
+</span><span id="line-12"></span><span class="hs-keyword">module</span><span> </span><span class="hs-identifier">Htcc.Parser.AST.DeduceKind</span><span> </span><span class="hs-special">(</span><span>
+</span><span id="line-13"></span><span>    </span><span class="annot"><a href="Htcc.Parser.AST.DeduceKind.html#addKind"><span class="hs-identifier">addKind</span></a></span><span class="hs-special">,</span><span>
+</span><span id="line-14"></span><span>    </span><span class="annot"><a href="Htcc.Parser.AST.DeduceKind.html#subKind"><span class="hs-identifier">subKind</span></a></span><span>
+</span><span id="line-15"></span><span class="hs-special">)</span><span> </span><span class="hs-keyword">where</span><span>
+</span><span id="line-16"></span><span>
+</span><span id="line-17"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><span class="hs-identifier">Data.Maybe</span></span><span>           </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier">isJust</span></span><span class="hs-special">)</span><span>
+</span><span id="line-18"></span><span>
+</span><span id="line-19"></span><span class="hs-keyword">import</span><span> </span><span class="hs-keyword">qualified</span><span> </span><span class="annot"><a href="Htcc.CRules.Types.html"><span class="hs-identifier">Htcc.CRules.Types</span></a></span><span>    </span><span class="hs-keyword">as</span><span> </span><span class="annot"><span class="hs-identifier">CT</span></span><span>
+</span><span id="line-20"></span><span class="hs-keyword">import</span><span>           </span><span class="annot"><a href="Htcc.Parser.AST.Core.html"><span class="hs-identifier">Htcc.Parser.AST.Core</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATKind"><span class="hs-identifier">ATKind</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">,</span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATree"><span class="hs-identifier">ATree</span></a></span><span> </span><span class="hs-special">(</span><span class="hs-glyph">..</span><span class="hs-special">)</span><span class="hs-special">)</span><span>
+</span><span id="line-21"></span><span>
+</span><span id="line-22"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Parser.AST.DeduceKind.html#addKind"><span class="hs-pragma hs-type">addKind</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-23"></span><span class="hs-comment">-- | Constructs a numeric addition or pointer addition node according to the C language implicit conversion rules</span><span>
+</span><span id="line-24"></span><span id="local-6989586621679287218"><span class="annot"><a href="Htcc.Parser.AST.DeduceKind.html#addKind"><span class="hs-identifier hs-type">addKind</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Eq</span></span><span> </span><span class="annot"><a href="#local-6989586621679287218"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Ord</span></span><span> </span><span class="annot"><a href="#local-6989586621679287218"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Show</span></span><span> </span><span class="annot"><a href="#local-6989586621679287218"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATree"><span class="hs-identifier hs-type">ATree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287218"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATree"><span class="hs-identifier hs-type">ATree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287218"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATree"><span class="hs-identifier hs-type">ATree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287218"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span></span><span>
+</span><span id="line-25"></span><span id="addKind"><span class="annot"><span class="annottext">addKind :: ATree i -&gt; ATree i -&gt; Maybe (ATree i)
+</span><a href="Htcc.Parser.AST.DeduceKind.html#addKind"><span class="hs-identifier hs-var hs-var">addKind</span></a></span></span><span> </span><span id="local-6989586621679287217"><span class="annot"><span class="annottext">lhs :: ATree i
+</span><a href="#local-6989586621679287217"><span class="hs-identifier hs-var">lhs</span></a></span></span><span> </span><span id="local-6989586621679287216"><span class="annot"><span class="annottext">rhs :: ATree i
+</span><a href="#local-6989586621679287216"><span class="hs-identifier hs-var">rhs</span></a></span></span><span>
+</span><span id="line-26"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">(ATree i -&gt; Bool) -&gt; [ATree i] -&gt; Bool
+forall (t :: * -&gt; *) a. Foldable t =&gt; (a -&gt; Bool) -&gt; t a -&gt; Bool
+</span><span class="hs-identifier hs-var">all</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; Bool
+forall a. CType a =&gt; a -&gt; Bool
+</span><a href="Htcc.CRules.Types.CType.html#isFundamental"><span class="hs-identifier hs-var">CT.isFundamental</span></a></span><span> </span><span class="annot"><span class="annottext">(StorageClass i -&gt; Bool)
+-&gt; (ATree i -&gt; StorageClass i) -&gt; ATree i -&gt; Bool
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; StorageClass i
+forall a. ATree a -&gt; StorageClass a
+</span><a href="Htcc.Parser.AST.Core.html#atype"><span class="hs-identifier hs-var hs-var">atype</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287217"><span class="hs-identifier hs-var">lhs</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287216"><span class="hs-identifier hs-var">rhs</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Maybe (ATree i)
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">(ATree i -&gt; Maybe (ATree i)) -&gt; ATree i -&gt; Maybe (ATree i)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ATKind i -&gt; StorageClass i -&gt; ATree i -&gt; ATree i -&gt; ATree i
+forall a.
+ATKind a -&gt; StorageClass a -&gt; ATree a -&gt; ATree a -&gt; ATree a
+</span><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-var">ATNode</span></a></span><span> </span><span class="annot"><span class="annottext">ATKind i
+forall a. ATKind a
+</span><a href="Htcc.Parser.AST.Core.html#ATAdd"><span class="hs-identifier hs-var">ATAdd</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; StorageClass i -&gt; StorageClass i
+forall a. CType a =&gt; a -&gt; a -&gt; a
+</span><a href="Htcc.CRules.Types.CType.html#conversion"><span class="hs-identifier hs-var">CT.conversion</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ATree i -&gt; StorageClass i
+forall a. ATree a -&gt; StorageClass a
+</span><a href="Htcc.Parser.AST.Core.html#atype"><span class="hs-identifier hs-var hs-var">atype</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287217"><span class="hs-identifier hs-var">lhs</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ATree i -&gt; StorageClass i
+forall a. ATree a -&gt; StorageClass a
+</span><a href="Htcc.Parser.AST.Core.html#atype"><span class="hs-identifier hs-var hs-var">atype</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287216"><span class="hs-identifier hs-var">rhs</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287217"><span class="hs-identifier hs-var">lhs</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287216"><span class="hs-identifier hs-var">rhs</span></a></span><span>
+</span><span id="line-27"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Maybe (StorageClass i) -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">isJust</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; Maybe (StorageClass i)
+forall a. CType a =&gt; a -&gt; Maybe a
+</span><a href="Htcc.CRules.Types.CType.html#deref"><span class="hs-identifier hs-var">CT.deref</span></a></span><span> </span><span class="annot"><span class="annottext">(StorageClass i -&gt; Maybe (StorageClass i))
+-&gt; StorageClass i -&gt; Maybe (StorageClass i)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; StorageClass i
+forall a. ATree a -&gt; StorageClass a
+</span><a href="Htcc.Parser.AST.Core.html#atype"><span class="hs-identifier hs-var hs-var">atype</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287217"><span class="hs-identifier hs-var">lhs</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
+</span><span class="hs-operator hs-var">&amp;&amp;</span></span><span> </span><span class="annot"><span class="annottext">StorageClass i -&gt; Bool
+forall a. CType a =&gt; a -&gt; Bool
+</span><a href="Htcc.CRules.Types.CType.html#isFundamental"><span class="hs-identifier hs-var">CT.isFundamental</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ATree i -&gt; StorageClass i
+forall a. ATree a -&gt; StorageClass a
+</span><a href="Htcc.Parser.AST.Core.html#atype"><span class="hs-identifier hs-var hs-var">atype</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287216"><span class="hs-identifier hs-var">rhs</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Maybe (ATree i)
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">(ATree i -&gt; Maybe (ATree i)) -&gt; ATree i -&gt; Maybe (ATree i)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ATKind i -&gt; StorageClass i -&gt; ATree i -&gt; ATree i -&gt; ATree i
+forall a.
+ATKind a -&gt; StorageClass a -&gt; ATree a -&gt; ATree a -&gt; ATree a
+</span><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-var">ATNode</span></a></span><span> </span><span class="annot"><span class="annottext">ATKind i
+forall a. ATKind a
+</span><a href="Htcc.Parser.AST.Core.html#ATAddPtr"><span class="hs-identifier hs-var">ATAddPtr</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ATree i -&gt; StorageClass i
+forall a. ATree a -&gt; StorageClass a
+</span><a href="Htcc.Parser.AST.Core.html#atype"><span class="hs-identifier hs-var hs-var">atype</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287217"><span class="hs-identifier hs-var">lhs</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287217"><span class="hs-identifier hs-var">lhs</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287216"><span class="hs-identifier hs-var">rhs</span></a></span><span>
+</span><span id="line-28"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">StorageClass i -&gt; Bool
+forall a. CType a =&gt; a -&gt; Bool
+</span><a href="Htcc.CRules.Types.CType.html#isFundamental"><span class="hs-identifier hs-var">CT.isFundamental</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ATree i -&gt; StorageClass i
+forall a. ATree a -&gt; StorageClass a
+</span><a href="Htcc.Parser.AST.Core.html#atype"><span class="hs-identifier hs-var hs-var">atype</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287217"><span class="hs-identifier hs-var">lhs</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
+</span><span class="hs-operator hs-var">&amp;&amp;</span></span><span> </span><span class="annot"><span class="annottext">Maybe (StorageClass i) -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">isJust</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; Maybe (StorageClass i)
+forall a. CType a =&gt; a -&gt; Maybe a
+</span><a href="Htcc.CRules.Types.CType.html#deref"><span class="hs-identifier hs-var">CT.deref</span></a></span><span> </span><span class="annot"><span class="annottext">(StorageClass i -&gt; Maybe (StorageClass i))
+-&gt; StorageClass i -&gt; Maybe (StorageClass i)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; StorageClass i
+forall a. ATree a -&gt; StorageClass a
+</span><a href="Htcc.Parser.AST.Core.html#atype"><span class="hs-identifier hs-var hs-var">atype</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287216"><span class="hs-identifier hs-var">rhs</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Maybe (ATree i)
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">(ATree i -&gt; Maybe (ATree i)) -&gt; ATree i -&gt; Maybe (ATree i)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ATKind i -&gt; StorageClass i -&gt; ATree i -&gt; ATree i -&gt; ATree i
+forall a.
+ATKind a -&gt; StorageClass a -&gt; ATree a -&gt; ATree a -&gt; ATree a
+</span><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-var">ATNode</span></a></span><span> </span><span class="annot"><span class="annottext">ATKind i
+forall a. ATKind a
+</span><a href="Htcc.Parser.AST.Core.html#ATAddPtr"><span class="hs-identifier hs-var">ATAddPtr</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ATree i -&gt; StorageClass i
+forall a. ATree a -&gt; StorageClass a
+</span><a href="Htcc.Parser.AST.Core.html#atype"><span class="hs-identifier hs-var hs-var">atype</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287216"><span class="hs-identifier hs-var">rhs</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287216"><span class="hs-identifier hs-var">rhs</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287217"><span class="hs-identifier hs-var">lhs</span></a></span><span>
+</span><span id="line-29"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe (ATree i)
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-30"></span><span>
+</span><span id="line-31"></span><span class="hs-pragma">{-# INLINE</span><span> </span><span class="annot"><a href="Htcc.Parser.AST.DeduceKind.html#subKind"><span class="hs-pragma hs-type">subKind</span></a></span><span> </span><span class="hs-pragma">#-}</span><span>
+</span><span id="line-32"></span><span class="hs-comment">-- | Constructs a number subtraction or pointer subtraction node according to the C language implicit conversion rules</span><span>
+</span><span id="line-33"></span><span id="local-6989586621679287205"><span class="annot"><a href="Htcc.Parser.AST.DeduceKind.html#subKind"><span class="hs-identifier hs-type">subKind</span></a></span><span> </span><span class="hs-glyph">::</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="hs-identifier hs-type">Eq</span></span><span> </span><span class="annot"><a href="#local-6989586621679287205"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Ord</span></span><span> </span><span class="annot"><a href="#local-6989586621679287205"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATree"><span class="hs-identifier hs-type">ATree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287205"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATree"><span class="hs-identifier hs-type">ATree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287205"><span class="hs-identifier hs-type">i</span></a></span><span> </span><span class="hs-glyph">-&gt;</span><span> </span><span class="annot"><span class="hs-identifier hs-type">Maybe</span></span><span> </span><span class="hs-special">(</span><span class="annot"><a href="Htcc.Parser.AST.Core.html#ATree"><span class="hs-identifier hs-type">ATree</span></a></span><span> </span><span class="annot"><a href="#local-6989586621679287205"><span class="hs-identifier hs-type">i</span></a></span><span class="hs-special">)</span></span><span>
+</span><span id="line-34"></span><span id="subKind"><span class="annot"><span class="annottext">subKind :: ATree i -&gt; ATree i -&gt; Maybe (ATree i)
+</span><a href="Htcc.Parser.AST.DeduceKind.html#subKind"><span class="hs-identifier hs-var hs-var">subKind</span></a></span></span><span> </span><span id="local-6989586621679287204"><span class="annot"><span class="annottext">lhs :: ATree i
+</span><a href="#local-6989586621679287204"><span class="hs-identifier hs-var">lhs</span></a></span></span><span> </span><span id="local-6989586621679287203"><span class="annot"><span class="annottext">rhs :: ATree i
+</span><a href="#local-6989586621679287203"><span class="hs-identifier hs-var">rhs</span></a></span></span><span>
+</span><span id="line-35"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">(ATree i -&gt; Bool) -&gt; [ATree i] -&gt; Bool
+forall (t :: * -&gt; *) a. Foldable t =&gt; (a -&gt; Bool) -&gt; t a -&gt; Bool
+</span><span class="hs-identifier hs-var">all</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; Bool
+forall a. CType a =&gt; a -&gt; Bool
+</span><a href="Htcc.CRules.Types.CType.html#isFundamental"><span class="hs-identifier hs-var">CT.isFundamental</span></a></span><span> </span><span class="annot"><span class="annottext">(StorageClass i -&gt; Bool)
+-&gt; (ATree i -&gt; StorageClass i) -&gt; ATree i -&gt; Bool
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; StorageClass i
+forall a. ATree a -&gt; StorageClass a
+</span><a href="Htcc.Parser.AST.Core.html#atype"><span class="hs-identifier hs-var hs-var">atype</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287204"><span class="hs-identifier hs-var">lhs</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287203"><span class="hs-identifier hs-var">rhs</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Maybe (ATree i)
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">(ATree i -&gt; Maybe (ATree i)) -&gt; ATree i -&gt; Maybe (ATree i)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ATKind i -&gt; StorageClass i -&gt; ATree i -&gt; ATree i -&gt; ATree i
+forall a.
+ATKind a -&gt; StorageClass a -&gt; ATree a -&gt; ATree a -&gt; ATree a
+</span><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-var">ATNode</span></a></span><span> </span><span class="annot"><span class="annottext">ATKind i
+forall a. ATKind a
+</span><a href="Htcc.Parser.AST.Core.html#ATSub"><span class="hs-identifier hs-var">ATSub</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; StorageClass i -&gt; StorageClass i
+forall a. CType a =&gt; a -&gt; a -&gt; a
+</span><a href="Htcc.CRules.Types.CType.html#conversion"><span class="hs-identifier hs-var">CT.conversion</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ATree i -&gt; StorageClass i
+forall a. ATree a -&gt; StorageClass a
+</span><a href="Htcc.Parser.AST.Core.html#atype"><span class="hs-identifier hs-var hs-var">atype</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287204"><span class="hs-identifier hs-var">lhs</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ATree i -&gt; StorageClass i
+forall a. ATree a -&gt; StorageClass a
+</span><a href="Htcc.Parser.AST.Core.html#atype"><span class="hs-identifier hs-var hs-var">atype</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287203"><span class="hs-identifier hs-var">rhs</span></a></span><span class="hs-special">)</span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287204"><span class="hs-identifier hs-var">lhs</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287203"><span class="hs-identifier hs-var">rhs</span></a></span><span>
+</span><span id="line-36"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Maybe (StorageClass i) -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">isJust</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">StorageClass i -&gt; Maybe (StorageClass i)
+forall a. CType a =&gt; a -&gt; Maybe a
+</span><a href="Htcc.CRules.Types.CType.html#deref"><span class="hs-identifier hs-var">CT.deref</span></a></span><span> </span><span class="annot"><span class="annottext">(StorageClass i -&gt; Maybe (StorageClass i))
+-&gt; StorageClass i -&gt; Maybe (StorageClass i)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; StorageClass i
+forall a. ATree a -&gt; StorageClass a
+</span><a href="Htcc.Parser.AST.Core.html#atype"><span class="hs-identifier hs-var hs-var">atype</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287204"><span class="hs-identifier hs-var">lhs</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">Bool -&gt; Bool -&gt; Bool
+</span><span class="hs-operator hs-var">&amp;&amp;</span></span><span> </span><span class="annot"><span class="annottext">StorageClass i -&gt; Bool
+forall a. CType a =&gt; a -&gt; Bool
+</span><a href="Htcc.CRules.Types.CType.html#isFundamental"><span class="hs-identifier hs-var">CT.isFundamental</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ATree i -&gt; StorageClass i
+forall a. ATree a -&gt; StorageClass a
+</span><a href="Htcc.Parser.AST.Core.html#atype"><span class="hs-identifier hs-var hs-var">atype</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287203"><span class="hs-identifier hs-var">rhs</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Maybe (ATree i)
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">(ATree i -&gt; Maybe (ATree i)) -&gt; ATree i -&gt; Maybe (ATree i)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ATKind i -&gt; StorageClass i -&gt; ATree i -&gt; ATree i -&gt; ATree i
+forall a.
+ATKind a -&gt; StorageClass a -&gt; ATree a -&gt; ATree a -&gt; ATree a
+</span><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-var">ATNode</span></a></span><span> </span><span class="annot"><span class="annottext">ATKind i
+forall a. ATKind a
+</span><a href="Htcc.Parser.AST.Core.html#ATSubPtr"><span class="hs-identifier hs-var">ATSubPtr</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ATree i -&gt; StorageClass i
+forall a. ATree a -&gt; StorageClass a
+</span><a href="Htcc.Parser.AST.Core.html#atype"><span class="hs-identifier hs-var hs-var">atype</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287204"><span class="hs-identifier hs-var">lhs</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287204"><span class="hs-identifier hs-var">lhs</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287203"><span class="hs-identifier hs-var">rhs</span></a></span><span>
+</span><span id="line-37"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">(ATree i -&gt; Bool) -&gt; [ATree i] -&gt; Bool
+forall (t :: * -&gt; *) a. Foldable t =&gt; (a -&gt; Bool) -&gt; t a -&gt; Bool
+</span><span class="hs-identifier hs-var">all</span></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">Maybe (StorageClass i) -&gt; Bool
+forall a. Maybe a -&gt; Bool
+</span><span class="hs-identifier hs-var">isJust</span></span><span> </span><span class="annot"><span class="annottext">(Maybe (StorageClass i) -&gt; Bool)
+-&gt; (ATree i -&gt; Maybe (StorageClass i)) -&gt; ATree i -&gt; Bool
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">StorageClass i -&gt; Maybe (StorageClass i)
+forall a. CType a =&gt; a -&gt; Maybe a
+</span><a href="Htcc.CRules.Types.CType.html#deref"><span class="hs-identifier hs-var">CT.deref</span></a></span><span> </span><span class="annot"><span class="annottext">(StorageClass i -&gt; Maybe (StorageClass i))
+-&gt; (ATree i -&gt; StorageClass i) -&gt; ATree i -&gt; Maybe (StorageClass i)
+forall b c a. (b -&gt; c) -&gt; (a -&gt; b) -&gt; a -&gt; c
+</span><span class="hs-operator hs-var">.</span></span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; StorageClass i
+forall a. ATree a -&gt; StorageClass a
+</span><a href="Htcc.Parser.AST.Core.html#atype"><span class="hs-identifier hs-var hs-var">atype</span></a></span><span class="hs-special">)</span><span> </span><span class="hs-special">[</span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287204"><span class="hs-identifier hs-var">lhs</span></a></span><span class="hs-special">,</span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287203"><span class="hs-identifier hs-var">rhs</span></a></span><span class="hs-special">]</span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">ATree i -&gt; Maybe (ATree i)
+forall a. a -&gt; Maybe a
+</span><span class="hs-identifier hs-var">Just</span></span><span> </span><span class="annot"><span class="annottext">(ATree i -&gt; Maybe (ATree i)) -&gt; ATree i -&gt; Maybe (ATree i)
+forall a b. (a -&gt; b) -&gt; a -&gt; b
+</span><span class="hs-operator hs-var">$</span></span><span> </span><span class="annot"><span class="annottext">ATKind i -&gt; StorageClass i -&gt; ATree i -&gt; ATree i -&gt; ATree i
+forall a.
+ATKind a -&gt; StorageClass a -&gt; ATree a -&gt; ATree a -&gt; ATree a
+</span><a href="Htcc.Parser.AST.Core.html#ATNode"><span class="hs-identifier hs-var">ATNode</span></a></span><span> </span><span class="annot"><span class="annottext">ATKind i
+forall a. ATKind a
+</span><a href="Htcc.Parser.AST.Core.html#ATPtrDis"><span class="hs-identifier hs-var">ATPtrDis</span></a></span><span> </span><span class="hs-special">(</span><span class="annot"><span class="annottext">ATree i -&gt; StorageClass i
+forall a. ATree a -&gt; StorageClass a
+</span><a href="Htcc.Parser.AST.Core.html#atype"><span class="hs-identifier hs-var hs-var">atype</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287204"><span class="hs-identifier hs-var">lhs</span></a></span><span class="hs-special">)</span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287204"><span class="hs-identifier hs-var">lhs</span></a></span><span> </span><span class="annot"><span class="annottext">ATree i
+</span><a href="#local-6989586621679287203"><span class="hs-identifier hs-var">rhs</span></a></span><span>
+</span><span id="line-38"></span><span>    </span><span class="hs-glyph">|</span><span> </span><span class="annot"><span class="annottext">Bool
+</span><span class="hs-identifier hs-var">otherwise</span></span><span> </span><span class="hs-glyph">=</span><span> </span><span class="annot"><span class="annottext">Maybe (ATree i)
+forall a. Maybe a
+</span><span class="hs-identifier hs-var">Nothing</span></span><span>
+</span><span id="line-39"></span></pre></body></html>
