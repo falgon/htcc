@@ -32,7 +32,6 @@ module Htcc.Parser.Parsing.Type (
 
 import           Data.Bits                                       hiding (shift)
 import           Data.Bool                                       (bool)
-import           Data.Foldable                                   (Foldable (..))
 import qualified Data.Map.Strict                                 as M
 import           Data.Maybe                                      (fromJust,
                                                                   fromMaybe,
