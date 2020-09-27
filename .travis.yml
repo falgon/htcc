@@ -80,7 +80,8 @@ jobs:
     services: docker
     script:
     - cd example && make docker && make clean_docker
-  - stage: Deploy gh-pages
+  - if: branch = master
+    stage: Deploy gh-pages
     os: linux
     script:
         - stack clean
@@ -89,7 +90,8 @@ jobs:
         - git push -qf git@github.com:falgon/htcc.git gh-pages
 branches:
     except:
-        - gh-pages          
+        - gh-pages
+        - monadic
 notifications:
   email: false
 env:
