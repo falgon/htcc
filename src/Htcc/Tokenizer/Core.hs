@@ -19,8 +19,6 @@ import           Control.Applicative                             (Alternative (.
 import           Control.Conditional                             (ifM)
 import           Control.Monad.Extra                             (firstJustM)
 import           Control.Monad.State
-import           Control.Monad.Trans                             (lift)
-
 import           Data.Char                                       (digitToInt,
                                                                   isDigit, ord)
 import           Data.List                                       (find)
@@ -29,7 +27,6 @@ import           Data.Maybe                                      (fromJust,
                                                                   isNothing)
 import qualified Data.Text                                       as T
 import qualified Data.Text.Encoding                              as T
-
 import           Numeric                                         (readHex,
                                                                   showHex)
 

@@ -80,15 +80,18 @@ jobs:
     services: docker
     script:
     - cd example && make docker && make clean_docker
-  - stage: Deploy gh-pages
+  - if: branch = master
+    stage: Deploy gh-pages
     os: linux
     script:
-        - stack haddock --fast
+        - stack clean
+        - stack haddock --fast 
         - ghp-import -m "by Travis CI (JOB $TRAVIS_JOB_NUMBER)" -n docs
         - git push -qf git@github.com:falgon/htcc.git gh-pages
 branches:
     except:
-        - gh-pages          
+        - gh-pages
+        - monadic
 notifications:
   email: false
 env:

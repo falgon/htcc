@@ -30,7 +30,7 @@ import           Control.Applicative     ((<|>))
 import           Control.DeepSeq         (NFData (..))
 import           Data.Bits               (Bits (..), complement, (.&.))
 import           Data.Foldable           (Foldable (..))
-import           Data.List               (find, foldl', intercalate, maximumBy)
+import           Data.List               (find, intercalate, maximumBy)
 import           Data.List.Split         (chunksOf)
 import qualified Data.Map                as M
 import qualified Data.Text               as T

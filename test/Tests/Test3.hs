@@ -5,7 +5,6 @@ module Tests.Test3 (
 
 import           Control.Exception (finally)
 import           Control.Monad     (forM_)
-import           Data.List         (unwords)
 import qualified Data.Text         as T
 import           Tests.Utils
 
