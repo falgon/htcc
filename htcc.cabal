@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 22bacaccc5bc8617817eb1c982386f1b7ce9a77e1928a9f47181e1dcd7a27d2a
+-- hash: 9f038934ecf3af287cdb982fab4ed2163a79dec6d3dbe365c5b6c98a38a7b8bc
 
 name:           htcc
 version:        0.0.0.1
@@ -55,6 +55,7 @@ library
       Htcc.Asm.Intrinsic.Structure.Section.Text.Operations
       Htcc.CRules
       Htcc.CRules.Char
+      Htcc.CRules.Definition
       Htcc.CRules.LexicalElements
       Htcc.CRules.Preprocessor
       Htcc.CRules.Preprocessor.Core
@@ -70,6 +71,7 @@ library
       Htcc.Parser.AST.Type
       Htcc.Parser.AST.Var
       Htcc.Parser.AST.Var.Init
+      Htcc.Parser.Combinators
       Htcc.Parser.ConstructionData
       Htcc.Parser.ConstructionData.Core
       Htcc.Parser.ConstructionData.Scope
@@ -124,6 +126,7 @@ library
     , mtl
     , natural-transformation
     , optparse-applicative
+    , parsec
     , safe
     , split
     , text
@@ -149,6 +152,7 @@ executable htcc
     , diagrams-svg
     , directory
     , extra
+    , gitrev
     , htcc
     , monad-finally
     , monad-loops
@@ -156,6 +160,7 @@ executable htcc
     , mtl
     , natural-transformation
     , optparse-applicative
+    , parsec
     , safe
     , split
     , text
@@ -202,6 +207,7 @@ test-suite htcc-test
     , mtl
     , natural-transformation
     , optparse-applicative
+    , parsec
     , process
     , safe
     , split
@@ -237,6 +243,7 @@ benchmark criterion
     , mtl
     , natural-transformation
     , optparse-applicative
+    , parsec
     , safe
     , split
     , text

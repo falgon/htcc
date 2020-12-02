@@ -46,6 +46,7 @@ dependencies:
 - diagrams-lib
 - natural-transformation
 - optparse-applicative
+- parsec
 
 library:
   source-dirs: src
@@ -64,6 +65,7 @@ executables:
     dependencies:
     - htcc
     - directory
+    - gitrev
 
 tests:
   htcc-test:
