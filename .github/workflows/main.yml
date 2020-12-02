@@ -29,7 +29,7 @@ jobs:
               with:
                   ghc-version: ${{ matrix.ghc }}
                   cabal-version: ${{ matrix.cabal }}
-            - uses: mstksg/setup-stack@v1
+            - uses: mstksg/setup-stack@v2
             - name: Setup Dhall to yaml
               if: runner.os == 'Linux'
               run: .travis/install-dhall-to-yaml.sh
