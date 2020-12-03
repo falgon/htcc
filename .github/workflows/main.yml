@@ -1,5 +1,9 @@
 name: CI
-on: push
+on:
+  push:
+    branches:
+      - master
+      - develop
 
 jobs:
     test:
@@ -14,34 +18,35 @@ jobs:
                 # - macos-latest
                 ghc: ["8.6.5"]
                 cabal: ["3.0"]
-                cache-version: ["v4"]
         steps:
             - uses: actions/checkout@v2
-            - name: Cache .stack
-              id: cache-stack
-              uses: actions/cache@v1
-              with:
-                  path: ~/.stack
-                  key: ${{ matrix.cache-version }}-${{ runner.os }}-stack-${{ hashFiles('**/stack.yaml.lock') }}
-                  restore-keys: ${{ matrix.cache-version }}-${{ runner.os }}-stack-
             - name: Setup Haskell to ${{ matrix.os }} (GHC ${{ matrix.ghc }})
-              uses: actions/setup-haskell@v1
+              uses: actions/setup-haskell@v1.1.4
               with:
+                  enable-stack: true
+                  stack-setup-ghc: true
                   ghc-version: ${{ matrix.ghc }}
                   cabal-version: ${{ matrix.cabal }}
-            - uses: mstksg/setup-stack@v1
+            - name: Cache
+              uses: actions/cache@v2
+              id: stack-cache
+              with:
+                path: ~/.stack
+                key: stack-v3-${{ runner.os }}-${{ hashFiles('stack.yaml') }}
             - name: Setup Dhall to yaml
               if: runner.os == 'Linux'
               run: .travis/install-dhall-to-yaml.sh
+            - name: Add path
+              run: echo "$HOME/.local/bin" >> $GITHUB_PATH
             - name: Install dependencies to ${{ matrix.os }}
-              run: stack --system-ghc build --only-dependencies
+              run: stack build --only-dependencies
             - name: Build htcc to ${{ matrix.os }}
-              run: stack --system-ghc install
+              run: stack install
             - name: Test htcc on ${{ matrix.os }}
               if: runner.os == 'Linux'
               run: |
-                  stack --system-ghc test --test-arguments self
-                  stack --system-ghc test --test-arguments subp
+                  stack test --test-arguments self
+                  stack test --test-arguments subp
             - name: Compile and execute example C codes on ${{ matrix.os }}
               if: runner.os == 'Linux'
               run: |
@@ -51,8 +56,8 @@ jobs:
               working-directory: ./example
             - name: Test htcc on ${{ matrix.os }} with Docker
               run: |
-                  stack --system-ghc test --test-arguments docker
-                  stack --system-ghc test --test-arguments docker --test-arguments --clean
+                  stack test --test-arguments docker
+                  stack test --test-arguments docker --test-arguments --clean
             - name: Compile and execute example C codes on ${{ matrix.os }} with Docker
               run: |
                   make docker
