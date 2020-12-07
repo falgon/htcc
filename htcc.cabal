@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 9f038934ecf3af287cdb982fab4ed2163a79dec6d3dbe365c5b6c98a38a7b8bc
+-- hash: eafa6289395390475dd9cf3e016680d63468cafd8c86f64acb8619a5b655f0e2
 
 name:           htcc
 version:        0.0.0.1
@@ -55,7 +55,6 @@ library
       Htcc.Asm.Intrinsic.Structure.Section.Text.Operations
       Htcc.CRules
       Htcc.CRules.Char
-      Htcc.CRules.Definition
       Htcc.CRules.LexicalElements
       Htcc.CRules.Preprocessor
       Htcc.CRules.Preprocessor.Core
@@ -72,6 +71,9 @@ library
       Htcc.Parser.AST.Var
       Htcc.Parser.AST.Var.Init
       Htcc.Parser.Combinators
+      Htcc.Parser.Combinators.Core
+      Htcc.Parser.Combinators.Expr
+      Htcc.Parser.Combinators.Keywords
       Htcc.Parser.ConstructionData
       Htcc.Parser.ConstructionData.Core
       Htcc.Parser.ConstructionData.Scope
@@ -82,6 +84,7 @@ library
       Htcc.Parser.ConstructionData.Scope.Typedef
       Htcc.Parser.ConstructionData.Scope.Utils
       Htcc.Parser.ConstructionData.Scope.Var
+      Htcc.Parser.Development
       Htcc.Parser.Parsing
       Htcc.Parser.Parsing.Core
       Htcc.Parser.Parsing.Global
@@ -120,15 +123,17 @@ library
     , diagrams-lib
     , diagrams-svg
     , extra
+    , megaparsec
     , monad-finally
     , monad-loops
     , mono-traversable
     , mtl
     , natural-transformation
     , optparse-applicative
-    , parsec
+    , parser-combinators
     , safe
     , split
+    , template-haskell
     , text
     , transformers
   default-language: Haskell2010
@@ -139,7 +144,7 @@ executable htcc
       Paths_htcc
   hs-source-dirs:
       app
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall -Werror -O2
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall -O2
   build-depends:
       ansi-wl-pprint
     , base >=4.7 && <5
@@ -154,15 +159,17 @@ executable htcc
     , extra
     , gitrev
     , htcc
+    , megaparsec
     , monad-finally
     , monad-loops
     , mono-traversable
     , mtl
     , natural-transformation
     , optparse-applicative
-    , parsec
+    , parser-combinators
     , safe
     , split
+    , template-haskell
     , text
     , transformers
   default-language: Haskell2010
@@ -171,6 +178,8 @@ test-suite htcc-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Tests.ComponentsTests
+      Tests.ComponentsTests.Parser.Combinators
       Tests.SubProcTests
       Tests.Test1
       Tests.Test2
@@ -201,16 +210,18 @@ test-suite htcc-test
     , hspec-contrib
     , hspec-core
     , htcc
+    , megaparsec
     , monad-finally
     , monad-loops
     , mono-traversable
     , mtl
     , natural-transformation
     , optparse-applicative
-    , parsec
+    , parser-combinators
     , process
     , safe
     , split
+    , template-haskell
     , text
     , time
     , transformers
@@ -237,15 +248,17 @@ benchmark criterion
     , diagrams-svg
     , extra
     , htcc
+    , megaparsec
     , monad-finally
     , monad-loops
     , mono-traversable
     , mtl
     , natural-transformation
     , optparse-applicative
-    , parsec
+    , parser-combinators
     , safe
     , split
+    , template-haskell
     , text
     , transformers
   default-language: Haskell2010

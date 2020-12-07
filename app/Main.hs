@@ -1,12 +1,23 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Main where
 
-import           Control.Monad       (forM_, (>=>))
-import qualified Data.Text.IO        as T
-import           Data.Version        (showVersion)
-import           Development.GitRev  (gitHash)
-import qualified Options.Applicative as OA
-import qualified Paths_htcc          as P
+import           Control.Monad                          (forM_)
+import qualified Data.Text.IO                           as T
+import           Data.Version                           (showVersion)
+import           Development.GitRev                     (gitHash)
+import qualified Options.Applicative                    as OA
+import qualified Paths_htcc                             as P
+
+import qualified Data.Text                              as T
+import           Data.Void
+import           Htcc.Asm.Generate                      (casm')
+import qualified Htcc.Asm.Intrinsic.Structure.Internal  as SI
+import           Htcc.Parser                            (ASTs)
+import           Htcc.Parser.Combinators                (parser, runParser)
+import           Htcc.Parser.ConstructionData           (Warnings)
+import           Htcc.Parser.ConstructionData.Scope.Var (GlobalVars, Literals)
+import           Htcc.Utils
+import qualified Text.Megaparsec                        as M
 
 data Opts = Opts
     { optIsRunAsm  :: !Bool
@@ -76,4 +87,9 @@ optsParser = OA.info (OA.helper <*> versionOption <*> programOptions) $ mconcat 
 main :: IO ()
 main = do
     opts <- OA.execParser optsParser
-    forM_ (optInput opts) $ T.readFile >=> T.putStr
+    forM_ (optInput opts) $ \fname -> do
+        txt <- T.readFile fname
+        case runParser parser fname txt
+            :: Either (M.ParseErrorBundle T.Text Void) (Warnings Integer, ASTs Integer, GlobalVars Integer, Literals Integer) of
+            Left x  -> print x
+            Right r -> SI.runAsm $ casm' (snd4 r) (thd4 r) (fou4 r)

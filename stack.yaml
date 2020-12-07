@@ -22,7 +22,6 @@ extra-deps:
 - monad-abort-fd-0.7@sha256:dc917e7ee2ec0b4f20d6e1cc323bef03adf5b2067619b6e7f4f324a50ae6e870,1340
 - transformers-abort-0.6.0.3@sha256:34de32cc6e852df10ad57df34e46404f841c6b0123526b7fd942c455f62a7a31,1236
 
-
 # Override default flag values for local packages and extra-deps
 # flags: {}
 

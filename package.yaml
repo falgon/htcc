@@ -46,7 +46,9 @@ dependencies:
 - diagrams-lib
 - natural-transformation
 - optparse-applicative
-- parsec
+- megaparsec
+- parser-combinators
+- template-haskell
 
 library:
   source-dirs: src
@@ -60,7 +62,7 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     - -Wall
-    - -Werror
+      #- -Werror
     - -O2
     dependencies:
     - htcc

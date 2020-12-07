@@ -13,6 +13,7 @@ import qualified Options.Applicative      as OA
 import           System.Directory         (createDirectoryIfMissing)
 import           System.FilePath          ((</>))
 import           System.Process           (readCreateProcess, shell)
+import qualified Tests.ComponentsTests     as ComponentsTests
 import qualified Tests.SubProcTests       as SubProcTests
 import           Tests.Utils
 
@@ -25,7 +26,7 @@ specPath = workDir </> "spec.s"
 dockerComposePath :: FilePath
 dockerComposePath = "./docker" </> "test.dhall"
 
-data Command = WithSubProc | WithDocker | WithSelf
+data Command = WithSubProc | WithDocker | WithSelf | WithComponents
 
 data Opts = Opts
     { optClean :: !Bool
@@ -44,6 +45,10 @@ selfCmd :: OA.Mod OA.CommandFields Command
 selfCmd = OA.command "self" $
     OA.info (pure WithSelf) $ OA.progDesc "run the test using htcc's processing power"
 
+componentsCmd :: OA.Mod OA.CommandFields Command
+componentsCmd = OA.command "components" $
+    OA.info (pure WithComponents) $ OA.progDesc "run unit tests of components"
+
 cleanOpt :: OA.Parser Bool
 cleanOpt = OA.switch $ mconcat [
     OA.long "clean"
@@ -57,6 +62,7 @@ programOptions = Opts
         subProcCmd
       , dockerCmd
       , selfCmd
+      , componentsCmd
       ])
 
 optsParser :: OA.ParserInfo Opts
@@ -93,3 +99,4 @@ main = do
             genTestAsm
             execErrFin $ "gcc -no-pie -o spec " <> T.pack specPath
             execErrFin "./spec"
+        WithComponents -> ComponentsTests.exec
