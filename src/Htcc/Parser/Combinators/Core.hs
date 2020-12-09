@@ -13,6 +13,7 @@ C language lexer
 module Htcc.Parser.Combinators.Core (
     runParser
   , Parser
+  , spaceConsumer
   , lexme
   , symbol
   , charLiteral
@@ -56,6 +57,7 @@ import qualified Text.Megaparsec.Char.Lexer     as ML
 import qualified Htcc.Parser.ConstructionData.Scope.Var as PSV
 import qualified Htcc.Parser.ConstructionData.Scope as PS
 import Htcc.Parser.AST.Type (ASTs)
+import Control.Monad.Combinators (between)
 
 type ConstructionDataState i = StateT (ConstructionData i) Identity
 type Parser i = M.ParsecT Void T.Text (ConstructionDataState i)
@@ -64,7 +66,7 @@ runParser ::
     Parser i (ASTs i) ->
     FilePath ->
     T.Text ->
-    Either (M.ParseErrorBundle T.Text Void) (Warnings i, ASTs i, PSV.GlobalVars i, PSV.Literals i)  -- (ATree i, ConstructionData i)
+    Either (M.ParseErrorBundle T.Text Void) (Warnings i, ASTs i, PSV.GlobalVars i, PSV.Literals i)
 runParser p fp input = 
     (warns (snd result),, PSV.globals $ PS.vars $ scope $ snd result, PSV.literals $ PS.vars $ scope $ snd result) 
         <$> fst result
@@ -96,11 +98,11 @@ decimal = ML.decimal
 natural = M.try (lexme hexadecimal) <|> M.try (lexme octal) <|> lexme decimal
 integer = ML.signed spaceConsumer natural <|> natural
 
-parens, braces, angles, brackets :: Ord e => M.ParsecT e T.Text m T.Text -> M.ParsecT e T.Text m T.Text
-parens = M.between (symbol "(") (symbol ")")
-braces = M.between (symbol "{") (symbol "}")
-angles = M.between (symbol "<") (symbol ">")
-brackets = M.between (symbol "[") (symbol "]")
+parens, braces, angles, brackets :: Ord e => M.ParsecT e T.Text m a -> M.ParsecT e T.Text m a
+parens = between (symbol "(") (symbol ")")
+braces = between (symbol "{") (symbol "}")
+angles = between (symbol "<") (symbol ">")
+brackets = between (symbol "[") (symbol "]")
 
 identifier, operator, semi, comma, colon :: Ord e => M.ParsecT e T.Text m T.Text
 identifier =

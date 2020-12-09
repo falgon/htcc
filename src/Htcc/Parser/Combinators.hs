@@ -11,8 +11,8 @@ C language lexer
 -}
 module Htcc.Parser.Combinators (
     module Htcc.Parser.Combinators.Core
-  , module Htcc.Parser.Combinators.Expr
+  , module Htcc.Parser.Combinators.Program
 ) where
 
 import Htcc.Parser.Combinators.Core
-import Htcc.Parser.Combinators.Expr
+import Htcc.Parser.Combinators.Program

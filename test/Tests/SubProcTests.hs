@@ -14,6 +14,28 @@ import           Tests.Utils       hiding (exec)
 import qualified Htcc.CRules.Types as CT
 
 exec :: IO ()
+exec = runTestsEx
+    [ (StatementEqual.test "1+2", 3)
+    , (StatementEqual.test "1+2+4", 7)
+    , (StatementEqual.test "10-7+3", 6)
+    , (StatementEqual.test "42+23-30", 35)
+    , (StatementEqual.test "42/2+2-5", 18)
+    , (StatementEqual.test "(3+5)/2", 4)
+    , (StatementEqual.test "(4-2)*8+20/4",21)
+    , (StatementEqual.test "-(-3*+5)", 15)
+    , (StatementEqual.test "-25+30", 5)
+    , (StatementEqual.test "42 == 42", 1)
+    , (StatementEqual.test "42 != 53", 1)
+    , (StatementEqual.test "42 < 53", 1)
+    , (StatementEqual.test "53 > 42", 1)
+    , (StatementEqual.test "42 <= 42", 1)
+    , (StatementEqual.test "32 <= 42", 1)
+    , (StatementEqual.test "42 >= 42", 1)
+    , (StatementEqual.test "53 >= 42", 1)
+    , (StatementEqual.test "(1 + 1) == 2", 1)
+    , (StatementEqual.test "(2 * 3) != 2", 1)
+    ]
+{-
 exec = let sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural in runTestsEx [
     (StatementEqual.test "int main() { return 42; }", 42),
     (StatementEqual.test "int main() { return 1+2; }", 3),
@@ -178,6 +200,6 @@ exec = let sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural in runTestsEx [
     (StatementEqual.test "int main() { int* ar[3]; int x; ar[0] = &x; x = 42; ar[0][0]; }", 42)
     ] >> runTestsEx [
     (LinkFuncStdOut.test "int test_func1(); int main() { return test_func1(); }" ["test_func1"], Right "test/Tests/csrc/test_func1.c::test_func1(): [OK]"),
-    (LinkFuncStdOut.test "int test_func2(); int main() { return test_func2(40); }" ["test_func2"], Right "test/Tests/csrc/test_func2.c::test_func2(40) outputs: \"2 3 5 7 11 13 17 19 23 29 31 37 \": [OK]") --,
-    -- (LinkFuncStdOut.test "int main() { return test_func2(sum7(1, 2, 3, 4, 5, 6, 7)); }" ["test_func2", "test_func3"], Right "test/Tests/csrc/test_func2.c::test_func2(28) outputs: \"2 3 5 7 11 13 17 19 23 \": [OK]")
+    (LinkFuncStdOut.test "int test_func2(); int main() { return test_func2(40); }" ["test_func2"], Right "test/Tests/csrc/test_func2.c::test_func2(40) outputs: \"2 3 5 7 11 13 17 19 23 29 31 37 \": [OK]"),
     ]
+-}
