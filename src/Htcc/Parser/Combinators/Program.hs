@@ -14,70 +14,133 @@ module Htcc.Parser.Combinators.Program (
     parser
 ) where
 
-import           Control.Applicative            hiding (many)
-import           Control.Monad.Combinators      (between, choice)
-import           Control.Monad.Combinators.Expr
-import           Control.Monad.Fix              (fix)
-import qualified Data.Text                      as T
-import           Htcc.CRules.Types              as CT
-import           Htcc.Parser.AST.Core           (ATKind (..), ATree (..),
-                                                 atNumLit)
-import           Htcc.Parser.AST.Type           (ASTs)
+import           Control.Applicative                    hiding (many, some)
+import           Control.Monad.Combinators              (choice, some)
+import           Control.Monad.Trans                    (MonadTrans (..))
+import           Control.Monad.Trans.State              (get, put)
+import           Data.Bits                              (Bits (..))
+import           Htcc.CRules.Types                      as CT
+import           Htcc.Parser.AST                        (Treealizable (..))
+import           Htcc.Parser.AST.Core                   (ATKind (..),
+                                                         ATree (..), atBlock,
+                                                         atGVar, atNumLit,
+                                                         atReturn)
+import           Htcc.Parser.AST.Type                   (ASTs)
+import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.Core
-import           Htcc.Parser.Development        (defMainFn)
-import qualified Text.Megaparsec                as M
-import qualified Text.Megaparsec.Char           as MC
+import           Htcc.Parser.Combinators.Keywords
+import           Htcc.Parser.ConstructionData           (addLVar, lookupVar)
+import           Htcc.Parser.ConstructionData.Scope     (LookupVarResult (..))
+import qualified Htcc.Parser.ConstructionData.Scope.Var as PV
+import           Htcc.Parser.Development                (defMainFn)
+import qualified Htcc.Tokenizer.Token                   as HT
+import           Htcc.Utils                             (lor)
+import qualified Text.Megaparsec                        as M
 
-parser :: Num i => Parser i (ASTs i)
-parser = (:[]) . defMainFn <$> (spaceConsumer >> expr)
+binOpBool, binOpCon :: (Monad m, Ord i, Bits i, Show i)
+    => ATKind i
+    -> ATree i
+    -> ATree i
+    -> m (ATree i)
+binOpBool k lhs rhs = return $ ATNode k (CT.SCAuto CT.CTBool) lhs rhs
+binOpCon k lhs rhs = return $ ATNode k (CT.conversion (atype lhs) (atype rhs)) lhs rhs
 
-expr :: Num i => Parser i (ATree i)
-expr = makeExprParser term operatorTable M.<?> "expression"
+binOpIntOnly :: (Monad m, Alternative m, Ord i, Bits i, Show i)
+    => ATKind i
+    -> ATree i
+    -> ATree i
+    -> m (ATree i)
+binOpIntOnly k lhs rhs
+    | lor [CT.isIntegral, (CT.CTBool==) . CT.toTypeKind] (atype lhs) &&
+        lor [CT.isIntegral, (CT.CTBool ==) . CT.toTypeKind] (atype rhs) =
+            return $ ATNode k (CT.SCAuto $ CT.CTLong CT.CTInt) lhs rhs
+    | otherwise = empty
 
-term :: Num i => Parser i (ATree i)
-term = choice [parens expr, atNumLit <$> natural] M.<?> "term"
+parser :: (Integral i, Ord i, Bits i, Show i) => Parser i (ASTs i)
+parser = (:[]) . defMainFn . atBlock <$> (spaceConsumer >> program) <* M.eof
 
-operatorTable :: Num i => [[Operator (Parser i) (ATree i)]]
-operatorTable =
-    [ [ binary "==" (ATNode ATEQ (CT.SCAuto CT.CTInt))
-      , binary "!=" (ATNode ATNEQ (CT.SCAuto CT.CTInt))
-      ]
-    , [ binary "<=" (ATNode ATLEQ (CT.SCAuto CT.CTInt))
-      , binary "<" (ATNode ATLT (CT.SCAuto CT.CTInt))
-      , binary ">=" (ATNode ATGEQ (CT.SCAuto CT.CTInt))
-      , binary ">" (ATNode ATGT (CT.SCAuto CT.CTInt))
-      ]
-    , [ prefix "-" (ATNode ATSub (CT.SCAuto CT.CTInt) (atNumLit 0))
-      , prefix "+" id
-      ]
-    , [ binary "*" (ATNode ATMul (CT.SCAuto CT.CTInt))
-      , binary "/" (ATNode ATDiv (CT.SCAuto CT.CTInt))
-      ]
-    , [ binary "+" (ATNode ATAdd (CT.SCAuto CT.CTInt))
-      , binary "-" (ATNode ATSub (CT.SCAuto CT.CTInt))
-      ]
+program :: (Integral i, Ord i, Bits i, Show i) => Parser i (ASTs i)
+program = some stmt
+
+stmt,
+    expr,
+    assign,
+    logicalOr,
+    logicalAnd,
+    bitwiseOr,
+    bitwiseXor,
+    bitwiseAnd,
+    equality,
+    relational,
+    add,
+    term,
+    unary,
+    factor,
+    identifier' :: (Ord i, Bits i, Show i, Integral i) => Parser i (ATree i)
+
+stmt = choice
+    [ (atReturn (CT.SCUndef CT.CTUndef) <$> (kReturn >> expr)) <* semi
+    , expr <* semi
     ]
-    where
-        prefix name f = Prefix (f <$ symbol name)
-        binary name f = InfixL (f <$ symbol name)
 
-{-
-expr :: Num i => Parser i (ATree i)
-expr = do
-    m <- term
-    ($ m) . fix $ \f nd ->
-        ((ATNode ATAdd (CT.SCAuto CT.CTInt) nd <$> (symbol "+" >> term)) >>= f)
-            <|> ((ATNode ATSub (CT.SCAuto CT.CTInt) nd <$> (symbol "-" >> term)) >>= f)
-            <|> return nd
+expr = assign
 
-term :: Num i => Parser i (ATree i)
-term = do
-    fac <- factor
-    ($ fac) . fix $ \f nd ->
-        ((ATNode ATMul (CT.SCAuto CT.CTInt) nd <$> (symbol "*" >> factor)) >>= f)
-            <|> ((ATNode ATDiv (CT.SCAuto CT.CTInt) nd <$> (symbol "/" >> factor)) >>= f)
-            <|> return nd
+assign = do
+    nd <- logicalOr
+    choice
+        [ symbol "=" >> (ATNode ATAssign (atype nd) nd <$> assign)
+        , return nd
+        ]
 
-factor :: Num i => Parser i (ATree i)
-factor = atNumLit <$> integer <|> between (symbol "(") (symbol ")") expr
--}
+logicalOr = binaryOperator logicalAnd [(symbol "||", binOpBool ATLOr)]
+logicalAnd = binaryOperator bitwiseOr [(symbol "&&", binOpBool ATLAnd)]
+bitwiseOr = binaryOperator bitwiseXor [(symbol "|", binOpIntOnly ATOr)]
+bitwiseXor = binaryOperator bitwiseAnd [(symbol "^", binOpIntOnly ATXor)]
+bitwiseAnd = binaryOperator equality [(symbol "&", binOpIntOnly ATAnd)]
+
+equality = binaryOperator relational
+    [ (symbol "==", binOpBool ATEQ)
+    , (symbol "!=", binOpBool ATNEQ)
+    ]
+
+relational = binaryOperator add
+    [ (symbol "<=", binOpBool ATLEQ)
+    , (symbol "<",  binOpBool ATLT)
+    , (symbol ">=", binOpBool ATGEQ)
+    , (symbol ">",  binOpBool ATGT)
+    ]
+
+add = binaryOperator term
+    [ (symbol "+", binOpCon ATAdd)
+    , (symbol "-", binOpCon ATSub)
+    ]
+
+term = binaryOperator unary
+    [ (symbol "*", binOpCon ATMul)
+    , (symbol "/", binOpCon ATDiv)
+    ]
+
+unary = choice
+    [ symbol "+" >> factor
+    , (\n -> ATNode ATSub (atype n) (atNumLit 0) n) <$> (symbol "-" >> factor)
+    , factor
+    ]
+
+factor = choice
+    [ atNumLit <$> natural
+    , identifier'
+    , parens expr
+    , ATEmpty <$ M.eof
+    ]
+
+identifier' = do
+    ident <- identifier
+    lift $ do
+        scp <- get
+        case lookupVar ident scp of
+            FoundGVar (PV.GVar t _) -> return $ atGVar t ident
+            FoundLVar sct -> return $ treealize sct
+            FoundEnum sct -> return $ treealize sct
+            NotFound -> let Right (lat, scp') = addLVar (CT.SCAuto CT.CTInt) (HT.TokenLCNums 1 1, HT.TKIdent ident) scp in do
+                put scp'
+                return lat

@@ -94,6 +94,9 @@ instance TypeKindBase StorageClass where
     {-# INLINE isArray #-}
     isArray = isArray . toTypeKind
 
+    {-# INLINE isIntegral #-}
+    isIntegral = isIntegral . toTypeKind
+
     {-# INLINE isCTStruct #-}
     isCTStruct = isCTStruct . toTypeKind
 

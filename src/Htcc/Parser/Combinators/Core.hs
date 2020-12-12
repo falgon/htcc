@@ -28,7 +28,6 @@ module Htcc.Parser.Combinators.Core (
   , braces
   , brackets
   , identifier
-  , operator
   , semi
   , comma
   , colon
@@ -36,28 +35,24 @@ module Htcc.Parser.Combinators.Core (
   , commaSep1
 ) where
 
-import           Control.Applicative            (Alternative (..))
+import           Control.Applicative                    (Alternative (..))
+import           Control.Monad.Combinators              (between)
 import           Control.Monad.Trans.State.Lazy
-import           Data.Char                      (isAlpha)
-import           Data.Foldable                  (asum)
+import           Data.Char                              (isAlpha)
 import           Data.Functor.Identity
-import           Data.Maybe                     (isJust)
-import qualified Data.Text                      as T
+import qualified Data.Text                              as T
 import           Data.Void
-import qualified Htcc.CRules                    as CR
-import           Htcc.Parser.AST.Core           (ATree (..))
-import           Htcc.Parser.ConstructionData   (ConstructionData (..),
-                                                 initConstructionData, Warnings)
-import           Htcc.Tokenizer.Token           (Token (..), keywordsTokens,
-                                                 lookupKeyword)
-import           Htcc.Utils                     (lor)
-import qualified Text.Megaparsec                as M
-import qualified Text.Megaparsec.Char           as MC
-import qualified Text.Megaparsec.Char.Lexer     as ML
+import qualified Htcc.CRules                            as CR
+import           Htcc.Parser.AST.Type                   (ASTs)
+import           Htcc.Parser.ConstructionData           (ConstructionData (..),
+                                                         Warnings,
+                                                         initConstructionData)
+import qualified Htcc.Parser.ConstructionData.Scope     as PS
 import qualified Htcc.Parser.ConstructionData.Scope.Var as PSV
-import qualified Htcc.Parser.ConstructionData.Scope as PS
-import Htcc.Parser.AST.Type (ASTs)
-import Control.Monad.Combinators (between)
+import           Htcc.Utils                             (lor)
+import qualified Text.Megaparsec                        as M
+import qualified Text.Megaparsec.Char                   as MC
+import qualified Text.Megaparsec.Char.Lexer             as ML
 
 type ConstructionDataState i = StateT (ConstructionData i) Identity
 type Parser i = M.ParsecT Void T.Text (ConstructionDataState i)
@@ -67,8 +62,8 @@ runParser ::
     FilePath ->
     T.Text ->
     Either (M.ParseErrorBundle T.Text Void) (Warnings i, ASTs i, PSV.GlobalVars i, PSV.Literals i)
-runParser p fp input = 
-    (warns (snd result),, PSV.globals $ PS.vars $ scope $ snd result, PSV.literals $ PS.vars $ scope $ snd result) 
+runParser p fp input =
+    (warns (snd result),, PSV.globals $ PS.vars $ scope $ snd result, PSV.literals $ PS.vars $ scope $ snd result)
         <$> fst result
     where
         result = runIdentity $ runStateT (M.runParserT p fp input) initConstructionData
@@ -81,9 +76,6 @@ lexme = ML.lexeme spaceConsumer
 
 symbol :: Ord e => T.Text -> M.ParsecT e T.Text m T.Text
 symbol = ML.symbol spaceConsumer
-
-toSymbols :: (Ord e) => [T.Text] -> M.ParsecT e T.Text m T.Text
-toSymbols = asum . map (M.try . symbol)
 
 charLiteral :: Ord e => M.ParsecT e T.Text m Char
 charLiteral = M.between (MC.char '\'') (MC.char '\'') ML.charLiteral
@@ -104,15 +96,13 @@ braces = between (symbol "{") (symbol "}")
 angles = between (symbol "<") (symbol ">")
 brackets = between (symbol "[") (symbol "]")
 
-identifier, operator, semi, comma, colon :: Ord e => M.ParsecT e T.Text m T.Text
+identifier, semi, comma, colon :: Ord e => M.ParsecT e T.Text m T.Text
 identifier =
     mappend
         <$> M.takeWhile1P (Just "valid identifier") (lor [isAlpha, (=='_')])
         <*> M.takeWhileP (Just "valid identifier") CR.isValidChar
-operator =
-    toSymbols CR.strOps3
-        <|> toSymbols CR.strOps2
-        <|> toSymbols (T.singleton <$> CR.charOps)
+        <* spaceConsumer
+
 semi = symbol ";"
 comma = symbol ","
 colon = symbol "."

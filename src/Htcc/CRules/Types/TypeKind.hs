@@ -53,6 +53,8 @@ class TypeKindBase a where
     -- | `isArray` return `True` when the given argument is `Htcc.CRules.Types.Core.CTArray` or `IncompleteArray`
     -- Otherwise, returns `False`
     isArray :: a i -> Bool
+    -- | `isIntegral` return `True` when the given argument is `Htcc.CRules.Types.Core.CTInt`, `Htcc.CRules.Types.Core.CTShort` or `Htcc.CRules.Types.Core.CTLong`
+    isIntegral :: a i -> Bool
     -- | `isCTStruct` returns `True` when the given argument is `Htcc.CRules.Types.Core.CTStruct`.
     -- Otherwise, returns `False`
     isCTStruct :: a i -> Bool
@@ -387,6 +389,13 @@ instance TypeKindBase TypeKind where
 
     {-# INLINE isArray #-}
     isArray = lor [isCTArray, isIncompleteArray]
+
+    {-# INLINE isIntegral #-}
+    isIntegral CTInt = True
+    isIntegral (CTSigned x) = isIntegral x
+    isIntegral (CTLong x) = isIntegral x
+    isIntegral (CTShort x) = isIntegral x
+    isIntegral _ = False
 
     {-# INLINE isCTStruct #-}
     isCTStruct (CTStruct _) = True

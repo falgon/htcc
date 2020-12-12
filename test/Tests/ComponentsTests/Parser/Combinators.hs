@@ -15,7 +15,7 @@ import qualified Text.Megaparsec              as M
 
 type TestParser = M.Parsec Void T.Text
 
-charLiteralTest, stringLiteralTest, hexadecimalTest, octalTest, naturalTest, integerTest, identifierTest, operatorTest :: Test
+charLiteralTest, stringLiteralTest, hexadecimalTest, octalTest, naturalTest, integerTest, identifierTest :: Test
 
 charLiteralTest = TestLabel "Parser.Combinators.Core.charLiteral" $
     TestList [
@@ -154,7 +154,8 @@ identifierTest = TestLabel "Parser.Combinators.Core.identifier" $
     TestList [
         TestLabel "Parser.Combinators.Core.identifier success patterns" $
             TestList [
-                "abcde" ~: M.runParser identifier' "" "abcde" ~?= Right "abcde"
+                "a" ~: M.runParser identifier' "" "a =" ~?= Right "a"
+              , "abcde" ~: M.runParser identifier' "" "abcde" ~?= Right "abcde"
               , "_" ~: M.runParser identifier' "" "_" ~?= Right "_"
               , "a@" ~: M.runParser identifier' "" "a@" ~?= Right "a"
               , "a1a" ~: M.runParser identifier' "" "a1" ~?= Right "a1"
@@ -177,24 +178,6 @@ identifierTest = TestLabel "Parser.Combinators.Core.identifier" $
     where
         identifier' = identifier :: TestParser T.Text
 
-operatorTest = TestLabel "Parser.Combinators.Core.operator" $
-    TestList [
-        TestLabel "Parser.Combinators.Core.operator success patterns" $
-            TestList [
-                TestLabel "3 characters" $ TestList [T.unpack op ~: M.runParser operator' "" op ~?= Right op | op <- CR.strOps3]
-              , TestLabel "2 characters" $ TestList [T.unpack op ~: M.runParser operator' "" op ~?= Right op | op <- CR.strOps2]
-              , TestLabel "1 character" $
-                    TestList [[op] ~: M.runParser operator' "" (T.singleton op) ~?= Right (T.singleton op) | op <- CR.charOps]
-            ]
-      , TestLabel "Parser.Combinators.Core.operator fail patterns" $
-            TestList [
-                [c] ~: isLeft (M.runParser operator' "" (T.singleton c)) ~?= True
-                    | c <- ['a'..'z'] <> ['A'..'Z']
-            ]
-    ]
-    where
-        operator' = operator :: TestParser T.Text
-
 test :: Test
 test = TestLabel "Parser.Combinators.Core" $
     TestList [
@@ -205,5 +188,4 @@ test = TestLabel "Parser.Combinators.Core" $
       , naturalTest
       , integerTest
       , identifierTest
-      , operatorTest
     ]
