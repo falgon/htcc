@@ -14,7 +14,6 @@ module Htcc.Parser.Combinators.Program (
     parser
 ) where
 
-import           Control.Applicative                    hiding (many, some)
 import           Control.Monad.Combinators              (choice, some)
 import           Control.Monad.Trans                    (MonadTrans (..))
 import           Control.Monad.Trans.State              (get, put)
@@ -34,27 +33,7 @@ import           Htcc.Parser.ConstructionData.Scope     (LookupVarResult (..))
 import qualified Htcc.Parser.ConstructionData.Scope.Var as PV
 import           Htcc.Parser.Development                (defMainFn)
 import qualified Htcc.Tokenizer.Token                   as HT
-import           Htcc.Utils                             (lor)
 import qualified Text.Megaparsec                        as M
-
-binOpBool, binOpCon :: (Monad m, Ord i, Bits i, Show i)
-    => ATKind i
-    -> ATree i
-    -> ATree i
-    -> m (ATree i)
-binOpBool k lhs rhs = return $ ATNode k (CT.SCAuto CT.CTBool) lhs rhs
-binOpCon k lhs rhs = return $ ATNode k (CT.conversion (atype lhs) (atype rhs)) lhs rhs
-
-binOpIntOnly :: (Monad m, Alternative m, Ord i, Bits i, Show i)
-    => ATKind i
-    -> ATree i
-    -> ATree i
-    -> m (ATree i)
-binOpIntOnly k lhs rhs
-    | lor [CT.isIntegral, (CT.CTBool==) . CT.toTypeKind] (atype lhs) &&
-        lor [CT.isIntegral, (CT.CTBool ==) . CT.toTypeKind] (atype rhs) =
-            return $ ATNode k (CT.SCAuto $ CT.CTLong CT.CTInt) lhs rhs
-    | otherwise = empty
 
 parser :: (Integral i, Ord i, Bits i, Show i) => Parser i (ASTs i)
 parser = (:[]) . defMainFn . atBlock <$> (spaceConsumer >> program) <* M.eof
