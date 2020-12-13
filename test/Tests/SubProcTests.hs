@@ -59,6 +59,9 @@ exec = runTestsEx
     , (StatementEqual.test "if (1) if (1) if (1) if (1) if (1) if (0) return 1; else return 2; else return 3; else return 4; else return 5; else return 6; else return 7;", 2)
     , (StatementEqual.test "if(1)if(1)return 42;return 53;", 42)
     , (StatementEqual.test "if(0); return 0;", 0)
+    , (StatementEqual.test "a = 1; while (a < 10) a = a + 1; return a;", 10)
+    , (StatementEqual.test "a = 1; while (a < 10) a = a + 1; b = 1; while (b < 20) b = b + 2; return a + b;", 31)
+    , (StatementEqual.test "a = 0; while (a); return 0;", 0)
     ]
 {-
 exec = let sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural in runTestsEx [

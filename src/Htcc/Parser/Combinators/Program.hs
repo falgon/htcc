@@ -24,7 +24,7 @@ import           Htcc.Parser.AST                        (Treealizable (..))
 import           Htcc.Parser.AST.Core                   (ATKind (..),
                                                          ATree (..), atBlock,
                                                          atElse, atGVar, atIf,
-                                                         atNumLit, atReturn)
+                                                         atNumLit, atReturn, atWhile)
 import           Htcc.Parser.AST.Type                   (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.Core
@@ -58,6 +58,7 @@ stmt,
 stmt = choice
     [ returnStmt
     , ifStmt
+    , whileStmt
     , expr <* semi
     , ATEmpty <$ semi
     ]
@@ -71,6 +72,7 @@ stmt = choice
             M.option ATEmpty (M.try kElse >> stmt) <&> \case
                 ATEmpty -> r
                 nd -> atElse r nd
+        whileStmt = atWhile <$> (M.try kWhile >> parens expr) <*> stmt
 
 expr = assign
 
