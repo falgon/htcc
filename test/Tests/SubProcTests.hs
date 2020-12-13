@@ -62,6 +62,15 @@ exec = runTestsEx
     , (StatementEqual.test "a = 1; while (a < 10) a = a + 1; return a;", 10)
     , (StatementEqual.test "a = 1; while (a < 10) a = a + 1; b = 1; while (b < 20) b = b + 2; return a + b;", 31)
     , (StatementEqual.test "a = 0; while (a); return 0;", 0)
+    , (StatementEqual.test "a = 0; i = 0; for (i = 1; i <= 10; i = i + 1) a = a + i * 2; return a;", 110)
+    , (StatementEqual.test "i = 0; for (; i <= 10;) i = i + 2; return i; ", 12)
+    , (StatementEqual.test "i = 0; for (; i <= 10; i = i + 2);  return i;", 12)
+    , (StatementEqual.test "a = 0; i = 0; for (i = 0; i < 10; i = i + 1) if (a) a = 0; else a = 1; return a;", 0)
+    , (StatementEqual.test "a = 1; b = 1; return a & b;", 1)
+    , (StatementEqual.test "a = 42; b = 53; a = a ^ b; b = b ^ a; a = a ^ b; if (a == 53) if (b == 42) return 1; return 0;", 1)
+    , (StatementEqual.test "return 1 | 0;", 1)
+    , (StatementEqual.test "a = 1; b = 0; return a & b ^ a | b;", 1) -- Xor swap
+    , (StatementEqual.test "a = 0; i = 0; for (i = 0; i < 10; i = i + 1) if (i % 2 == 0) a = a + i; return a;", 20)
     ]
 {-
 exec = let sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural in runTestsEx [

@@ -14,6 +14,7 @@ module Htcc.Parser.Combinators.Program (
     parser
 ) where
 
+import           Control.Monad                          ((>=>))
 import           Control.Monad.Combinators              (choice, some)
 import           Control.Monad.Trans                    (MonadTrans (..))
 import           Control.Monad.Trans.State              (get, put)
@@ -22,9 +23,12 @@ import           Data.Functor                           ((<&>))
 import           Htcc.CRules.Types                      as CT
 import           Htcc.Parser.AST                        (Treealizable (..))
 import           Htcc.Parser.AST.Core                   (ATKind (..),
+                                                         ATKindFor (..),
                                                          ATree (..), atBlock,
-                                                         atElse, atGVar, atIf,
-                                                         atNumLit, atReturn, atWhile)
+                                                         atElse, atExprStmt,
+                                                         atFor, atGVar, atIf,
+                                                         atNumLit, atReturn,
+                                                         atWhile)
 import           Htcc.Parser.AST.Type                   (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.Core
@@ -59,6 +63,7 @@ stmt = choice
     [ returnStmt
     , ifStmt
     , whileStmt
+    , forStmt
     , expr <* semi
     , ATEmpty <$ semi
     ]
@@ -73,6 +78,16 @@ stmt = choice
                 ATEmpty -> r
                 nd -> atElse r nd
         whileStmt = atWhile <$> (M.try kWhile >> parens expr) <*> stmt
+        forStmt = do
+            es <- (>>) (M.try kFor) $ parens $ do
+                initSect <- ATForInit . atExprStmt
+                    <$> choice [ATEmpty <$ semi,  expr <* semi]
+                condSect <- ATForCond
+                    <$> choice [atNumLit 1 <$ semi, expr <* semi]
+                incrSect <- ATForIncr . atExprStmt
+                    <$> M.option ATEmpty expr
+                pure [initSect, condSect, incrSect]
+            atFor . (es <>) . (:[]) . ATForStmt <$> stmt
 
 expr = assign
 
@@ -109,6 +124,7 @@ add = binaryOperator term
 term = binaryOperator unary
     [ (symbol "*", binOpCon ATMul)
     , (symbol "/", binOpCon ATDiv)
+    , (symbol "%", binOpCon ATMod)
     ]
 
 unary = choice
