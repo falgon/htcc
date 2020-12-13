@@ -14,6 +14,7 @@ module Htcc.Parser.Combinators.BasicOperator (
   , binOpBool
   , binOpCon
   , binOpIntOnly
+  , notFollowedOp
 ) where
 
 import           Control.Applicative          (Alternative (..))
@@ -64,3 +65,6 @@ binOpIntOnly k lhs rhs
             , show k
             , "'"
             ]
+
+notFollowedOp :: Parser i a -> Parser i b -> Parser i a
+notFollowedOp op nop = M.try $ lexeme $ op `notFollowedBy` nop
