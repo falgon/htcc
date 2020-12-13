@@ -71,6 +71,11 @@ exec = runTestsEx
     , (StatementEqual.test "return 1 | 0;", 1)
     , (StatementEqual.test "a = 1; b = 0; return a & b ^ a | b;", 1) -- Xor swap
     , (StatementEqual.test "a = 0; i = 0; for (i = 0; i < 10; i = i + 1) if (i % 2 == 0) a = a + i; return a;", 20)
+    , (StatementEqual.test "a = 0; i = 0; for (i = 0; i < 10; i = i + 1) { a = a + i; a = a - i; } return a;", 0)
+    , (StatementEqual.test "a = 10; if (a) { a = a * a; a = a / 10; } return a;", 10)
+    , (StatementEqual.test "a = 0; while (1) { if (a < 10) a = a + 1; else return a; }", 10)
+    , (StatementEqual.test "a = 0; for (;;) { a = 42; return a; } return a;", 42)
+    , (StatementEqual.test "a = 0; for (;;) { if (a < 10) a = a + 1; else return a; }", 10)
     ]
 {-
 exec = let sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural in runTestsEx [

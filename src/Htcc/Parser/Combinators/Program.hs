@@ -14,7 +14,6 @@ module Htcc.Parser.Combinators.Program (
     parser
 ) where
 
-import           Control.Monad                          ((>=>))
 import           Control.Monad.Combinators              (choice, some)
 import           Control.Monad.Trans                    (MonadTrans (..))
 import           Control.Monad.Trans.State              (get, put)
@@ -64,6 +63,7 @@ stmt = choice
     , ifStmt
     , whileStmt
     , forStmt
+    , compoundStmt
     , expr <* semi
     , ATEmpty <$ semi
     ]
@@ -88,6 +88,7 @@ stmt = choice
                     <$> M.option ATEmpty expr
                 pure [initSect, condSect, incrSect]
             atFor . (es <>) . (:[]) . ATForStmt <$> stmt
+        compoundStmt = atBlock <$> braces (M.many stmt)
 
 expr = assign
 

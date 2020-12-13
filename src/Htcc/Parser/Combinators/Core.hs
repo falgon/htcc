@@ -31,8 +31,6 @@ module Htcc.Parser.Combinators.Core (
   , semi
   , comma
   , colon
-  , commaSep
-  , commaSep1
   , notFollowedBy
 ) where
 
@@ -107,10 +105,6 @@ identifier =
 semi = symbol ";"
 comma = symbol ","
 colon = symbol "."
-
-commaSep, commaSep1 :: Ord e => M.ParsecT e T.Text m T.Text -> M.ParsecT e T.Text m [T.Text]
-commaSep = flip M.sepBy comma
-commaSep1 = flip M.sepBy1 comma
 
 notFollowedBy :: Ord e => M.ParsecT e T.Text m a -> M.ParsecT e T.Text m b -> M.ParsecT e T.Text m a
 notFollowedBy k p = lexeme (k <* M.notFollowedBy p)
