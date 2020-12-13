@@ -46,7 +46,7 @@ binOpBool, binOpCon :: (Monad m, Ord i, Bits i, Show i)
 binOpBool k lhs rhs = return $ ATNode k (CT.SCAuto CT.CTBool) lhs rhs
 binOpCon k lhs rhs = return $ ATNode k (CT.conversion (atype lhs) (atype rhs)) lhs rhs
 
-binOpIntOnly :: (Monad m, Alternative m, Ord i, Bits i, Show i)
+binOpIntOnly :: (Monad m, MonadFail m, Alternative m, Ord i, Bits i, Show i)
     => ATKind i
     -> ATree i
     -> ATree i
@@ -55,4 +55,12 @@ binOpIntOnly k lhs rhs
     | lor [CT.isIntegral, (CT.CTBool==) . CT.toTypeKind] (atype lhs) &&
         lor [CT.isIntegral, (CT.CTBool ==) . CT.toTypeKind] (atype rhs) =
             return $ ATNode k (CT.SCAuto $ CT.CTLong CT.CTInt) lhs rhs
-    | otherwise = empty
+    | otherwise = fail $ mconcat
+            [ "invalid operands of types '"
+            , show (atype lhs)
+            , "' and '"
+            , show (atype rhs)
+            , "' to binary '"
+            , show k
+            , "'"
+            ]

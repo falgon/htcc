@@ -14,9 +14,10 @@ module Htcc.Parser.Combinators.Program (
     parser
 ) where
 
+import Control.Monad (void, forM)
 import           Control.Monad.Combinators              (choice, some)
 import           Control.Monad.Trans                    (MonadTrans (..))
-import           Control.Monad.Trans.State              (get, put)
+import           Control.Monad.Trans.State              (get, gets, put, modify)
 import           Data.Bits                              (Bits (..))
 import           Data.Functor                           ((<&>))
 import           Htcc.CRules.Types                      as CT
@@ -27,26 +28,29 @@ import           Htcc.Parser.AST.Core                   (ATKind (..),
                                                          atElse, atExprStmt,
                                                          atFor, atGVar, atIf,
                                                          atNumLit, atReturn,
-                                                         atWhile, atNoLeaf)
+                                                         atWhile, atNoLeaf, atDefFunc)
 import           Htcc.Parser.AST.Type                   (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.Core
 import           Htcc.Parser.Combinators.Keywords
-import           Htcc.Parser.ConstructionData           (addLVar, lookupVar, lookupFunction)
+import           Htcc.Parser.ConstructionData           (addLVar, lookupVar, lookupFunction, resetLocal, addFunction)
 import           Htcc.Parser.ConstructionData.Scope     (LookupVarResult (..))
 import qualified Htcc.Parser.ConstructionData.Scope.Var as PV
 import           Htcc.Parser.Development                (defMainFn)
 import qualified Htcc.Tokenizer.Token                   as HT
 import qualified Text.Megaparsec                        as M
 import qualified Htcc.Parser.ConstructionData.Scope.Function     as PSF
+import qualified Data.Text as T
 
 import Text.Megaparsec.Debug (dbg)
 
 parser, program :: (Integral i, Ord i, Bits i, Show i) => Parser i (ASTs i)
-parser = (:[]) . defMainFn . atBlock <$> (spaceConsumer >> program) <* M.eof
-program = some stmt
+parser = (spaceConsumer >> program) <* M.eof
+program = some global
 
-stmt,
+global,
+    function,
+    stmt,
     expr,
     assign,
     logicalOr,
@@ -61,6 +65,35 @@ stmt,
     unary,
     factor,
     identifier' :: (Ord i, Bits i, Show i, Integral i) => Parser i (ATree i)
+
+global = choice
+    [ function
+    ]
+
+function = do
+    ident <- identifier
+    params <- symbol "(" >> M.manyTill (M.try (identifier <* comma) M.<|> identifier) (symbol ")")
+    lift $ modify resetLocal
+    choice
+        [ declaration ident
+        , definition ident params
+        ]
+    where
+        declaration ident = do
+            void semi
+            scp <- lift get
+            case addFunction False (CT.SCAuto CT.CTInt) (HT.TokenLCNums 1 1, HT.TKIdent ident) scp of
+                Right scp' -> ATEmpty <$ lift (put scp')
+                Left y -> fail $ T.unpack $ fst y
+     
+        definition ident params = do
+            void $ M.lookAhead (symbol "{")
+            params' <- forM params $ \p -> do
+                scp <- lift get
+                case addLVar (CT.SCAuto CT.CTInt) (HT.TokenLCNums 1 1, HT.TKIdent p) scp of
+                    Right (lat, scp') -> lat <$ lift (put scp')
+                    Left x -> fail $ T.unpack $ fst x
+            atDefFunc ident (if null params' then Nothing else Just params') (CT.SCAuto CT.CTInt) <$> stmt
 
 stmt = choice
     [ returnStmt
