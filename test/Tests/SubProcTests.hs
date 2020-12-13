@@ -76,6 +76,9 @@ exec = runTestsEx
     , (StatementEqual.test "a = 0; while (1) { if (a < 10) a = a + 1; else return a; }", 10)
     , (StatementEqual.test "a = 0; for (;;) { a = 42; return a; } return a;", 42)
     , (StatementEqual.test "a = 0; for (;;) { if (a < 10) a = a + 1; else return a; }", 10)
+    , (LinkFuncRet.test "a = test_func1(); test_func1(); return a;" ["test_func1"], 0)
+    , (LinkFuncRet.test "return test_func2(40);" ["test_func2"], 0)
+    , (LinkFuncRet.test "return test_func5(1, 2);" ["test_func5"], 3)
     ]
 {-
 exec = let sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural in runTestsEx [

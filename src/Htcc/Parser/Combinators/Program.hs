@@ -27,17 +27,20 @@ import           Htcc.Parser.AST.Core                   (ATKind (..),
                                                          atElse, atExprStmt,
                                                          atFor, atGVar, atIf,
                                                          atNumLit, atReturn,
-                                                         atWhile)
+                                                         atWhile, atNoLeaf)
 import           Htcc.Parser.AST.Type                   (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.Core
 import           Htcc.Parser.Combinators.Keywords
-import           Htcc.Parser.ConstructionData           (addLVar, lookupVar)
+import           Htcc.Parser.ConstructionData           (addLVar, lookupVar, lookupFunction)
 import           Htcc.Parser.ConstructionData.Scope     (LookupVarResult (..))
 import qualified Htcc.Parser.ConstructionData.Scope.Var as PV
 import           Htcc.Parser.Development                (defMainFn)
 import qualified Htcc.Tokenizer.Token                   as HT
 import qualified Text.Megaparsec                        as M
+import qualified Htcc.Parser.ConstructionData.Scope.Function     as PSF
+
+import Text.Megaparsec.Debug (dbg)
 
 parser, program :: (Integral i, Ord i, Bits i, Show i) => Parser i (ASTs i)
 parser = (:[]) . defMainFn . atBlock <$> (spaceConsumer >> program) <* M.eof
@@ -56,7 +59,8 @@ stmt,
     add,
     term,
     unary,
-    factor :: (Ord i, Bits i, Show i, Integral i) => Parser i (ATree i)
+    factor,
+    identifier' :: (Ord i, Bits i, Show i, Integral i) => Parser i (ATree i)
 
 stmt = choice
     [ returnStmt
@@ -72,12 +76,15 @@ stmt = choice
             [ atReturn (CT.SCUndef CT.CTUndef) <$> (M.try kReturn >> expr) <* semi
             --, atReturn (CT.SCUndef CT.CTUndef) ATEmpty <$ (kReturn >> semi)
             ]
+        
         ifStmt = do
             r <- atIf <$> (M.try kIf >> parens expr) <*> stmt
             M.option ATEmpty (M.try kElse >> stmt) <&> \case
                 ATEmpty -> r
                 nd -> atElse r nd
+        
         whileStmt = atWhile <$> (M.try kWhile >> parens expr) <*> stmt
+        
         forStmt = do
             es <- (>>) (M.try kFor) $ parens $ do
                 initSect <- ATForInit . atExprStmt
@@ -88,6 +95,7 @@ stmt = choice
                     <$> M.option ATEmpty expr
                 pure [initSect, condSect, incrSect]
             atFor . (es <>) . (:[]) . ATForStmt <$> stmt
+        
         compoundStmt = atBlock <$> braces (M.many stmt)
 
 expr = assign
@@ -140,10 +148,15 @@ factor = choice
     , parens expr
     , ATEmpty <$ M.eof
     ]
+    
+identifier' = do
+    ident <- identifier
+    choice 
+        [ fnCall ident
+        , variable ident
+        ]
     where
-    identifier' = do
-        ident <- identifier
-        lift $ do
+        variable ident = lift $ do
             scp <- get
             case lookupVar ident scp of
                 FoundGVar (PV.GVar t _) -> return $ atGVar t ident
@@ -152,3 +165,14 @@ factor = choice
                 NotFound -> let Right (lat, scp') = addLVar (CT.SCAuto CT.CTInt) (HT.TokenLCNums 1 1, HT.TKIdent ident) scp in do
                     put scp'
                     return lat
+
+        fnCall ident = do
+            params <- symbol "(" >> M.manyTill (M.try (expr <* comma) M.<|> expr) (symbol ")")
+            let params' = if length params == 0 then Nothing else Just params
+            lift $ do
+                scp <- get
+                return $ case lookupFunction ident scp of
+                    -- TODO: set warning message
+                    -- TODO: Infer the return type of a function
+                    Nothing -> atNoLeaf (ATCallFunc ident params') (CT.SCAuto CT.CTInt)
+                    Just fn -> atNoLeaf (ATCallFunc ident params') (PSF.fntype fn)
