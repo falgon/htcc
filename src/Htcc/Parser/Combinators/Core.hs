@@ -14,7 +14,7 @@ module Htcc.Parser.Combinators.Core (
     runParser
   , Parser
   , spaceConsumer
-  , lexme
+  , lexeme
   , symbol
   , charLiteral
   , stringLiteral
@@ -33,6 +33,7 @@ module Htcc.Parser.Combinators.Core (
   , colon
   , commaSep
   , commaSep1
+  , notFollowedBy
 ) where
 
 import           Control.Applicative                    (Alternative (..))
@@ -58,10 +59,10 @@ type ConstructionDataState i = StateT (ConstructionData i) Identity
 type Parser i = M.ParsecT Void T.Text (ConstructionDataState i)
 
 runParser ::
-    Parser i (ASTs i) ->
-    FilePath ->
-    T.Text ->
-    Either (M.ParseErrorBundle T.Text Void) (Warnings i, ASTs i, PSV.GlobalVars i, PSV.Literals i)
+    Parser i (ASTs i)
+    -> FilePath
+    -> T.Text
+    -> Either (M.ParseErrorBundle T.Text Void) (Warnings i, ASTs i, PSV.GlobalVars i, PSV.Literals i)
 runParser p fp input =
     (warns (snd result),, PSV.globals $ PS.vars $ scope $ snd result, PSV.literals $ PS.vars $ scope $ snd result)
         <$> fst result
@@ -71,8 +72,8 @@ runParser p fp input =
 spaceConsumer :: Ord e => M.ParsecT e T.Text m ()
 spaceConsumer = ML.space MC.space1 (ML.skipLineComment "//") (ML.skipBlockComment "/*" "*/")
 
-lexme :: Ord e => M.ParsecT e T.Text m a -> M.ParsecT e T.Text m a
-lexme = ML.lexeme spaceConsumer
+lexeme :: Ord e => M.ParsecT e T.Text m a -> M.ParsecT e T.Text m a
+lexeme = ML.lexeme spaceConsumer
 
 symbol :: Ord e => T.Text -> M.ParsecT e T.Text m T.Text
 symbol = ML.symbol spaceConsumer
@@ -87,7 +88,7 @@ hexadecimal, octal, decimal, natural, integer :: (Ord e, Num i) => M.ParsecT e T
 hexadecimal = MC.char '0' >> MC.char' 'x' >> ML.hexadecimal
 octal = MC.char '0' >> ML.octal
 decimal = ML.decimal
-natural = M.try (lexme hexadecimal) <|> M.try (lexme octal) <|> lexme decimal
+natural = M.try (lexeme hexadecimal) <|> M.try (lexeme octal) <|> lexeme decimal
 integer = ML.signed spaceConsumer natural <|> natural
 
 parens, braces, angles, brackets :: Ord e => M.ParsecT e T.Text m a -> M.ParsecT e T.Text m a
@@ -110,3 +111,6 @@ colon = symbol "."
 commaSep, commaSep1 :: Ord e => M.ParsecT e T.Text m T.Text -> M.ParsecT e T.Text m [T.Text]
 commaSep = flip M.sepBy comma
 commaSep1 = flip M.sepBy1 comma
+
+notFollowedBy :: Ord e => M.ParsecT e T.Text m a -> M.ParsecT e T.Text m b -> M.ParsecT e T.Text m a
+notFollowedBy k p = lexeme (k <* M.notFollowedBy p)

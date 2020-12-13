@@ -9,7 +9,7 @@ Portability : POSIX
 
 C language lexer
 -}
-{-# LANGUAGE FlexibleContexts, OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts, LambdaCase, OverloadedStrings #-}
 module Htcc.Parser.Combinators.Program (
     parser
 ) where
@@ -18,12 +18,13 @@ import           Control.Monad.Combinators              (choice, some)
 import           Control.Monad.Trans                    (MonadTrans (..))
 import           Control.Monad.Trans.State              (get, put)
 import           Data.Bits                              (Bits (..))
+import           Data.Functor                           ((<&>))
 import           Htcc.CRules.Types                      as CT
 import           Htcc.Parser.AST                        (Treealizable (..))
 import           Htcc.Parser.AST.Core                   (ATKind (..),
                                                          ATree (..), atBlock,
-                                                         atGVar, atNumLit,
-                                                         atReturn)
+                                                         atElse, atGVar, atIf,
+                                                         atNumLit, atReturn)
 import           Htcc.Parser.AST.Type                   (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.Core
@@ -35,10 +36,8 @@ import           Htcc.Parser.Development                (defMainFn)
 import qualified Htcc.Tokenizer.Token                   as HT
 import qualified Text.Megaparsec                        as M
 
-parser :: (Integral i, Ord i, Bits i, Show i) => Parser i (ASTs i)
+parser, program :: (Integral i, Ord i, Bits i, Show i) => Parser i (ASTs i)
 parser = (:[]) . defMainFn . atBlock <$> (spaceConsumer >> program) <* M.eof
-
-program :: (Integral i, Ord i, Bits i, Show i) => Parser i (ASTs i)
 program = some stmt
 
 stmt,
@@ -54,13 +53,24 @@ stmt,
     add,
     term,
     unary,
-    factor,
-    identifier' :: (Ord i, Bits i, Show i, Integral i) => Parser i (ATree i)
+    factor :: (Ord i, Bits i, Show i, Integral i) => Parser i (ATree i)
 
 stmt = choice
-    [ (atReturn (CT.SCUndef CT.CTUndef) <$> (kReturn >> expr)) <* semi
+    [ returnStmt
+    , ifStmt
     , expr <* semi
+    , ATEmpty <$ semi
     ]
+    where
+        returnStmt = choice
+            [ atReturn (CT.SCUndef CT.CTUndef) <$> (M.try kReturn >> expr) <* semi
+            --, atReturn (CT.SCUndef CT.CTUndef) ATEmpty <$ (kReturn >> semi)
+            ]
+        ifStmt = do
+            r <- atIf <$> (M.try kIf >> parens expr) <*> stmt
+            M.option ATEmpty (M.try kElse >> stmt) <&> \case
+                ATEmpty -> r
+                nd -> atElse r nd
 
 expr = assign
 
@@ -68,7 +78,7 @@ assign = do
     nd <- logicalOr
     choice
         [ symbol "=" >> (ATNode ATAssign (atype nd) nd <$> assign)
-        , return nd
+        , pure nd
         ]
 
 logicalOr = binaryOperator logicalAnd [(symbol "||", binOpBool ATLOr)]
@@ -111,15 +121,15 @@ factor = choice
     , parens expr
     , ATEmpty <$ M.eof
     ]
-
-identifier' = do
-    ident <- identifier
-    lift $ do
-        scp <- get
-        case lookupVar ident scp of
-            FoundGVar (PV.GVar t _) -> return $ atGVar t ident
-            FoundLVar sct -> return $ treealize sct
-            FoundEnum sct -> return $ treealize sct
-            NotFound -> let Right (lat, scp') = addLVar (CT.SCAuto CT.CTInt) (HT.TokenLCNums 1 1, HT.TKIdent ident) scp in do
-                put scp'
-                return lat
+    where
+    identifier' = do
+        ident <- identifier
+        lift $ do
+            scp <- get
+            case lookupVar ident scp of
+                FoundGVar (PV.GVar t _) -> return $ atGVar t ident
+                FoundLVar sct -> return $ treealize sct
+                FoundEnum sct -> return $ treealize sct
+                NotFound -> let Right (lat, scp') = addLVar (CT.SCAuto CT.CTInt) (HT.TokenLCNums 1 1, HT.TKIdent ident) scp in do
+                    put scp'
+                    return lat

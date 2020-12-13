@@ -22,8 +22,13 @@ module Htcc.Parser.Combinators.Keywords (
 ) where
 
 import qualified Data.Text                    as T
+import qualified Htcc.CRules                  as CR
 import           Htcc.Parser.Combinators.Core
-import qualified Text.Megaparsec as M
+import qualified Text.Megaparsec              as M
+import qualified Text.Megaparsec.Char         as MC
+
+pKeyword :: Ord e => T.Text -> M.ParsecT e T.Text m T.Text
+pKeyword = flip notFollowedBy (M.takeWhile1P (Just "valid identifier") CR.isValidChar) . MC.string
 
 kAuto, kBreak, kCase, kChar, kConst, kContinue,
     kDefault, kDo, kDouble, kElse, kEnum, kExtern,
@@ -33,50 +38,50 @@ kAuto, kBreak, kCase, kChar, kConst, kContinue,
     kUnsigned, kVoid, kVolatile, kWhile, k_Alignas, k_Alignof,
     k_Atomic, k_Bool, k_Complex, k_Generic, k_Imaginary, k_Noreturn,
     k_Static_assert, k_Thread_local :: Ord e => M.ParsecT e T.Text m T.Text
-kAuto = symbol "auto"
-kBreak = symbol "break"
-kCase = symbol "case"
-kChar = symbol "char"
-kConst = symbol "const"
-kContinue = symbol "continue"
-kDefault = symbol "default"
-kDo = symbol "do"
-kDouble = symbol "double"
-kElse = symbol "else"
-kEnum = symbol "enum"
-kExtern = symbol "extern"
-kFloat = symbol "float"
-kFor = symbol "for"
-kGoto = symbol "goto"
-kIf = symbol "if"
-kInline = symbol "inline"
-kInt = symbol "int"
-kLong = symbol "long"
-kRegister = symbol "register"
+kAuto = pKeyword "auto"
+kBreak = pKeyword "break"
+kCase = pKeyword "case"
+kChar = pKeyword "char"
+kConst = pKeyword "const"
+kContinue = pKeyword "continue"
+kDefault = pKeyword "default"
+kDo = pKeyword "do"
+kDouble = pKeyword "double"
+kElse = pKeyword "else"
+kEnum = pKeyword "enum"
+kExtern = pKeyword "extern"
+kFloat = pKeyword "float"
+kFor = pKeyword "for"
+kGoto = pKeyword "goto"
+kIf = pKeyword "if"
+kInline = pKeyword "inline"
+kInt = pKeyword "int"
+kLong = pKeyword "long"
+kRegister = pKeyword "register"
 kRestrict = "restrict"
-kReturn = symbol "return"
-kShort = symbol "short"
-kSigned = symbol "signed"
-kSizeof = symbol "sizeof"
-kStatic = symbol "static"
-kStruct = symbol "struct"
-kSwitch = symbol "switch"
-kTypedef = symbol "typedef"
-kUnion = symbol "union"
-kUnsigned = symbol "unsigned"
-kVoid = symbol "void"
-kVolatile = symbol "volatile"
-kWhile = symbol "while"
-k_Alignas = symbol "_Alignas"
-k_Alignof = symbol "_Alignof"
-k_Atomic = symbol "_Atomic"
-k_Bool = symbol "_Bool"
-k_Complex = symbol "_Complex"
-k_Generic = symbol "_Generic"
-k_Imaginary = symbol "_Imaginary"
-k_Noreturn = symbol "_Noreturn"
-k_Static_assert = symbol "_Static_assert"
-k_Thread_local = symbol "_Thread_local"
+kReturn = pKeyword "return"
+kShort = pKeyword "short"
+kSigned = pKeyword "signed"
+kSizeof = pKeyword "sizeof"
+kStatic = pKeyword "static"
+kStruct = pKeyword "struct"
+kSwitch = pKeyword "switch"
+kTypedef = pKeyword "typedef"
+kUnion = pKeyword "union"
+kUnsigned = pKeyword "unsigned"
+kVoid = pKeyword "void"
+kVolatile = pKeyword "volatile"
+kWhile = pKeyword "while"
+k_Alignas = pKeyword "_Alignas"
+k_Alignof = pKeyword "_Alignof"
+k_Atomic = pKeyword "_Atomic"
+k_Bool = pKeyword "_Bool"
+k_Complex = pKeyword "_Complex"
+k_Generic = pKeyword "_Generic"
+k_Imaginary = pKeyword "_Imaginary"
+k_Noreturn = pKeyword "_Noreturn"
+k_Static_assert = pKeyword "_Static_assert"
+k_Thread_local = pKeyword "_Thread_local"
 
 kBasicTypes :: Ord e => [M.ParsecT e T.Text m T.Text]
 kBasicTypes = [

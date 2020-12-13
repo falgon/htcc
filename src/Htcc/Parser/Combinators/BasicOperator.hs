@@ -36,8 +36,7 @@ binaryOperator ::
 binaryOperator p opndMs = do
     m <- p
     ($ m) . fix $ \f nd ->
-        choice [M.try (opM >> p) >>= ndM nd >>= f | (opM, ndM) <- opndMs]
-            <|> return nd
+        M.option nd $ choice [M.try (opM >> p) >>= ndM nd >>= f | (opM, ndM) <- opndMs]
 
 binOpBool, binOpCon :: (Monad m, Ord i, Bits i, Show i)
     => ATKind i

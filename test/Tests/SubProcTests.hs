@@ -45,7 +45,20 @@ exec = runTestsEx
     , (StatementEqual.test "a = 42; b = 20; return a + b;", 62)
     , (StatementEqual.test "a = 42; b = 20; c = 32; return (a - c) * b / 10;", 20)
     , (StatementEqual.test "a = 42; b = 20; return a - b;", 22)
-    , (StatementEqual.test "a = 3; b = 5 * 6 - 8; return a + b / 2;", 14)
+    , (StatementEqual.test "a = 3; returnb = 5 * 6 - 8; return a + returnb / 2;", 14)
+    , (StatementEqual.test "a = 3; return_ = 5 * 6 - 8; return a + return_ / 2;", 14)
+    , (StatementEqual.test "a /* comment */ = 3; b = 5 */*comment*/ 6 - 8; return a + b / 2;", 14)
+    , (StatementEqual.test "if (1) return 42; return 53;", 42)
+    , (StatementEqual.test "if (20*3-60) return 42; return 53;", 53)
+    , (StatementEqual.test "a = 1; b = 2; if (a) return b; return 42;", 2)
+    , (StatementEqual.test "if (1) return 42; else return 53;", 42)
+    , (StatementEqual.test "if (0) return 42; else return 53;", 53)
+    , (StatementEqual.test "a = 0; b = 2; if (a) return b; else return b * 2;", 4)
+    , (StatementEqual.test "a = 1; b = 0; if (b) return 42; if (0) return 42; else return a;", 1)
+    , (StatementEqual.test "a = 1; b = 2; if (a) if (b) return b; else return 53; else return 24;", 2)
+    , (StatementEqual.test "if (1) if (1) if (1) if (1) if (1) if (0) return 1; else return 2; else return 3; else return 4; else return 5; else return 6; else return 7;", 2)
+    , (StatementEqual.test "if(1)if(1)return 42;return 53;", 42)
+    , (StatementEqual.test "if(0); return 0;", 0)
     ]
 {-
 exec = let sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural in runTestsEx [
