@@ -95,7 +95,13 @@ exec = runTestsEx
     , (StatementEqual.test "int main() { int a; a = 42; int b; b = 5; *(&a-1) = 53; return b; }", 53)
     , (StatementEqual.test "int main() { int a; a = 42; int b; b = 5; *(&b+1) = 53; return a; }", 53)
     , (StatementEqual.test "int main() { int sum; sum = 0; int i; i = 1; for (; i < 4; i = i + 1) sum = sum + i; return sum; }", 6)
+    , (StatementEqual.test "int main() { int a; return sizeof(a); }", fromIntegral $ sizeof CT.CTInt)
+    , (StatementEqual.test "int main() { int a; return sizeof a; }", fromIntegral $ sizeof CT.CTInt)
+    , (StatementEqual.test "int main() { int* p; return sizeof p; }", fromIntegral $ sizeof $ CT.CTPtr CT.CTInt)
+    , (StatementEqual.test "int main() { return sizeof(int); }", fromIntegral $ sizeof CT.CTInt)
     ]
+    where
+        sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural 
 {-
 exec = let sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural in runTestsEx [
     (StatementEqual.test "int main() { return !0; }", 1),

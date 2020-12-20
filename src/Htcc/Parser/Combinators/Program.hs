@@ -26,7 +26,7 @@ import           Data.Either                                 (rights)
 import           Data.Functor                                ((<&>))
 import           Data.Maybe                                  (fromJust)
 import qualified Data.Text                                   as T
-import           Htcc.CRules.Types                           as CT
+import qualified Htcc.CRules.Types                           as CT
 import           Htcc.Parser.AST                             (Treealizable (..), addKind, subKind)
 import           Htcc.Parser.AST.Core                        (ATKind (..),
                                                               ATKindFor (..),
@@ -100,6 +100,7 @@ global,
     term,
     unary,
     factor,
+    sizeof,
     identifier' :: (Ord i, Bits i, Read i, Show i, Integral i) => Parser i (ATree i)
 
 global = choice
@@ -239,9 +240,17 @@ unary = choice
 
 factor = choice
     [ atNumLit <$> natural
+    , sizeof
     , identifier'
     , parens expr
     , ATEmpty <$ M.eof
+    ]
+
+sizeof = kSizeof >> choice
+    [ incomplete <$> M.try (parens cType) <*> lift get
+        >>= maybe (fail "invalid application of 'sizeof' to incomplete type")
+            (pure . atNumLit . fromIntegral . CT.sizeof)
+    , atNumLit . fromIntegral . CT.sizeof . atype <$> unary
     ]
 
 identifier' = do
