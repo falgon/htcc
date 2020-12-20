@@ -27,7 +27,7 @@ import           Data.Functor                                ((<&>))
 import           Data.Maybe                                  (fromJust)
 import qualified Data.Text                                   as T
 import           Htcc.CRules.Types                           as CT
-import           Htcc.Parser.AST                             (Treealizable (..))
+import           Htcc.Parser.AST                             (Treealizable (..), addKind, subKind)
 import           Htcc.Parser.AST.Core                        (ATKind (..),
                                                               ATKindFor (..),
                                                               ATree (..),
@@ -205,8 +205,8 @@ relational = binaryOperator add
     ]
 
 add = binaryOperator term
-    [ (symbol "+", binOpCon ATAdd)
-    , (symbol "-", binOpCon ATSub)
+    [ (symbol "+", \l r -> maybe (fail "invalid operands") pure $ addKind l r)
+    , (symbol "-", \l r -> maybe (fail "invalid operands") pure $ subKind l r)
     ]
 
 term = binaryOperator unary

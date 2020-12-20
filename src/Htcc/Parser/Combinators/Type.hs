@@ -36,6 +36,7 @@ preType = choice
             -> CT.TypeKind i
         read' = read
 
-cType = flip id 
-    <$> preType 
-    <*> (CT.ctorPtr . toNatural . length <$> M.many (symbol "*"))
+cType = do
+    pt <- preType
+    fn <- CT.ctorPtr . toNatural . length <$> M.many (symbol "*")
+    pure $ fn pt

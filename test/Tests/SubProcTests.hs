@@ -91,9 +91,10 @@ exec = runTestsEx
     , (StatementEqual.test "int f(int) { return 42; } int main() { int; int a; a = f(0); return a; }", 42)
     , (StatementEqual.test "int main() { int a; a = 42; int* b; b = &a; int** c; c = &b; return **c; }", 42)
     , (StatementEqual.test "int main() { int a; a = 42; int* b; b = &a; *b = a * 2; return a; }", 84)
-    --, (StatementEqual.test "int main() { int a; a = 42; int b; b = 5; return *(&b+1); }", 42)
-    --, (StatementEqual.test "int main() { int a; a = 42; int b; b = 5; *(&a-1) = 53; return b; }", 53)
-    -- , (StatementEqual.test "int main() { int a = 42; int b = 5; *(&b+1) = 53; return a; }", 53)
+    , (StatementEqual.test "int main() { int a; a = 42; int b; b = 5; return *(&b+1); }", 42)
+    , (StatementEqual.test "int main() { int a; a = 42; int b; b = 5; *(&a-1) = 53; return b; }", 53)
+    , (StatementEqual.test "int main() { int a; a = 42; int b; b = 5; *(&b+1) = 53; return a; }", 53)
+    , (StatementEqual.test "int main() { int sum; sum = 0; int i; i = 1; for (; i < 4; i = i + 1) sum = sum + i; return sum; }", 6)
     ]
 {-
 exec = let sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural in runTestsEx [
@@ -109,12 +110,6 @@ exec = let sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural in runTestsEx [
     -- (LinkFuncRet.test "int main() { return sum7(1, 1, 1, 1, 1, 1, 1); }" ["test_func3"], 7),
     -- (LinkFuncRet.test "int main() { return test_func2(sum7(1, 2, 3, 4, 5, 6, 7)); }" ["test_func2", "test_func3"], 0),
     -- (LinkFuncRet.test "int main() { return sum16(1,1,1,1,1,1,11,10,9,8,7,6,5,4,3,2); }" ["test_func3"], 11),
-    (StatementEqual.test "int main() { int a = 42; int* b = &a; int** c = &b; return **c; }", 42),
-    (StatementEqual.test "int main() { int a = 42; int* b = &a; *b = a * 2; return a; }", 84),
-    (StatementEqual.test "int main() { int a = 42; int b = 5; return *(&b+1); }", 42),
-    (StatementEqual.test "int main() { int a = 42; int b = 5; *(&a-1) = 53; return b; }", 53),
-    (StatementEqual.test "int main() { int a = 42; int b = 5; *(&b+1) = 53; return a; }", 53),
-    (StatementEqual.test "int main() { int sum = 0; int i = 1; for (; i < 4; i = i + 1) sum = sum + i; return sum; }", 6),
     (StatementEqual.test "int main() { int ar[2]; int* p = ar; *p = 3; return *ar; }", 3),
     (StatementEqual.test "int main() { int ar[2]; int* p = ar; *(p + 1) = 3; return *(ar + 1); }", 3),
     (StatementEqual.test "int main() { int ar[2]; int* p = ar; *p = 2; *(p + 1) = 3; return *ar + *(ar + 1); }", 5),
