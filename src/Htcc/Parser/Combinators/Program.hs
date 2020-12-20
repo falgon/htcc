@@ -14,7 +14,6 @@ module Htcc.Parser.Combinators.Program (
     parser
 ) where
 
-import Data.Either (rights)
 import           Control.Monad                               (forM, void, (>=>))
 import           Control.Monad.Combinators                   (choice, some)
 import           Control.Monad.Trans                         (MonadTrans (..))
@@ -23,6 +22,7 @@ import           Control.Monad.Trans.Maybe                   (MaybeT (..),
 import           Control.Monad.Trans.State                   (get, gets, modify,
                                                               put)
 import           Data.Bits                                   (Bits (..))
+import           Data.Either                                 (rights)
 import           Data.Functor                                ((<&>))
 import           Data.Maybe                                  (fromJust,
                                                               fromMaybe)
@@ -36,10 +36,10 @@ import           Htcc.Parser.AST.Core                        (ATKind (..),
                                                               atDefFunc, atElse,
                                                               atExprStmt, atFor,
                                                               atGVar, atIf,
-                                                              atNoLeaf,
+                                                              atNoLeaf, atNull,
                                                               atNumLit,
                                                               atReturn, atUnary,
-                                                              atWhile, atNull)
+                                                              atWhile)
 import           Htcc.Parser.AST.Type                        (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.Core
@@ -54,14 +54,13 @@ import           Htcc.Parser.ConstructionData.Scope          (LookupVarResult (.
 import qualified Htcc.Parser.ConstructionData.Scope.Function as PSF
 import qualified Htcc.Parser.ConstructionData.Scope.Var      as PV
 import qualified Htcc.Tokenizer.Token                        as HT
-import           Htcc.Utils                                  (maybe')
 import qualified Text.Megaparsec                             as M
 import qualified Text.Megaparsec.Char                        as MC
 
 import           Text.Megaparsec.Debug                       (dbg)
 
-declIdent :: (Show i, Read i, Integral i) 
-    => Parser i a 
+declIdent :: (Show i, Read i, Integral i)
+    => Parser i a
     -> Parser i (Either (CT.StorageClass i) (CT.StorageClass i, T.Text))
 declIdent sep = do
     ty <- cType
@@ -77,7 +76,7 @@ registerLVar ty ident = do
     x <- lift $ gets $ addLVar ty (HT.TokenLCNums 1 1, HT.TKIdent ident)
     case x of
         Right (lat, scp') -> lift (lat <$ put scp')
-        Left err -> fail $ T.unpack $ fst err
+        Left err          -> fail $ T.unpack $ fst err
 
 parser, program :: (Integral i, Bits i, Read i, Show i) => Parser i (ASTs i)
 parser = (spaceConsumer >> program) <* M.eof
@@ -105,27 +104,37 @@ global = choice
     [ function
     ]
 
-function = do
-    ident <- identifier
-    params <- symbol "(" 
-        >> M.manyTill (M.try (declIdent comma) M.<|> (declIdent $ M.lookAhead (symbol ")"))) (symbol ")")
-    lift $ modify resetLocal
-    choice
-        [ declaration ident
-        , definition ident params
-        ]
+function =
+    declIdent (symbol "(")
+        >>= \case
+            Left _ -> fail "unexpected '(' token, expected an identifier"
+            Right (ty, ident) -> do
+                params <- takeParameters
+                lift $ modify resetLocal
+                choice
+                    [ declaration ty ident
+                    , definition ty ident params
+                    ]
     where
-        declaration ident = do
-            void semi
-            scp <- lift get
-            case addFunction False (CT.SCAuto CT.CTInt) (HT.TokenLCNums 1 1, HT.TKIdent ident) scp of
-                Right scp' -> ATEmpty <$ lift (put scp')
-                Left y     -> fail $ T.unpack $ fst y
+        takeParameters =
+            M.manyTill (M.try (declIdent comma) M.<|> (declIdent $ M.lookAhead (symbol ")"))) (symbol ")")
 
-        definition ident params = do
-            void $ M.lookAhead $ symbol "{"
-            params' <- forM (rights params) $ uncurry registerLVar
-            atDefFunc ident (if null params' then Nothing else Just params') (CT.SCAuto CT.CTInt) <$> stmt
+        declaration ty ident =
+            void semi
+                >> lift (gets $ addFunction False ty (HT.TokenLCNums 1 1, HT.TKIdent ident))
+                >>= \case
+                    Right scp' -> ATEmpty <$ lift (put scp')
+                    Left err   -> fail $ T.unpack $ fst err
+
+        definition ty ident params =
+            void (M.lookAhead $ symbol "{")
+                >> lift (gets $ addFunction True ty (HT.TokenLCNums 1 1, HT.TKIdent ident))
+                >>= \case
+                    Right scp' -> do
+                        lift $ put scp'
+                        params' <- forM (rights params) $ uncurry registerLVar
+                        atDefFunc ident (if null params' then Nothing else Just params') ty <$> stmt
+                    Left err -> fail $ T.unpack $ fst err
 
 stmt = choice
     [ returnStmt

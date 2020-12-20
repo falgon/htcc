@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f8ff139d7a8b4675999113daed2e9e05240b03c0f429230a35d0a449fe444c14
+-- hash: b66e6a875f19a96fcebcd35b2b8fed0395cf7d04fb59c94b3fe72819dffd4521
 
 name:           htcc
 version:        0.0.0.1
@@ -133,7 +133,6 @@ library
     , parser-combinators
     , safe
     , split
-    , template-haskell
     , text
     , transformers
   default-language: Haskell2010
@@ -169,7 +168,6 @@ executable htcc
     , parser-combinators
     , safe
     , split
-    , template-haskell
     , text
     , transformers
   default-language: Haskell2010
@@ -221,7 +219,6 @@ test-suite htcc-test
     , process
     , safe
     , split
-    , template-haskell
     , text
     , time
     , transformers
@@ -258,7 +255,6 @@ benchmark criterion
     , parser-combinators
     , safe
     , split
-    , template-haskell
     , text
     , transformers
   default-language: Haskell2010

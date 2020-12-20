@@ -48,7 +48,6 @@ dependencies:
 - optparse-applicative
 - megaparsec
 - parser-combinators
-- template-haskell
 
 library:
   source-dirs: src
