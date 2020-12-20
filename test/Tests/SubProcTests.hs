@@ -86,8 +86,14 @@ exec = runTestsEx
     , (StatementEqual.test "int add(int a, int b) { return a + b; } int main() { return add(1, 2); }", 3)
     , (StatementEqual.test "int rec(int a) { if (a == 0) return 42; return rec(a - 1); } int main() { int b; b = rec(2); return 1 + 2; }", 3)
     , (StatementEqual.test "int fib(int n) { if (n == 0) return 1; else if (n == 1) return 1; else if (n >= 2) return fib(n - 1) + fib(n - 2); else return 0; } int main() { return fib(5); }", 8) -- fibonacci number
-    , (StatementEqual.test "int main() { int a; int b; a = 42; b = &a; return a; }", 42)
+    , (StatementEqual.test "int main() { int a; int* b; a = 42; b = &a; return a; }", 42)
     , (StatementEqual.test "int main() { int a; a = 42; return *&a; }", 42)
+    , (StatementEqual.test "int f(int) { return 42; } int main() { int; int a; a = f(0); return a; }", 42)
+    , (StatementEqual.test "int main() { int a; a = 42; int* b; b = &a; int** c; c = &b; return **c; }", 42)
+    , (StatementEqual.test "int main() { int a; a = 42; int* b; b = &a; *b = a * 2; return a; }", 84)
+    --, (StatementEqual.test "int main() { int a; a = 42; int b; b = 5; return *(&b+1); }", 42)
+    --, (StatementEqual.test "int main() { int a; a = 42; int b; b = 5; *(&a-1) = 53; return b; }", 53)
+    -- , (StatementEqual.test "int main() { int a = 42; int b = 5; *(&b+1) = 53; return a; }", 53)
     ]
 {-
 exec = let sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural in runTestsEx [

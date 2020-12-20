@@ -24,8 +24,7 @@ import           Control.Monad.Trans.State                   (get, gets, modify,
 import           Data.Bits                                   (Bits (..))
 import           Data.Either                                 (rights)
 import           Data.Functor                                ((<&>))
-import           Data.Maybe                                  (fromJust,
-                                                              fromMaybe)
+import           Data.Maybe                                  (fromJust)
 import qualified Data.Text                                   as T
 import           Htcc.CRules.Types                           as CT
 import           Htcc.Parser.AST                             (Treealizable (..))
@@ -44,6 +43,7 @@ import           Htcc.Parser.AST.Type                        (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.Core
 import           Htcc.Parser.Combinators.Keywords
+import           Htcc.Parser.Combinators.Type                (cType)
 import           Htcc.Parser.ConstructionData                (addFunction,
                                                               addLVar,
                                                               incomplete,
@@ -59,24 +59,25 @@ import qualified Text.Megaparsec.Char                        as MC
 
 import           Text.Megaparsec.Debug                       (dbg)
 
-declIdent :: (Show i, Read i, Integral i)
+declIdent :: (Show i, Read i, Integral i) => Parser i (CT.StorageClass i, T.Text)
+declIdent = (,) <$> cType <*> identifier
+
+declIdent' :: (Show i, Read i, Integral i)
     => Parser i a
     -> Parser i (Either (CT.StorageClass i) (CT.StorageClass i, T.Text))
-declIdent sep = do
+declIdent' sep = do
     ty <- cType
     choice
         [ Left ty <$ sep
         , Right . (ty, ) <$> identifier <* sep
         ]
-    where
-        cType = SCAuto . read . T.unpack <$> choice kBasicTypes
 
 registerLVar :: (Bits i, Integral i) => CT.StorageClass i -> T.Text -> Parser i (ATree i)
-registerLVar ty ident = do
-    x <- lift $ gets $ addLVar ty (HT.TokenLCNums 1 1, HT.TKIdent ident)
-    case x of
-        Right (lat, scp') -> lift (lat <$ put scp')
-        Left err          -> fail $ T.unpack $ fst err
+registerLVar ty ident =
+    lift (gets $ addLVar ty (HT.TokenLCNums 1 1, HT.TKIdent ident))
+        >>= \case
+            Right (lat, scp') -> lift (lat <$ put scp')
+            Left err          -> fail $ T.unpack $ fst err
 
 parser, program :: (Integral i, Bits i, Read i, Show i) => Parser i (ASTs i)
 parser = (spaceConsumer >> program) <* M.eof
@@ -85,6 +86,7 @@ program = some global
 global,
     function,
     stmt,
+    lvarStmt,
     expr,
     assign,
     logicalOr,
@@ -104,20 +106,17 @@ global = choice
     [ function
     ]
 
-function =
-    declIdent (symbol "(")
-        >>= \case
-            Left _ -> fail "unexpected '(' token, expected an identifier"
-            Right (ty, ident) -> do
-                params <- takeParameters
-                lift $ modify resetLocal
-                choice
-                    [ declaration ty ident
-                    , definition ty ident params
-                    ]
+function = do
+    (ty, ident) <- declIdent <* symbol "("
+    params <- takeParameters
+    lift $ modify resetLocal
+    choice
+        [ declaration ty ident
+        , definition ty ident params
+        ]
     where
         takeParameters =
-            M.manyTill (M.try (declIdent comma) M.<|> (declIdent $ M.lookAhead (symbol ")"))) (symbol ")")
+            M.manyTill (M.try (declIdent' comma) M.<|> (declIdent' $ M.lookAhead (symbol ")"))) (symbol ")")
 
         declaration ty ident =
             void semi
@@ -135,6 +134,11 @@ function =
                         params' <- forM (rights params) $ uncurry registerLVar
                         atDefFunc ident (if null params' then Nothing else Just params') ty <$> stmt
                     Left err -> fail $ T.unpack $ fst err
+
+lvarStmt = choice
+    [ ATEmpty <$ M.try (cType <* semi)
+    , declIdent <* semi >>= fmap atNull . uncurry registerLVar
+    ]
 
 stmt = choice
     [ returnStmt
@@ -172,9 +176,6 @@ stmt = choice
             atFor . (es <>) . (:[]) . ATForStmt <$> stmt
 
         compoundStmt = atBlock <$> braces (M.many stmt)
-
-        lvarStmt = declIdent semi
-            >>= either (const $ return ATEmpty) (fmap atNull . uncurry registerLVar)
 
 expr = assign
 
@@ -227,10 +228,6 @@ unary = choice
         deref' :: Ord i => ATree i -> Parser i (ATree i)
         deref' = runMaybeT . deref'' >=> maybe M.empty pure
 
-        deref'' :: Ord i => ATree i -> MaybeT (Parser i) (ATree i)
-        deref'' n = lift $ pure $ atUnary ATDeref (CT.SCAuto CT.CTInt) n
-
-        {- After implementing the type, use:
         deref'' n = do
             ty <- MaybeT $ pure (CT.deref $ atype n)
             case CT.toTypeKind ty of
@@ -239,7 +236,6 @@ unary = choice
                     scp <- lift $ lift get
                     ty' <- MaybeT $ pure (incomplete ty scp)
                     lift $ pure $ atUnary ATDeref ty' n
-        -}
 
 factor = choice
     [ atNumLit <$> natural
@@ -256,20 +252,18 @@ identifier' = do
         ]
     where
         variable ident = do
-            lookupResult <- lift $ gets $ lookupVar ident
-            case lookupResult of
-                FoundGVar (PV.GVar t _) -> return $ atGVar t ident
-                FoundLVar sct -> return $ treealize sct
-                FoundEnum sct -> return $ treealize sct
-                NotFound -> fail $ "The '" <> T.unpack ident <> "' is not defined identifier"
+            lift (gets $ lookupVar ident)
+                >>= \case
+                    FoundGVar (PV.GVar t _) -> return $ atGVar t ident
+                    FoundLVar sct -> return $ treealize sct
+                    FoundEnum sct -> return $ treealize sct
+                    NotFound -> fail $ "The '" <> T.unpack ident <> "' is not defined identifier"
 
         fnCall ident = do
             params <- symbol "(" >> M.manyTill (M.try (expr <* comma) M.<|> expr) (symbol ")")
             let params' = if null params then Nothing else Just params
-            lift $ do
-                scp <- get
-                return $ case lookupFunction ident scp of
-                    -- TODO: set warning message
-                    -- TODO: Infer the return type of a function
-                    Nothing -> atNoLeaf (ATCallFunc ident params') (CT.SCAuto CT.CTInt)
-                    Just fn -> atNoLeaf (ATCallFunc ident params') (PSF.fntype fn)
+            lift (gets $ lookupFunction ident) <&> \case
+                -- TODO: set warning message
+                -- TODO: Infer the return type of a function
+                Nothing -> atNoLeaf (ATCallFunc ident params') (CT.SCAuto CT.CTInt)
+                Just fn -> atNoLeaf (ATCallFunc ident params') (PSF.fntype fn)
