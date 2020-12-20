@@ -38,7 +38,7 @@ import           Htcc.Parser.AST.Core                        (ATKind (..),
                                                               atNoLeaf,
                                                               atNumLit,
                                                               atReturn, atUnary,
-                                                              atWhile)
+                                                              atWhile, atNull)
 import           Htcc.Parser.AST.Type                        (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.Core
@@ -59,11 +59,22 @@ import qualified Text.Megaparsec.Char                        as MC
 
 import           Text.Megaparsec.Debug                       (dbg)
 
-parser, program :: (Integral i, Ord i, Bits i, Show i) => Parser i (ASTs i)
+registerLVar :: (Bits i, Integral i) => CT.StorageClass i -> T.Text -> Parser i (ATree i)
+registerLVar ty ident = do
+    x <- lift $ gets $ addLVar ty (HT.TokenLCNums 1 1, HT.TKIdent ident)
+    case x of
+        Right (lat, scp') -> lift (atNull lat <$ put scp')
+        Left err -> fail $ T.unpack $ fst err
+
+cType :: (Show i, Read i, Integral i) => Parser i (CT.StorageClass i)
+cType = SCAuto . read . T.unpack <$> choice kBasicTypes
+
+parser, program :: (Integral i, Bits i, Read i, Show i) => Parser i (ASTs i)
 parser = (spaceConsumer >> program) <* M.eof
 program = some global
 
 global,
+    varDecl,
     function,
     stmt,
     expr,
@@ -79,11 +90,18 @@ global,
     term,
     unary,
     factor,
-    identifier' :: (Ord i, Bits i, Show i, Integral i) => Parser i (ATree i)
+    identifier' :: (Ord i, Bits i, Read i, Show i, Integral i) => Parser i (ATree i)
 
 global = choice
     [ function
     ]
+
+varDecl = do
+    ty <- cType
+    choice
+        [ ATEmpty <$ symbol ";"
+        , (identifier >>= registerLVar ty) <* symbol ";"
+        ]
 
 function = do
     ident <- identifier
@@ -116,6 +134,7 @@ stmt = choice
     , whileStmt
     , forStmt
     , compoundStmt
+    , varDecl
     , expr <* semi
     , ATEmpty <$ semi
     ]
@@ -225,15 +244,13 @@ identifier' = do
         , variable ident
         ]
     where
-        variable ident = lift $ do
-            scp <- get
-            case lookupVar ident scp of
+        variable ident = do
+            lookupResult <- lift $ gets $ lookupVar ident
+            case lookupResult of
                 FoundGVar (PV.GVar t _) -> return $ atGVar t ident
                 FoundLVar sct -> return $ treealize sct
                 FoundEnum sct -> return $ treealize sct
-                NotFound -> let Right (lat, scp') = addLVar (CT.SCAuto CT.CTInt) (HT.TokenLCNums 1 1, HT.TKIdent ident) scp in do
-                    put scp'
-                    return lat
+                NotFound -> fail $ "The '" <> T.unpack ident <> "' is not defined identifier"
 
         fnCall ident = do
             params <- symbol "(" >> M.manyTill (M.try (expr <* comma) M.<|> expr) (symbol ")")
