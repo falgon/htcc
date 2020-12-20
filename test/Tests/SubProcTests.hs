@@ -81,11 +81,11 @@ exec = runTestsEx
     , (LinkFuncRet.test "main() { return test_func5(1, 2); }" ["test_func5"], 3)
     , (StatementEqual.test "f() { return 42; } main() { return f(); }", 42)
     , (StatementEqual.test "g() { return 42; } f() { return g(); } main() { return f(); }", 42)
-    -- , (StatementEqual.test "id(a) { return a; } main() { a = 1; return id(a-1) + id(1); }", 1)
+    , (StatementEqual.test "id(int a) { return a; } main() { int a; a = 1; return id(a-1) + id(1); }", 1)
     , (StatementEqual.test "get1() { return 1; } get2() { return 2; } main() { int a; a = get1(); return a + get2(); }", 3)
-    -- , (StatementEqual.test "add(a, b) { return a + b; } main() { return add(1, 2); }", 3)
-    -- , (StatementEqual.test "rec(a) { if (a == 0) return 42; return rec(a - 1); } main() { b = rec(2); return 1 + 2; }", 3)
-    -- , (StatementEqual.test "fib(n) { if (n == 0) return 1; else if (n == 1) return 1; else if (n >= 2) return fib(n - 1) + fib(n - 2); else return 0; } main() { return fib(5); }", 8) -- fibonacci number
+    , (StatementEqual.test "add(int a, int b) { return a + b; } main() { return add(1, 2); }", 3)
+    , (StatementEqual.test "rec(int a) { if (a == 0) return 42; return rec(a - 1); } main() { int b; b = rec(2); return 1 + 2; }", 3)
+    , (StatementEqual.test "fib(int n) { if (n == 0) return 1; else if (n == 1) return 1; else if (n >= 2) return fib(n - 1) + fib(n - 2); else return 0; } main() { return fib(5); }", 8) -- fibonacci number
     , (StatementEqual.test "main() { int a; int b; a = 42; b = &a; return a; }", 42)
     , (StatementEqual.test "main() { int a; a = 42; return *&a; }", 42)
     ]

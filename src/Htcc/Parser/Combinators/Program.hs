@@ -9,11 +9,12 @@ Portability : POSIX
 
 C language lexer
 -}
-{-# LANGUAGE FlexibleContexts, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts, LambdaCase, OverloadedStrings, TupleSections #-}
 module Htcc.Parser.Combinators.Program (
     parser
 ) where
 
+import Data.Either (rights)
 import           Control.Monad                               (forM, void, (>=>))
 import           Control.Monad.Combinators                   (choice, some)
 import           Control.Monad.Trans                         (MonadTrans (..))
@@ -59,22 +60,30 @@ import qualified Text.Megaparsec.Char                        as MC
 
 import           Text.Megaparsec.Debug                       (dbg)
 
+declIdent :: (Show i, Read i, Integral i) 
+    => Parser i a 
+    -> Parser i (Either (CT.StorageClass i) (CT.StorageClass i, T.Text))
+declIdent sep = do
+    ty <- cType
+    choice
+        [ Left ty <$ sep
+        , Right . (ty, ) <$> identifier <* sep
+        ]
+    where
+        cType = SCAuto . read . T.unpack <$> choice kBasicTypes
+
 registerLVar :: (Bits i, Integral i) => CT.StorageClass i -> T.Text -> Parser i (ATree i)
 registerLVar ty ident = do
     x <- lift $ gets $ addLVar ty (HT.TokenLCNums 1 1, HT.TKIdent ident)
     case x of
-        Right (lat, scp') -> lift (atNull lat <$ put scp')
+        Right (lat, scp') -> lift (lat <$ put scp')
         Left err -> fail $ T.unpack $ fst err
-
-cType :: (Show i, Read i, Integral i) => Parser i (CT.StorageClass i)
-cType = SCAuto . read . T.unpack <$> choice kBasicTypes
 
 parser, program :: (Integral i, Bits i, Read i, Show i) => Parser i (ASTs i)
 parser = (spaceConsumer >> program) <* M.eof
 program = some global
 
 global,
-    varDecl,
     function,
     stmt,
     expr,
@@ -96,16 +105,10 @@ global = choice
     [ function
     ]
 
-varDecl = do
-    ty <- cType
-    choice
-        [ ATEmpty <$ symbol ";"
-        , (identifier >>= registerLVar ty) <* symbol ";"
-        ]
-
 function = do
     ident <- identifier
-    params <- symbol "(" >> M.manyTill (M.try (identifier <* comma) M.<|> identifier) (symbol ")")
+    params <- symbol "(" 
+        >> M.manyTill (M.try (declIdent comma) M.<|> (declIdent $ M.lookAhead (symbol ")"))) (symbol ")")
     lift $ modify resetLocal
     choice
         [ declaration ident
@@ -120,12 +123,8 @@ function = do
                 Left y     -> fail $ T.unpack $ fst y
 
         definition ident params = do
-            void $ M.lookAhead (symbol "{")
-            params' <- forM params $ \p -> do
-                scp <- lift get
-                case addLVar (CT.SCAuto CT.CTInt) (HT.TokenLCNums 1 1, HT.TKIdent p) scp of
-                    Right (lat, scp') -> lat <$ lift (put scp')
-                    Left x            -> fail $ T.unpack $ fst x
+            void $ M.lookAhead $ symbol "{"
+            params' <- forM (rights params) $ uncurry registerLVar
             atDefFunc ident (if null params' then Nothing else Just params') (CT.SCAuto CT.CTInt) <$> stmt
 
 stmt = choice
@@ -134,7 +133,7 @@ stmt = choice
     , whileStmt
     , forStmt
     , compoundStmt
-    , varDecl
+    , lvarStmt
     , expr <* semi
     , ATEmpty <$ semi
     ]
@@ -164,6 +163,9 @@ stmt = choice
             atFor . (es <>) . (:[]) . ATForStmt <$> stmt
 
         compoundStmt = atBlock <$> braces (M.many stmt)
+
+        lvarStmt = declIdent semi
+            >>= either (const $ return ATEmpty) (fmap atNull . uncurry registerLVar)
 
 expr = assign
 
