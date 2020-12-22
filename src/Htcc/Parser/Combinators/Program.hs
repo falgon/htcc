@@ -12,6 +12,7 @@ C language lexer
 {-# LANGUAGE FlexibleContexts, LambdaCase, OverloadedStrings, TupleSections #-}
 module Htcc.Parser.Combinators.Program (
     parser
+  , logicalOr
 ) where
 
 import           Control.Monad                               (forM, void, (>=>))
@@ -24,10 +25,12 @@ import           Control.Monad.Trans.State                   (get, gets, modify,
 import           Data.Bits                                   (Bits (..))
 import           Data.Either                                 (rights)
 import           Data.Functor                                ((<&>))
-import           Data.Maybe                                  (fromJust)
+import           Data.Maybe                                  (fromJust,
+                                                              fromMaybe)
 import qualified Data.Text                                   as T
 import qualified Htcc.CRules.Types                           as CT
-import           Htcc.Parser.AST                             (Treealizable (..), addKind, subKind)
+import           Htcc.Parser.AST                             (Treealizable (..),
+                                                              addKind, subKind)
 import           Htcc.Parser.AST.Core                        (ATKind (..),
                                                               ATKindFor (..),
                                                               ATree (..),
@@ -43,7 +46,8 @@ import           Htcc.Parser.AST.Type                        (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.Core
 import           Htcc.Parser.Combinators.Keywords
-import           Htcc.Parser.Combinators.Type                (cType)
+import           Htcc.Parser.Combinators.Type                (arraySuffix,
+                                                              cType)
 import           Htcc.Parser.ConstructionData                (addFunction,
                                                               addLVar,
                                                               incomplete,
@@ -59,18 +63,28 @@ import qualified Text.Megaparsec.Char                        as MC
 
 import           Text.Megaparsec.Debug                       (dbg)
 
-declIdent :: (Show i, Read i, Integral i) => Parser i (CT.StorageClass i, T.Text)
-declIdent = (,) <$> cType <*> identifier
+declIdent :: (Show i, Read i, Bits i, Integral i) => Parser i (CT.StorageClass i, T.Text)
+declIdent = do
+    ty <- cType
+    ident <- identifier
+    (,ident) <$> M.option ty (arraySuffix ty)
 
-declIdent' :: (Show i, Read i, Integral i)
+declIdentFuncArg :: (Show i, Read i, Bits i, Integral i)
     => Parser i a
     -> Parser i (Either (CT.StorageClass i) (CT.StorageClass i, T.Text))
-declIdent' sep = do
+declIdentFuncArg sep = do
     ty <- cType
-    choice
-        [ Left ty <$ sep
-        , Right . (ty, ) <$> identifier <* sep
-        ]
+    anonymousArg ty M.<|> namedArg ty
+    where
+        anonymousArg ty = Left <$> M.option ty (arraySuffix ty) <* sep
+        namedArg ty = do
+            ident <- identifier
+            Right . (,ident) <$> M.option ty (narrowPtr <$> arraySuffix ty) <* sep
+        
+        narrowPtr ty
+            | CT.isCTArray ty = fromMaybe ty $ CT.mapTypeKind CT.CTPtr <$> CT.deref ty
+            | CT.isIncompleteArray ty =
+                CT.mapTypeKind (\(CT.CTIncomplete (CT.IncompleteArray t')) -> CT.CTPtr t') ty
 
 registerLVar :: (Bits i, Integral i) => CT.StorageClass i -> T.Text -> Parser i (ATree i)
 registerLVar ty ident =
@@ -117,7 +131,7 @@ function = do
         ]
     where
         takeParameters =
-            M.manyTill (M.try (declIdent' comma) M.<|> (declIdent' $ M.lookAhead (symbol ")"))) (symbol ")")
+            M.manyTill (M.try (declIdentFuncArg comma) M.<|> (declIdentFuncArg $ M.lookAhead (symbol ")"))) (symbol ")")
 
         declaration ty ident =
             void semi

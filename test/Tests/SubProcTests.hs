@@ -99,6 +99,10 @@ exec = runTestsEx
     , (StatementEqual.test "int main() { int a; return sizeof a; }", fromIntegral $ sizeof CT.CTInt)
     , (StatementEqual.test "int main() { int* p; return sizeof p; }", fromIntegral $ sizeof $ CT.CTPtr CT.CTInt)
     , (StatementEqual.test "int main() { return sizeof(int); }", fromIntegral $ sizeof CT.CTInt)
+    , (StatementEqual.test "int main() { int ar[10]; return 0; }", 0)
+    , (StatementEqual.test "int main() { int ar[1+2/1]; return 0; }", 0)
+    , (StatementEqual.test "int f(int[10]) { return 42; } int main() { int ar[10]; return f(ar); }", 42)
+    , (StatementEqual.test "int f(int ar[10]) { return 42; } int main() { int ar[10]; return f(ar); }", 42)
     ]
     where
         sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural 
