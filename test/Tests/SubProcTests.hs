@@ -101,8 +101,10 @@ exec = runTestsEx
     , (StatementEqual.test "int main() { return sizeof(int); }", fromIntegral $ sizeof CT.CTInt)
     , (StatementEqual.test "int main() { int ar[10]; return 0; }", 0)
     , (StatementEqual.test "int main() { int ar[1+2/1]; return 0; }", 0)
+    , (StatementEqual.test "int main() { int ar[10][1+2/1]; return 0; }", 0)
     , (StatementEqual.test "int f(int[10]) { return 42; } int main() { int ar[10]; return f(ar); }", 42)
     , (StatementEqual.test "int f(int ar[10]) { return 42; } int main() { int ar[10]; return f(ar); }", 42)
+    , (StatementEqual.test "int main() { int ar[2]; int* p; p = ar; *p = 3; return *ar; }", 3)
     ]
     where
         sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural 
@@ -120,7 +122,6 @@ exec = let sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural in runTestsEx [
     -- (LinkFuncRet.test "int main() { return sum7(1, 1, 1, 1, 1, 1, 1); }" ["test_func3"], 7),
     -- (LinkFuncRet.test "int main() { return test_func2(sum7(1, 2, 3, 4, 5, 6, 7)); }" ["test_func2", "test_func3"], 0),
     -- (LinkFuncRet.test "int main() { return sum16(1,1,1,1,1,1,11,10,9,8,7,6,5,4,3,2); }" ["test_func3"], 11),
-    (StatementEqual.test "int main() { int ar[2]; int* p = ar; *p = 3; return *ar; }", 3),
     (StatementEqual.test "int main() { int ar[2]; int* p = ar; *(p + 1) = 3; return *(ar + 1); }", 3),
     (StatementEqual.test "int main() { int ar[2]; int* p = ar; *p = 2; *(p + 1) = 3; return *ar + *(ar + 1); }", 5),
     (StatementEqual.test "int main() { int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; return *ar; }", 1),

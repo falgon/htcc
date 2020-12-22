@@ -85,6 +85,7 @@ declIdentFuncArg sep = do
             | CT.isCTArray ty = fromMaybe ty $ CT.mapTypeKind CT.CTPtr <$> CT.deref ty
             | CT.isIncompleteArray ty =
                 CT.mapTypeKind (\(CT.CTIncomplete (CT.IncompleteArray t')) -> CT.CTPtr t') ty
+            | otherwise = ty
 
 registerLVar :: (Bits i, Integral i) => CT.StorageClass i -> T.Text -> Parser i (ATree i)
 registerLVar ty ident =

@@ -54,7 +54,7 @@ constantExp = logicalOr >>= constantExp'
             ATNot -> fromIntegral . fromEnum . not . toBool <$> constantExp' lhs
             ATBitNot -> complement <$> constantExp' lhs
             ATLAnd -> binop ((.) fromBool . flip (.) toBool . (&&) . toBool)
-            ATOr -> binop ((.) fromBool . flip (.) toBool . (||) . toBool)
+            ATLOr -> binop ((.) fromBool . flip (.) toBool . (||) . toBool)
             ATNum v -> pure v
             _ -> fail "The expression is not constant-expression"
             where
