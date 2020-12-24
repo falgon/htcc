@@ -9,20 +9,27 @@ Portability : POSIX
 
 C language parser Combinators
 -}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase, OverloadedStrings #-}
 module Htcc.Parser.Combinators.Type (
     cType
   , arraySuffix
 ) where
+import           Control.Monad                    (mfilter, void)
 import           Control.Monad.Combinators        (choice)
+import           Control.Monad.Trans              (MonadTrans (..))
+import           Control.Monad.Trans.Maybe        (MaybeT (..), runMaybeT)
+import           Control.Monad.Trans.State        (gets)
 import           Data.Bits                        (Bits (..))
 import           Data.Bool                        (bool)
+import           Data.Maybe                       (fromJust)
 import qualified Data.Text                        as T
+import           Data.Tuple.Extra                 (dupe, first)
 import qualified Htcc.CRules.Types                as CT
 import           Htcc.Parser.AST.Core             (ATKind (..), ATree (..))
 import           Htcc.Parser.Combinators.Core
 import           Htcc.Parser.Combinators.Keywords
 import {-# SOURCE #-} Htcc.Parser.Combinators.Program  (logicalOr)
+import           Htcc.Parser.ConstructionData     (incomplete)
 import           Htcc.Utils                       (toNatural)
 import qualified Text.Megaparsec                  as M
 
@@ -67,17 +74,35 @@ arraySuffix :: (Show i, Read i, Bits i, Integral i)
     -> Parser i (CT.StorageClass i)
 arraySuffix ty = choice
     [ withConstantExp
+    , nonConstantExp
     ]
     where
+        failWithTypeMaybe ty' = maybe (fail $ show ty') pure
+
         withConstantExp = do
-            val <- M.try (brackets constantExp)
-            M.option (CT.mapTypeKind (CT.CTArray (toNatural val)) ty) $ do
-                ty' <- arraySuffix ty
-                case CT.concatCTArray (CT.mapTypeKind (CT.CTArray (toNatural val)) ty) ty' of
-                    Nothing -> fail $ show ty'
-                    Just ty''
-                        | CT.isValidIncomplete ty'' -> pure ty''
-                        | otherwise -> fail $ show ty'
+            arty <- flip id ty . CT.mapTypeKind . CT.CTArray . toNatural <$> M.try (brackets constantExp)
+            M.option Nothing (Just <$> arraySuffix ty)
+                >>= \case
+                    Nothing -> pure arty
+                    Just ty' ->
+                        runMaybeT (mfilter CT.isValidIncomplete $ MaybeT $ pure $ CT.concatCTArray arty ty')
+                            >>= failWithTypeMaybe ty'
+
+        nonConstantExp = let mtIncomplete ty' = MaybeT $ lift $ gets $ incomplete ty' in
+            void (brackets M.eof)
+                >> M.option Nothing (Just <$> arraySuffix ty)
+                >>= \case
+                    Nothing ->
+                        runMaybeT (CT.mapTypeKind (CT.CTIncomplete . CT.IncompleteArray) <$> mtIncomplete ty)
+                            >>= failWithTypeMaybe ty
+                    Just ty' ->
+                        runMaybeT (multiple <$> mtIncomplete ty')
+                            >>= failWithTypeMaybe ty'
+            where
+                multiple = CT.mapTypeKind $
+                    uncurry ((.) fromJust . CT.concatCTArray)
+                        . first (CT.CTIncomplete . CT.IncompleteArray . CT.removeAllExtents)
+                        . dupe
 
 preType,
     cType :: (Show i, Read i, Integral i) => Parser i (CT.StorageClass i)
