@@ -14,7 +14,7 @@ module Htcc.Parser.Combinators.Type (
     cType
   , arraySuffix
 ) where
-import           Control.Monad                    (mfilter, void)
+import           Control.Monad                    (mfilter)
 import           Control.Monad.Combinators        (choice)
 import           Control.Monad.Trans              (MonadTrans (..))
 import           Control.Monad.Trans.Maybe        (MaybeT (..), runMaybeT)
@@ -89,7 +89,7 @@ arraySuffix ty = choice
                             >>= failWithTypeMaybe ty'
 
         nonConstantExp = let mtIncomplete ty' = MaybeT $ lift $ gets $ incomplete ty' in
-            void (brackets M.eof)
+            brackets M.eof
                 >> M.option Nothing (Just <$> arraySuffix ty)
                 >>= \case
                     Nothing ->

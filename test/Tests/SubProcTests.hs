@@ -105,6 +105,43 @@ exec = runTestsEx
     , (StatementEqual.test "int f(int[10]) { return 42; } int main() { int ar[10]; return f(ar); }", 42)
     , (StatementEqual.test "int f(int ar[10]) { return 42; } int main() { int ar[10]; return f(ar); }", 42)
     , (StatementEqual.test "int main() { int ar[2]; int* p; p = ar; *p = 3; return *ar; }", 3)
+    , (StatementEqual.test "int main() { int ar[2]; int* p; p = ar; *(p + 1) = 3; return *(ar + 1); }", 3)
+    , (StatementEqual.test "int main() { int ar[2]; int* p; p = ar; *p = 2; *(p + 1) = 3; return *ar + *(ar + 1); }", 5)
+    , (StatementEqual.test "int main() { int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; return *ar; }", 1)
+    , (StatementEqual.test "int main() { int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; return *(ar + 1); }", 2)
+    , (StatementEqual.test "int main() { int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; return *(ar + 2); }", 3)
+    , (StatementEqual.test "int f(int* p) { *p = 42; return 0; } int main() { int a; a = 0; f(&a); return a; }", 42)
+    , (StatementEqual.test "int main() { int ar[10]; int i; i = 0; for (; i < 10; i = i + 1) { *(ar + i) = i; } int sum; sum = 0; for (i = 0; i < 10; i = i + 1) { sum = sum + *(ar + i); } return sum; }", 45)
+    , (StatementEqual.test "int sum(int* p, int n) { int sum; sum = 0; int i; i = 0; for (; i < n; i = i + 1) sum = sum + *(p + i); return sum; } int main() { int ar[10]; int i; i = 0; for (; i < 10; i = i + 1) *(ar + i) = i; return sum(ar, 10); }", 45)
+    , (StatementEqual.test "int main() { int ar[2][3]; int sum; sum = 0; int i; i = 0; for (; i < 2; i = i + 1) { int j; j = 0; for (; j < 3; j = j + 1) { *(*(ar + i) + j) = i + j; sum = sum + *(*(ar + i) + j); } } return sum; } ", 9)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = ar; *p = 42; return **ar; }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = ar; *(p + 1) = 42; return *(*ar + 1); }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = ar; *(p + 2) = 42; return *(*ar + 2); }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = ar; *(p + 3) = 42; return **(ar + 1); }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = ar; *(p + 4) = 42; return *(*(ar + 1) + 1); }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = ar; *(p + 5) = 42; return *(*(ar + 1) + 2); }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = ar; *(p + 6) = 42; return **(ar + 2); }", 42)
+    , (StatementEqual.test "int main() { int ar[3]; int i; i = 0; for (; i < 3; i = i + 1) ar[i] = i; return ar[0]; }", 0)
+    , (StatementEqual.test "int main() { int ar[3]; int i; i = 0; for (; i < 3; i = i + 1) ar[i] = i; return ar[1]; }", 1)
+    , (StatementEqual.test "int main() { int ar[3]; int i; i = 0; for (; i < 3; i = i + 1) ar[i] = i; return ar[2]; }", 2)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = ar; p[0] = 42; return ar[0][0]; }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = ar; p[1] = 42; return ar[0][1]; }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = ar; p[2] = 42; return ar[0][2]; }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = ar; p[3] = 42; return ar[1][0]; }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = ar; p[4] = 42; return ar[1][1]; }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = ar; p[5] = 42; return ar[1][2]; }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = ar; p[6] = 42; return ar[2][0]; }", 42)
+    , (StatementEqual.test "int main() { int a; return sizeof(a); }", fromIntegral $ sizeof CT.CTInt)
+    , (StatementEqual.test "int main() { int a; return sizeof a; }", fromIntegral $ sizeof CT.CTInt)
+    , (StatementEqual.test "int main() { int* p; return sizeof p; }", fromIntegral $ sizeof $ CT.CTPtr CT.CTInt)
+    , (StatementEqual.test "int main() { int ar[3]; return sizeof ar; }", fromIntegral $ sizeof $ CT.CTArray 3 CT.CTInt)
+    , (StatementEqual.test "int main() { int ar[3][5]; return sizeof ar; }", fromIntegral $ sizeof $ CT.CTArray 5 $ CT.CTArray 3 CT.CTInt)
+    , (StatementEqual.test "int main() { int ar[3][5]; return sizeof *ar; }", fromIntegral $ sizeof $ CT.CTArray 5 CT.CTInt)
+    , (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar; }", fromIntegral $ sizeof CT.CTInt)
+    , (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar) + 1; }", succ $ fromIntegral $ sizeof CT.CTInt)
+    , (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar + 1; }", succ $ fromIntegral $ sizeof CT.CTInt)
+    , (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar + 1); }", fromIntegral $ sizeof $ CT.CTLong CT.CTInt)
+    , (StatementEqual.test "int main() { int ar[2]; 2[ar] = 42; return ar[2]; }", 42)
     ]
     where
         sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural 
@@ -122,43 +159,6 @@ exec = let sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural in runTestsEx [
     -- (LinkFuncRet.test "int main() { return sum7(1, 1, 1, 1, 1, 1, 1); }" ["test_func3"], 7),
     -- (LinkFuncRet.test "int main() { return test_func2(sum7(1, 2, 3, 4, 5, 6, 7)); }" ["test_func2", "test_func3"], 0),
     -- (LinkFuncRet.test "int main() { return sum16(1,1,1,1,1,1,11,10,9,8,7,6,5,4,3,2); }" ["test_func3"], 11),
-    (StatementEqual.test "int main() { int ar[2]; int* p = ar; *(p + 1) = 3; return *(ar + 1); }", 3),
-    (StatementEqual.test "int main() { int ar[2]; int* p = ar; *p = 2; *(p + 1) = 3; return *ar + *(ar + 1); }", 5),
-    (StatementEqual.test "int main() { int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; return *ar; }", 1),
-    (StatementEqual.test "int main() { int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; return *(ar + 1); }", 2),
-    (StatementEqual.test "int main() { int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; return *(ar + 2); }", 3),
-    (StatementEqual.test "int main() { int f(int* p) { *p = 42; return 0; } int main() { int a = 0; f(&a); return a; }", 42),
-    (StatementEqual.test "int main() { int ar[10]; int i = 0; for (; i < 10; i = i + 1) { *(ar + i) = i; } int sum = 0; for (i = 0; i < 10; i = i + 1) { sum = sum + *(ar + i); } return sum; }", 45),
-    (StatementEqual.test "int main() { int sum(int* p, int n) { int sum = 0; int i = 0; for (; i < n; i = i + 1) sum = sum + *(p + i); return sum; } int main() { int ar[10]; int i = 0; for (; i < 10; i = i + 1) *(ar + i) = i; return sum(ar, 10); }", 45),
-    (StatementEqual.test "int main() { int ar[2][3]; int sum = 0; int i = 0; for (; i < 2; i = i + 1) { int j = 0; for (; j < 3; j = j + 1) { *(*(ar + i) + j) = i + j; sum = sum + *(*(ar + i) + j); } } return sum; } ", 9),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; *p = 42; return **ar; }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; *(p + 1) = 42; return *(*ar + 1); }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; *(p + 2) = 42; return *(*ar + 2); }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; *(p + 3) = 42; return **(ar + 1); }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; *(p + 4) = 42; return *(*(ar + 1) + 1); }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; *(p + 5) = 42; return *(*(ar + 1) + 2); }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; *(p + 6) = 42; return **(ar + 2); }", 42),
-    (StatementEqual.test "int main() { int ar[3]; int i = 0; for (; i < 3; i = i + 1) ar[i] = i; return ar[0]; }", 0),
-    (StatementEqual.test "int main() { int ar[3]; int i = 0; for (; i < 3; i = i + 1) ar[i] = i; return ar[1]; }", 1),
-    (StatementEqual.test "int main() { int ar[3]; int i = 0; for (; i < 3; i = i + 1) ar[i] = i; return ar[2]; }", 2),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[0] = 42; return ar[0][0]; }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[1] = 42; return ar[0][1]; }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[2] = 42; return ar[0][2]; }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[3] = 42; return ar[1][0]; }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[4] = 42; return ar[1][1]; }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[5] = 42; return ar[1][2]; }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[6] = 42; return ar[2][0]; }", 42),
-    (StatementEqual.test "int main() { int a; return sizeof(a); }", fromIntegral $ sizeof CT.CTInt),
-    (StatementEqual.test "int main() { int a; return sizeof a; }", fromIntegral $ sizeof CT.CTInt),
-    (StatementEqual.test "int main() { int* p; return sizeof p; }", fromIntegral $ sizeof $ CT.CTPtr CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3]; return sizeof ar; }", fromIntegral $ sizeof $ CT.CTArray 3 CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof ar; }", fromIntegral $ sizeof $ CT.CTArray 5 $ CT.CTArray 3 CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof *ar; }", fromIntegral $ sizeof $ CT.CTArray 5 CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar; }", fromIntegral $ sizeof CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar) + 1; }", succ $ fromIntegral $ sizeof CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar + 1; }", succ $ fromIntegral $ sizeof CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar + 1); }", fromIntegral $ sizeof $ CT.CTLong CT.CTInt),
-    (StatementEqual.test "int main() { int ar[2]; 2[ar] = 42; return ar[2]; }", 42),
     (StatementEqual.test "int main() { int g; int main() { return g; }", 0),
     (StatementEqual.test "int main() { int g; int main() { g = 42; return g; }", 42),
     (StatementEqual.test "int main() { int gr[3]; int main() { int i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; return gr[0]; }", 1),

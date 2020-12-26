@@ -234,24 +234,37 @@ term = binaryOperator unary
 unary = choice
     [ symbol "+" >> factor
     , symbol "-" >> factor <&> \n -> ATNode ATSub (atype n) (atNumLit 0) n
-    , MC.char '&' `notFollowedOp` MC.char '&' >> unary <&> \n ->
-        let ty = if CT.isArray (atype n) then fromJust $ CT.deref $ atype n else atype n in
-            atUnary ATAddr (CT.mapTypeKind CT.CTPtr ty) n
+    , addr
     , symbol "*" >> unary >>= deref'
-    , factor
+    , factor'
     ]
     where
-        deref' :: Ord i => ATree i -> Parser i (ATree i)
-        deref' = runMaybeT . deref'' >=> maybe M.empty pure
+        addr = MC.char '&' `notFollowedOp` MC.char '&' >> unary <&> \n ->
+            let ty = if CT.isArray (atype n) then fromJust $ CT.deref $ atype n else atype n in
+                atUnary ATAddr (CT.mapTypeKind CT.CTPtr ty) n
 
-        deref'' n = do
-            ty <- MaybeT $ pure (CT.deref $ atype n)
-            case CT.toTypeKind ty of
-                CT.CTVoid -> lift $ fail "void value not ignored as it ought to be"
-                _ -> do
-                    scp <- lift $ lift get
-                    ty' <- MaybeT $ pure (incomplete ty scp)
-                    lift $ pure $ atUnary ATDeref ty' n
+        factor' = factor >>= allAcc
+            where
+                allAcc fac = M.option fac $ choice
+                    [ idxAcc fac
+                    ]
+
+                idxAcc fac = do
+                    idx <- brackets expr
+                    kt <- maybe (fail "invalid operands") pure (addKind fac idx)
+                    ty <- maybe (fail "subscripted value is neither array nor pointer nor vector") pure 
+                        $ CT.deref $ atype kt
+                    ty' <- maybe (fail "incomplete value dereference") pure =<< lift (gets $ incomplete ty)
+                    allAcc $ atUnary ATDeref ty' kt
+
+        deref' = runMaybeT . deref'' >=> maybe M.empty pure
+            where
+                deref'' n = do
+                    ty <- MaybeT $ pure (CT.deref $ atype n)
+                    case CT.toTypeKind ty of
+                        CT.CTVoid -> lift $ fail "void value not ignored as it ought to be"
+                        _ -> MaybeT (lift $ gets $ incomplete ty)
+                            >>= lift . pure . flip (atUnary ATDeref) n
 
 factor = choice
     [ atNumLit <$> natural
