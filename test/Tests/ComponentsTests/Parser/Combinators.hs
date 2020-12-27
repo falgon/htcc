@@ -53,9 +53,9 @@ stringLiteralTest = TestLabel "Parser.Combinators.Core.stringLiteral" $
     TestList [
         TestLabel "Parser.Combinators.Core.stringLiteral success patterns" $
             TestList [
-                "\"abc\" == abc" ~: M.runParser stringLiteral' "" "\"abc\"" ~?= Right "abc"
-              , "\"012\" == 012" ~: M.runParser stringLiteral' "" "\"012\"" ~?= Right "012"
-              , "\"012\"3 == 012" ~: M.runParser stringLiteral' "" "\"012\"3" ~?= Right "012"
+                "\"abc\" == abc" ~: M.runParser stringLiteral' "" "\"abc\"" ~?= Right "abc\0"
+              , "\"012\" == 012" ~: M.runParser stringLiteral' "" "\"012\"" ~?= Right "012\0"
+              , "\"012\"3 == 012" ~: M.runParser stringLiteral' "" "\"012\"3" ~?= Right "012\0"
             ]
       , TestLabel "Parser.Combinators.Core.stringLiteral fail patterns" $
             TestList [

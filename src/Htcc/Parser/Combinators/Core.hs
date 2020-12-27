@@ -80,7 +80,7 @@ charLiteral :: Ord e => M.ParsecT e T.Text m Char
 charLiteral = M.between (MC.char '\'') (MC.char '\'') ML.charLiteral
 
 stringLiteral :: Ord e => M.ParsecT e T.Text m String
-stringLiteral = MC.char '\"' *> M.manyTill ML.charLiteral (MC.char '\"')
+stringLiteral = MC.char '\"' *> ((<> "\0") <$> M.manyTill ML.charLiteral (MC.char '\"'))
 
 hexadecimal, octal, decimal, natural, integer :: (Ord e, Num i) => M.ParsecT e T.Text m i
 hexadecimal = MC.char '0' >> MC.char' 'x' >> ML.hexadecimal

@@ -15,6 +15,8 @@ module Htcc.Parser.Combinators.Program (
   , logicalOr
 ) where
 
+import qualified Data.ByteString.UTF8 as BSU
+
 import           Control.Monad                               (forM, void, (>=>))
 import           Control.Monad.Combinators                   (choice, some)
 import           Control.Monad.Trans                         (MonadTrans (..))
@@ -23,6 +25,7 @@ import           Control.Monad.Trans.Maybe                   (MaybeT (..),
 import           Control.Monad.Trans.State                   (get, gets, modify,
                                                               put)
 import           Data.Bits                                   (Bits (..))
+import           Data.Char                                   (ord)
 import           Data.Either                                 (rights)
 import           Data.Functor                                ((<&>))
 import           Data.Maybe                                  (fromJust,
@@ -46,12 +49,14 @@ import           Htcc.Parser.AST.Type                        (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.Core
 import           Htcc.Parser.Combinators.Keywords
-import           Htcc.Parser.Combinators.Type                (constantExp, arraySuffix,
-                                                              cType)
+import           Htcc.Parser.Combinators.Type                (arraySuffix,
+                                                              cType,
+                                                              constantExp)
 import           Htcc.Parser.ConstructionData                (addFunction,
-                                                              addLVar,
                                                               addGVar,
                                                               addGVarWith,
+                                                              addLVar,
+                                                              addLiteral,
                                                               incomplete,
                                                               lookupFunction,
                                                               lookupVar,
@@ -82,7 +87,7 @@ declIdentFuncArg sep = do
         namedArg ty = do
             ident <- identifier
             Right . (,ident) <$> M.option ty (narrowPtr <$> arraySuffix ty) <* sep
-        
+
         narrowPtr ty
             | CT.isCTArray ty = fromMaybe ty $ CT.mapTypeKind CT.CTPtr <$> CT.deref ty
             | CT.isIncompleteArray ty =
@@ -173,7 +178,7 @@ gvar = do
                 >>= \case
                     Left err -> fail $ T.unpack $ fst err
                     Right (_, scp) -> ATEmpty <$ lift (put scp)
-        
+
         withInit ty ident = do
             void $ symbol "="
             ty' <- maybe (fail "defining global variables with a incomplete type") pure
@@ -201,7 +206,7 @@ gvar = do
                             -- TODO: support initializing from other global variables
                             | otherwise -> fail "initializer element is not constant"
                         _ -> fail "initializer element is not constant"
-                
+
                 gvarInitWithOG ty' to = addGVarWith ty' (tmpTKIdent ident) (PV.GVarInitWithOG to)
                 gvarInitWithVal ty' to = addGVarWith ty' (tmpTKIdent ident) (PV.GVarInitWithVal to)
 
@@ -211,7 +216,7 @@ gvar = do
                         >>= \case
                             Left err -> fail $ T.unpack $ fst err
                             Right (_, scp) -> ATEmpty <$ lift (put scp)
-                    
+
 
 lvarStmt = choice
     [ ATEmpty <$ M.try (cType <* semi)
@@ -314,7 +319,7 @@ unary = choice
                 idxAcc fac = do
                     idx <- brackets expr
                     kt <- maybe (fail "invalid operands") pure (addKind fac idx)
-                    ty <- maybe (fail "subscripted value is neither array nor pointer nor vector") pure 
+                    ty <- maybe (fail "subscripted value is neither array nor pointer nor vector") pure
                         $ CT.deref $ atype kt
                     ty' <- maybe (fail "incomplete value dereference") pure =<< lift (gets $ incomplete ty)
                     allAcc $ atUnary ATDeref ty' kt
@@ -330,11 +335,22 @@ unary = choice
 
 factor = choice
     [ atNumLit <$> natural
+    , atNumLit . fromIntegral . ord <$> charLiteral
     , sizeof
+    , strLiteral
     , identifier'
     , parens expr
     , ATEmpty <$ M.eof
     ]
+    where
+        strLiteral = do
+            s <- stringLiteral
+            lit <- lift $ gets $ 
+                addLiteral (CT.SCAuto $ CT.CTArray (fromIntegral $ length s) CT.CTChar) $
+                    (HT.TokenLCNums 1 1, HT.TKString $ BSU.fromString s)
+            case lit of
+                Left err -> fail $ T.unpack $ fst err
+                Right (nd, scp) -> nd <$ lift (put scp)
 
 sizeof = kSizeof >> choice
     [ incomplete <$> M.try (parens cType) <*> lift get

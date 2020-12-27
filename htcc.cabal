@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0a6f7ec02e3df248fd99bdf5c5994002b16d028dd5e733e0014a093970230942
+-- hash: fb71932dd3267d5d6b0cf4dcd5b4ad1098bba4925012b3d82e2229544cc0037f
 
 name:           htcc
 version:        0.0.0.1
@@ -136,6 +136,7 @@ library
     , split
     , text
     , transformers
+    , utf8-string
   default-language: Haskell2010
 
 executable htcc
@@ -171,6 +172,7 @@ executable htcc
     , split
     , text
     , transformers
+    , utf8-string
   default-language: Haskell2010
 
 test-suite htcc-test
@@ -258,4 +260,5 @@ benchmark criterion
     , split
     , text
     , transformers
+    , utf8-string
   default-language: Haskell2010
