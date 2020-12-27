@@ -46,10 +46,12 @@ import           Htcc.Parser.AST.Type                        (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.Core
 import           Htcc.Parser.Combinators.Keywords
-import           Htcc.Parser.Combinators.Type                (arraySuffix,
+import           Htcc.Parser.Combinators.Type                (constantExp, arraySuffix,
                                                               cType)
 import           Htcc.Parser.ConstructionData                (addFunction,
                                                               addLVar,
+                                                              addGVar,
+                                                              addGVarWith,
                                                               incomplete,
                                                               lookupFunction,
                                                               lookupVar,
@@ -100,6 +102,7 @@ program = some global
 
 global,
     function,
+    gvar,
     stmt,
     lvarStmt,
     expr,
@@ -119,11 +122,13 @@ global,
     identifier' :: (Ord i, Bits i, Read i, Show i, Integral i) => Parser i (ATree i)
 
 global = choice
-    [ function
+    [ ATEmpty <$ M.try (cType >> semi)
+    , function
+    , gvar
     ]
 
 function = do
-    (ty, ident) <- declIdent <* symbol "("
+    (ty, ident) <- M.try (declIdent <* symbol "(")
     params <- takeParameters
     lift $ modify resetLocal
     choice
@@ -150,6 +155,63 @@ function = do
                         params' <- forM (rights params) $ uncurry registerLVar
                         atDefFunc ident (if null params' then Nothing else Just params') ty <$> stmt
                     Left err -> fail $ T.unpack $ fst err
+
+gvar = do
+    (ty, ident) <- declIdent
+    choice
+        [ nonInit ty ident
+        , withInit ty ident
+        ]
+    where
+        tmpTKIdent ident = (HT.TokenLCNums 1 1, HT.TKIdent ident)
+
+        nonInit ty ident = do
+            void semi
+            ty' <- maybe (fail "defining global variables with a incomplete type") pure
+                =<< lift (gets $ incomplete ty)
+            lift (gets (addGVar ty' (tmpTKIdent ident)))
+                >>= \case
+                    Left err -> fail $ T.unpack $ fst err
+                    Right (_, scp) -> ATEmpty <$ lift (put scp)
+        
+        withInit ty ident = do
+            void $ symbol "="
+            ty' <- maybe (fail "defining global variables with a incomplete type") pure
+                =<< lift (gets $ incomplete ty)
+            gvarInit ty' ident <* semi
+
+        gvarInit ty ident = choice
+                [ M.try fromConstant
+                , fromOG
+                ]
+            where
+                fromOG = do
+                    ast <- logicalOr
+                    case (atkind ast, atkind (atL ast)) of
+                        (ATAddr, ATGVar _ name) -> lift (gets (gvarInitWithOG ty name))
+                            >>= \case
+                                Left err -> fail $ T.unpack $ fst err
+                                Right (_, scp) -> ATEmpty <$ lift (put scp)
+                        (ATAddr, _) -> fail "invalid initializer in global variable"
+                        (ATGVar t name, _)
+                            | CT.isCTArray t -> lift (gets (gvarInitWithOG ty name))
+                                >>= \case
+                                    Left err -> fail $ T.unpack $ fst err
+                                    Right (_, scp) -> ATEmpty <$ lift (put scp)
+                            -- TODO: support initializing from other global variables
+                            | otherwise -> fail "initializer element is not constant"
+                        _ -> fail "initializer element is not constant"
+                
+                gvarInitWithOG ty' to = addGVarWith ty' (tmpTKIdent ident) (PV.GVarInitWithOG to)
+                gvarInitWithVal ty' to = addGVarWith ty' (tmpTKIdent ident) (PV.GVarInitWithVal to)
+
+                fromConstant = do
+                    cval <- constantExp
+                    lift (gets (gvarInitWithVal ty cval))
+                        >>= \case
+                            Left err -> fail $ T.unpack $ fst err
+                            Right (_, scp) -> ATEmpty <$ lift (put scp)
+                    
 
 lvarStmt = choice
     [ ATEmpty <$ M.try (cType <* semi)

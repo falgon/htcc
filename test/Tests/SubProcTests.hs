@@ -142,6 +142,21 @@ exec = runTestsEx
     , (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar + 1; }", succ $ fromIntegral $ sizeof CT.CTInt)
     , (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar + 1); }", fromIntegral $ sizeof $ CT.CTLong CT.CTInt)
     , (StatementEqual.test "int main() { int ar[2]; 2[ar] = 42; return ar[2]; }", 42)
+    , (StatementEqual.test "int g; int main() { return g; }", 0)
+    , (StatementEqual.test "int g; int main() { g = 42; return g; }", 42)
+    , (StatementEqual.test "int g = 42; int main() { return g; }", 42)
+    --, (StatementEqual.test "int g = 42; int h = g; int main() { return h; }", 42)
+    , (StatementEqual.test "int g = 42; int* h = &g; int main() { return *h; }", 42)
+    , (StatementEqual.test "int gr[3]; int main() { int i; i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; return gr[0]; }", 1)
+    , (StatementEqual.test "int gr[3]; int main() { int i; i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; return gr[1]; }", 2)
+    , (StatementEqual.test "int gr[3]; int main() { int i; i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; return gr[2]; }", 3)
+    , (StatementEqual.test "int main() { char c; c = 1; return c; }", 1)
+    , (StatementEqual.test "int main() { char c1; c1 = 1; char c2; c2 = 2; return c1; }", 1)
+    , (StatementEqual.test "int main() { char c1; c1 = 1; char c2; c2 = 2; return c2; }", 2)
+    , (StatementEqual.test "int main() { char x; return sizeof x; }", 1)
+    , (StatementEqual.test "int main() { char ar[10]; return sizeof ar; }", fromIntegral $ sizeof $ CT.CTArray 10 CT.CTChar)
+    , (StatementEqual.test "int f(char a, char b, char c) { return a - b - c; } int main() { return f(7, 3, 3); }", 1)
+    , (StatementEqual.test "int f(char a, int b, char c) { return a - b - c; } int main() { return f(7, 3, 3); }", 1)
     ]
     where
         sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural 
@@ -159,18 +174,6 @@ exec = let sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural in runTestsEx [
     -- (LinkFuncRet.test "int main() { return sum7(1, 1, 1, 1, 1, 1, 1); }" ["test_func3"], 7),
     -- (LinkFuncRet.test "int main() { return test_func2(sum7(1, 2, 3, 4, 5, 6, 7)); }" ["test_func2", "test_func3"], 0),
     -- (LinkFuncRet.test "int main() { return sum16(1,1,1,1,1,1,11,10,9,8,7,6,5,4,3,2); }" ["test_func3"], 11),
-    (StatementEqual.test "int main() { int g; int main() { return g; }", 0),
-    (StatementEqual.test "int main() { int g; int main() { g = 42; return g; }", 42),
-    (StatementEqual.test "int main() { int gr[3]; int main() { int i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; return gr[0]; }", 1),
-    (StatementEqual.test "int main() { int gr[3]; int main() { int i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; return gr[1]; }", 2),
-    (StatementEqual.test "int main() { int gr[3]; int main() { int i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; return gr[2]; }", 3),
-    (StatementEqual.test "int main() { char c = 1; return c; }", 1),
-    (StatementEqual.test "int main() { char c1 = 1; char c2 = 2; return c1; }", 1),
-    (StatementEqual.test "int main() { char c1 = 1; char c2 = 2; return c2; }", 2),
-    (StatementEqual.test "int main() { char x; return sizeof x; }", 1),
-    (StatementEqual.test "int main() { char ar[10]; return sizeof ar; }", fromIntegral $ sizeof $ CT.CTArray 10 CT.CTChar),
-    (StatementEqual.test "int main() { int f(char a, char b, char c) { return a - b - c; } int main() { return f(7, 3, 3); }", 1),
-    (StatementEqual.test "int main() { int f(char a, int b, char c) { return a - b - c; } int main() { return f(7, 3, 3); }", 1),
     (StatementEqual.test "int main() { return \"abc\"[0]; }", ord 'a'),
     (StatementEqual.test "int main() { return \"abc\"[1]; }", ord 'b'),
     (StatementEqual.test "int main() { return \"abc\"[2]; }", ord 'c'),

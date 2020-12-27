@@ -11,7 +11,8 @@ C language parser Combinators
 -}
 {-# LANGUAGE LambdaCase, OverloadedStrings #-}
 module Htcc.Parser.Combinators.Type (
-    cType
+    constantExp
+  , cType
   , arraySuffix
 ) where
 import           Control.Monad                    (mfilter)
