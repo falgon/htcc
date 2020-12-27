@@ -15,7 +15,7 @@ module Htcc.Parser.Combinators.Program (
   , logicalOr
 ) where
 
-import qualified Data.ByteString.UTF8 as BSU
+import qualified Data.ByteString.UTF8                        as BSU
 
 import           Control.Monad                               (forM, void, (>=>))
 import           Control.Monad.Combinators                   (choice, some)
@@ -24,7 +24,7 @@ import           Control.Monad.Trans.Maybe                   (MaybeT (..),
                                                               runMaybeT)
 import           Control.Monad.Trans.State                   (get, gets, modify,
                                                               put)
-import           Data.Bits                                   (Bits (..))
+import           Data.Bits                                   (Bits)
 import           Data.Char                                   (ord)
 import           Data.Either                                 (rights)
 import           Data.Functor                                ((<&>))
@@ -119,6 +119,7 @@ global,
     bitwiseAnd,
     equality,
     relational,
+    shift,
     add,
     term,
     unary,
@@ -280,11 +281,16 @@ equality = binaryOperator relational
     , (symbol "!=", binOpBool ATNEQ)
     ]
 
-relational = binaryOperator add
+relational = binaryOperator shift
     [ (symbol "<=", binOpBool ATLEQ)
     , (symbol "<",  binOpBool ATLT)
     , (symbol ">=", binOpBool ATGEQ)
     , (symbol ">",  binOpBool ATGT)
+    ]
+
+shift = binaryOperator add
+    [ (symbol "<<", binOpIntOnly ATShl)
+    , (symbol ">>", binOpIntOnly ATShr)
     ]
 
 add = binaryOperator term
@@ -299,8 +305,10 @@ term = binaryOperator unary
     ]
 
 unary = choice
-    [ symbol "+" >> factor
-    , symbol "-" >> factor <&> \n -> ATNode ATSub (atype n) (atNumLit 0) n
+    [ symbol "+" >> unary
+    , symbol "-" >> unary <&> \n -> ATNode ATSub (atype n) (atNumLit 0) n
+    , symbol "!" >> unary <&> flip (ATNode ATNot (CT.SCAuto CT.CTBool)) ATEmpty
+    , symbol "~" >> unary <&> flip (ATNode ATBitNot (CT.SCAuto CT.CTInt)) ATEmpty
     , addr
     , symbol "*" >> unary >>= deref'
     , factor'
@@ -345,11 +353,11 @@ factor = choice
     where
         strLiteral = do
             s <- stringLiteral
-            lit <- lift $ gets $ 
+            lit <- lift $ gets $
                 addLiteral (CT.SCAuto $ CT.CTArray (fromIntegral $ length s) CT.CTChar) $
                     (HT.TokenLCNums 1 1, HT.TKString $ BSU.fromString s)
             case lit of
-                Left err -> fail $ T.unpack $ fst err
+                Left err        -> fail $ T.unpack $ fst err
                 Right (nd, scp) -> nd <$ lift (put scp)
 
 sizeof = kSizeof >> choice

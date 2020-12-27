@@ -172,19 +172,19 @@ exec = runTestsEx
     , (StatementEqual.test "int main() { return \"\\r\"[0]; }", ord '\r')
     , (StatementEqual.test "int main() { return \"\\e\"[0]; }", ord '\ESC')
     , (StatementEqual.test "int main() { return \"\\\\0\"[0]; }", ord '\0')
+    , (StatementEqual.test "int main() { return !0; }", 1)
+    , (StatementEqual.test "int main() { return !42; }", 0)
+    , (StatementEqual.test "int main() { return !!!0; }", 1)
+    , (StatementEqual.test "int main() { return ~(-42); }", 41)
+    , (StatementEqual.test "int main() { return ~~~~42; }", 42)
+    , (StatementEqual.test "int main() { return (2 * 4) == (2 << 2); }", 1)
+    , (StatementEqual.test "int main() { return (8 / 4) == (8 >> 2); }", 1)
+    , (StatementEqual.test "int main() { int a; a = 2 << 4; return (a & (a - 1)) == 0; }", 1) -- Determining if an integer is a power of 2
     ]
     where
         sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural 
 {-
 exec = let sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural in runTestsEx [
-    (StatementEqual.test "int main() { return !0; }", 1),
-    (StatementEqual.test "int main() { return !42; }", 0),
-    (StatementEqual.test "int main() { return !!!0; }", 1),
-    (StatementEqual.test "int main() { return ~(-42); }", 41),
-    (StatementEqual.test "int main() { return ~~~~42; }", 42),
-    (StatementEqual.test "int main() { return (2 * 4) == (2 << 2); }", 1),
-    (StatementEqual.test "int main() { return (8 / 4) == (8 >> 2); }", 1),
-    (StatementEqual.test "int main() { int a = 2 << 4; return (a & (a - 1)) == 0; }", 1), -- Determining if an integer is a power of 2
     (StatementEqual.test "int main() { 1; {2;} return 3; }", 3),
     -- (LinkFuncRet.test "int main() { return sum7(1, 1, 1, 1, 1, 1, 1); }" ["test_func3"], 7),
     -- (LinkFuncRet.test "int main() { return test_func2(sum7(1, 2, 3, 4, 5, 6, 7)); }" ["test_func2", "test_func3"], 0),
