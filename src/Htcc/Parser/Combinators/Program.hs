@@ -47,7 +47,7 @@ import           Htcc.Parser.AST.Core                        (ATKind (..),
                                                               atNumLit,
                                                               atReturn, atUnary,
                                                               atWhile, atBreak,
-                                                              fromATKindFor,
+                                                              fromATKindFor, atContinue,
                                                               isEmptyExprStmt)
 import           Htcc.Parser.AST.Type                        (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
@@ -226,6 +226,7 @@ stmt = choice
     , whileStmt
     , forStmt
     , breakStmt
+    , continueStmt
     , atBlock <$> compoundStmt
     , lvarStmt
     , atExprStmt <$> (expr <* semi)
@@ -261,6 +262,8 @@ stmt = choice
             atFor es <$ semi M.<|> atFor . (es <>) . (:[]) . ATForStmt <$> stmt
 
         breakStmt = atBreak <$ (M.try kBreak *> semi)
+
+        continueStmt = atContinue <$ (M.try kContinue *> semi)
 
         lvarStmt = choice
             [ ATEmpty <$ M.try (cType <* semi)
