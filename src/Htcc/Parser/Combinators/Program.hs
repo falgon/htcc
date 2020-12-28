@@ -38,16 +38,20 @@ import           Htcc.Parser.AST                             (Treealizable (..),
 import           Htcc.Parser.AST.Core                        (ATKind (..),
                                                               ATKindFor (..),
                                                               ATree (..),
-                                                              atBlock, atComma,
+                                                              atBlock, atBreak,
+                                                              atCase, atComma,
                                                               atConditional,
-                                                              atDefFunc, atElse,
+                                                              atContinue,
+                                                              atDefFunc,
+                                                              atDefault, atElse,
                                                               atExprStmt, atFor,
                                                               atGVar, atIf,
                                                               atNoLeaf, atNull,
                                                               atNumLit,
-                                                              atReturn, atUnary,
-                                                              atWhile, atBreak,
-                                                              fromATKindFor, atContinue,
+                                                              atReturn,
+                                                              atSwitch, atUnary,
+                                                              atWhile,
+                                                              fromATKindFor,
                                                               isEmptyExprStmt)
 import           Htcc.Parser.AST.Type                        (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
@@ -66,6 +70,7 @@ import           Htcc.Parser.ConstructionData                (addFunction,
                                                               addLiteral,
                                                               fallBack,
                                                               incomplete,
+                                                              isSwitchStmt,
                                                               lookupFunction,
                                                               lookupVar,
                                                               resetLocal,
@@ -227,6 +232,9 @@ stmt = choice
     , forStmt
     , breakStmt
     , continueStmt
+    , switchStmt
+    , caseStmt
+    , defaultStmt
     , atBlock <$> compoundStmt
     , lvarStmt
     , atExprStmt <$> (expr <* semi)
@@ -264,6 +272,25 @@ stmt = choice
         breakStmt = atBreak <$ (M.try kBreak *> semi)
 
         continueStmt = atContinue <$ (M.try kContinue *> semi)
+
+        switchStmt = do
+            cond <- M.try kSwitch *> parens expr
+            bracket (putSwitchState True) (const $ putSwitchState False) (const stmt)
+                >>= \case
+                    ATNode (ATBlock ats) ty _ _ -> pure $ atSwitch cond ats ty
+                    _ -> fail "expected compound statement after the token ')'"
+            where
+                putSwitchState b = lift $ modify $ \scp -> scp { isSwitchStmt = b }
+
+        caseStmt = M.try kCase
+            *> ifM (lift $ gets isSwitchStmt)
+                ((atCase 0 <$> constantExp <* symbol ":") <*> stmt)
+                (fail "stray 'case'")
+
+        defaultStmt = (M.try kDefault <* symbol ":")
+            *> ifM (lift $ gets isSwitchStmt)
+                (atDefault 0 <$> stmt)
+                (fail "stray 'default'")
 
         lvarStmt = choice
             [ ATEmpty <$ M.try (cType <* semi)

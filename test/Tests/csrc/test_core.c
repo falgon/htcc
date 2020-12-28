@@ -415,7 +415,7 @@ int main()
     assert(11, ({ int i = 0; int j = 0; while (!i) { while (j++ != 10) continue; break; } j; }), "({ int i = 0; int j = 0; while (!i) { while (j++ != 10) continue; break; } j; })");/*
     assert(3, ({ int i = 0; goto a; a: ++i; b: ++i; c: ++i; i; }), "({ int i = 0; goto a; a: ++i; b: ++i; c: ++i; i; })");
     assert(2, ({ int i = 0; goto e; d: ++i; e: ++i; f: ++i; i; }), "({ int i = 0; goto e; d: ++i; e: ++i; f: ++i; i; })");
-    assert(1, ({ int i = 0; goto i; g: ++i; h: ++i; i: ++i; i; }), "({ int i = 0; goto i; g: ++i; h: ++i; i: ++i; i; })");
+    assert(1, ({ int i = 0; goto i; g: ++i; h: ++i; i: ++i; i; }), "({ int i = 0; goto i; g: ++i; h: ++i; i: ++i; i; })");*/
     assert(42, ({ int i = 0; switch (0) { case 0: i = 42; break; case 1: i = 43; break; case 2: i = 44; break; } i; }), "({ int i = 0; switch (0) { case 0: i = 42; break; case 1: i = 43; break; case 2: i = 44; break; } i; })");
     assert(43, ({ int i = 0; switch (1) { case 0: i = 42; break; case 1: i = 43; break; case 2: i = 44; break; } i; }), "({ int i = 0; switch (1) { case 0: i = 42; break; case 1: i = 43; break; case 2: i = 44; break; } i; })");
     assert(44, ({ int i = 0; switch (2) { case 0: i = 42; break; case 1: i = 43; break; case 2: i = 44; break; } i; }), "({ int i = 0; switch (2) { case 0: i = 42; break; case 1: i = 43; break; case 2: i = 44; break; } i; })");
@@ -425,7 +425,7 @@ int main()
     assert(42, ({ int i = 0; switch (1) { case 0: 0; case 1: 0; case 2: 0; i = 42; } i; }), "({ int i = 0; switch (1) { case 0: 0; case 1: 0; case 2: 0; i = 42; } i; })");
     assert(0, ({ int i = 0; switch (3) { case 0: 0; case 1: 0; case 2: 0; i = 42; } i; }), "({ int i = 0; switch (3) { case 0: 0; case 1: 0; case 2: 0; i = 42; } i; })");
     assert(42, ({ int i = 40; switch (0) { case 0: ++i; case 1: ++i; } i; }), "({ int i = 40; switch (0) { case 0: ++i; case 1: ++i; } i; })");
-    assert(41, ({ int i = 40; switch (i) { case 20 * 2: ++i; } i; }), "({ int i = 40; switch (i) { case 20 * 2: ++i; } i; })");
+    assert(41, ({ int i = 40; switch (i) { case 20 * 2: ++i; } i; }), "({ int i = 40; switch (i) { case 20 * 2: ++i; } i; })");/*
     assert(1, ({ int ar[3] = { 1, 2, 3 }; ar[0]; }), "({ int ar[2] = { 1, 2, 3 }; ar[0]; })");
     assert(2, ({ int ar[3] = { 1, 2, 3 }; ar[1]; }), "({ int ar[2] = { 1, 2, 3 }; ar[1]; })");
     assert(3, ({ int ar[3] = { 1, 2, 3 }; ar[2]; }), "({ int ar[2] = { 1, 2, 3 }; ar[2]; })");
