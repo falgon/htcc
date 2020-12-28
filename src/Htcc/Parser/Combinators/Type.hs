@@ -29,13 +29,13 @@ import qualified Htcc.CRules.Types                as CT
 import           Htcc.Parser.AST.Core             (ATKind (..), ATree (..))
 import           Htcc.Parser.Combinators.Core
 import           Htcc.Parser.Combinators.Keywords
-import {-# SOURCE #-} Htcc.Parser.Combinators.Program  (logicalOr)
+import {-# SOURCE #-} Htcc.Parser.Combinators.Program  (conditional)
 import           Htcc.Parser.ConstructionData     (incomplete)
 import           Htcc.Utils                       (toNatural)
 import qualified Text.Megaparsec                  as M
 
 constantExp :: (Bits i, Integral i, Show i, Read i) => Parser i i
-constantExp = logicalOr >>= constantExp'
+constantExp = conditional >>= constantExp'
     where
         fromBool = fromIntegral . fromEnum :: Num i => Bool -> i
         toBool x | x == 0 = False | otherwise = True

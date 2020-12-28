@@ -325,13 +325,13 @@ int main()
     assert(42, ({ int a = 84; a /= 2; a; }), "int a = 84; a /= 2; a;");
     assert(42, ({ int a = 84; a /= 2; }), "int a = 84; a /= 2;");
     assert(1, ({ int ar[2]; int i = 0; for (; i < sizeof ar / sizeof *ar; ++i) ar[i] = i; int* p = ar; p += 1; *p; }), "({ int ar[2]; int i = 0; for (; i < sizeof ar / sizeof *ar; ++i) ar[i] = i; int* p = ar; p += 1; *p; })");
-    assert(0, ({ int ar[2]; int i = 0; for (; i < sizeof ar / sizeof *ar; ++i) ar[i] = i; int* p = ar + 1; p -= 1; *p; }), "({ int ar[2]; int i = 0; for (; i < sizeof ar / sizeof *ar; ++i) ar[i] = i; int* p = ar + 1; p -= 1; *p; })");
+    assert(0, ({ int ar[2]; int i = 0; for (; i < sizeof ar / sizeof *ar; ++i) ar[i] = i; int* p = ar + 1; p -= 1; *p; }), "({ int ar[2]; int i = 0; for (; i < sizeof ar / sizeof *ar; ++i) ar[i] = i; int* p = ar + 1; p -= 1; *p; })");*/
     assert(1, 1 || 0, "1 || 0");
     assert(1, (1 + 1) || 0 || 0, "(1 + 1) || 0 || 0");
     assert(0, 0 || 0, "0 || 0");
     assert(0, 0 || (1 - 1), "0 || (1 - 1)");
     assert(1, 1 && 2, "1 && 2");
-    assert(0, 2 && 3 && 4 && 0, "2 && 3 && 4 && 0");
+    assert(0, 2 && 3 && 4 && 0, "2 && 3 && 4 && 0");/*
     assert(2, ({ int a = 6; a &= 3; a; }), "({ int a = 6; a &= 3; a; })");
     assert(2, ({ int a = 6; a &= 3; }), "({ int a = 6; a &= 3; })");
     assert(7, ({ int a = 6; a |= 3; a; }), "({ int a = 6; a |= 3; a; })");
@@ -342,17 +342,17 @@ int main()
     assert(2, ({ int a = 1; a <<= 1; }), "({ int a = 1; a <<= 1; })");
     assert(2, ({ int a = 4; a >>= 1; a; }), "({ int a = 4; a >>= 1; a; })");
     assert(2, ({ int a = 4; a >>= 1; }), "({ int a = 4; a >>= 1; })");
-    assert(-1, ({ int a = -1; a >>= 1; }), "({ int a = -1; a >>= 1; })");
+    assert(-1, ({ int a = -1; a >>= 1; }), "({ int a = -1; a >>= 1; })");*/
     assert(42, 1 ? 42 : 0, "1 ? 42 : 0");
     assert(42, 0 ? 0 : 42, "0 ? 0 : 42");
     assert(42, ({ int a = 1; int b = 0; a || b ? 42 : 0; }), "({ int a = 1; int b = 0; a || b ? 42 : 0; })");
     assert(42, ({ int a = 1; int b = 0; a && b ? 0 : 42; }), "({ int a = 1; int b = 0; a && b ? 0 : 42; })");
     assert(42, ({ 42 ?: 0; }), "({ 42 ?: 0; })");
-    assert(42, ({ int a = 42; a++ ?: 0; }),  "({ int a = 42; a++ ?: 0; })");
+    //assert(42, ({ int a = 42; a++ ?: 0; }),  "({ int a = 42; a++ ?: 0; })");
     assert(42, ({ sub3(2, 1, 1) ?: 42; }), "({ sub3(2, 1, 1) ?: 42; })");
-    assert(43, ({ enum { a = 14 + 14 + 14, b }; b; }), "({ enum { a = 14 + 14 + 14, b }; b; })");
+    //assert(43, ({ enum { a = 14 + 14 + 14, b }; b; }), "({ enum { a = 14 + 14 + 14, b }; b; })");
     assert(10, ({ int ar[2 ? 5 * 2 : 5]; sizeof ar / sizeof *ar; }), "({ int ar[2 ? 5 * 2 : 5]; sizeof ar / sizeof *ar; })");
-    assert(1, sizeof(signed char), "sizeof(signed char)");
+/*    assert(1, sizeof(signed char), "sizeof(signed char)");
     assert(1, sizeof(char signed), "sizeof(char signed)");
     assert(4, sizeof(signed int), "sizeof(signed int)");
     assert(4, sizeof(int signed), "sizeof(int signed)");
@@ -385,20 +385,20 @@ int main()
     assert(42, ({ auto struct X { int x; }* p; struct X x; p = &x; p->x = 42; x.x; }), "({ register struct X { int x; }* p; struct X x; p = &x; p->x = 42; x.x; })");
     assert(42, ({ int i = 42; for (int i = 0; i < 10; ++i); i; }), "({ int i = 42; for (int i = 0; i < 10; ++i); i; })");
     assert(42, ({ int i = 42; for (auto int i = ({ int i = 0; for (; i < 10; ++i); i; }); i > 0; --i); i; }), "for (int i = ({ int i = 0; for (; i < 10; ++i); i; }); i > 0; --i); i; })");
-    assert(42, ({ for (struct { int x; } x; 0;); 42; }), "({ for (struct { int x; } x; 0;); 42; })");
+    assert(42, ({ for (struct { int x; } x; 0;); 42; }), "({ for (struct { int x; } x; 0;); 42; })");*/
     assert(511, 0777, "0777");
     assert(0, 0x0, "0x0");
     assert(10, 0xa, "0xa");
     assert(10, 0Xa, "0Xa");
     assert(48879, 0xbeef, "0xbeef");
     assert(48879, 0xBEEF, "0xBEEF");
-    assert(0, 0b0, "0b0");
+    /*assert(0, 0b0, "0b0");
     assert(1, 0b1, "0b1");
     assert(42, 0b101010, "0b101010");
-    assert(42, 0B101010, "0B101010");
+    assert(42, 0B101010, "0B101010");*/
     assert(49389, 0xc0ed, "0xc0ed");
     assert(49389, 0xC0eD, "0xC0eD");
-    assert(42, ({ int a = 53; int b = 42; swap(&a, &b); a; }), "({ int a = 53; int b = 42; swap(&a, &b); a; })");
+/*    assert(42, ({ int a = 53; int b = 42; swap(&a, &b); a; }), "({ int a = 53; int b = 42; swap(&a, &b); a; })");
     assert(42, ({ int a = 0; void_fn(&a); a; }), "({ int a = 53; int b = 42; swap(&a, &b); a; })");
     assert(42, ({ int ar[2]; ar[0] = 42; param_decay(ar); }), "({ int ar[2]; ar[0] = 0; param_decay(ar); })");
     assert(4, ({ struct X *a; struct X { int x; }; sizeof(struct X); }), " ({ struct X *a; struct X { int x; }; sizeof(struct X); })");

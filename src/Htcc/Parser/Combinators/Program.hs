@@ -12,11 +12,12 @@ C language lexer
 {-# LANGUAGE FlexibleContexts, LambdaCase, OverloadedStrings, TupleSections #-}
 module Htcc.Parser.Combinators.Program (
     parser
-  , logicalOr
+  , conditional
 ) where
 
 import           Control.Monad                               (forM, void, (>=>))
 import           Control.Monad.Combinators                   (choice, some)
+import           Control.Monad.Extra                         (ifM)
 import           Control.Monad.Trans                         (MonadTrans (..))
 import           Control.Monad.Trans.Maybe                   (MaybeT (..),
                                                               runMaybeT)
@@ -37,6 +38,7 @@ import           Htcc.Parser.AST.Core                        (ATKind (..),
                                                               ATKindFor (..),
                                                               ATree (..),
                                                               atBlock,
+                                                              atConditional,
                                                               atDefFunc, atElse,
                                                               atExprStmt, atFor,
                                                               atGVar, atIf,
@@ -110,6 +112,7 @@ global,
     stmt,
     expr,
     assign,
+    conditional,
     logicalOr,
     logicalAnd,
     bitwiseOr,
@@ -186,7 +189,7 @@ gvar = do
                 ]
             where
                 fromOG = do
-                    ast <- logicalOr
+                    ast <- conditional
                     case (atkind ast, atkind (atL ast)) of
                         (ATAddr, ATGVar _ name) -> lift (gets (gvarInitWithOG ty name))
                             >>= \case
@@ -264,11 +267,21 @@ stmt = choice
 expr = assign
 
 assign = do
-    nd <- logicalOr
+    nd <- conditional
     choice
         [ symbol "=" >> (ATNode ATAssign (atype nd) nd <$> assign)
         , pure nd
         ]
+
+conditional = do
+    nd <- logicalOr
+    ifM (M.option False (True <$ M.lookAhead "?")) (gnuCondOmitted nd M.<|> condOp nd) $ pure nd
+    where
+        -- GNU extension (Conditionals with Omitted Operands, see also: https://gcc.gnu.org/onlinedocs/gcc/Conditionals.html)
+        gnuCondOmitted nd = M.try (symbol "?" *> symbol ":") *> ((atConditional (atype nd) nd ATEmpty) <$> conditional)
+        condOp nd = (\thn c -> atConditional (atype thn) nd thn c)
+            <$> (symbol "?" *> expr <* symbol ":")
+            <*> conditional
 
 logicalOr = binaryOperator logicalAnd [(symbol "||", binOpBool ATLOr)]
 
@@ -351,7 +364,7 @@ factor = choice
     , strLiteral
     , identifier'
     , M.try (parens expr)
-    , stmtExpr
+    , gnuStmtExpr
     , ATEmpty <$ M.eof
     ]
     where
@@ -371,7 +384,7 @@ factor = choice
                 Left err        -> fail $ T.unpack $ fst err
                 Right (nd, scp) -> nd <$ lift (put scp)
 
-        stmtExpr = do
+        gnuStmtExpr = do
             k <- parens compoundStmt
             if null k then fail "void value not ignored as it ought to be" else case last k of
                 (ATNode ATExprStmt _ n _) -> pure $ atNoLeaf (ATStmtExpr $ init k <> [n]) (atype n)
