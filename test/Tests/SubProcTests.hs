@@ -180,12 +180,26 @@ exec = runTestsEx
     , (StatementEqual.test "int main() { return (2 * 4) == (2 << 2); }", 1)
     , (StatementEqual.test "int main() { return (8 / 4) == (8 >> 2); }", 1)
     , (StatementEqual.test "int main() { int a; a = 2 << 4; return (a & (a - 1)) == 0; }", 1) -- Determining if an integer is a power of 2
+    , (StatementEqual.test "int main() { int a; a = 1; { int a; a = 42; } return a; }", 1)
+    , (StatementEqual.test "int main() { int a; a = 1; if (1) { int a; a = 42; } return a; }", 1)
+    , (StatementEqual.test "int main() { 1; {2;} return 3; }", 3)
+    , (StatementEqual.test "int main() { return ({ 42; }); }", 42)
+    , (StatementEqual.test "int main() { return ({ 1; 2; 3; }); }", 3)
+    , (StatementEqual.test "int main() { ({ 1; return 2; 3; }); return 4; }", 2)
+    , (StatementEqual.test "int main() { return ({ int a; a = 42; a; }); }", 42)
+    , (StatementEqual.test "int main() { /* return 0; */ return 42; }", 42)
+    , (StatementEqual.test "int main() { // hoge\nreturn 42; }", 42)
+    , (StatementEqual.test "int main() { int a; a = 42; { int a; a = 32; } return a; }", 42)
+    , (StatementEqual.test "int main() { int a; a = 42; { int a; a = 32; } { int a; a = 53; return a; } return 42; }", 53)
+    , (StatementEqual.test "int main() { int a; a = 42; { a = 32; } return a; }", 32)
+    , (StatementEqual.test "int main() { int* ar[3]; int x; ar[0] = &x; x = 42; ar[0][0]; }", 42)
+    , (StatementEqual.test "int main() { int a = 42; return ({ a; }); }", 42)
+    , (StatementEqual.test "int main() { return ({ int a = 42; int b = 1; a + b; }); }", 43)
     ]
     where
         sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural 
 {-
 exec = let sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural in runTestsEx [
-    (StatementEqual.test "int main() { 1; {2;} return 3; }", 3),
     -- (LinkFuncRet.test "int main() { return sum7(1, 1, 1, 1, 1, 1, 1); }" ["test_func3"], 7),
     -- (LinkFuncRet.test "int main() { return test_func2(sum7(1, 2, 3, 4, 5, 6, 7)); }" ["test_func2", "test_func3"], 0),
     -- (LinkFuncRet.test "int main() { return sum16(1,1,1,1,1,1,11,10,9,8,7,6,5,4,3,2); }" ["test_func3"], 11),

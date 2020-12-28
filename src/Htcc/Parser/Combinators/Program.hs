@@ -15,8 +15,6 @@ module Htcc.Parser.Combinators.Program (
   , logicalOr
 ) where
 
-import qualified Data.ByteString.UTF8                        as BSU
-
 import           Control.Monad                               (forM, void, (>=>))
 import           Control.Monad.Combinators                   (choice, some)
 import           Control.Monad.Trans                         (MonadTrans (..))
@@ -25,6 +23,7 @@ import           Control.Monad.Trans.Maybe                   (MaybeT (..),
 import           Control.Monad.Trans.State                   (get, gets, modify,
                                                               put)
 import           Data.Bits                                   (Bits)
+import qualified Data.ByteString.UTF8                        as BSU
 import           Data.Char                                   (ord)
 import           Data.Either                                 (rights)
 import           Data.Functor                                ((<&>))
@@ -44,7 +43,9 @@ import           Htcc.Parser.AST.Core                        (ATKind (..),
                                                               atNoLeaf, atNull,
                                                               atNumLit,
                                                               atReturn, atUnary,
-                                                              atWhile)
+                                                              atWhile,
+                                                              fromATKindFor,
+                                                              isEmptyExprStmt)
 import           Htcc.Parser.AST.Type                        (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.Core
@@ -52,15 +53,19 @@ import           Htcc.Parser.Combinators.Keywords
 import           Htcc.Parser.Combinators.Type                (arraySuffix,
                                                               cType,
                                                               constantExp)
+import           Htcc.Parser.Combinators.Utils               (bracket,
+                                                              registerLVar)
+import           Htcc.Parser.Combinators.Var                 (varInit)
 import           Htcc.Parser.ConstructionData                (addFunction,
                                                               addGVar,
                                                               addGVarWith,
-                                                              addLVar,
                                                               addLiteral,
+                                                              fallBack,
                                                               incomplete,
                                                               lookupFunction,
                                                               lookupVar,
-                                                              resetLocal)
+                                                              resetLocal,
+                                                              succNest)
 import           Htcc.Parser.ConstructionData.Scope          (LookupVarResult (..))
 import qualified Htcc.Parser.ConstructionData.Scope.Function as PSF
 import qualified Htcc.Parser.ConstructionData.Scope.Var      as PV
@@ -94,13 +99,6 @@ declIdentFuncArg sep = do
                 CT.mapTypeKind (\(CT.CTIncomplete (CT.IncompleteArray t')) -> CT.CTPtr t') ty
             | otherwise = ty
 
-registerLVar :: (Bits i, Integral i) => CT.StorageClass i -> T.Text -> Parser i (ATree i)
-registerLVar ty ident =
-    lift (gets $ addLVar ty (HT.TokenLCNums 1 1, HT.TKIdent ident))
-        >>= \case
-            Right (lat, scp') -> lift (lat <$ put scp')
-            Left err          -> fail $ T.unpack $ fst err
-
 parser, program :: (Integral i, Bits i, Read i, Show i) => Parser i (ASTs i)
 parser = (spaceConsumer >> program) <* M.eof
 program = some global
@@ -109,7 +107,6 @@ global,
     function,
     gvar,
     stmt,
-    lvarStmt,
     expr,
     assign,
     logicalOr,
@@ -123,9 +120,7 @@ global,
     add,
     term,
     unary,
-    factor,
-    sizeof,
-    identifier' :: (Ord i, Bits i, Read i, Show i, Integral i) => Parser i (ATree i)
+    factor :: (Ord i, Bits i, Read i, Show i, Integral i) => Parser i (ATree i)
 
 global = choice
     [ ATEmpty <$ M.try (cType >> semi)
@@ -218,20 +213,18 @@ gvar = do
                             Left err -> fail $ T.unpack $ fst err
                             Right (_, scp) -> ATEmpty <$ lift (put scp)
 
-
-lvarStmt = choice
-    [ ATEmpty <$ M.try (cType <* semi)
-    , declIdent <* semi >>= fmap atNull . uncurry registerLVar
-    ]
+compoundStmt :: (Ord i, Bits i, Read i, Show i, Integral i) => Parser i [ATree i]
+compoundStmt = bracket (lift get) (lift . modify . fallBack) $ const $
+    braces (lift (modify succNest) *> M.many stmt)
 
 stmt = choice
     [ returnStmt
     , ifStmt
     , whileStmt
     , forStmt
-    , compoundStmt
+    , atBlock <$> compoundStmt
     , lvarStmt
-    , expr <* semi
+    , atExprStmt <$> (expr <* semi)
     , ATEmpty <$ semi
     ]
     where
@@ -248,18 +241,26 @@ stmt = choice
 
         whileStmt = atWhile <$> (M.try kWhile >> parens expr) <*> stmt
 
-        forStmt = do
-            es <- (>>) (M.try kFor) $ parens $ do
-                initSect <- ATForInit . atExprStmt
-                    <$> choice [ATEmpty <$ semi,  expr <* semi]
+        forStmt = (>>) (M.try kFor) $ bracket (lift get) (lift . modify . fallBack) $ const $ do
+            es <- parens $ do
+                lift $ modify succNest
+                initSect <- ATForInit
+                    <$> choice [ATEmpty <$ semi, M.try (atExprStmt <$> expr <* semi), lvarStmt]
                 condSect <- ATForCond
                     <$> choice [atNumLit 1 <$ semi, expr <* semi]
-                incrSect <- ATForIncr . atExprStmt
-                    <$> M.option ATEmpty expr
-                pure [initSect, condSect, incrSect]
+                incrSect <- ATForIncr
+                    <$> M.option ATEmpty (atExprStmt <$> expr)
+                pure
+                    [ x | x <- [initSect, condSect, incrSect]
+                    , case fromATKindFor x of ATEmpty -> False; x' -> not $ isEmptyExprStmt x'
+                    ]
             atFor . (es <>) . (:[]) . ATForStmt <$> stmt
 
-        compoundStmt = atBlock <$> braces (M.many stmt)
+        lvarStmt = choice
+            [ ATEmpty <$ M.try (cType <* semi)
+            , M.try (declIdent <* semi) >>= fmap atNull . uncurry registerLVar
+            , (declIdent <* symbol "=" >>= uncurry (varInit assign)) <* semi
+            ]
 
 expr = assign
 
@@ -271,9 +272,13 @@ assign = do
         ]
 
 logicalOr = binaryOperator logicalAnd [(symbol "||", binOpBool ATLOr)]
+
 logicalAnd = binaryOperator bitwiseOr [(symbol "&&", binOpBool ATLAnd)]
+
 bitwiseOr = binaryOperator bitwiseXor [(symbol "|", binOpIntOnly ATOr)]
+
 bitwiseXor = binaryOperator bitwiseAnd [(symbol "^", binOpIntOnly ATXor)]
+
 bitwiseAnd = binaryOperator equality [(MC.char '&' `notFollowedOp` MC.char '&', binOpIntOnly ATAnd)]
 
 equality = binaryOperator relational
@@ -347,10 +352,18 @@ factor = choice
     , sizeof
     , strLiteral
     , identifier'
-    , parens expr
+    , M.try (parens expr)
+    , stmtExpr
     , ATEmpty <$ M.eof
     ]
     where
+        sizeof = kSizeof >> choice
+            [ incomplete <$> M.try (parens cType) <*> lift get
+                >>= maybe (fail "invalid application of 'sizeof' to incomplete type")
+                    (pure . atNumLit . fromIntegral . CT.sizeof)
+            , atNumLit . fromIntegral . CT.sizeof . atype <$> unary
+            ]
+
         strLiteral = do
             s <- stringLiteral
             lit <- lift $ gets $
@@ -360,33 +373,32 @@ factor = choice
                 Left err        -> fail $ T.unpack $ fst err
                 Right (nd, scp) -> nd <$ lift (put scp)
 
-sizeof = kSizeof >> choice
-    [ incomplete <$> M.try (parens cType) <*> lift get
-        >>= maybe (fail "invalid application of 'sizeof' to incomplete type")
-            (pure . atNumLit . fromIntegral . CT.sizeof)
-    , atNumLit . fromIntegral . CT.sizeof . atype <$> unary
-    ]
+        stmtExpr = do
+            k <- parens compoundStmt
+            if null k then fail "void value not ignored as it ought to be" else case last k of
+                (ATNode ATExprStmt _ n _) -> pure $ atNoLeaf (ATStmtExpr $ init k <> [n]) (atype n)
+                _ -> fail "void value not ignored as it ought to be"
 
-identifier' = do
-    ident <- identifier
-    choice
-        [ fnCall ident
-        , variable ident
-        ]
-    where
-        variable ident = do
-            lift (gets $ lookupVar ident)
-                >>= \case
-                    FoundGVar (PV.GVar t _) -> return $ atGVar t ident
-                    FoundLVar sct -> return $ treealize sct
-                    FoundEnum sct -> return $ treealize sct
-                    NotFound -> fail $ "The '" <> T.unpack ident <> "' is not defined identifier"
+        identifier' = do
+            ident <- identifier
+            choice
+                [ fnCall ident
+                , variable ident
+                ]
+            where
+                variable ident = do
+                    lift (gets $ lookupVar ident)
+                        >>= \case
+                            FoundGVar (PV.GVar t _) -> return $ atGVar t ident
+                            FoundLVar sct -> return $ treealize sct
+                            FoundEnum sct -> return $ treealize sct
+                            NotFound -> fail $ "The '" <> T.unpack ident <> "' is not defined identifier"
 
-        fnCall ident = do
-            params <- symbol "(" >> M.manyTill (M.try (expr <* comma) M.<|> expr) (symbol ")")
-            let params' = if null params then Nothing else Just params
-            lift (gets $ lookupFunction ident) <&> \case
-                -- TODO: set warning message
-                -- TODO: Infer the return type of a function
-                Nothing -> atNoLeaf (ATCallFunc ident params') (CT.SCAuto CT.CTInt)
-                Just fn -> atNoLeaf (ATCallFunc ident params') (PSF.fntype fn)
+                fnCall ident = do
+                    params <- symbol "(" >> M.manyTill (M.try (expr <* comma) M.<|> expr) (symbol ")")
+                    let params' = if null params then Nothing else Just params
+                    lift (gets $ lookupFunction ident) <&> \case
+                        -- TODO: set warning message
+                        -- TODO: Infer the return type of a function
+                        Nothing -> atNoLeaf (ATCallFunc ident params') (CT.SCAuto CT.CTInt)
+                        Just fn -> atNoLeaf (ATCallFunc ident params') (PSF.fntype fn)
