@@ -54,6 +54,7 @@ import           Htcc.Parser.Combinators.Type                (arraySuffix,
                                                               cType,
                                                               constantExp)
 import           Htcc.Parser.Combinators.Utils               (bracket,
+                                                              maybeToParser,
                                                               registerLVar)
 import           Htcc.Parser.Combinators.Var                 (varInit)
 import           Htcc.Parser.ConstructionData                (addFunction,
@@ -168,8 +169,7 @@ gvar = do
 
         nonInit ty ident = do
             void semi
-            ty' <- maybe (fail "defining global variables with a incomplete type") pure
-                =<< lift (gets $ incomplete ty)
+            ty' <- maybeToParser "defining global variables with a incomplete type" =<< lift (gets $ incomplete ty)
             lift (gets (addGVar ty' (tmpTKIdent ident)))
                 >>= \case
                     Left err -> fail $ T.unpack $ fst err
@@ -177,8 +177,7 @@ gvar = do
 
         withInit ty ident = do
             void $ symbol "="
-            ty' <- maybe (fail "defining global variables with a incomplete type") pure
-                =<< lift (gets $ incomplete ty)
+            ty' <- maybeToParser "defining global variables with a incomplete type" =<< lift (gets $ incomplete ty)
             gvarInit ty' ident <* semi
 
         gvarInit ty ident = choice
@@ -254,7 +253,7 @@ stmt = choice
                     [ x | x <- [initSect, condSect, incrSect]
                     , case fromATKindFor x of ATEmpty -> False; x' -> not $ isEmptyExprStmt x'
                     ]
-            atFor . (es <>) . (:[]) . ATForStmt <$> stmt
+            atFor es <$ semi M.<|> atFor . (es <>) . (:[]) . ATForStmt <$> stmt
 
         lvarStmt = choice
             [ ATEmpty <$ M.try (cType <* semi)
@@ -299,8 +298,8 @@ shift = binaryOperator add
     ]
 
 add = binaryOperator term
-    [ (symbol "+", \l r -> maybe (fail "invalid operands") pure $ addKind l r)
-    , (symbol "-", \l r -> maybe (fail "invalid operands") pure $ subKind l r)
+    [ (symbol "+", \l r -> maybeToParser "invalid operands" $ addKind l r)
+    , (symbol "-", \l r -> maybeToParser "invalid operands" $ subKind l r)
     ]
 
 term = binaryOperator unary
@@ -331,10 +330,9 @@ unary = choice
 
                 idxAcc fac = do
                     idx <- brackets expr
-                    kt <- maybe (fail "invalid operands") pure (addKind fac idx)
-                    ty <- maybe (fail "subscripted value is neither array nor pointer nor vector") pure
-                        $ CT.deref $ atype kt
-                    ty' <- maybe (fail "incomplete value dereference") pure =<< lift (gets $ incomplete ty)
+                    kt <- maybeToParser "invalid operands" (addKind fac idx)
+                    ty <- maybeToParser "subscripted value is neither array nor pointer nor vector" $ CT.deref $ atype kt
+                    ty' <- maybeToParser "incomplete value dereference" =<< lift (gets $ incomplete ty)
                     allAcc $ atUnary ATDeref ty' kt
 
         deref' = runMaybeT . deref'' >=> maybe M.empty pure
@@ -359,8 +357,8 @@ factor = choice
     where
         sizeof = kSizeof >> choice
             [ incomplete <$> M.try (parens cType) <*> lift get
-                >>= maybe (fail "invalid application of 'sizeof' to incomplete type")
-                    (pure . atNumLit . fromIntegral . CT.sizeof)
+                >>= fmap (atNumLit . fromIntegral . CT.sizeof)
+                . maybeToParser "invalid application of 'sizeof' to incomplete type"
             , atNumLit . fromIntegral . CT.sizeof . atype <$> unary
             ]
 
