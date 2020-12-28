@@ -333,12 +333,14 @@ term = binaryOperator unary
     ]
 
 unary = choice
-    [ symbol "+" >> unary
-    , symbol "-" >> unary <&> \n -> ATNode ATSub (atype n) (atNumLit 0) n
-    , symbol "!" >> unary <&> flip (ATNode ATNot (CT.SCAuto CT.CTBool)) ATEmpty
-    , symbol "~" >> unary <&> flip (ATNode ATBitNot (CT.SCAuto CT.CTInt)) ATEmpty
+    [ symbol "++" *> unary <&> \n -> ATNode ATPreInc (atype n) n ATEmpty
+    , symbol "--" *> unary <&> \n -> ATNode ATPreDec (atype n) n ATEmpty
+    , symbol "+" *> unary
+    , symbol "-" *> unary <&> \n -> ATNode ATSub (atype n) (atNumLit 0) n
+    , symbol "!" *> unary <&> flip (ATNode ATNot (CT.SCAuto CT.CTBool)) ATEmpty
+    , symbol "~" *> unary <&> flip (ATNode ATBitNot (CT.SCAuto CT.CTInt)) ATEmpty
     , addr
-    , symbol "*" >> unary >>= deref'
+    , symbol "*" *> unary >>= deref'
     , factor'
     ]
     where
@@ -350,6 +352,8 @@ unary = choice
             where
                 allAcc fac = M.option fac $ choice
                     [ idxAcc fac
+                    , postInc fac
+                    , postDec fac
                     ]
 
                 idxAcc fac = do
@@ -358,6 +362,9 @@ unary = choice
                     ty <- maybeToParser "subscripted value is neither array nor pointer nor vector" $ CT.deref $ atype kt
                     ty' <- maybeToParser "incomplete value dereference" =<< lift (gets $ incomplete ty)
                     allAcc $ atUnary ATDeref ty' kt
+
+                postInc fac = allAcc =<< atUnary ATPostInc (atype fac) fac <$ symbol "++"
+                postDec fac = allAcc =<< atUnary ATPostDec (atype fac) fac <$ symbol "--"
 
         deref' = runMaybeT . deref'' >=> maybe M.empty pure
             where
