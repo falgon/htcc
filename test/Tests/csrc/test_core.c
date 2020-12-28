@@ -10,15 +10,14 @@ int test_num;
 
 int g;
 int gr[3];
-/*
-int (*gpa)[3];
+//int (*gpa)[3];
 char gc = 1;
 short gsh = 2;
 int gi = 3;
 long gl = 4;
 int* gp = &gi;
 char* gstr = "abc";
-*/
+
 int assert(long expected, long actual, char* code)
 {
     if (expected == actual) {
@@ -286,9 +285,9 @@ int main()
     assert(1, (long)1, "(long)1");
     assert(0, (long)&*(int *)0, "(long)&*(int *)0");
     assert(42, ({ int a = 42 ; long b = (long)&a; *(int*)b; }), "int a = 42; long b = (long)&a; *(int*)b");
-    assert(2147483648, ({ int a = 2147483647; long b = a + 1; b; }), " ({ int a = 2147483647; long b = a + 1; b; })");
+    assert(2147483648, ({ int a = 2147483647; long b = a + 1; b; }), " ({ int a = 2147483647; long b = a + 1; b; })");*/
     assert(97, 'a', "'a'");
-    assert(10, '\n', "\'\\n\'");
+    assert(10, '\n', "\'\\n\'");/*
     assert(0, ({ enum { zero, one, two }; zero; }), "enum { zero, one, two }; zero;");
     assert(1, ({ enum { zero, one, two }; one; }), "enum { zero, one, two }; one;");
     assert(2, ({ enum { zero, one, two }; two; }), "enum { zero, one, two }; two;");
@@ -482,14 +481,14 @@ int main()
     assert(0, ({ struct { int a; int b; } x[2] = { { 1, 2 } }; x[1].a; }), "({ struct { int a; int b; } x[2] = { { 1, 2 } }; x[1].a; })");
     assert(0, ({ struct { int a; int b; } x[2] = { { 1, 2 } }; x[1].b; }), "({ struct { int a; int b; } x[2] = { { 1, 2 } }; x[1].b; })");
     assert(0, ({ struct { int a; int b; } x = {}; x.a; }), "({ struct { int a; int b; } x = {}; x.a; })");
-    assert(0, ({ struct { int a; int b; } x = {}; x.b; }), "({ struct { int a; int b; } x = {}; x.b; })");
+    assert(0, ({ struct { int a; int b; } x = {}; x.b; }), "({ struct { int a; int b; } x = {}; x.b; })");*/
     assert(1, gc, "gc");
     assert(2, gsh, "gsh");
     assert(3, gi, "gi");
     assert(4, gl, "gl");
     assert(3, *gp, "*gp");
     assert(0, strcmp(gstr, "abc"), "strcmp(gstr, \"abc\")");
-    */
+    
     printf("All tests are passed!\n");
 
     return 0;
