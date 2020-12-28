@@ -47,11 +47,11 @@ import           Htcc.Parser.AST.Core                        (ATKind (..),
                                                               atExprStmt, atFor,
                                                               atGVar, atIf,
                                                               atNoLeaf, atNull,
-                                                              atNumLit,
+                                                              atNumLit, atLabel,
                                                               atReturn,
                                                               atSwitch, atUnary,
                                                               atWhile,
-                                                              fromATKindFor,
+                                                              fromATKindFor, atGoto,
                                                               isEmptyExprStmt)
 import           Htcc.Parser.AST.Type                        (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
@@ -235,6 +235,8 @@ stmt = choice
     , switchStmt
     , caseStmt
     , defaultStmt
+    , gotoStmt
+    , labelStmt
     , atBlock <$> compoundStmt
     , lvarStmt
     , atExprStmt <$> (expr <* semi)
@@ -291,6 +293,10 @@ stmt = choice
             *> ifM (lift $ gets isSwitchStmt)
                 (atDefault 0 <$> stmt)
                 (fail "stray 'default'")
+
+        gotoStmt = atGoto <$> (M.try kGoto *> identifier <* semi)
+
+        labelStmt = atLabel <$> M.try (identifier <* symbol ":")
 
         lvarStmt = choice
             [ ATEmpty <$ M.try (cType <* semi)

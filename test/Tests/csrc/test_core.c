@@ -412,10 +412,10 @@ int main()
     assert(10, ({ int i = 0; int j = 0; for (; !i;) { for (; j != 10; ++j) continue; break; } j; }), "({ int i = 0; int j = 0; for (; !i;) { for (; j != 10; ++j) continue; break; } j; }),");
     assert(11, ({ int i = 0; int j = 0; while (i++ < 10) { if (i > 5) continue; ++j; } i; }), "({ int i = 0; int j = 0; while (i++ < 10) { if (i > 5) continue; ++j; } i; })");
     assert(5, ({ int i = 0; int j = 0; while (i++ < 10) { if (i > 5) continue; ++j; } j; }), "({ int i = 0; int j = 0; while (i++ < 10) { if (i > 5) continue; ++j; } j; })");
-    assert(11, ({ int i = 0; int j = 0; while (!i) { while (j++ != 10) continue; break; } j; }), "({ int i = 0; int j = 0; while (!i) { while (j++ != 10) continue; break; } j; })");/*
+    assert(11, ({ int i = 0; int j = 0; while (!i) { while (j++ != 10) continue; break; } j; }), "({ int i = 0; int j = 0; while (!i) { while (j++ != 10) continue; break; } j; })");
     assert(3, ({ int i = 0; goto a; a: ++i; b: ++i; c: ++i; i; }), "({ int i = 0; goto a; a: ++i; b: ++i; c: ++i; i; })");
     assert(2, ({ int i = 0; goto e; d: ++i; e: ++i; f: ++i; i; }), "({ int i = 0; goto e; d: ++i; e: ++i; f: ++i; i; })");
-    assert(1, ({ int i = 0; goto i; g: ++i; h: ++i; i: ++i; i; }), "({ int i = 0; goto i; g: ++i; h: ++i; i: ++i; i; })");*/
+    assert(1, ({ int i = 0; goto i; g: ++i; h: ++i; i: ++i; i; }), "({ int i = 0; goto i; g: ++i; h: ++i; i: ++i; i; })");
     assert(42, ({ int i = 0; switch (0) { case 0: i = 42; break; case 1: i = 43; break; case 2: i = 44; break; } i; }), "({ int i = 0; switch (0) { case 0: i = 42; break; case 1: i = 43; break; case 2: i = 44; break; } i; })");
     assert(43, ({ int i = 0; switch (1) { case 0: i = 42; break; case 1: i = 43; break; case 2: i = 44; break; } i; }), "({ int i = 0; switch (1) { case 0: i = 42; break; case 1: i = 43; break; case 2: i = 44; break; } i; })");
     assert(44, ({ int i = 0; switch (2) { case 0: i = 42; break; case 1: i = 43; break; case 2: i = 44; break; } i; }), "({ int i = 0; switch (2) { case 0: i = 42; break; case 1: i = 43; break; case 2: i = 44; break; } i; })");
