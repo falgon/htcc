@@ -31,13 +31,14 @@ import           Data.Functor                                ((<&>))
 import           Data.Maybe                                  (fromJust,
                                                               fromMaybe)
 import qualified Data.Text                                   as T
+import           Data.Tuple.Extra                            (dupe, first)
 import qualified Htcc.CRules.Types                           as CT
 import           Htcc.Parser.AST                             (Treealizable (..),
                                                               addKind, subKind)
 import           Htcc.Parser.AST.Core                        (ATKind (..),
                                                               ATKindFor (..),
                                                               ATree (..),
-                                                              atBlock,
+                                                              atBlock, atComma,
                                                               atConditional,
                                                               atDefFunc, atElse,
                                                               atExprStmt, atFor,
@@ -268,10 +269,20 @@ expr = assign
 
 assign = do
     nd <- conditional
-    choice
-        [ symbol "=" >> (ATNode ATAssign (atype nd) nd <$> assign)
-        , pure nd
+    M.option nd $ choice $ map (`id` nd) $
+        [ assignOp ATAssign "="
+        , assignOp ATMulAssign "*="
+        , assignOp ATDivAssign "/="
+        , assignOp ATAndAssign "&="
+        , assignOp ATOrAssign "|="
+        , assignOp ATXorAssign "^="
+        , assignOp ATShlAssign "<<="
+        , assignOp ATShrAssign ">>="
+        , assignOp (maybe ATAddAssign (const ATAddPtrAssign) $ CT.deref (atype nd)) "+="
+        , assignOp (maybe ATSubAssign (const ATSubPtrAssign) $ CT.deref (atype nd)) "-="
         ]
+    where
+        assignOp k s nd = symbol s *> (ATNode k (atype nd) nd <$> assign)
 
 conditional = do
     nd <- logicalOr
@@ -279,7 +290,7 @@ conditional = do
     where
         -- GNU extension (Conditionals with Omitted Operands, see also: https://gcc.gnu.org/onlinedocs/gcc/Conditionals.html)
         gnuCondOmitted nd = M.try (symbol "?" *> symbol ":") *> ((atConditional (atype nd) nd ATEmpty) <$> conditional)
-        condOp nd = (\thn c -> atConditional (atype thn) nd thn c)
+        condOp nd = uncurry (flip atConditional nd) . first atype . dupe
             <$> (symbol "?" *> expr <* symbol ":")
             <*> conditional
 
