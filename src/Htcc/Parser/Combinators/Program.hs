@@ -13,6 +13,7 @@ C language lexer
 module Htcc.Parser.Combinators.Program (
     parser
   , conditional
+  , compoundStmt
 ) where
 
 import           Control.Monad                               (forM, void, (>=>))
@@ -39,23 +40,25 @@ import           Htcc.Parser.AST.Core                        (ATKind (..),
                                                               ATKindFor (..),
                                                               ATree (..),
                                                               atBlock, atBreak,
-                                                              atCase, atComma,
+                                                              atCase,
                                                               atConditional,
                                                               atContinue,
                                                               atDefFunc,
                                                               atDefault, atElse,
                                                               atExprStmt, atFor,
-                                                              atGVar, atIf,
+                                                              atGVar, atGoto,
+                                                              atIf, atLabel,
                                                               atNoLeaf, atNull,
-                                                              atNumLit, atLabel,
+                                                              atNumLit,
                                                               atReturn,
                                                               atSwitch, atUnary,
                                                               atWhile,
-                                                              fromATKindFor, atGoto,
+                                                              fromATKindFor,
                                                               isEmptyExprStmt)
 import           Htcc.Parser.AST.Type                        (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.Core
+import           Htcc.Parser.Combinators.GNUExtensions as GNU
 import           Htcc.Parser.Combinators.Keywords
 import           Htcc.Parser.Combinators.Type                (arraySuffix,
                                                               cType,
@@ -325,10 +328,8 @@ assign = do
 
 conditional = do
     nd <- logicalOr
-    ifM (M.option False (True <$ M.lookAhead "?")) (gnuCondOmitted nd M.<|> condOp nd) $ pure nd
+    ifM (M.option False (True <$ M.lookAhead "?")) (GNU.condOmitted nd M.<|> condOp nd) $ pure nd
     where
-        -- GNU extension (Conditionals with Omitted Operands, see also: https://gcc.gnu.org/onlinedocs/gcc/Conditionals.html)
-        gnuCondOmitted nd = M.try (symbol "?" *> symbol ":") *> ((atConditional (atype nd) nd ATEmpty) <$> conditional)
         condOp nd = uncurry (flip atConditional nd) . first atype . dupe
             <$> (symbol "?" *> expr <* symbol ":")
             <*> conditional
@@ -421,7 +422,7 @@ factor = choice
     , strLiteral
     , identifier'
     , M.try (parens expr)
-    , gnuStmtExpr
+    , GNU.stmtExpr
     , ATEmpty <$ M.eof
     ]
     where
@@ -440,12 +441,6 @@ factor = choice
             case lit of
                 Left err        -> fail $ T.unpack $ fst err
                 Right (nd, scp) -> nd <$ lift (put scp)
-
-        gnuStmtExpr = do
-            k <- parens compoundStmt
-            if null k then fail "void value not ignored as it ought to be" else case last k of
-                (ATNode ATExprStmt _ n _) -> pure $ atNoLeaf (ATStmtExpr $ init k <> [n]) (atype n)
-                _ -> fail "void value not ignored as it ought to be"
 
         identifier' = do
             ident <- identifier
