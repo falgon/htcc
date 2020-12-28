@@ -402,12 +402,11 @@ int main()
     assert(42, ({ int a = 0; void_fn(&a); a; }), "({ int a = 53; int b = 42; swap(&a, &b); a; })");
     assert(42, ({ int ar[2]; ar[0] = 42; param_decay(ar); }), "({ int ar[2]; ar[0] = 0; param_decay(ar); })");
     assert(4, ({ struct X *a; struct X { int x; }; sizeof(struct X); }), " ({ struct X *a; struct X { int x; }; sizeof(struct X); })");
-    assert(42, ({ struct X { struct X* next; int x; } a; struct X b; b.x = 42; a.next = &b; a.next->x; }), "({ struct X { struct X* next; int x; } a; struct X b; b.x = 42; a.next = &b; a.next->x; })");
+    assert(42, ({ struct X { struct X* next; int x; } a; struct X b; b.x = 42; a.next = &b; a.next->x; }), "({ struct X { struct X* next; int x; } a; struct X b; b.x = 42; a.next = &b; a.next->x; })");*/
     assert(3, ({ int i = 0; for (; i < 10; ++i) { if (i == 3) break; } i; }), "({ int i = 0; for (; i < 10; ++i) { if (i == 3) break; } i; })");
     assert(3, ({ int i = 0; for (; i < 10; ++i) { for (;;) break; if (i == 3) break; } i; }), "({ int i = 0; for (; i < 10; ++i) { for (;;) break; if (i == 3) break; } i; })");
     assert(4, ({ int i = 0; while (1) { if (i++ == 3) break; } i; }), "({ int i = 0; while (1) { if (i++ == 3) break; } i; })");
-    assert(4, ({ int i = 0; while (1) { for (;;) break; if (i++ == 3) break; } i; }), "({ int i = 0; while (1) { for (;;) break; if (i++ == 3) break; } i; })");
-    printf(">> All tests passed <<\n");
+    assert(4, ({ int i = 0; while (1) { for (;;) break; if (i++ == 3) break; } i; }), "({ int i = 0; while (1) { for (;;) break; if (i++ == 3) break; } i; })");/*
     assert(10, ({ int i = 0; int j = 0; for (; i < 10; ++i) { if (i > 5) continue; ++j; } i; }), "({ int i = 0; int j = 0; for (; i < 10; ++i) { if (i > 5) continue; ++j; } i; })");
     assert(6, ({ int i = 0; int j = 0; for (; i < 10; ++i) { if (i > 5) continue; ++j; } j; }), "({ int i = 0; int j = 0; for (; i < 10; ++i) { if (i > 5) continue; ++j; } j; })");
     assert(10, ({ int i = 0; int j = 0; for (; !i;) { for (; j != 10; ++j) continue; break; } j; }), "({ int i = 0; int j = 0; for (; !i;) { for (; j != 10; ++j) continue; break; } j; }),");

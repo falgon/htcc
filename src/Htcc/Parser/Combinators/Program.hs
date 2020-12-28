@@ -46,7 +46,7 @@ import           Htcc.Parser.AST.Core                        (ATKind (..),
                                                               atNoLeaf, atNull,
                                                               atNumLit,
                                                               atReturn, atUnary,
-                                                              atWhile,
+                                                              atWhile, atBreak,
                                                               fromATKindFor,
                                                               isEmptyExprStmt)
 import           Htcc.Parser.AST.Type                        (ASTs)
@@ -225,6 +225,7 @@ stmt = choice
     , ifStmt
     , whileStmt
     , forStmt
+    , breakStmt
     , atBlock <$> compoundStmt
     , lvarStmt
     , atExprStmt <$> (expr <* semi)
@@ -258,6 +259,8 @@ stmt = choice
                     , case fromATKindFor x of ATEmpty -> False; x' -> not $ isEmptyExprStmt x'
                     ]
             atFor es <$ semi M.<|> atFor . (es <>) . (:[]) . ATForStmt <$> stmt
+
+        breakStmt = atBreak <$ (M.try kBreak *> semi)
 
         lvarStmt = choice
             [ ATEmpty <$ M.try (cType <* semi)
