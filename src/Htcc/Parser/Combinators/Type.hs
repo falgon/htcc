@@ -90,8 +90,9 @@ arraySuffix ty = choice
                             >>= failWithTypeMaybe ty'
 
         nonConstantExp = let mtIncomplete ty' = MaybeT $ lift $ gets $ incomplete ty' in
-            brackets M.eof
-                >> M.option Nothing (Just <$> arraySuffix ty)
+            symbol "["
+                *> symbol "]"
+                *> M.option Nothing (Just <$> arraySuffix ty)
                 >>= \case
                     Nothing ->
                         runMaybeT (CT.mapTypeKind (CT.CTIncomplete . CT.IncompleteArray) <$> mtIncomplete ty)

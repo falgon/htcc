@@ -58,14 +58,15 @@ import           Htcc.Parser.AST.Core                        (ATKind (..),
 import           Htcc.Parser.AST.Type                        (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.Core
-import           Htcc.Parser.Combinators.GNUExtensions as GNU
+import qualified Htcc.Parser.Combinators.GNUExtensions       as GNU
 import           Htcc.Parser.Combinators.Keywords
 import           Htcc.Parser.Combinators.Type                (arraySuffix,
                                                               cType,
                                                               constantExp)
 import           Htcc.Parser.Combinators.Utils               (bracket,
                                                               maybeToParser,
-                                                              registerLVar)
+                                                              registerLVar,
+                                                              tmpTKIdent)
 import           Htcc.Parser.Combinators.Var                 (varInit)
 import           Htcc.Parser.ConstructionData                (addFunction,
                                                               addGVar,
@@ -142,7 +143,7 @@ global = choice
     ]
 
 function = do
-    (ty, ident) <- M.try (declIdent <* symbol "(")
+    (ty, ident) <- M.try (declIdent <* lparen)
     params <- takeParameters
     lift $ modify resetLocal
     choice
@@ -151,7 +152,7 @@ function = do
         ]
     where
         takeParameters =
-            M.manyTill (M.try (declIdentFuncArg comma) M.<|> (declIdentFuncArg $ M.lookAhead (symbol ")"))) (symbol ")")
+            M.manyTill (M.try (declIdentFuncArg comma) M.<|> (declIdentFuncArg $ M.lookAhead rparen)) rparen
 
         declaration ty ident =
             void semi
@@ -161,7 +162,7 @@ function = do
                     Left err   -> fail $ T.unpack $ fst err
 
         definition ty ident params =
-            void (M.lookAhead $ symbol "{")
+            void (M.lookAhead lbrace)
                 >> lift (gets $ addFunction True ty (HT.TokenLCNums 1 1, HT.TKIdent ident))
                 >>= \case
                     Right scp' -> do
@@ -177,8 +178,6 @@ gvar = do
         , withInit ty ident
         ]
     where
-        tmpTKIdent ident = (HT.TokenLCNums 1 1, HT.TKIdent ident)
-
         nonInit ty ident = do
             void semi
             ty' <- maybeToParser "defining global variables with a incomplete type" =<< lift (gets $ incomplete ty)
@@ -188,7 +187,7 @@ gvar = do
                     Right (_, scp) -> ATEmpty <$ lift (put scp)
 
         withInit ty ident = do
-            void $ symbol "="
+            void equal
             ty' <- maybeToParser "defining global variables with a incomplete type" =<< lift (gets $ incomplete ty)
             gvarInit ty' ident <* semi
 
@@ -289,22 +288,22 @@ stmt = choice
 
         caseStmt = M.try kCase
             *> ifM (lift $ gets isSwitchStmt)
-                ((atCase 0 <$> constantExp <* symbol ":") <*> stmt)
+                ((atCase 0 <$> constantExp <* colon) <*> stmt)
                 (fail "stray 'case'")
 
-        defaultStmt = (M.try kDefault <* symbol ":")
+        defaultStmt = (M.try kDefault <* colon)
             *> ifM (lift $ gets isSwitchStmt)
                 (atDefault 0 <$> stmt)
                 (fail "stray 'default'")
 
         gotoStmt = atGoto <$> (M.try kGoto *> identifier <* semi)
 
-        labelStmt = atLabel <$> M.try (identifier <* symbol ":")
+        labelStmt = atLabel <$> M.try (identifier <* colon)
 
         lvarStmt = choice
             [ ATEmpty <$ M.try (cType <* semi)
             , M.try (declIdent <* semi) >>= fmap atNull . uncurry registerLVar
-            , (declIdent <* symbol "=" >>= uncurry (varInit assign)) <* semi
+            , (declIdent <* equal >>= uncurry (varInit assign)) <* semi
             ]
 
 expr = assign
@@ -328,19 +327,19 @@ assign = do
 
 conditional = do
     nd <- logicalOr
-    ifM (M.option False (True <$ M.lookAhead "?")) (GNU.condOmitted nd M.<|> condOp nd) $ pure nd
+    ifM (M.option False (True <$ M.lookAhead question)) (GNU.condOmitted nd M.<|> condOp nd) $ pure nd
     where
         condOp nd = uncurry (flip atConditional nd) . first atype . dupe
-            <$> (symbol "?" *> expr <* symbol ":")
+            <$> (question *> expr <* colon)
             <*> conditional
 
 logicalOr = binaryOperator logicalAnd [(symbol "||", binOpBool ATLOr)]
 
 logicalAnd = binaryOperator bitwiseOr [(symbol "&&", binOpBool ATLAnd)]
 
-bitwiseOr = binaryOperator bitwiseXor [(symbol "|", binOpIntOnly ATOr)]
+bitwiseOr = binaryOperator bitwiseXor [(vertical, binOpIntOnly ATOr)]
 
-bitwiseXor = binaryOperator bitwiseAnd [(symbol "^", binOpIntOnly ATXor)]
+bitwiseXor = binaryOperator bitwiseAnd [(hat, binOpIntOnly ATXor)]
 
 bitwiseAnd = binaryOperator equality [(MC.char '&' `notFollowedOp` MC.char '&', binOpIntOnly ATAnd)]
 
@@ -351,9 +350,9 @@ equality = binaryOperator relational
 
 relational = binaryOperator shift
     [ (symbol "<=", binOpBool ATLEQ)
-    , (symbol "<",  binOpBool ATLT)
+    , (langle, binOpBool ATLT)
     , (symbol ">=", binOpBool ATGEQ)
-    , (symbol ">",  binOpBool ATGT)
+    , (rangle, binOpBool ATGT)
     ]
 
 shift = binaryOperator add
@@ -367,9 +366,9 @@ add = binaryOperator term
     ]
 
 term = binaryOperator unary
-    [ (symbol "*", binOpCon ATMul)
-    , (symbol "/", binOpCon ATDiv)
-    , (symbol "%", binOpCon ATMod)
+    [ (star, binOpCon ATMul)
+    , (slash, binOpCon ATDiv)
+    , (percent, binOpCon ATMod)
     ]
 
 unary = choice
@@ -377,10 +376,10 @@ unary = choice
     , symbol "--" *> unary <&> \n -> ATNode ATPreDec (atype n) n ATEmpty
     , symbol "+" *> unary
     , symbol "-" *> unary <&> \n -> ATNode ATSub (atype n) (atNumLit 0) n
-    , symbol "!" *> unary <&> flip (ATNode ATNot (CT.SCAuto CT.CTBool)) ATEmpty
-    , symbol "~" *> unary <&> flip (ATNode ATBitNot (CT.SCAuto CT.CTInt)) ATEmpty
+    , lnot *> unary <&> flip (ATNode ATNot (CT.SCAuto CT.CTBool)) ATEmpty
+    , tilda *> unary <&> flip (ATNode ATBitNot (CT.SCAuto CT.CTInt)) ATEmpty
     , addr
-    , symbol "*" *> unary >>= deref'
+    , star *> unary >>= deref'
     , factor'
     ]
     where
@@ -458,7 +457,7 @@ factor = choice
                             NotFound -> fail $ "The '" <> T.unpack ident <> "' is not defined identifier"
 
                 fnCall ident = do
-                    params <- symbol "(" >> M.manyTill (M.try (expr <* comma) M.<|> expr) (symbol ")")
+                    params <- lparen *> M.manyTill (M.try (expr <* comma) M.<|> expr) rparen
                     let params' = if null params then Nothing else Just params
                     lift (gets $ lookupFunction ident) <&> \case
                         -- TODO: set warning message

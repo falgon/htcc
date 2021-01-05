@@ -31,6 +31,26 @@ module Htcc.Parser.Combinators.Core (
   , semi
   , comma
   , colon
+  , lnot
+  , sharp
+  , ampersand
+  , lparen
+  , rparen
+  , lbrace
+  , rbrace
+  , langle
+  , rangle
+  , lbracket
+  , rbracket
+  , star
+  , period
+  , slash
+  , equal
+  , question
+  , hat
+  , tilda
+  , vertical
+  , percent
   , notFollowedBy
 ) where
 
@@ -90,21 +110,66 @@ natural = M.try (lexeme hexadecimal) <|> M.try (lexeme octal) <|> lexeme decimal
 integer = ML.signed spaceConsumer natural <|> natural
 
 parens, braces, angles, brackets :: Ord e => M.ParsecT e T.Text m a -> M.ParsecT e T.Text m a
-parens = between (symbol "(") (symbol ")")
-braces = between (symbol "{") (symbol "}")
-angles = between (symbol "<") (symbol ">")
-brackets = between (symbol "[") (symbol "]")
+parens = between lparen rparen
+braces = between lbrace rbrace
+angles = between langle rangle
+brackets = between lbracket rbracket
 
-identifier, semi, comma, colon :: Ord e => M.ParsecT e T.Text m T.Text
+identifier,
+    semi,
+    comma,
+    colon,
+    lnot,
+    sharp,
+    ampersand,
+    lparen,
+    rparen,
+    lbrace,
+    rbrace,
+    langle,
+    rangle,
+    lbracket,
+    rbracket,
+    star,
+    period,
+    slash,
+    equal,
+    question,
+    hat,
+    tilda,
+    vertical,
+    percent :: Ord e => M.ParsecT e T.Text m T.Text
 identifier =
     mappend
         <$> M.takeWhile1P (Just "valid identifier") (lor [isAlpha, (=='_')])
         <*> M.takeWhileP (Just "valid identifier") CR.isValidChar
         <* spaceConsumer
-
 semi = symbol ";"
 comma = symbol ","
-colon = symbol "."
+colon = symbol ":"
+lnot = symbol "!"
+sharp = symbol "#"
+ampersand = symbol "&"
+lparen = symbol "("
+rparen = symbol ")"
+lbrace = symbol "{"
+rbrace = symbol "}"
+langle = symbol "<"
+rangle = symbol ">"
+lbracket = symbol "["
+rbracket = symbol "]"
+star = symbol "*"
+period = symbol "."
+slash = symbol "/"
+equal = symbol "="
+question = symbol "?"
+hat = symbol "^"
+tilda = symbol "~"
+vertical = symbol "|"
+percent = symbol "%"
 
-notFollowedBy :: Ord e => M.ParsecT e T.Text m a -> M.ParsecT e T.Text m b -> M.ParsecT e T.Text m a
+notFollowedBy :: Ord e
+    => M.ParsecT e T.Text m a
+    -> M.ParsecT e T.Text m b
+    -> M.ParsecT e T.Text m a
 notFollowedBy k p = lexeme (k <* M.notFollowedBy p)

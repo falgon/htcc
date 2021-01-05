@@ -14,6 +14,7 @@ module Htcc.Parser.Combinators.Utils (
     maybeToParser
   , registerLVar
   , bracket
+  , tmpTKIdent
 ) where
 import           Control.Monad.Trans          (MonadTrans (..))
 import           Control.Monad.Trans.State    (gets, put)
@@ -40,3 +41,6 @@ bracket :: Parser i a -> (a -> Parser i b) -> (a -> Parser i c) -> Parser i c
 bracket beg end m = do
     b <- beg
     M.withRecovery (\err -> end b *> M.parseError err) (m b) <* end b
+        
+tmpTKIdent :: Num i => T.Text -> HT.TokenLC i
+tmpTKIdent ident = (HT.TokenLCNums 1 1, HT.TKIdent ident)
