@@ -12,9 +12,8 @@ C language parser Combinators
 {-# LANGUAGE OverloadedStrings #-}
 module Htcc.Parser.Combinators.Var (
     varInit
-  , lengthArrayBrace
 ) where
-import           Control.Monad                 (forM, void, (>=>))
+import           Control.Monad                 (foldM, forM, void, (>=>))
 import           Control.Monad.Extra           (andM)
 import           Control.Monad.Fix             (fix)
 import           Control.Monad.Trans           (MonadTrans (..))
@@ -26,7 +25,6 @@ import           Data.Functor                  ((<&>))
 import           Data.Maybe                    (fromJust, fromMaybe)
 import qualified Data.Sequence                 as SQ
 import qualified Data.Text                     as T
-import           Data.Void
 import qualified Htcc.CRules.Types             as CT
 import           Htcc.Parser.AST               (ATKind (..), ATree (..),
                                                 addKind, atAssign, atBlock,
@@ -54,8 +52,8 @@ lengthArrayBrace = braces (arrayBrace 0)
             [ (+) <$> M.try (acc c <$> braces (arrayBrace (succ c)) <* comma) <*> arrayBrace c
             , acc c <$> braces (arrayBrace $ succ c)
             , (+) <$> M.try (accN c <$ validCharSets <* comma) <*> arrayBrace c
-            , accN c <$ validCharSets <* M.lookAhead "}"
-            , 0 <$ (M.lookAhead "}")
+            , accN c <$ validCharSets <* M.lookAhead rbrace
+            , 0 <$ M.lookAhead rbrace
             ]
         acc n | n == 0 = succ | otherwise = id
         accN n | n == 0 = 1 | otherwise = 0
@@ -84,8 +82,8 @@ lengthArrayBrace = braces (arrayBrace 0)
             , hat
             , tilda
             , vertical
+            , percent
             ]
-
 
 desgNode :: (Num i, Ord i, Show i)
     => T.Text
@@ -115,7 +113,7 @@ initLoop p ty ident ai desg = initLoop' ai <* rbrace
             CT.CTArray _ _ -> ($ (0, ai')) . fix $ \f (idx, rl) -> do
                 rs <- desgInit p (fromJust $ CT.deref ty) ident rl (CT.DesgIdx idx SQ.<| desg)
                 M.choice
-                    [ (rs, succ idx) <$ M.lookAhead "}"
+                    [ (rs, succ idx) <$ M.lookAhead rbrace
                     , comma *> f (succ idx, rs)
                     ]
             _ -> fail "internal compiler error"
@@ -125,9 +123,11 @@ initZero :: (Num i, Ord i, Show i, Enum i)
     -> T.Text
     -> SQ.Seq (CT.Desg i)
     -> Parser i (SQ.Seq (ATree i))
-initZero (CT.CTArray n ty) ident desg = foldr idxs (pure SQ.empty) [0..fromIntegral (pred n)]
-    where
-        idxs idx acc = (SQ.><) <$> initZero ty ident (CT.DesgIdx idx SQ.<| desg) <*> acc
+initZero (CT.CTArray n ty) ident desg =
+    foldM
+        (\acc idx -> (SQ.>< acc) <$> initZero ty ident (CT.DesgIdx idx SQ.<| desg))
+        SQ.empty
+        [0..fromIntegral (pred n)]
 initZero _ ident desg = SQ.singleton <$> desgNode ident (atNumLit 0) desg
 
 initializerList :: (Integral i, Bits i, Read i, Show i)
@@ -158,26 +158,14 @@ initializerList p ty ident ai desg = M.choice
                     CT.CTArray n bt -> do
                         (ast, idx) <- initLoop p ty ident ai desg
                         (ai SQ.><) . (ast SQ.><)
-                            <$> foldr (idxs bt) (pure SQ.empty) [fromIntegral idx..pred (fromIntegral n)]
+                            <$> foldM
+                                (\acc idx' -> (SQ.>< acc) <$> initZero bt ident (CT.DesgIdx idx' SQ.<| desg))
+                                SQ.empty
+                                [fromIntegral idx..pred (fromIntegral n)]
                     _ -> fail "internal compiler error"
             where
-                idxs bt idx acc = (SQ.><)
-                    <$> initZero bt ident (CT.DesgIdx idx SQ.<| desg)
-                    <*> acc
-
                 arType len = snd (CT.dctorArray ty) $
                     CT.mapTypeKind (CT.CTArray (fromIntegral len) . fromJust . CT.fromIncompleteArray) ty
-
-lookInitializerString :: Ord i => CT.StorageClass i -> Parser i ()
-lookInitializerString ty = bool M.empty (pure ()) =<< andM
-    [ pure $ CT.isArray ty
-    , pure $ maybe False ((==CT.CTChar) . CT.toTypeKind) (CT.deref ty)
-    , M.option False (True <$ M.lookAhead stringLiteral)
-    ]
-
-lookInitializerList, lookStructInit :: CT.StorageClass i -> Parser i ()
-lookInitializerList = bool M.empty (pure ()) . CT.isArray
-lookStructInit = bool M.empty (pure ()) . CT.isCTStruct
 
 desgInit :: (Integral i, Bits i, Read i, Show i)
     => Parser i (ATree i)
@@ -187,11 +175,19 @@ desgInit :: (Integral i, Bits i, Read i, Show i)
     -> SQ.Seq (CT.Desg i)
     -> Parser i (SQ.Seq (ATree i))
 desgInit p ty ident ai desg = M.choice
-    [ ai <$ lookInitializerString ty
-    , lookInitializerList ty *> initializerList p ty ident ai desg
-    , ai <$ lookStructInit ty
+    [ ai <$ lookInitializerString
+    , lookInitializerList *> initializerList p ty ident ai desg
+    , ai <$ lookStructInit
     , p >>= (flip (desgNode ident) desg >=> pure . (SQ.|>) ai)
     ]
+    where
+        lookInitializerString = bool M.empty (pure ()) =<< andM
+            [ pure $ CT.isArray ty
+            , pure $ maybe False ((==CT.CTChar) . CT.toTypeKind) (CT.deref ty)
+            , M.option False (True <$ M.lookAhead stringLiteral)
+            ]
+        lookInitializerList = bool M.empty (pure ()) $ CT.isArray ty
+        lookStructInit = bool M.empty (pure ()) $ CT.isCTStruct ty
 
 varInit' :: (Integral i, Bits i, Read i, Show i)
     => Parser i (ATree i)
