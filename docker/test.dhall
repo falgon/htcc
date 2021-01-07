@@ -9,9 +9,9 @@ let htccService =
       ⫽ { image = Some "roki/htcc_test:1.0.0"
         , command = Some
             ( types.StringOrList.String
-                "/bin/sh -c 'gcc -no-pie -o spec /htcc_work/spec.s && ./spec'"
+                "/bin/bash /htcc_work/scripts/test.sh"
             )
-        , volumes = Some [ "/tmp/htcc:/htcc_work" ]
+        , volumes = Some [ "/tmp/htcc:/htcc_work", "./docker/scripts:/htcc_work/scripts" ]
         , build = Some
             ( types.Build.Object
                 { context = "."

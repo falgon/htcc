@@ -3,15 +3,13 @@ module Tests.SubProcTests (
     exec
 ) where
 
-import           Data.Char         (ord)
+import           Data.Char                         (ord)
+import qualified Htcc.CRules.Types                 as CT
 import           Numeric.Natural
-
-import qualified Tests.Test1       as StatementEqual
-import qualified Tests.Test2       as LinkFuncRet
-import qualified Tests.Test3       as LinkFuncStdOut
-import           Tests.Utils       hiding (exec)
-
-import qualified Htcc.CRules.Types as CT
+import qualified Tests.SubProcTests.LinkFuncRet    as LinkFuncRet
+import qualified Tests.SubProcTests.LinkFuncStdOut as LinkFuncStdOut
+import qualified Tests.SubProcTests.StatementEqual as StatementEqual
+import           Tests.Utils                       hiding (exec)
 
 exec :: IO ()
 exec = runTestsEx
@@ -195,26 +193,10 @@ exec = runTestsEx
     , (StatementEqual.test "int main() { int* ar[3]; int x; ar[0] = &x; x = 42; ar[0][0]; }", 42)
     , (StatementEqual.test "int main() { int a = 42; return ({ a; }); }", 42)
     , (StatementEqual.test "int main() { return ({ int a = 42; int b = 1; a + b; }); }", 43)
+    ] *> runTestsEx
+    [ (LinkFuncStdOut.test "int test_func1(); int main() { return test_func1(); }" ["test_func1"], Right "test/Tests/csrc/externals/test_func1.c::test_func1(): [OK]")
+    , (LinkFuncStdOut.test "int test_func2(); int main() { return test_func2(40); }" ["test_func2"], Right "test/Tests/csrc/externals/test_func2.c::test_func2(40) outputs: \"2 3 5 7 11 13 17 19 23 29 31 37 \": [OK]")
     ]
+
     where
-        sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural 
-{-
-exec = let sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural in runTestsEx [
-    -- (LinkFuncRet.test "int main() { return sum7(1, 1, 1, 1, 1, 1, 1); }" ["test_func3"], 7),
-    -- (LinkFuncRet.test "int main() { return test_func2(sum7(1, 2, 3, 4, 5, 6, 7)); }" ["test_func2", "test_func3"], 0),
-    -- (LinkFuncRet.test "int main() { return sum16(1,1,1,1,1,1,11,10,9,8,7,6,5,4,3,2); }" ["test_func3"], 11),
-    (StatementEqual.test "int main() { return ({ 42; }); }", 42),
-    (StatementEqual.test "int main() { return ({ 1; 2; 3; }); }", 3),
-    (StatementEqual.test "int main() { ({ 1; return 2; 3; }); return 4; }", 2),
-    (StatementEqual.test "int main() { return ({ int a = 42; a; }); }", 42),
-    (StatementEqual.test "int main() { /* return 0; */ return 42; }", 42),
-    (StatementEqual.test "int main() { // hoge\nreturn 42; }", 42),
-    (StatementEqual.test "int main() { int a = 42; { int a = 32; } return a; }", 42),
-    (StatementEqual.test "int main() { int a = 42; { int a = 32; } { int a = 53; return a; } return 42; }", 53),
-    (StatementEqual.test "int main() { int a = 42; { a = 32; } return a; }", 32),
-    (StatementEqual.test "int main() { int* ar[3]; int x; ar[0] = &x; x = 42; ar[0][0]; }", 42)
-    ] >> runTestsEx [
-    (LinkFuncStdOut.test "int main() { int test_func1(); int main() { return test_func1(); }" ["test_func1"], Right "test/Tests/csrc/test_func1.c::test_func1(): [OK]"),
-    (LinkFuncStdOut.test "int main() { int test_func2(); int main() { return test_func2(40); }" ["test_func2"], Right "test/Tests/csrc/test_func2.c::test_func2(40) outputs: \"2 3 5 7 11 13 17 19 23 29 31 37 \": [OK]"),
-    ]
--}
+        sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural

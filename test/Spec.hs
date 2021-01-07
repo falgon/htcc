@@ -1,30 +1,38 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import           Codec.Binary.UTF8.String (decodeString)
-import           Control.Exception        (finally)
-import qualified Data.ByteString.Char8    as B
-import qualified Data.Text                as T
-import qualified Data.Text.IO             as T
-import           Dhall.JSON               (omitNull)
-import           Dhall.Yaml               (Options (..), defaultOptions,
-                                           dhallToYaml)
-import qualified Options.Applicative      as OA
-import           System.Directory         (createDirectoryIfMissing)
-import           System.FilePath          ((</>))
-import           System.Process           (readCreateProcess, shell)
+import           Codec.Binary.UTF8.String  (decodeString)
+import           Control.Exception         (finally)
+import           Control.Monad             (foldM)
+import           Control.Monad.Extra       (partitionM)
+import           Control.Monad.Trans       (lift)
+import           Control.Monad.Trans.State (StateT, evalStateT, get, modify,
+                                            put)
+import qualified Data.ByteString.Char8     as B
+import           Data.List                 (isSuffixOf)
+import qualified Data.Text                 as T
+import qualified Data.Text.IO              as T
+import           Dhall.JSON                (omitNull)
+import           Dhall.Yaml                (Options (..), defaultOptions,
+                                            dhallToYaml)
+import           Htcc.Utils                (tshow)
+import qualified Options.Applicative       as OA
+import           System.Directory          (createDirectoryIfMissing)
+import           System.Directory          (doesDirectoryExist, listDirectory)
+import           System.FilePath           ((</>))
+import           System.Process            (readCreateProcess, shell)
 import qualified Tests.ComponentsTests     as ComponentsTests
-import qualified Tests.SubProcTests       as SubProcTests
+import qualified Tests.SubProcTests        as SubProcTests
 import           Tests.Utils
 
 workDir :: FilePath
 workDir = "/tmp" </> "htcc"
 
-specPath :: FilePath
-specPath = workDir </> "spec.s"
+asmDir :: FilePath
+asmDir = workDir </> "asm"
 
 dockerComposePath :: FilePath
-dockerComposePath = "./docker" </> "test.dhall"
+dockerComposePath = "." </> "docker" </> "test.dhall"
 
 data Command = WithSubProc | WithDocker | WithSelf | WithComponents
 
@@ -71,12 +79,43 @@ optsParser = OA.info (OA.helper <*> programOptions) $ mconcat [
   , OA.progDesc $ "The htcc unit tester"
   ]
 
-genTestAsm :: IO ()
-genTestAsm = do
-    createDirectoryIfMissing False workDir
-    execErrFin $ "stack exec htcc -- " <> T.pack testCoreFile <> " > " <> T.pack specPath
+genTestAsm' :: StateT Int IO [T.Text]
+genTestAsm' = lift (createDirectoryIfMissing False workDir *> createDirectoryIfMissing False asmDir)
+    *> go [] ("." </> "test" </> "Tests" </> "csrc" </> "self")
     where
-        testCoreFile = "./test" </> "Tests" </> "csrc" </> "test_core.c"
+        go s fname = do
+            names <- lift $ map (fname </>) <$> listDirectory fname
+            (dirPaths, filePaths) <- lift $ partitionM doesDirectoryExist names
+            foldM (\fs f -> if ".c" `isSuffixOf` f then (:fs) <$> mkBin f else pure fs) s filePaths
+                >>= flip (foldM go) dirPaths
+
+        mkBin fname = do
+            n <- get
+            lift $ execErrFin $
+                mconcat
+                    [ "stack exec htcc -- "
+                    , T.pack fname
+                    , " > "
+                    , T.pack (asmDir </> "spec")
+                    , tshow n
+                    , ".s"
+                    ]
+            mconcat [T.pack (asmDir </> "spec"), tshow n, ".s"] <$ modify succ
+
+genTestAsm :: IO [T.Text]
+genTestAsm = evalStateT genTestAsm' 0
+
+genTestBins' :: StateT Int IO [T.Text]
+genTestBins' = (genTestAsm' <* put 0) >>= mapM f
+    where
+        f fname = do
+            n <- get
+            let binName = mconcat [T.pack (workDir </> "spec"), tshow n, ".out"]
+            lift $ execErrFin ("gcc -xassembler -no-pie -o " <> binName <> " " <> fname)
+            binName <$ modify succ
+
+genTestBins :: IO [T.Text]
+genTestBins = evalStateT genTestBins' 0
 
 createProcessDhallDocker :: FilePath -> String -> IO ()
 createProcessDhallDocker fp cmd = T.readFile fp
@@ -84,19 +123,16 @@ createProcessDhallDocker fp cmd = T.readFile fp
     >>= readCreateProcess (shell $ "docker-compose -f - " <> cmd) . decodeString . B.unpack
     >>= putStrLn
 
+runDhallDocker :: String -> IO ()
+runDhallDocker = createProcessDhallDocker dockerComposePath
+
 main :: IO ()
 main = do
     opts <- OA.execParser optsParser
     case optCmd opts of
         WithSubProc -> SubProcTests.exec
-        WithDocker  -> let runDhallDocker = createProcessDhallDocker dockerComposePath in
-            if optClean opts then
-                runDhallDocker "down --rmi all"
-            else
-                flip finally (clean [workDir]) $
-                    genTestAsm >> runDhallDocker "up --build"
-        WithSelf    -> flip finally (clean [workDir, "spec"]) $ do
-            genTestAsm
-            execErrFin $ "gcc -no-pie -o spec " <> T.pack specPath
-            execErrFin "./spec"
+        WithDocker
+            | optClean opts -> runDhallDocker "down --rmi all"
+            | otherwise -> genTestAsm *> runDhallDocker "up --build" *> clean [workDir]
+        WithSelf    -> genTestBins >>= mapM_ execErrFin >> clean [workDir]
         WithComponents -> ComponentsTests.exec

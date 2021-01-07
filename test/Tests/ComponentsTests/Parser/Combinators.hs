@@ -15,7 +15,13 @@ import qualified Text.Megaparsec              as M
 
 type TestParser = M.Parsec Void T.Text
 
-charLiteralTest, stringLiteralTest, hexadecimalTest, octalTest, naturalTest, integerTest, identifierTest :: Test
+charLiteralTest, 
+    stringLiteralTest, 
+    hexadecimalTest, 
+    octalTest, 
+    naturalTest,
+    integerTest,
+    identifierTest :: Test
 
 charLiteralTest = TestLabel "Parser.Combinators.Core.charLiteral" $
     TestList [

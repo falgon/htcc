@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ff5121aa8a5d3d8d22e341046abb4b45d00032001dab233a2a2f65d2d62deafe
+-- hash: 2eed65682adb7b03154ede97ff35806be8a937984b5dfcb70a644b23832bf2a2
 
 name:           htcc
 version:        0.0.0.1
@@ -185,9 +185,9 @@ test-suite htcc-test
       Tests.ComponentsTests
       Tests.ComponentsTests.Parser.Combinators
       Tests.SubProcTests
-      Tests.Test1
-      Tests.Test2
-      Tests.Test3
+      Tests.SubProcTests.LinkFuncRet
+      Tests.SubProcTests.LinkFuncStdOut
+      Tests.SubProcTests.StatementEqual
       Tests.Utils
       Paths_htcc
   hs-source-dirs:
