@@ -369,22 +369,8 @@ int main()
     assert(0, ({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[1][1]; }), "({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[1][1]; })");
     assert(0, ({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[1][2]; }), "({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[1][2]; })");
     assert(0, ({ int ar[1][1][1] = {{{}}}; ar[0][0][0]; }), "({ int ar[1][1][1] = {{{}}}; ar[0][0][0]; })");/*
-    assert('a', ({ char str[4] = "abc"; str[0]; }), "({ int str[4] = \"abc\"; str[0]; })");
-    assert('c', ({ char str[4] = "abc"; str[2]; }), "({ int str[4] = \"abc\"; str[2]; })");
-    assert(0, ({ char str[4] = "abc"; str[3]; }), "({ int str[4] = \"abc\"; str[3]; })");
-    assert('a', ({ char str[2][4] = { "abc", "def" }; str[0][0]; }), "({ char str[2][4] = { \"abc\", \"def\" }; str[0][0]; })");
-    assert('b', ({ char str[2][4] = { "abc", "def" }; str[0][1]; }), "({ char str[2][4] = { \"abc\", \"def\" }; str[0][1]; })");
-    assert('c', ({ char str[2][4] = { "abc", "def" }; str[0][2]; }), "({ char str[2][4] = { \"abc\", \"def\" }; str[0][2]; })");
-    assert(0, ({ char str[2][4] = { "abc", "def" }; str[0][3]; }), "({ char str[2][4] = { \"abc\", \"def\" }; str[0][3]; })");
-    assert('d', ({ char str[2][4] = { "abc", "def" }; str[1][0]; }), "({ char str[2][4] = { \"abc\", \"def\" }; str[1][0]; })");
-    assert('e', ({ char str[2][4] = { "abc", "def" }; str[1][1]; }), "({ char str[2][4] = { \"abc\", \"def\" }; str[1][1]; })");
-    assert('f', ({ char str[2][4] = { "abc", "def" }; str[1][2]; }), "({ char str[2][4] = { \"abc\", \"def\" }; str[1][2]; })");
-    assert(0, ({ char str[2][4] = { "abc", "def" }; str[1][3]; }), "({ char str[2][4] = { \"abc\", \"def\" }; str[1][3]; })");
     assert(3, ({ int ar[] = { 0, 1, 2, 3 }; ar[3]; }), "({ int ar[] = { 0, 1, 2, 3 }; ar[3]; })");
     assert(16, ({ int ar[] = { 0, 1, 2, 3 }; sizeof ar; }), "({ int ar[] = { 0, 1, 2, 3 }; sizeof ar; })");
-    assert(4, ({ char str[] = "foo"; sizeof str; }), "({ char str[] = \"foo\"; sizeof str; })");
-    assert('d', ({ char str[] = "abcd"; str[3]; }), "({ char str[] = \"abcd\"; str[3]; })");
-    assert(0, ({ char str[] = "abcd"; str[4]; }), "({ char str[] = \"abcd\"; str[4]; })");
     assert(1, ({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.a; }), "({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.a; })");
     assert(2, ({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.b; }), "({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.b; })");
     assert(3, ({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.c; }), "({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.c; })");

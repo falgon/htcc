@@ -12,6 +12,7 @@ C language lexer
 {-# LANGUAGE FlexibleContexts, OverloadedStrings, RankNTypes, TupleSections #-}
 module Htcc.Parser.Combinators.Core (
     runParser
+  , ConstructionDataState
   , Parser
   , spaceConsumer
   , lexeme
@@ -97,10 +98,10 @@ symbol :: Ord e => T.Text -> M.ParsecT e T.Text m T.Text
 symbol = ML.symbol spaceConsumer
 
 charLiteral :: Ord e => M.ParsecT e T.Text m Char
-charLiteral = M.between (MC.char '\'') (MC.char '\'') ML.charLiteral
+charLiteral = M.between (MC.char '\'') (MC.char '\'') ML.charLiteral <* spaceConsumer
 
 stringLiteral :: Ord e => M.ParsecT e T.Text m String
-stringLiteral = MC.char '\"' *> ((<> "\0") <$> M.manyTill ML.charLiteral (MC.char '\"'))
+stringLiteral = MC.char '\"' *> ((<> "\0") <$> M.manyTill ML.charLiteral (MC.char '\"')) <* spaceConsumer
 
 hexadecimal, octal, decimal, natural, integer :: (Ord e, Num i) => M.ParsecT e T.Text m i
 hexadecimal = MC.char '0' >> MC.char' 'x' >> ML.hexadecimal

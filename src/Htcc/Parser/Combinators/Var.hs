@@ -17,11 +17,14 @@ import           Control.Monad                 (foldM, forM, void, (>=>))
 import           Control.Monad.Extra           (andM)
 import           Control.Monad.Fix             (fix)
 import           Control.Monad.Trans           (MonadTrans (..))
+import           Control.Monad.Trans.Reader    (ReaderT, asks, runReaderT)
 import           Control.Monad.Trans.State     (gets)
 import           Data.Bits                     (Bits)
 import           Data.Bool                     (bool)
+import           Data.Char                     (ord)
 import           Data.Foldable                 (toList)
 import           Data.Functor                  ((<&>))
+import           Data.List                     (sortBy)
 import           Data.Maybe                    (fromJust, fromMaybe)
 import qualified Data.Sequence                 as SQ
 import qualified Data.Text                     as T
@@ -36,8 +39,15 @@ import           Htcc.Parser.Combinators.Utils (bracket, maybeToParser,
 import           Htcc.Parser.ConstructionData  (incomplete, lookupLVar)
 import           Htcc.Utils                    (tshow)
 import qualified Text.Megaparsec               as M
-
 import           Text.Megaparsec.Debug         (dbg)
+
+type DesignatorParser i r = ReaderT (T.Text, Parser i (ATree i)) (Parser i) r
+
+runDesignator :: (SQ.Seq (ATree i) -> SQ.Seq (CT.Desg i) -> DesignatorParser i r)
+    -> T.Text
+    -> Parser i (ATree i)
+    -> Parser i r
+runDesignator p ident assignParser = runReaderT (p SQ.empty SQ.empty) (ident, assignParser)
 
 fromValidAssignAST :: Eq i => ATree i -> Parser i (ATree i)
 fromValidAssignAST at@(ATNode _ ty _ _)
@@ -86,99 +96,116 @@ lengthArrayBrace = braces (arrayBrace 0)
             ]
 
 desgNode :: (Num i, Ord i, Show i)
-    => T.Text
-    -> ATree i
+    => ATree i
     -> SQ.Seq (CT.Desg i)
-    -> Parser i (ATree i)
-desgNode ident nd desg = fmap (atExprStmt . flip atAssign nd) $
-    flip (`foldr` (treealize <$> (maybeToParser' =<< lift (gets $ lookupLVar ident)))) desg $ \idx acc -> case idx of
+    -> DesignatorParser i (ATree i)
+desgNode nd desg = fmap (atExprStmt . flip atAssign nd) $
+    flip (`foldr` facc) desg $ \idx acc -> case idx of
         CT.DesgIdx idx' -> do
-            at <- acc
-            nd' <- maybeToParser' $ addKind at $ atNumLit idx'
+            nd' <- maybeToParser' . (`addKind` atNumLit idx') =<< acc
             flip (atUnary ATDeref) nd' <$> maybeToParser' (CT.deref (atype nd'))
         CT.DesgMem mem -> atMemberAcc mem <$> acc
     where
-        maybeToParser' = maybeToParser "invalid initializer-list"
+        facc = asks fst
+            >>= lift . lift . gets . lookupLVar
+            >>= maybeToParser'
+            <&> treealize
+        maybeToParser' = lift . maybeToParser "invalid initializer-list"
 
 initLoop :: (Integral i, Bits i, Read i, Show i)
-    => Parser i (ATree i)
-    -> CT.StorageClass i
-    -> T.Text
+    => CT.StorageClass i
     -> SQ.Seq (ATree i)
     -> SQ.Seq (CT.Desg i)
-    -> Parser i (SQ.Seq (ATree i), i)
-initLoop p ty ident ai desg = initLoop' ai <* rbrace
+    -> DesignatorParser i (SQ.Seq (ATree i), i)
+initLoop ty ai desg = initLoop' ai <* lift rbrace
     where
         initLoop' ai' = case CT.toTypeKind ty of
             CT.CTArray _ _ -> ($ (0, ai')) . fix $ \f (idx, rl) -> do
-                rs <- desgInit p (fromJust $ CT.deref ty) ident rl (CT.DesgIdx idx SQ.<| desg)
+                rs <- desgInit (fromJust $ CT.deref ty) rl (CT.DesgIdx idx SQ.<| desg)
                 M.choice
-                    [ (rs, succ idx) <$ M.lookAhead rbrace
-                    , comma *> f (succ idx, rs)
+                    [ (rs, succ idx) <$ lift (M.lookAhead rbrace)
+                    , lift comma *> f (succ idx, rs)
                     ]
             _ -> fail "internal compiler error"
 
 initZero :: (Num i, Ord i, Show i, Enum i)
     => CT.TypeKind i
-    -> T.Text
     -> SQ.Seq (CT.Desg i)
-    -> Parser i (SQ.Seq (ATree i))
-initZero (CT.CTArray n ty) ident desg =
+    -> DesignatorParser i (SQ.Seq (ATree i))
+initZero (CT.CTArray n ty) desg =
     foldM
-        (\acc idx -> (SQ.>< acc) <$> initZero ty ident (CT.DesgIdx idx SQ.<| desg))
+        (\acc idx -> (SQ.>< acc) <$> initZero ty (CT.DesgIdx idx SQ.<| desg))
         SQ.empty
         [0..fromIntegral (pred n)]
-initZero _ ident desg = SQ.singleton <$> desgNode ident (atNumLit 0) desg
+initZero _ desg = SQ.singleton <$> desgNode (atNumLit 0) desg
 
-initializerList :: (Integral i, Bits i, Read i, Show i)
-    => Parser i (ATree i)
-    -> CT.StorageClass i
-    -> T.Text
+arType :: (CT.CType (a j), CT.TypeKindBase a, Integral i) => a j -> i -> a j
+arType ty len = snd (CT.dctorArray ty) $
+    CT.mapTypeKind (CT.CTArray (fromIntegral len) . fromJust . CT.fromIncompleteArray) ty
+
+initializerString :: (Integral i, Bits i, Read i, Show i)
+    => CT.StorageClass i
     -> SQ.Seq (ATree i)
     -> SQ.Seq (CT.Desg i)
-    -> Parser i (SQ.Seq (ATree i))
-initializerList p ty ident ai desg = M.choice
+    -> DesignatorParser i (SQ.Seq (ATree i))
+initializerString ty ai desg
+    | CT.isIncompleteArray ty = do
+        newt <- lift $ bracket M.getInput M.setInput (const $ arType ty . length <$> stringLiteral)
+        asks fst >>= lift . registerLVar newt >> desgInit newt ai desg
+    | otherwise = case CT.toTypeKind ty of
+        CT.CTArray n _ -> do
+            s <- lift stringLiteral
+            let s' = s <> replicate (fromIntegral n - pred (length s)) (toEnum 0)
+                inds = sortBy (flip (.) reverse . compare . reverse) $ CT.accessibleIndices $ CT.toTypeKind ty
+            fmap ((ai SQ.><) . SQ.fromList)
+                $ mapM (uncurry desgNode)
+                $ zipWith (flip (.) ((SQ.>< desg) . SQ.fromList) . (,) . atNumLit . fromIntegral . ord) s' inds
+        _ -> fail "internal compiler error"
+
+initializerList :: (Integral i, Bits i, Read i, Show i)
+    => CT.StorageClass i
+    -> SQ.Seq (ATree i)
+    -> SQ.Seq (CT.Desg i)
+    -> DesignatorParser i (SQ.Seq (ATree i))
+initializerList ty ai desg = M.choice
     [ allZeroInit
     , withInitElements
     ]
     where
         allZeroInit = do
-            void $ M.try (lbrace *> rbrace)
+            void $ lift $ M.try (lbrace *> rbrace)
             (ai SQ.><) . SQ.fromList <$> forM
                 (CT.accessibleIndices $ CT.toTypeKind ty)
-                (desgNode ident (atNumLit 0) . (SQ.>< desg) . SQ.fromList)
+                (desgNode (atNumLit 0) . (SQ.>< desg) . SQ.fromList)
 
         withInitElements
             | CT.isIncompleteArray ty = do
-                newt <- bracket M.getInput M.setInput (const $ arType <$> lengthArrayBrace)
-                registerLVar newt ident *> desgInit p newt ident ai desg
+                newt <- lift $ bracket M.getInput M.setInput (const $ arType ty <$> lengthArrayBrace)
+                asks fst
+                    >>= lift . registerLVar newt
+                    >> desgInit newt ai desg
             | otherwise = do
-                void lbrace
+                void $ lift lbrace
                 case CT.toTypeKind ty of
                     CT.CTArray n bt -> do
-                        (ast, idx) <- initLoop p ty ident ai desg
+                        (ast, idx) <- initLoop ty ai desg
                         (ai SQ.><) . (ast SQ.><)
                             <$> foldM
-                                (\acc idx' -> (SQ.>< acc) <$> initZero bt ident (CT.DesgIdx idx' SQ.<| desg))
+                                (\acc idx' -> (SQ.>< acc) <$> initZero bt (CT.DesgIdx idx' SQ.<| desg))
                                 SQ.empty
                                 [fromIntegral idx..pred (fromIntegral n)]
                     _ -> fail "internal compiler error"
-            where
-                arType len = snd (CT.dctorArray ty) $
-                    CT.mapTypeKind (CT.CTArray (fromIntegral len) . fromJust . CT.fromIncompleteArray) ty
 
 desgInit :: (Integral i, Bits i, Read i, Show i)
-    => Parser i (ATree i)
-    -> CT.StorageClass i
-    -> T.Text
+    => CT.StorageClass i
     -> SQ.Seq (ATree i)
     -> SQ.Seq (CT.Desg i)
-    -> Parser i (SQ.Seq (ATree i))
-desgInit p ty ident ai desg = M.choice
-    [ ai <$ lookInitializerString
-    , lookInitializerList *> initializerList p ty ident ai desg
-    , ai <$ lookStructInit
-    , p >>= (flip (desgNode ident) desg >=> pure . (SQ.|>) ai)
+    -> DesignatorParser i (SQ.Seq (ATree i))
+desgInit ty ai desg = M.choice
+    [ lift lookInitializerString *> initializerString ty ai desg
+    , lift lookInitializerList *> initializerList ty ai desg
+    , ai <$ lift lookStructInit
+    , asks snd >>= lift >>= (flip desgNode desg >=> pure . (SQ.|>) ai)
     ]
     where
         lookInitializerString = bool M.empty (pure ()) =<< andM
@@ -196,7 +223,7 @@ varInit' :: (Integral i, Bits i, Read i, Show i)
     -> ATree i
     -> Parser i (ATree i)
 varInit' p ty ident lat
-    | CT.isArray ty || CT.isCTStruct ty = atBlock . toList <$> desgInit p ty ident SQ.empty SQ.empty
+    | CT.isArray ty || CT.isCTStruct ty = atBlock . toList <$> runDesignator (desgInit ty) ident p
     | otherwise = p >>= fromValidAssignAST <&> atExprStmt . ATNode ATAssign (atype lat) lat
 
 varInit :: (Integral i, Bits i, Read i, Show i)

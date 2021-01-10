@@ -2,7 +2,6 @@
 module Main where
 
 import           Codec.Binary.UTF8.String  (decodeString)
-import           Control.Exception         (finally)
 import           Control.Monad             (foldM)
 import           Control.Monad.Extra       (partitionM)
 import           Control.Monad.Trans       (lift)

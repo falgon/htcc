@@ -7,7 +7,7 @@ Maintainer  : falgon53@yahoo.co.jp
 Stability   : experimental
 Portability : POSIX
 
-C language lexer
+C language Program parser
 -}
 {-# LANGUAGE FlexibleContexts, LambdaCase, OverloadedStrings, TupleSections #-}
 module Htcc.Parser.Combinators.Program (
@@ -29,8 +29,7 @@ import qualified Data.ByteString.UTF8                        as BSU
 import           Data.Char                                   (ord)
 import           Data.Either                                 (rights)
 import           Data.Functor                                ((<&>))
-import           Data.Maybe                                  (fromJust,
-                                                              fromMaybe)
+import           Data.Maybe                                  (fromJust)
 import qualified Data.Text                                   as T
 import           Data.Tuple.Extra                            (dupe, first)
 import qualified Htcc.CRules.Types                           as CT
@@ -107,7 +106,7 @@ declIdentFuncArg sep = do
             Right . (,ident) <$> M.option ty (narrowPtr <$> arraySuffix ty) <* sep
 
         narrowPtr ty
-            | CT.isCTArray ty = fromMaybe ty $ CT.mapTypeKind CT.CTPtr <$> CT.deref ty
+            | CT.isCTArray ty = maybe ty (CT.mapTypeKind CT.CTPtr) $ CT.deref ty
             | CT.isIncompleteArray ty =
                 CT.mapTypeKind (\(CT.CTIncomplete (CT.IncompleteArray t')) -> CT.CTPtr t') ty
             | otherwise = ty
@@ -152,7 +151,7 @@ function = do
         ]
     where
         takeParameters =
-            M.manyTill (M.try (declIdentFuncArg comma) M.<|> (declIdentFuncArg $ M.lookAhead rparen)) rparen
+            M.manyTill (M.try (declIdentFuncArg comma) M.<|> declIdentFuncArg (M.lookAhead rparen)) rparen
 
         declaration ty ident =
             void semi
@@ -310,7 +309,7 @@ expr = assign
 
 assign = do
     nd <- conditional
-    M.option nd $ choice $ map (`id` nd) $
+    M.option nd $ choice $ map (`id` nd)
         [ assignOp ATAssign "="
         , assignOp ATMulAssign "*="
         , assignOp ATDivAssign "/="
@@ -329,7 +328,7 @@ conditional = do
     nd <- logicalOr
     ifM (M.option False (True <$ M.lookAhead question)) (GNU.condOmitted nd M.<|> condOp nd) $ pure nd
     where
-        condOp nd = uncurry (flip atConditional nd) . first atype . dupe
+        condOp nd = uncurry (`atConditional` nd) . first atype . dupe
             <$> (question *> expr <* colon)
             <*> conditional
 
@@ -435,7 +434,7 @@ factor = choice
         strLiteral = do
             s <- stringLiteral
             lit <- lift $ gets $
-                addLiteral (CT.SCAuto $ CT.CTArray (fromIntegral $ length s) CT.CTChar) $
+                addLiteral (CT.SCAuto $ CT.CTArray (fromIntegral $ length s) CT.CTChar)
                     (HT.TokenLCNums 1 1, HT.TKString $ BSU.fromString s)
             case lit of
                 Left err        -> fail $ T.unpack $ fst err
@@ -448,7 +447,7 @@ factor = choice
                 , variable ident
                 ]
             where
-                variable ident = do
+                variable ident =
                     lift (gets $ lookupVar ident)
                         >>= \case
                             FoundGVar (PV.GVar t _) -> return $ atGVar t ident
