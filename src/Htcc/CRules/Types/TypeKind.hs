@@ -148,7 +148,7 @@ data TypeKind i = CTInt -- ^ The type @int@ as C language
 
 {-# INLINE fundamental #-}
 fundamental :: [TypeKind i]
-fundamental = [CTChar, CTInt, CTShort CTUndef, CTLong CTUndef, CTSigned CTUndef]
+fundamental = [CTChar, CTInt, CTShort CTUndef, CTLong CTUndef, CTSigned CTUndef, CTVoid]
 
 {-# INLINE isLongShortable #-}
 isLongShortable :: TypeKind i -> Bool

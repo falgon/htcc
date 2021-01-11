@@ -28,7 +28,7 @@ import qualified Text.Megaparsec              as M
 import qualified Text.Megaparsec.Char         as MC
 
 pKeyword :: Ord e => T.Text -> M.ParsecT e T.Text m T.Text
-pKeyword = flip notFollowedBy (M.takeWhile1P (Just "valid identifier") CR.isValidChar) . MC.string
+pKeyword = flip notFollowedBy (M.takeWhile1P (Just "valid Keyword") CR.isValidChar) . MC.string
 
 kAuto, kBreak, kCase, kChar, kConst, kContinue,
     kDefault, kDo, kDouble, kElse, kEnum, kExtern,
@@ -58,7 +58,7 @@ kInline = pKeyword "inline"
 kInt = pKeyword "int"
 kLong = pKeyword "long"
 kRegister = pKeyword "register"
-kRestrict = "restrict"
+kRestrict = pKeyword "restrict"
 kReturn = pKeyword "return"
 kShort = pKeyword "short"
 kSigned = pKeyword "signed"

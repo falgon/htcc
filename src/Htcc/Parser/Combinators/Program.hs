@@ -29,12 +29,15 @@ import qualified Data.ByteString.UTF8                        as BSU
 import           Data.Char                                   (ord)
 import           Data.Either                                 (rights)
 import           Data.Functor                                ((<&>))
-import           Data.Maybe                                  (fromJust)
+import           Data.List                                   (find)
+import           Data.Maybe                                  (fromJust, isJust)
 import qualified Data.Text                                   as T
 import           Data.Tuple.Extra                            (dupe, first)
 import qualified Htcc.CRules.Types                           as CT
 import           Htcc.Parser.AST                             (Treealizable (..),
-                                                              addKind, subKind)
+                                                              addKind,
+                                                              isNonEmptyReturn,
+                                                              subKind)
 import           Htcc.Parser.AST.Core                        (ATKind (..),
                                                               ATKindFor (..),
                                                               ATree (..),
@@ -89,7 +92,7 @@ import           Text.Megaparsec.Debug                       (dbg)
 
 declIdent :: (Show i, Read i, Bits i, Integral i) => Parser i (CT.StorageClass i, T.Text)
 declIdent = do
-    ty <- cType
+    ty <- M.try cType
     ident <- identifier
     (,ident) <$> M.option ty (arraySuffix ty)
 
@@ -97,7 +100,7 @@ declIdentFuncArg :: (Show i, Read i, Bits i, Integral i)
     => Parser i a
     -> Parser i (Either (CT.StorageClass i) (CT.StorageClass i, T.Text))
 declIdentFuncArg sep = do
-    ty <- cType
+    ty <- M.try cType
     anonymousArg ty M.<|> namedArg ty
     where
         anonymousArg ty = Left <$> M.option ty (arraySuffix ty) <* sep
@@ -167,8 +170,23 @@ function = do
                     Right scp' -> do
                         lift $ put scp'
                         params' <- forM (rights params) $ uncurry registerLVar
-                        atDefFunc ident (if null params' then Nothing else Just params') ty <$> stmt
+                        stmt >>= fromValidFunc params'
                     Left err -> fail $ T.unpack $ fst err
+            where
+                fromValidFunc params' st@(ATNode (ATBlock block) _ _ _)
+                    | CT.toTypeKind ty == CT.CTVoid =
+                        if isJust (find isNonEmptyReturn block) then
+                            fail $ mconcat
+                                [ "the return type of function '"
+                                , T.unpack ident
+                                , "' is void, but the statement returns a value"
+                                ]
+                        else
+                            pure $ atDefFunc ident (if null params' then Nothing else Just params') ty st
+                    | otherwise =
+                            -- TODO: Warning when there is no return value when the function is not void
+                            pure $ atDefFunc ident (if null params' then Nothing else Just params') ty st
+                fromValidFunc _ _ = fail "internal compiler error"
 
 gvar = do
     (ty, ident) <- declIdent
@@ -245,8 +263,8 @@ stmt = choice
     ]
     where
         returnStmt = choice
-            [ atReturn (CT.SCUndef CT.CTUndef) <$> (M.try kReturn >> expr) <* semi
-            --, atReturn (CT.SCUndef CT.CTUndef) ATEmpty <$ (kReturn >> semi)
+            [ atReturn (CT.SCUndef CT.CTUndef) ATEmpty <$ M.try (kReturn *> semi)
+            , atReturn (CT.SCUndef CT.CTUndef) <$> (M.try kReturn *> expr) <* semi
             ]
 
         ifStmt = do

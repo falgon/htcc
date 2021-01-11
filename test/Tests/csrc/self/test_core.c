@@ -41,9 +41,6 @@ int sub3_short(short a, short b, short c) { return a - b - c; }
 int sub3_long(long a, long b, long c) { return a - b - c; }
 /*int ptr2ar(int (*p)[3]) { int i = 0; for (; i < sizeof *p / sizeof **p; i = i + 1) p[0][i] = i + 1; return 0; }
 static int static_fun() { return 42; }*/
-/*void swap(int* a, int* b) { *a ^= *b; *b ^= *a; *a ^= *b; }
-void void_fn(int* a) { *a = 42; return; *a = 53; }
-int param_decay(int ar[]) { return ar[0]; }*/
 
 int main()
 {
@@ -306,10 +303,7 @@ int main()
     assert(42, 0B101010, "0B101010");*/
     assert(49389, 0xc0ed, "0xc0ed");
     assert(49389, 0xC0eD, "0xC0eD");
-    /*assert(42, ({ int a = 53; int b = 42; swap(&a, &b); a; }), "({ int a = 53; int b = 42; swap(&a, &b); a; })");
-    assert(42, ({ int a = 0; void_fn(&a); a; }), "({ int a = 53; int b = 42; swap(&a, &b); a; })");
-    assert(42, ({ int ar[2]; ar[0] = 42; param_decay(ar); }), "({ int ar[2]; ar[0] = 0; param_decay(ar); })");
-    assert(4, ({ struct X *a; struct X { int x; }; sizeof(struct X); }), " ({ struct X *a; struct X { int x; }; sizeof(struct X); })");
+    /*assert(4, ({ struct X *a; struct X { int x; }; sizeof(struct X); }), " ({ struct X *a; struct X { int x; }; sizeof(struct X); })");
     assert(42, ({ struct X { struct X* next; int x; } a; struct X b; b.x = 42; a.next = &b; a.next->x; }), "({ struct X { struct X* next; int x; } a; struct X b; b.x = 42; a.next = &b; a.next->x; })");*/
     assert(3, ({ int i = 0; for (; i < 10; ++i) { if (i == 3) break; } i; }), "({ int i = 0; for (; i < 10; ++i) { if (i == 3) break; } i; })");
     assert(3, ({ int i = 0; for (; i < 10; ++i) { for (;;) break; if (i == 3) break; } i; }), "({ int i = 0; for (; i < 10; ++i) { for (;;) break; if (i == 3) break; } i; })");
