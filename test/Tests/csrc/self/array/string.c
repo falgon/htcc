@@ -51,6 +51,7 @@ int main()
     assert('e', ({ char str[][4] = { "abc", "def" }; str[1][1]; }), "({ char str[][4] = { \"abc\", \"def\" }; str[1][1]; })");
     assert('f', ({ char str[][4] = { "abc", "def" }; str[1][2]; }), "({ char str[][4] = { \"abc\", \"def\" }; str[1][2]; })");
     assert(0, ({ char str[][4] = { "abc", "def" }; str[1][3]; }), "({ char str[][4] = { \"abc\", \"def\" }; str[1][3]; })");
+    assert(92, "\\"[0], "\"\\\\\"[0]");
 
     printf("All tests are passed!\n");
 

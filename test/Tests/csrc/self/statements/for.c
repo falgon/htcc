@@ -38,6 +38,9 @@ int main()
     assert(2, ({ int ar[3]; int i = 0; for (; i < 3; i = i + 1) ar[i] = i; ar[2]; }), "({ int ar[3]; int i = 0; for (; i < 3; i = i + 1) ar[i] = i; ar[2]; })");
     assert(42, ({ int i = 42; for (int i = 0; i < 10; ++i); i; }), "({ int i = 42; for (int i = 0; i < 10; ++i); i; })");
     assert(42, ({ int i = 42; for (auto int i = ({ int i = 0; for (; i < 10; ++i); i; }); i > 0; --i); i; }), "for (int i = ({ int i = 0; for (; i < 10; ++i); i; }); i > 0; --i); i; })");
+    assert(3, ({ int i = 0; for (; i < 10; ++i) { if (i == 3) break; } i; }), "({ int i = 0; for (; i < 10; ++i) { if (i == 3) break; } i; })");
+    assert(3, ({ int i = 0; for (; i < 10; ++i) { for (;;) break; if (i == 3) break; } i; }), "({ int i = 0; for (; i < 10; ++i) { for (;;) break; if (i == 3) break; } i; })");
+    assert(42, ({ int i = 42; for (int i = 0; i < 10; ++i); i; }), "({ int i = 42; for (int i = 0; i < 10; ++i); i; })");
     
     printf("All tests are passed!\n");
 

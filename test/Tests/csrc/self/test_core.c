@@ -30,10 +30,7 @@ int assert(long expected, long actual, char* code)
     }
 }
 
-int f() { return 42; }
 int add(int x, int y) { return x + y; }
-int rec(int a) { if (a == 0) return 42; return rec(a - 1); } 
-int fib(int n) { if (n == 0) return 1; else if (n == 1) return 1; else if (n >= 2) return fib(n - 1) + fib(n - 2); else return 0; }
 int gg(int* p) { *p = 42; return 0; } 
 int sum(int* p, int n) { int s = 0; for (int i = 0; i < n; i = i + 1) s = s + *(p + i); return s; }
 int sub3(int a, int b, int c) { return a - b - c; }
@@ -45,85 +42,9 @@ static int static_fun() { return 42; }*/
 int main()
 {
     test_num = 1;
-    assert(42, ({ int a = 42; a; }), "({ int a = 42; a; })");
-    assert(42, ( { int a = 42; a; } ), "( { int a = 42; a; } )");
-    assert(44, ({ int a = 42; int b = 2; a + b; }), "({ int a = 42; int b = 2; a + b; })");
-    assert(20, ({ int a = 42; int b = 20; int c = 32; (a - c) * b / 10; }), "({ int a = 42; int b = 20; int c = 32; (a - c) * b / 10; })");
-    assert(22, ({ int hoge = 42; int foo = 20; hoge - foo; }), "({ int hoge = 42; int foo = 20; hoge - foo; })");
-    assert(14, ({ int a = 3; int b = 5 * 6 - 8; a + b / 2; }), "({ int a = 3; int b = 5 * 6 - 8; a + b / 2; })");
-    assert(42, ({ int a = 0; if (1) { a = 42; } else { a = 53; } a; }), "({ int a = 0; if (1) { a = 42; } else { a = 53; } a; })");
-    assert(53, ({ int a = 0; if (20*3-60) a = 42; else a = 53; a; }), "({ int a = 0; if (20*3-60) a = 42; else a = 53; a; })");
-    assert(2, ({ int a = 1; int b = 2; if (a) a = b; else a = 42; a; }), "({ int a = 1; int b = 2; if (a) a = b; else a = 42; a; })");
-    assert(53, ({ int a = 0; if (0) a = 42; else a = 53; a; }), "({ int a = 0; if (0) a = 42; else a = 53; a; })");
-    assert(4, ({ int a = 0; int b = 2; if (a) a = b; else a = b * 2; a; }), "({ int a = 0; int b = 2; if (a) a = b; else a = b * 2; a; })");
-    assert(1, ({ int a = 1; int b = 0; if (b) a = 42; if (0) a = 42; a; }), "({ int a = 1; int b = 0; if (b) a = 42; if (0) a = 42; a; })");
-    assert(2, ({ int a = 1; int b = 2; if (a) if (b) a = b; else a = 53; else a = 24; a; }), "({ int a = 1; int b = 2; if (a) if (b) a = b; else a = 53; else a = 24; a; })");
-    assert(2, ({ int a = 0; if (1) if (1) if (1) if (1) if (1) if (0) a = 1; else a = 2; else a = 3; else a = 4; else a = 5; else a = 6; else a = 7; a; }), "({ int a = 0; if (1) if (1) if (1) if (1) if (1) if (0) a = 1; else a = 2; else a = 3; else a = 4; else a = 5; else a = 6; else a = 7; a; })");
-    assert(42, ({ int a = 0; if(1) if(1) a = 42; else a = 53; a; }), "({ int a = 0; if(1) if(1) a = 42; else a = 53; a; })");
-    assert(0, ({ if(0); 0; }), "({ if(0); 0; })");
-    assert(10, ({ int a = 1; while (a < 10) a = a + 1; a; }), "({{ int a = 1; while (a < 10) a = a + 1; a; })");
-    assert(31, ({ int a = 1; while (a < 10) a = a + 1; int b = 1; while (b < 20) b = b + 2; a + b; }), "({ int a = 1; while (a < 10) a = a + 1; int b = 1; while (b < 20) b = b + 2; a + b; })");
-    assert(0, ({ int a = 0; while (a); 0; }), "({ int a = 0; while (a); 0; })");
-    assert(110, ({ int a = 0; int i = 0; for (i = 1; i <= 10; i = i + 1) a = a + i * 2; a; }), "({ int a = 0; int i = 0; for (i = 1; i <= 10; i = i + 1) a = a + i * 2; a; })");
-    assert(12, ({ int i = 0; for (; i <= 10;) i = i + 2; i; }), "({ int i = 0; for (; i <= 10;) i = i + 2; i; })");
-    assert(0, ({ int a = 0; int i = 0; for (i = 0; i < 10; i = i + 1) if (a) a = 0; else a = 1; a; }), "({ int a = 0; int i = 0; for (i = 0; i < 10; i = i + 1) if (a) a = 0; else a = 1; a; })");
-    assert(0, ({ int a = 0; int i = 0; for (i = 0; i < 10; i = i + 1) { a = a + i; a = a - i; } a; }), "({ int a = 0; int i = 0; for (i = 0; i < 10; i = i + 1) { a = a + i; a = a - i; } a; })");
-    assert(1, ({ int a = 1; int b = 1; a & b; }), "({ int a = 1; int b = 1; return a & b; })");
-    assert(1, ({ int a = 42; int b = 53; a = a ^ b; b = b ^ a; a = a ^ b; if (a == 53) if (b == 42) a = 1; else a = 0; a; }), "({ int a = 42; int b = 53; a = a ^ b; b = b ^ a; a = a ^ b; if (a == 53) if (b == 42) a = 1; else a = 0; a; })");
-    assert(1, 1 | 0, "1 | 0");
     assert(3, ({ 1; {2;} 3; }), "({ 1; {2;} 3; })");
-    assert(42, f(), "f()");
-    assert(45, f() + 3,  "f() + 3");
-    assert(3, add(1, 2), "add(1, 2)");
-    assert(44, ({ int b = rec(2); b + 2; }), "({ int b = rec(2); b + 2; })");
-    assert(8, fib(5), "fib(5)"); // fibonacci number
-    assert(42, ({ int a = 42; int* b = &a; *b; }), "({ int a = 42; int* b = &a; *b; })");
-    assert(42, ({ int a = 42; *&a; }), "({ int a = 42; *&a; })");
-    assert(42, ({ int a = 42; int* b = &a; int** c = &b; **c; }), "({ int a = 42; int* b = &a; int** c = &b; **c; })");
-    assert(84, ({ int a = 42; int* b = &a; *b = a * 2; a; }), "({ int a = 42; int* b = &a; *b = a * 2; a; })");
-    assert(42, ({ int a = 42; int b = 5; *(&b+1); }), "({ int a = 42; int b = 5; *(&b+1); })");
-    assert(53, ({ int a = 42; int b = 5; *(&a-1) = 53; b; }), "({ int a = 42; int b = 5; *(&a-1) = 53; b; })");
-    assert(53, ({ int a = 42; int b = 5; *(&b+1) = 53; a; }), "({ int a = 42; int b = 5; *(&b+1) = 53; a; })");
     assert(6, ({ int s = 0; int i = 1; for (; i < 4; i = i + 1) s = s + i; s; }), "({ int s = 0; int i = 1; for (; i < 4; i = i + 1) s = s + i; return s; })");
     assert(3, ({ int a = 0; for(; a < 3; a = a + 1); a; }), "({ int a = 0; for(; a < 3; a = a + 1); a; })");
-    assert(3, ({ int ar[2]; int* p = ar; *p = 3; *ar; }), "({ int ar[2]; int* p = ar; *p = 3; *ar; })");
-    assert(3, ({ int ar[2]; int* p = ar; *(p + 1) = 3; *(ar + 1); }), "({ int ar[2]; int* p = ar; *(p + 1) = 3; *(ar + 1); })");
-    assert(5, ({ int ar[2]; int* p = ar; *p = 2; *(p + 1) = 3; *ar + *(ar + 1); }), "({ int ar[2]; int* p = ar; *p = 2; *(p + 1) = 3; *ar + *(ar + 1); })");
-    assert(1, ({ int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; *ar; }), "({ int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; *ar; })");
-    assert(2, ({ int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; *(ar + 1); }), "({ int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; *(ar + 1); })");
-    assert(3, ({ int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; *(ar + 2); }), "({ int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; *(ar + 2); })");
-    assert(42, ({ int a = 0; gg(&a); a; }), "({ int a = 0; gg(&a); a; })");
-    assert(45, ({ int ar[10]; int i = 0; for (; i < 10; i = i + 1) { *(ar + i) = i; } int s = 0; for (i = 0; i < 10; i = i + 1) { s = s + *(ar + i); } s; }), "({ int ar[10]; int i = 0; for (; i < 10; i = i + 1) { *(ar + i) = i; } int s = 0; for (i = 0; i < 10; i = i + 1) { s = s + *(ar + i); } s; })");
-    assert(45, ({ int ar[10]; int i = 0; for (; i < 10; i = i + 1) *(ar + i) = i; sum(ar, 10); }), "({ int ar[10]; int i = 0; for (; i < 10; i = i + 1) *(ar + i) = i; sum(ar, 10); })");
-    assert(9, ({ int ar[2][3]; int s = 0; int i = 0; for (; i < 2; i = i + 1) { int j = 0; for (; j < 3; j = j + 1) { *(*(ar + i) + j) = i + j; s = s + *(*(ar + i) + j); } } s; }), "({ int ar[2][3]; int s = 0; int i = 0; for (; i < 2; i = i + 1) { int j = 0; for (; j < 3; j = j + 1) { *(*(ar + i) + j) = i + j; s = s + *(*(ar + i) + j); } } s; })");
-    assert(42, ({ int ar[2][3]; int* p = ar; *p = 42; **ar; }), "({ int ar[2][3]; int* p = ar; *p = 42; **ar; }");
-    assert(42, ({ int ar[2][3]; int* p = ar; *(p + 1) = 42; *(*ar + 1); }), "({ int ar[2][3]; int* p = ar; *(p + 1) = 42; *(*ar + 1); })");
-    assert(42, ({ int ar[2][3]; int* p = ar; *(p + 2) = 42; *(*ar + 2); }), "({ int ar[2][3]; int* p = ar; *(p + 2) = 42; *(*ar + 2); })");
-    assert(42, ({ int ar[2][3]; int* p = ar; *(p + 3) = 42; **(ar + 1); }), "({ int ar[2][3]; int* p = ar; *(p + 3) = 42; **(ar + 1); })");
-    assert(42, ({ int ar[2][3]; int* p = ar; *(p + 4) = 42; *(*(ar + 1) + 1); }), "({ int ar[2][3]; int* p = ar; *(p + 4) = 42; *(*(ar + 1) + 1); })");
-    assert(42, ({ int ar[2][3]; int* p = ar; *(p + 5) = 42; *(*(ar + 1) + 2); }), "({ int ar[2][3]; int* p = ar; *(p + 5) = 42; *(*(ar + 1) + 2); })");
-    assert(42, ({ int ar[2][3]; int* p = ar; *(p + 6) = 42; **(ar + 2); }), "({ int ar[2][3]; int* p = ar; *(p + 6) = 42; **(ar + 2); })");
-    assert(0, ({ int ar[3]; int i = 0; for (; i < 3; i = i + 1) ar[i] = i; ar[0]; }), "({ int ar[3]; int i = 0; for (; i < 3; i = i + 1) ar[i] = i; ar[0]; })");
-    assert(1, ({ int ar[3]; int i = 0; for (; i < 3; i = i + 1) ar[i] = i; ar[1]; }), "({ int ar[3]; int i = 0; for (; i < 3; i = i + 1) ar[i] = i; ar[1]; })");
-    assert(2, ({ int ar[3]; int i = 0; for (; i < 3; i = i + 1) ar[i] = i; ar[2]; }), "({ int ar[3]; int i = 0; for (; i < 3; i = i + 1) ar[i] = i; ar[2]; })");
-    assert(42, ({ int ar[2][3]; int* p = ar; p[0] = 42; ar[0][0]; }), "({ int ar[2][3]; int* p = ar; p[0] = 42; ar[0][0]; })");
-    assert(42, ({ int ar[2][3]; int* p = ar; p[1] = 42; ar[0][1]; }), "({ int ar[2][3]; int* p = ar; p[1] = 42; ar[0][1]; })");
-    assert(42, ({ int ar[2][3]; int* p = ar; p[2] = 42; ar[0][2]; }), "({ int ar[2][3]; int* p = ar; p[2] = 42; ar[0][2]; })");
-    assert(42, ({ int ar[2][3]; int* p = ar; p[3] = 42; ar[1][0]; }), "({ int ar[2][3]; int* p = ar; p[3] = 42; ar[1][0]; })");
-    assert(42, ({ int ar[2][3]; int* p = ar; p[4] = 42; ar[1][1]; }), "({ int ar[2][3]; int* p = ar; p[4] = 42; ar[1][1]; })");
-    assert(42, ({ int ar[2][3]; int* p = ar; p[5] = 42; ar[1][2]; }), "({ int ar[2][3]; int* p = ar; p[5] = 42; ar[1][2]; })");
-    assert(42, ({ int ar[2][3]; int* p = ar; p[6] = 42; ar[2][0]; }), "({ int ar[2][3]; int* p = ar; p[6] = 42; ar[2][0]; })");
-    assert(4, ({ int a; sizeof(a); }), "({ int a; sizeof(a); })");
-    assert(4, ({ int a; sizeof a; }), "({ int a; sizeof a; })");
-    assert(8, ({ int* p; sizeof p; }), "({ int* p; sizeof p; })");
-    assert(3 * 4, ({ int ar[3]; sizeof ar; }), "({ int ar[3]; sizeof ar; })");
-    assert(3 * 5 * 4, ({int ar[3][5]; sizeof ar; }), "({int ar[3][5]; return sizeof ar; })");
-    assert(5 * 4, ({ int ar[3][5]; sizeof *ar; }), "({ int ar[3][5]; sizeof *ar; })");
-    assert(4, ({ int ar[3][5]; sizeof **ar; }), "({ int ar[3][5]; sizeof **ar; })");
-    assert(4 + 1, ({ int ar[3][5]; sizeof(**ar) + 1; }), "({ int ar[3][5]; sizeof(**ar) + 1; })");
-    assert(4 + 1, ({ int ar[3][5]; sizeof **ar + 1; }), "({ int ar[3][5]; return sizeof **ar + 1; })");
-    assert(8, ({ int ar[3][5]; sizeof(**ar + 1); }), "({ int ar[3][5]; sizeof(**ar + 1); })");
-    assert(42, ({ int ar[2]; 2[ar] = 42; ar[2]; }), "({ int ar[2]; 2[ar] = 42; ar[2]; })");
     assert(0, g, "g"); 
     assert(42, ({ g = 42; g; }), "({ g = 42; g; })");
     assert(1, ({ int i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; gr[0]; }), "({ int i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; gr[0]; })");
@@ -133,12 +54,9 @@ int main()
     assert(1, ({ char c1 = 1; char c2 = 2; c1; }), "({ char c1 = 1; char c2 = 2; c1; })");
     assert(2, ({ char c1 = 1; char c2 = 2; c2; }), "({ char c1 = 1; char c2 = 2; c2; })");
     assert(1, ({ char x; sizeof x; }), "({ char x; sizeof x; })");
-    assert(10, ({ char ar[10]; sizeof ar; }), "({ char ar[10]; return sizeof ar; })");
     assert(1, sub3(7, 3, 3), "sub3(7, 3, 3)");
-    assert(92, "\\"[0], "a");
     assert(42, ({ int a = 42; { int a = 32; } a; }), "({ int a = 42; { int a = 32; } a; })");
     assert(32, ({ int a = 42; { a = 32; } a; }), "({ int a = 42; { a = 32; } a; })");
-    assert(2, ({ int ar[5]; int* p = ar + 2; p - ar; }), "({ int ar[5]; int* p = ar + 2; p - ar; })");
     /*assert(1, ({ struct { int a; int b; } x; x.a = 1; x.b = 2; x.a; }), "({ struct { int a; int b; } x; x.a = 1; x.b = 2; x.a; })");
     assert(2, ({ struct { int a; int b; } x; x.a = 1; x.b = 2; x.b; }), "({ struct { int a; int b; } x; x.a = 1; x.b = 2; x.b; })");
     assert(1, ({ struct { char a; int b; char c; } x; x.a = 1; x.b = 2; x.c = 3; x.a; }), "({ struct { char a; int b; char c; } x; x.a = 1; x.b = 2; x.c = 3; x.a; })");
@@ -241,9 +159,7 @@ int main()
     assert(0, (long)&*(int *)0, "(long)&*(int *)0");
     assert(42, ({ int a = 42 ; long b = (long)&a; *(int*)b; }), "int a = 42; long b = (long)&a; *(int*)b");
     assert(2147483648, ({ int a = 2147483647; long b = a + 1; b; }), " ({ int a = 2147483647; long b = a + 1; b; })");*/
-    assert(97, 'a', "'a'");
-    assert(10, '\n', "\'\\n\'");/*
-    assert(0, ({ enum { zero, one, two }; zero; }), "enum { zero, one, two }; zero;");
+    /*assert(0, ({ enum { zero, one, two }; zero; }), "enum { zero, one, two }; zero;");
     assert(1, ({ enum { zero, one, two }; one; }), "enum { zero, one, two }; one;");
     assert(2, ({ enum { zero, one, two }; two; }), "enum { zero, one, two }; two;");
     assert(5, ({ enum { five = 5, six, seven }; five; }), "enum { five = 5, six, seven }; five;");
@@ -288,84 +204,13 @@ int main()
     assert(42, ({ register struct X { int x; }* p; struct X x; p = &x; p->x = 42; x.x; }), "({ register struct X { int x; }* p; struct X x; p = &x; p->x = 42; x.x; })");
     assert(42, ({ auto struct { int x; } x; x.x = 42; x.x; }), "({ auto struct { int x; } x; x.x = 42; x.x; })");
     assert(42, ({ auto struct X { int x; }* p; struct X x; p = &x; p->x = 42; x.x; }), "({ register struct X { int x; }* p; struct X x; p = &x; p->x = 42; x.x; })");*/
-    assert(42, ({ int i = 42; for (int i = 0; i < 10; ++i); i; }), "({ int i = 42; for (int i = 0; i < 10; ++i); i; })");
     /*assert(42, ({ int i = 42; for (auto int i = ({ int i = 0; for (; i < 10; ++i); i; }); i > 0; --i); i; }), "for (int i = ({ int i = 0; for (; i < 10; ++i); i; }); i > 0; --i); i; })");
     assert(42, ({ for (struct { int x; } x; 0;); 42; }), "({ for (struct { int x; } x; 0;); 42; })");*/
-    assert(511, 0777, "0777");
-    assert(0, 0x0, "0x0");
-    assert(10, 0xa, "0xa");
-    assert(10, 0Xa, "0Xa");
-    assert(48879, 0xbeef, "0xbeef");
-    assert(48879, 0xBEEF, "0xBEEF");
-    /*assert(0, 0b0, "0b0");
-    assert(1, 0b1, "0b1");
-    assert(42, 0b101010, "0b101010");
-    assert(42, 0B101010, "0B101010");*/
-    assert(49389, 0xc0ed, "0xc0ed");
-    assert(49389, 0xC0eD, "0xC0eD");
+
     /*assert(4, ({ struct X *a; struct X { int x; }; sizeof(struct X); }), " ({ struct X *a; struct X { int x; }; sizeof(struct X); })");
     assert(42, ({ struct X { struct X* next; int x; } a; struct X b; b.x = 42; a.next = &b; a.next->x; }), "({ struct X { struct X* next; int x; } a; struct X b; b.x = 42; a.next = &b; a.next->x; })");*/
-    assert(3, ({ int i = 0; for (; i < 10; ++i) { if (i == 3) break; } i; }), "({ int i = 0; for (; i < 10; ++i) { if (i == 3) break; } i; })");
-    assert(3, ({ int i = 0; for (; i < 10; ++i) { for (;;) break; if (i == 3) break; } i; }), "({ int i = 0; for (; i < 10; ++i) { for (;;) break; if (i == 3) break; } i; })");
-    assert(4, ({ int i = 0; while (1) { if (i++ == 3) break; } i; }), "({ int i = 0; while (1) { if (i++ == 3) break; } i; })");
-    assert(4, ({ int i = 0; while (1) { for (;;) break; if (i++ == 3) break; } i; }), "({ int i = 0; while (1) { for (;;) break; if (i++ == 3) break; } i; })");
-    assert(3, ({ int i = 0; goto a; a: ++i; b: ++i; c: ++i; i; }), "({ int i = 0; goto a; a: ++i; b: ++i; c: ++i; i; })");
-    assert(2, ({ int i = 0; goto e; d: ++i; e: ++i; f: ++i; i; }), "({ int i = 0; goto e; d: ++i; e: ++i; f: ++i; i; })");
-    assert(1, ({ int i = 0; goto i; g: ++i; h: ++i; i: ++i; i; }), "({ int i = 0; goto i; g: ++i; h: ++i; i: ++i; i; })");
-    assert(42, ({ int i = 0; switch (0) { case 0: i = 42; break; case 1: i = 43; break; case 2: i = 44; break; } i; }), "({ int i = 0; switch (0) { case 0: i = 42; break; case 1: i = 43; break; case 2: i = 44; break; } i; })");
-    assert(43, ({ int i = 0; switch (1) { case 0: i = 42; break; case 1: i = 43; break; case 2: i = 44; break; } i; }), "({ int i = 0; switch (1) { case 0: i = 42; break; case 1: i = 43; break; case 2: i = 44; break; } i; })");
-    assert(44, ({ int i = 0; switch (2) { case 0: i = 42; break; case 1: i = 43; break; case 2: i = 44; break; } i; }), "({ int i = 0; switch (2) { case 0: i = 42; break; case 1: i = 43; break; case 2: i = 44; break; } i; })");
-    assert(42, ({ int i = 42; switch (3) { case 0: i = 5; break; case 1: i = 6; break; case 2: i = 7; break; } i; }), "({ int i = 42; switch (3) { case 0: i = 5; break; case 1: i = 6; break; case 2: i = 7; break; } i; })");
-    assert(42, ({ int i = 0; switch (0) { case 0: i = 42; break; default: i = 43; } i; }), "({ int i = 0; switch (0) { case 0: i = 42; break; default: i = 43; } i; })");
-    assert(43, ({ int i = 0; switch (1) { case 0: i = 42; break; default: i = 43; } i; }), "({ int i = 0; switch (0) { case 0: i = 42; break; default: i = 43; } i; })");
-    assert(42, ({ int i = 0; switch (1) { case 0: 0; case 1: 0; case 2: 0; i = 42; } i; }), "({ int i = 0; switch (1) { case 0: 0; case 1: 0; case 2: 0; i = 42; } i; })");
-    assert(0, ({ int i = 0; switch (3) { case 0: 0; case 1: 0; case 2: 0; i = 42; } i; }), "({ int i = 0; switch (3) { case 0: 0; case 1: 0; case 2: 0; i = 42; } i; })");
-    assert(42, ({ int i = 40; switch (0) { case 0: ++i; case 1: ++i; } i; }), "({ int i = 40; switch (0) { case 0: ++i; case 1: ++i; } i; })");
-    assert(41, ({ int i = 40; switch (i) { case 20 * 2: ++i; } i; }), "({ int i = 40; switch (i) { case 20 * 2: ++i; } i; })");
     //assert(0, ({ int ar[]; 0; }), "({ int ar[]; 0; })");
-    assert(42, ({ int ar[1] = { 42 }; ar[0]; }), "({ int ar[1] = { 42 }; ar[0]; })");
-    assert(1, ({ int ar[3] = { 1, 2, 3 }; ar[0]; }), "({ int ar[3] = { 1, 2, 3 }; ar[0]; })");
-    assert(2, ({ int ar[3] = { 1, 2, 3 }; ar[1]; }), "({ int ar[3] = { 1, 2, 3 }; ar[1]; })");
-    assert(3, ({ int ar[3] = { 1, 2, 3 }; ar[2]; }), "({ int ar[3] = { 1, 2, 3 }; ar[2]; })");
-    assert(2, ({ int ar[2][3] = { { 1, 2, 3 }, { 4, 5, 6 }}; ar[0][1]; }), "({ int ar[2][3] = { { 1, 2, 3 }, { 4, 5, 6 }}; ar[0][1]; })");
-    assert(4, ({ int ar[2][3] = { { 1, 2, 3 }, { 4, 5, 6 }}; ar[1][0]; }), "({ int ar[2][3] = { { 1, 2, 3 }, { 4, 5, 6 }}; ar[1][0]; })");
-    assert(6, ({ int ar[2][3] = { { 1, 2, 3 }, { 4, 5, 6 }}; ar[1][2]; }), "({ int ar[2][3] = { { 1, 2, 3 }, { 4, 5, 6 }}; ar[1][2]; })");
-    assert(1, ({ int a = 0; int ar[2] = { a = 1 }; ar[0]; }), "({ int a = 0; int ar[2] = { a = 1 }; ar[0]; })");
-    assert(1, ({ int a = 0; int ar[2] = { a = 1 }; a; }), "({ int a = 0; int ar[2] = { a = 1 }; a; })");
-    assert(0, ({ int ar[3] = {}; ar[0]; }), "({ int ar[3] = {}; ar[0]; })");
-    assert(0, ({ int ar[3] = {}; ar[1]; }), "({ int ar[3] = {}; ar[1]; })");
-    assert(0, ({ int ar[3] = {}; ar[2]; }), "({ int ar[3] = {}; ar[2]; })");
-    assert(0, ({ int ar[3][2] = {}; ar[0][0]; }), "({ int ar[3][2] = {}; ar[0][0]; })");
-    assert(0, ({ int ar[3][2] = {}; ar[0][1]; }), "({ int ar[3][2] = {}; ar[0][1]; })");
-    assert(0, ({ int ar[3][2] = {}; ar[1][0]; }), "({ int ar[3][2] = {}; ar[1][0]; })");
-    assert(0, ({ int ar[3][2] = {}; ar[1][1]; }), "({ int ar[3][2] = {}; ar[1][1]; })");
-    assert(0, ({ int ar[3][2] = {}; ar[2][0]; }), "({ int ar[3][2] = {}; ar[2][0]; })");
-    assert(0, ({ int ar[3][2] = {}; ar[2][1]; }), "({ int ar[3][2] = {}; ar[2][1]; })");
-    assert(2, ({ int ar[2][3] = { { 42, 2 } }; ar[0][1]; }), "({ int ar[2][3] = { { 42, 2 } }; ar[0][1]; })");
-    assert(0, ({ int ar[2][3] = { { 42, 2 } }; ar[1][0]; }), "({ int ar[2][3] = { { 42, 2 } }; ar[1][0]; })");
-    assert(0, ({ int ar[2][3] = { { 42, 2 } }; ar[1][2]; }), "({ int ar[2][3] = { { 42, 2 } }; ar[1][2]; })");
-    assert(0, ({ int ar[3][2] = { {}, {}, {} }; ar[0][0]; }), "({ int ar[3][2] = { {}, {}, {} }; ar[0][0]; })");
-    assert(0, ({ int ar[3][2] = { {}, {}, {} }; ar[0][1]; }), "({ int ar[3][2] = { {}, {}, {} }; ar[0][1]; })");
-    assert(0, ({ int ar[3][2] = { {}, {}, {} }; ar[1][0]; }), "({ int ar[3][2] = { {}, {}, {} }; ar[1][0]; })");
-    assert(0, ({ int ar[3][2] = { {}, {}, {} }; ar[1][1]; }), "({ int ar[3][2] = { {}, {}, {} }; ar[1][1]; })");
-    assert(0, ({ int ar[3][2] = { {}, {}, {} }; ar[2][0]; }), "({ int ar[3][2] = { {}, {}, {} }; ar[2][0]; })");
-    assert(0, ({ int ar[3][2] = { {}, {}, {} }; ar[2][1]; }), "({ int ar[3][2] = { {}, {}, {} }; ar[2][1]; })");
-    assert(0, ({ int ar[3][2] = { {}, {}, { 1, 2 } }; ar[0][0]; }), "({ int ar[3][2] = { {}, {}, { 1, 2 } }; ar[0][0]; })");
-    assert(0, ({ int ar[3][2] = { {}, {}, { 1, 2 } }; ar[0][1]; }), "({ int ar[3][2] = { {}, {}, { 1, 2 } }; ar[0][1]; })");
-    assert(0, ({ int ar[3][2] = { {}, {}, { 1, 2 } }; ar[1][0]; }), "({ int ar[3][2] = { {}, {}, { 1, 2 } }; ar[1][0]; })");
-    assert(0, ({ int ar[3][2] = { {}, {}, { 1, 2 } }; ar[1][1]; }), "({ int ar[3][2] = { {}, {}, { 1, 2 } }; ar[1][1]; })");
-    assert(1, ({ int ar[3][2] = { {}, {}, { 1, 2 } }; ar[2][0]; }), "({ int ar[3][2] = { {}, {}, { 1, 2 } }; ar[2][0]; })");
-    assert(2, ({ int ar[3][2] = { {}, {}, { 1, 2 } }; ar[2][1]; }), "({ int ar[3][2] = { {}, {}, { 1, 2 } }; ar[2][1]; })");
-    assert(1, ({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[0][0]; }), "({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[0][0]; })");
-    assert(2, ({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[0][1]; }), "({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[0][1]; })");
-    assert(3, ({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[0][2]; }), "({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[0][2]; })");
-    assert(0, ({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[1][0]; }), "({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[1][0]; })");
-    assert(0, ({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[1][1]; }), "({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[1][1]; })");
-    assert(0, ({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[1][2]; }), "({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[1][2]; })");
-    assert(0, ({ int ar[1][1][1] = {{{}}}; ar[0][0][0]; }), "({ int ar[1][1][1] = {{{}}}; ar[0][0][0]; })");/*
-    assert(3, ({ int ar[] = { 0, 1, 2, 3 }; ar[3]; }), "({ int ar[] = { 0, 1, 2, 3 }; ar[3]; })");
-    assert(16, ({ int ar[] = { 0, 1, 2, 3 }; sizeof ar; }), "({ int ar[] = { 0, 1, 2, 3 }; sizeof ar; })");
-    assert(1, ({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.a; }), "({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.a; })");
+    /*assert(1, ({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.a; }), "({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.a; })");
     assert(2, ({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.b; }), "({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.b; })");
     assert(3, ({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.c; }), "({ struct { int a; int b; int c; } x = { 1, 2, 3 }; x.c; })");
     assert(1, ({ struct { int a; int b; int c; } x = { 1 }; x.a; }), "({ struct { int a; int b; int c; } x = { 1 }; x.a; })");

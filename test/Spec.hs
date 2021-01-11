@@ -5,7 +5,7 @@ import           Codec.Binary.UTF8.String  (decodeString)
 import           Control.Monad             (foldM)
 import           Control.Monad.Extra       (partitionM)
 import           Control.Monad.Trans       (lift)
-import           Control.Monad.Trans.State (StateT, evalStateT, get, modify,
+import           Control.Monad.Trans.State (StateT, evalStateT, gets, modify,
                                             put)
 import qualified Data.ByteString.Char8     as B
 import           Data.List                 (isSuffixOf)
@@ -19,6 +19,7 @@ import qualified Options.Applicative       as OA
 import           System.Directory          (createDirectoryIfMissing)
 import           System.Directory          (doesDirectoryExist, listDirectory)
 import           System.FilePath           ((</>))
+import           System.IO                 (hFlush, stdout)
 import           System.Process            (readCreateProcess, shell)
 import qualified Tests.ComponentsTests     as ComponentsTests
 import qualified Tests.SubProcTests        as SubProcTests
@@ -85,21 +86,17 @@ genTestAsm' = lift (createDirectoryIfMissing False workDir *> createDirectoryIfM
         go s fname = do
             names <- lift $ map (fname </>) <$> listDirectory fname
             (dirPaths, filePaths) <- lift $ partitionM doesDirectoryExist names
-            foldM (\fs f -> if ".c" `isSuffixOf` f then (:fs) <$> mkBin f else pure fs) s filePaths
+            foldM (\fs f -> if ".c" `isSuffixOf` f then (:fs) <$> mkBin (T.pack f) else pure fs) s filePaths
                 >>= flip (foldM go) dirPaths
 
         mkBin fname = do
-            n <- get
-            lift $ execErrFin $
-                mconcat
-                    [ "stack exec htcc -- "
-                    , T.pack fname
-                    , " > "
-                    , T.pack (asmDir </> "spec")
-                    , tshow n
-                    , ".s"
-                    ]
-            mconcat [T.pack (asmDir </> "spec"), tshow n, ".s"] <$ modify succ
+            outAsmName <- gets (\n -> T.pack (asmDir </> "spec") <> tshow n <> ".s")
+            lift $
+                T.putStr ("[compiling] " <> fname)
+                    *> hFlush stdout
+                    *> execErrFin ("stack exec htcc -- " <> fname <> " > " <> outAsmName)
+                    *> T.putStrLn (" -> " <> outAsmName)
+            outAsmName <$ modify succ
 
 genTestAsm :: IO [T.Text]
 genTestAsm = evalStateT genTestAsm' 0
@@ -108,9 +105,12 @@ genTestBins' :: StateT Int IO [T.Text]
 genTestBins' = (genTestAsm' <* put 0) >>= mapM f
     where
         f fname = do
-            n <- get
-            let binName = mconcat [T.pack (workDir </> "spec"), tshow n, ".out"]
-            lift $ execErrFin ("gcc -xassembler -no-pie -o " <> binName <> " " <> fname)
+            binName <- gets (\n -> T.pack (workDir </> "spec") <> tshow n <> ".out")
+            lift $
+                T.putStr ("[assembling] " <> fname)
+                    *> hFlush stdout
+                    *> execErrFin ("gcc -xassembler -no-pie -o " <> binName <> " " <> fname)
+                    *> T.putStrLn (" -> " <> binName)
             binName <$ modify succ
 
 genTestBins :: IO [T.Text]

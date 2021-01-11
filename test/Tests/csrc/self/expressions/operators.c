@@ -99,6 +99,9 @@ int main()
     assert(42, ({ 42 ?: 0; }), "({ 42 ?: 0; })");
     assert(42, ({ int a = 42; a++ ?: 0; }),  "({ int a = 42; a++ ?: 0; })");
     assert(42, ({ sub3(2, 1, 1) ?: 42; }), "({ sub3(2, 1, 1) ?: 42; })");
+    assert(4, ({ int a; sizeof(a); }), "({ int a; sizeof(a); })");
+    assert(4, ({ int a; sizeof a; }), "({ int a; sizeof a; })");
+    assert(8, ({ int* p; sizeof p; }), "({ int* p; sizeof p; })");
     
     printf("All tests are passed!\n");
 
