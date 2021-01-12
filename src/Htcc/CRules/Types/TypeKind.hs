@@ -391,11 +391,11 @@ instance TypeKindBase TypeKind where
     isArray = lor [isCTArray, isIncompleteArray]
 
     {-# INLINE isIntegral #-}
-    isIntegral CTInt = True
+    isIntegral CTInt        = True
     isIntegral (CTSigned x) = isIntegral x
-    isIntegral (CTLong x) = isIntegral x
-    isIntegral (CTShort x) = isIntegral x
-    isIntegral _ = False
+    isIntegral (CTLong x)   = isIntegral x
+    isIntegral (CTShort x)  = isIntegral x
+    isIntegral _            = False
 
     {-# INLINE isCTStruct #-}
     isCTStruct (CTStruct _) = True

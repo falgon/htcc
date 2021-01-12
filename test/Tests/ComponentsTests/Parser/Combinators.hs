@@ -8,7 +8,6 @@ import qualified Data.Text                    as T
 import           Data.Void                    (Void)
 import qualified Htcc.CRules                  as CR
 import           Htcc.Parser.Combinators.Core
-import           Htcc.Utils                   (tshow)
 import           Test.HUnit                   (Test (..), (~:), (~?=))
 import qualified Text.Megaparsec              as M
 

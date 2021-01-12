@@ -9,23 +9,33 @@ Portability : POSIX
 
 The modules of intrinsic (x86_64) assembly
 -}
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns, OverloadedStrings, ScopedTypeVariables #-}
 module Htcc.Asm.Generate.Core (
     dataSection,
     textSection,
 ) where
 
-import           Control.Monad                             (forM_, unless, when, zipWithM_)
+import           Control.Monad                             (forM_, unless, when,
+                                                            zipWithM_)
 import           Control.Monad.Finally                     (MonadFinally (..))
-import           Prelude                                   hiding (truncate)
 import           Data.Int                                  (Int32)
 import           Data.IORef                                (readIORef)
 import           Data.List                                 (find)
 import qualified Data.Map                                  as M
 import           Data.Maybe                                (fromJust, isJust)
+import qualified Data.Set                                  as S
 import qualified Data.Text                                 as T
 import qualified Data.Text.IO                              as T
+import           Prelude                                   hiding (truncate)
 
+import           Data.List                                 (foldl')
+import           Data.Tuple.Extra                          (dupe, first, second)
+import           Htcc.Asm.Intrinsic.Operand
+import           Htcc.Asm.Intrinsic.Register
+import qualified Htcc.Asm.Intrinsic.Structure              as SI
+import qualified Htcc.Asm.Intrinsic.Structure.Section.Data as ID
+import qualified Htcc.Asm.Intrinsic.Structure.Section.Text as IT
+import qualified Htcc.CRules.Types                         as CR
 import           Htcc.Parser                               (ATKind (..),
                                                             ATree (..),
                                                             fromATKindFor,
@@ -33,16 +43,27 @@ import           Htcc.Parser                               (ATKind (..),
                                                             isATForIncr,
                                                             isATForInit,
                                                             isATForStmt,
-                                                            isComplexAssign,
-                                                            stackSize)
+                                                            isComplexAssign)
 import           Htcc.Parser.ConstructionData.Scope.Var    as PV
-import           Htcc.Asm.Intrinsic.Operand
-import           Htcc.Asm.Intrinsic.Register
-import qualified Htcc.Asm.Intrinsic.Structure              as SI
-import qualified Htcc.Asm.Intrinsic.Structure.Section.Data as ID
-import qualified Htcc.Asm.Intrinsic.Structure.Section.Text as IT
-import           Htcc.Utils                                (err, maybe', splitAtLen, tshow)
-import qualified Htcc.CRules.Types                         as CR
+import           Htcc.Utils                                (err, maybe',
+                                                            splitAtLen,
+                                                            toNatural, tshow)
+import           Numeric.Natural
+
+stackSize :: (Show i, Integral i) => ATree i -> Natural
+stackSize (ATNode (ATDefFunc _ args) _ body _) = let ms = f body $ maybe S.empty (foldr (\(ATNode (ATLVar t x) _ _ _) acc -> S.insert (t, x) acc) S.empty) args in
+    if S.size ms == 1 then toNatural $ flip CR.alignas 8 $ toInteger $ CR.sizeof $ fst $ head (S.toList ms) else toNatural $ flip CR.alignas 8 $ uncurry (+) $
+        first (toInteger . CR.sizeof . fst) $ second (fromIntegral . snd) $ dupe $ foldl' (\acc x -> if snd acc < snd x then x else acc) (CR.SCUndef CR.CTUndef, 0) $ S.toList ms
+    where
+        f ATEmpty !s = s
+        f (ATNode (ATCallFunc _ (Just arg)) t l r) !s = f (ATNode (ATBlock arg) t l r) s
+        f (ATNode (ATLVar t x) _ l r) !s = let i = S.insert (t, x) s in f l i `S.union` f r i
+        f (ATNode (ATBlock xs) _ l r) !s = let i = foldr (S.union . (`f` s)) s xs in f l i `S.union` f r i
+        f (ATNode (ATStmtExpr xs) t l r) !s = f (ATNode (ATBlock xs) t l r) s
+        f (ATNode (ATFor xs) _ l r) !s = let i = foldr (S.union . flip f s . fromATKindFor) S.empty xs in f l i `S.union` f r i
+        f (ATNode (ATNull x) _ _ _) !s = f x s
+        f (ATNode _ _ l r) !s = f l s `S.union` f r s
+stackSize _ = 0
 
 {-# INLINE prologue #-}
 prologue :: Integral i => i -> SI.Asm IT.TextLabelCtx e ()

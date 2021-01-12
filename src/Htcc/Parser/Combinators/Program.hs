@@ -16,14 +16,15 @@ module Htcc.Parser.Combinators.Program (
   , compoundStmt
 ) where
 
-import           Control.Monad                               (forM, void, (>=>))
+import           Control.Monad                               (forM, void, when,
+                                                              (>=>))
 import           Control.Monad.Combinators                   (choice, some)
 import           Control.Monad.Extra                         (ifM)
+import           Control.Monad.State                         (get, gets, modify,
+                                                              put)
 import           Control.Monad.Trans                         (MonadTrans (..))
 import           Control.Monad.Trans.Maybe                   (MaybeT (..),
                                                               runMaybeT)
-import           Control.Monad.Trans.State                   (get, gets, modify,
-                                                              put)
 import           Data.Bits                                   (Bits)
 import qualified Data.ByteString.UTF8                        as BSU
 import           Data.Char                                   (ord)
@@ -36,6 +37,7 @@ import           Data.Tuple.Extra                            (dupe, first)
 import qualified Htcc.CRules.Types                           as CT
 import           Htcc.Parser.AST                             (Treealizable (..),
                                                               addKind,
+                                                              isEmptyReturn,
                                                               isNonEmptyReturn,
                                                               subKind)
 import           Htcc.Parser.AST.Core                        (ATKind (..),
@@ -66,11 +68,12 @@ import           Htcc.Parser.Combinators.Type                (arraySuffix,
                                                               cType,
                                                               constantExp)
 import           Htcc.Parser.Combinators.Utils               (bracket,
+                                                              getPosState,
                                                               maybeToParser,
                                                               registerLVar,
                                                               tmpTKIdent)
 import           Htcc.Parser.Combinators.Var                 (varInit)
-import           Htcc.Parser.ConstructionData                (addFunction,
+import           Htcc.Parser.ConstructionData.Core           (addFunction,
                                                               addGVar,
                                                               addGVarWith,
                                                               addLiteral,
@@ -79,6 +82,7 @@ import           Htcc.Parser.ConstructionData                (addFunction,
                                                               isSwitchStmt,
                                                               lookupFunction,
                                                               lookupVar,
+                                                              pushWarn,
                                                               resetLocal,
                                                               succNest)
 import           Htcc.Parser.ConstructionData.Scope          (LookupVarResult (..))
@@ -145,12 +149,13 @@ global = choice
     ]
 
 function = do
+    pos <- getPosState
     (ty, ident) <- M.try (declIdent <* lparen)
     params <- takeParameters
-    lift $ modify resetLocal
+    modify resetLocal
     choice
         [ declaration ty ident
-        , definition ty ident params
+        , definition ty ident params pos
         ]
     where
         takeParameters =
@@ -158,17 +163,17 @@ function = do
 
         declaration ty ident =
             void semi
-                >> lift (gets $ addFunction False ty (HT.TokenLCNums 1 1, HT.TKIdent ident))
+                >> gets (addFunction False ty (HT.TokenLCNums 1 1, HT.TKIdent ident))
                 >>= \case
-                    Right scp' -> ATEmpty <$ lift (put scp')
+                    Right scp' -> ATEmpty <$ put scp'
                     Left err   -> fail $ T.unpack $ fst err
 
-        definition ty ident params =
+        definition ty ident params pos =
             void (M.lookAhead lbrace)
-                >> lift (gets $ addFunction True ty (HT.TokenLCNums 1 1, HT.TKIdent ident))
+                >> gets (addFunction True ty (HT.TokenLCNums 1 1, HT.TKIdent ident))
                 >>= \case
                     Right scp' -> do
-                        lift $ put scp'
+                        put scp'
                         params' <- forM (rights params) $ uncurry registerLVar
                         stmt >>= fromValidFunc params'
                     Left err -> fail $ T.unpack $ fst err
@@ -183,9 +188,16 @@ function = do
                                 ]
                         else
                             pure $ atDefFunc ident (if null params' then Nothing else Just params') ty st
-                    | otherwise =
-                            -- TODO: Warning when there is no return value when the function is not void
-                            pure $ atDefFunc ident (if null params' then Nothing else Just params') ty st
+                    | otherwise = do
+                        when (isJust (find isEmptyReturn block)) $
+                            pushWarn pos $ mconcat
+                                [ "the return type of function '"
+                                , T.unpack ident
+                                , "' is "
+                                , show (CT.toTypeKind ty)
+                                , ", but the statement returns no value"
+                                ]
+                        pure $ atDefFunc ident (if null params' then Nothing else Just params') ty st
                 fromValidFunc _ _ = fail "internal compiler error"
 
 gvar = do
@@ -197,15 +209,15 @@ gvar = do
     where
         nonInit ty ident = do
             void semi
-            ty' <- maybeToParser "defining global variables with a incomplete type" =<< lift (gets $ incomplete ty)
-            lift (gets (addGVar ty' (tmpTKIdent ident)))
+            ty' <- maybeToParser "defining global variables with a incomplete type" =<< gets (incomplete ty)
+            gets (addGVar ty' (tmpTKIdent ident))
                 >>= \case
                     Left err -> fail $ T.unpack $ fst err
-                    Right (_, scp) -> ATEmpty <$ lift (put scp)
+                    Right (_, scp) -> ATEmpty <$ put scp
 
         withInit ty ident = do
             void equal
-            ty' <- maybeToParser "defining global variables with a incomplete type" =<< lift (gets $ incomplete ty)
+            ty' <- maybeToParser "defining global variables with a incomplete type" =<< gets (incomplete ty)
             gvarInit ty' ident <* semi
 
         gvarInit ty ident = choice
@@ -216,16 +228,16 @@ gvar = do
                 fromOG = do
                     ast <- conditional
                     case (atkind ast, atkind (atL ast)) of
-                        (ATAddr, ATGVar _ name) -> lift (gets (gvarInitWithOG ty name))
+                        (ATAddr, ATGVar _ name) -> gets (gvarInitWithOG ty name)
                             >>= \case
                                 Left err -> fail $ T.unpack $ fst err
-                                Right (_, scp) -> ATEmpty <$ lift (put scp)
+                                Right (_, scp) -> ATEmpty <$ put scp
                         (ATAddr, _) -> fail "invalid initializer in global variable"
                         (ATGVar t name, _)
-                            | CT.isCTArray t -> lift (gets (gvarInitWithOG ty name))
+                            | CT.isCTArray t -> gets (gvarInitWithOG ty name)
                                 >>= \case
                                     Left err -> fail $ T.unpack $ fst err
-                                    Right (_, scp) -> ATEmpty <$ lift (put scp)
+                                    Right (_, scp) -> ATEmpty <$ put scp
                             -- TODO: support initializing from other global variables
                             | otherwise -> fail "initializer element is not constant"
                         _ -> fail "initializer element is not constant"
@@ -235,14 +247,14 @@ gvar = do
 
                 fromConstant = do
                     cval <- constantExp
-                    lift (gets (gvarInitWithVal ty cval))
+                    gets (gvarInitWithVal ty cval)
                         >>= \case
                             Left err -> fail $ T.unpack $ fst err
-                            Right (_, scp) -> ATEmpty <$ lift (put scp)
+                            Right (_, scp) -> ATEmpty <$ put scp
 
 compoundStmt :: (Ord i, Bits i, Read i, Show i, Integral i) => Parser i [ATree i]
-compoundStmt = bracket (lift get) (lift . modify . fallBack) $ const $
-    braces (lift (modify succNest) *> M.many stmt)
+compoundStmt = bracket get (modify . fallBack) $ const $
+    braces (modify succNest *> M.many stmt)
 
 stmt = choice
     [ returnStmt
@@ -275,9 +287,9 @@ stmt = choice
 
         whileStmt = atWhile <$> (M.try kWhile >> parens expr) <*> stmt
 
-        forStmt = (>>) (M.try kFor) $ bracket (lift get) (lift . modify . fallBack) $ const $ do
+        forStmt = (>>) (M.try kFor) $ bracket get (modify . fallBack) $ const $ do
             es <- parens $ do
-                lift $ modify succNest
+                modify succNest
                 initSect <- ATForInit
                     <$> choice [ATEmpty <$ semi, M.try (atExprStmt <$> expr <* semi), lvarStmt]
                 condSect <- ATForCond
@@ -301,15 +313,15 @@ stmt = choice
                     ATNode (ATBlock ats) ty _ _ -> pure $ atSwitch cond ats ty
                     _ -> fail "expected compound statement after the token ')'"
             where
-                putSwitchState b = lift $ modify $ \scp -> scp { isSwitchStmt = b }
+                putSwitchState b = modify $ \scp -> scp { isSwitchStmt = b }
 
         caseStmt = M.try kCase
-            *> ifM (lift $ gets isSwitchStmt)
+            *> ifM (gets isSwitchStmt)
                 ((atCase 0 <$> constantExp <* colon) <*> stmt)
                 (fail "stray 'case'")
 
         defaultStmt = (M.try kDefault <* colon)
-            *> ifM (lift $ gets isSwitchStmt)
+            *> ifM (gets isSwitchStmt)
                 (atDefault 0 <$> stmt)
                 (fail "stray 'default'")
 
@@ -416,7 +428,7 @@ unary = choice
                     idx <- brackets expr
                     kt <- maybeToParser "invalid operands" (addKind fac idx)
                     ty <- maybeToParser "subscripted value is neither array nor pointer nor vector" $ CT.deref $ atype kt
-                    ty' <- maybeToParser "incomplete value dereference" =<< lift (gets $ incomplete ty)
+                    ty' <- maybeToParser "incomplete value dereference" =<< gets (incomplete ty)
                     allAcc $ atUnary ATDeref ty' kt
 
                 postInc fac = allAcc =<< atUnary ATPostInc (atype fac) fac <$ symbol "++"
@@ -443,7 +455,7 @@ factor = choice
     ]
     where
         sizeof = kSizeof >> choice
-            [ incomplete <$> M.try (parens cType) <*> lift get
+            [ incomplete <$> M.try (parens cType) <*> get
                 >>= fmap (atNumLit . fromIntegral . CT.sizeof)
                 . maybeToParser "invalid application of 'sizeof' to incomplete type"
             , atNumLit . fromIntegral . CT.sizeof . atype <$> unary
@@ -451,33 +463,35 @@ factor = choice
 
         strLiteral = do
             s <- stringLiteral
-            lit <- lift $ gets $
+            lit <- gets $
                 addLiteral (CT.SCAuto $ CT.CTArray (fromIntegral $ length s) CT.CTChar)
                     (HT.TokenLCNums 1 1, HT.TKString $ BSU.fromString s)
             case lit of
                 Left err        -> fail $ T.unpack $ fst err
-                Right (nd, scp) -> nd <$ lift (put scp)
+                Right (nd, scp) -> nd <$ put scp
 
         identifier' = do
+            pos <- getPosState
             ident <- identifier
             choice
-                [ fnCall ident
+                [ fnCall ident pos
                 , variable ident
                 ]
             where
                 variable ident =
-                    lift (gets $ lookupVar ident)
+                    gets (lookupVar ident)
                         >>= \case
                             FoundGVar (PV.GVar t _) -> return $ atGVar t ident
                             FoundLVar sct -> return $ treealize sct
                             FoundEnum sct -> return $ treealize sct
                             NotFound -> fail $ "The '" <> T.unpack ident <> "' is not defined identifier"
 
-                fnCall ident = do
+                fnCall ident pos = do
                     params <- lparen *> M.manyTill (M.try (expr <* comma) M.<|> expr) rparen
                     let params' = if null params then Nothing else Just params
-                    lift (gets $ lookupFunction ident) <&> \case
+                    gets (lookupFunction ident) >>= \case
                         -- TODO: set warning message
                         -- TODO: Infer the return type of a function
                         Nothing -> atNoLeaf (ATCallFunc ident params') (CT.SCAuto CT.CTInt)
-                        Just fn -> atNoLeaf (ATCallFunc ident params') (PSF.fntype fn)
+                            <$ pushWarn pos ("the function '" <> T.unpack ident <> "' is not declared.")
+                        Just fn -> pure $ atNoLeaf (ATCallFunc ident params') (PSF.fntype fn)

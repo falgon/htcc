@@ -55,25 +55,18 @@ module Htcc.Parser.Combinators.Core (
   , notFollowedBy
 ) where
 
-import           Control.Applicative                    (Alternative (..))
-import           Control.Monad.Combinators              (between)
-import           Control.Monad.Trans.State.Lazy
-import           Data.Char                              (isAlpha)
-import           Data.Functor.Identity
-import qualified Data.Text                              as T
-import           Data.Void
-import qualified Htcc.CRules                            as CR
-import           Htcc.Parser.AST.Type                   (ASTs)
-import           Htcc.Parser.ConstructionData           (ConstructionData (..),
-                                                         Warnings,
-                                                         initConstructionData)
-import qualified Htcc.Parser.ConstructionData.Scope     as PS
-import qualified Htcc.Parser.ConstructionData.Scope.Var as PSV
-import           Htcc.Utils                             (lor)
-import qualified Text.Megaparsec                        as M
-import qualified Text.Megaparsec.Char                   as MC
-import qualified Text.Megaparsec.Char.Lexer             as ML
+import           Htcc.Parser.Combinators.ParserType
 
+import           Control.Applicative                (Alternative (..))
+import           Control.Monad.Combinators          (between)
+import           Data.Char                          (isAlpha)
+import qualified Data.Text                          as T
+import qualified Htcc.CRules                        as CR
+import           Htcc.Utils                         (lor)
+import qualified Text.Megaparsec                    as M
+import qualified Text.Megaparsec.Char               as MC
+import qualified Text.Megaparsec.Char.Lexer         as ML
+{-
 type ConstructionDataState i = StateT (ConstructionData i) Identity
 type Parser i = M.ParsecT Void T.Text (ConstructionDataState i)
 
@@ -87,7 +80,7 @@ runParser p fp input =
         <$> fst result
     where
         result = runIdentity $ runStateT (M.runParserT p fp input) initConstructionData
-
+-}
 spaceConsumer :: Ord e => M.ParsecT e T.Text m ()
 spaceConsumer = ML.space MC.space1 (ML.skipLineComment "//") (ML.skipBlockComment "/*" "*/")
 

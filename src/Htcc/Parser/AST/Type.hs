@@ -18,8 +18,8 @@ module Htcc.Parser.AST.Type (
 ) where
 
 import           Htcc.Parser.AST.Core                            (ATree (..))
-import           Htcc.Parser.ConstructionData.Core               (ConstructionData,
-                                                                  Warnings)
+import {-# SOURCE #-} Htcc.Parser.ConstructionData.Core               (ConstructionData,
+                                                                       Warnings)
 import           Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
 import qualified Htcc.Parser.ConstructionData.Scope.Var          as PV
 import qualified Htcc.Tokenizer                                  as HT
@@ -35,7 +35,7 @@ type ASTConstruction i = Either (ASTError i) (ASTSuccess i)
 type ASTs i = [ATree i]
 
 -- | A type that represents the result after AST construction. Quadraple of warning list, constructed abstract syntax tree list, global variable map, literal list.
-type ASTResult i = Either (ASTError i) (Warnings i, ASTs i, PV.GlobalVars i, PV.Literals i)
+type ASTResult i = Either (ASTError i) (Warnings, ASTs i, PV.GlobalVars i, PV.Literals i)
 
 -- | The type synonym of ASTState
 type ASTState i r = CompilationState (ConstructionData i) [HT.TokenLC i] i r

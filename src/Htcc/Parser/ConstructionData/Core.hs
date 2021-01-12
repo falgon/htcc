@@ -41,7 +41,7 @@ module Htcc.Parser.ConstructionData.Core (
 
 import           Data.Bits                                       (Bits (..))
 import           Data.Maybe                                      (fromJust)
-import qualified Data.Sequence                                   as S
+import qualified Data.Sequence                                   as SQ
 import qualified Data.Text                                       as T
 import           Data.Tuple.Extra                                (second)
 
@@ -55,17 +55,23 @@ import           Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
 import qualified Htcc.Parser.ConstructionData.Scope.Tag          as PS
 import qualified Htcc.Parser.ConstructionData.Scope.Typedef      as PT
 import qualified Htcc.Parser.ConstructionData.Scope.Var          as PV
-import           Htcc.Tokenizer.Token                            (TokenLC)
 import qualified Htcc.Tokenizer.Token                            as HT
 
+import           Control.Monad.State                             (modify)
+import           Data.List.NonEmpty                              (NonEmpty (..))
+import qualified Data.Set                                        as S
+import           Data.Void
+import {-# SOURCE #-} Htcc.Parser.Combinators.ParserType
+import qualified Text.Megaparsec                                 as M
+
 -- | The warning messages type
-type Warnings i = S.Seq (T.Text, TokenLC i)
+type Warnings = SQ.Seq (M.ParseErrorBundle T.Text Void)
 
 -- | `ConstructionData` is a set of "things" used during the construction of the AST.
 -- Contains error messages and scope information.
 data ConstructionData i = ConstructionData -- ^ The constructor of ConstructionData
     {
-        warns        :: Warnings i, -- ^ The warning messages
+        warns        :: Warnings, -- ^ The warning messages
         scope        :: AS.Scoped i, -- ^ Scope type
         isSwitchStmt :: Bool -- ^ When the statement is @switch@, this flag will be `True`, otherwise will be `False`.
     } deriving Show
@@ -202,7 +208,7 @@ addEnumerator ty tkn n cd = (\x -> cd { scope = x }) <$> AS.addEnumerator ty tkn
 -- | Shortcut to the initial state of `ConstructionData`.
 {-# INLINE initConstructionData #-}
 initConstructionData :: ConstructionData i
-initConstructionData = ConstructionData S.empty AS.initScope False
+initConstructionData = ConstructionData SQ.empty AS.initScope False
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.resetLocal` for variable @x@ of type `ConstructionData`.
 -- This function is equivalent to
@@ -212,8 +218,13 @@ resetLocal :: ConstructionData i -> ConstructionData i
 resetLocal cd = cd { scope = AS.resetLocal (scope cd) }
 
 -- | Function to add warning text.
-pushWarn :: T.Text -> TokenLC i -> ConstructionData i -> ConstructionData i
-pushWarn t tkn cd = cd { warns = warns cd S.|> (t, tkn) }
+pushWarn :: M.PosState T.Text -> String -> Parser i ()
+pushWarn posState warnMsg = do
+    let peb = M.ParseErrorBundle {
+          M.bundleErrors = M.FancyError 0 (S.singleton $ M.ErrorFail $ "warning: " <> warnMsg) :| []
+        , M.bundlePosState = posState
+        }
+    modify (\s -> s { warns = warns s SQ.|> peb })
 
 -- | Returns `Nothing` if incomplete, otherwise `Htcc.CRules.Types.StorageClass`.
 {-# INLINE incomplete #-}

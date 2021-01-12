@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 2eed65682adb7b03154ede97ff35806be8a937984b5dfcb70a644b23832bf2a2
+-- hash: 000a21d18c160392985148fd3a5bec6cce2c82a00c364037c73e8a677952aa01
 
 name:           htcc
 version:        0.0.0.1
@@ -68,18 +68,16 @@ library
       Htcc.Parser.AST.Core
       Htcc.Parser.AST.DeduceKind
       Htcc.Parser.AST.Type
-      Htcc.Parser.AST.Var
-      Htcc.Parser.AST.Var.Init
       Htcc.Parser.Combinators
       Htcc.Parser.Combinators.BasicOperator
       Htcc.Parser.Combinators.Core
       Htcc.Parser.Combinators.GNUExtensions
       Htcc.Parser.Combinators.Keywords
+      Htcc.Parser.Combinators.ParserType
       Htcc.Parser.Combinators.Program
       Htcc.Parser.Combinators.Type
       Htcc.Parser.Combinators.Utils
       Htcc.Parser.Combinators.Var
-      Htcc.Parser.ConstructionData
       Htcc.Parser.ConstructionData.Core
       Htcc.Parser.ConstructionData.Scope
       Htcc.Parser.ConstructionData.Scope.Enumerator
@@ -89,14 +87,6 @@ library
       Htcc.Parser.ConstructionData.Scope.Typedef
       Htcc.Parser.ConstructionData.Scope.Utils
       Htcc.Parser.ConstructionData.Scope.Var
-      Htcc.Parser.Parsing
-      Htcc.Parser.Parsing.Core
-      Htcc.Parser.Parsing.Global
-      Htcc.Parser.Parsing.Global.Function
-      Htcc.Parser.Parsing.Global.Var
-      Htcc.Parser.Parsing.StmtExpr
-      Htcc.Parser.Parsing.Type
-      Htcc.Parser.Parsing.Typedef
       Htcc.Parser.Utils
       Htcc.Parser.Utils.Core
       Htcc.Tokenizer

@@ -13,33 +13,34 @@ C language parser Combinators
 module Htcc.Parser.Combinators.Var (
     varInit
 ) where
-import           Control.Monad                 (foldM, forM, void, (>=>))
-import           Control.Monad.Extra           (andM)
-import           Control.Monad.Fix             (fix)
-import           Control.Monad.Trans           (MonadTrans (..))
-import           Control.Monad.Trans.Reader    (ReaderT, asks, runReaderT)
-import           Control.Monad.Trans.State     (gets)
-import           Data.Bits                     (Bits)
-import           Data.Bool                     (bool)
-import           Data.Char                     (ord)
-import           Data.Foldable                 (toList)
-import           Data.Functor                  ((<&>))
-import           Data.List                     (sortBy)
-import           Data.Maybe                    (fromJust, fromMaybe)
-import qualified Data.Sequence                 as SQ
-import qualified Data.Text                     as T
-import qualified Htcc.CRules.Types             as CT
-import           Htcc.Parser.AST               (ATKind (..), ATree (..),
-                                                addKind, atAssign, atBlock,
-                                                atExprStmt, atMemberAcc,
-                                                atNumLit, atUnary, treealize)
+import           Control.Monad                     (foldM, forM, void, (>=>))
+import           Control.Monad.Extra               (andM)
+import           Control.Monad.Fix                 (fix)
+import           Control.Monad.Trans               (MonadTrans (..))
+import           Control.Monad.Trans.Reader        (ReaderT, asks, runReaderT)
+import           Control.Monad.Trans.State         (gets)
+import           Data.Bits                         (Bits)
+import           Data.Bool                         (bool)
+import           Data.Char                         (ord)
+import           Data.Foldable                     (toList)
+import           Data.Functor                      ((<&>))
+import           Data.List                         (sortBy)
+import           Data.Maybe                        (fromJust, fromMaybe)
+import qualified Data.Sequence                     as SQ
+import qualified Data.Text                         as T
+import qualified Htcc.CRules.Types                 as CT
+import           Htcc.Parser.AST                   (ATKind (..), ATree (..),
+                                                    addKind, atAssign, atBlock,
+                                                    atExprStmt, atMemberAcc,
+                                                    atNumLit, atUnary,
+                                                    treealize)
 import           Htcc.Parser.Combinators.Core
-import           Htcc.Parser.Combinators.Utils (bracket, maybeToParser,
-                                                registerLVar)
-import           Htcc.Parser.ConstructionData  (incomplete, lookupLVar)
-import           Htcc.Utils                    (tshow)
-import qualified Text.Megaparsec               as M
-import           Text.Megaparsec.Debug         (dbg)
+import           Htcc.Parser.Combinators.Utils     (bracket, maybeToParser,
+                                                    registerLVar)
+import           Htcc.Parser.ConstructionData.Core (incomplete, lookupLVar)
+import           Htcc.Utils                        (tshow)
+import qualified Text.Megaparsec                   as M
+import           Text.Megaparsec.Debug             (dbg)
 
 type DesignatorParser i r = ReaderT (T.Text, Parser i (ATree i)) (Parser i) r
 

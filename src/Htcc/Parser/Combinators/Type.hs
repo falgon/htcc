@@ -15,24 +15,24 @@ module Htcc.Parser.Combinators.Type (
   , cType
   , arraySuffix
 ) where
-import           Control.Monad                    (mfilter)
-import           Control.Monad.Combinators        (choice)
-import           Control.Monad.Trans              (MonadTrans (..))
-import           Control.Monad.Trans.Maybe        (MaybeT (..), runMaybeT)
-import           Control.Monad.Trans.State        (gets)
-import           Data.Bits                        (Bits (..))
-import           Data.Bool                        (bool)
-import           Data.Maybe                       (fromJust)
-import qualified Data.Text                        as T
-import           Data.Tuple.Extra                 (dupe, first)
-import qualified Htcc.CRules.Types                as CT
-import           Htcc.Parser.AST.Core             (ATKind (..), ATree (..))
+import           Control.Monad                     (mfilter)
+import           Control.Monad.Combinators         (choice)
+import           Control.Monad.Trans               (MonadTrans (..))
+import           Control.Monad.Trans.Maybe         (MaybeT (..), runMaybeT)
+import           Control.Monad.Trans.State         (gets)
+import           Data.Bits                         (Bits (..))
+import           Data.Bool                         (bool)
+import           Data.Maybe                        (fromJust)
+import qualified Data.Text                         as T
+import           Data.Tuple.Extra                  (dupe, first)
+import qualified Htcc.CRules.Types                 as CT
+import           Htcc.Parser.AST.Core              (ATKind (..), ATree (..))
 import           Htcc.Parser.Combinators.Core
 import           Htcc.Parser.Combinators.Keywords
-import {-# SOURCE #-} Htcc.Parser.Combinators.Program  (conditional)
-import           Htcc.Parser.ConstructionData     (incomplete)
-import           Htcc.Utils                       (toNatural)
-import qualified Text.Megaparsec                  as M
+import {-# SOURCE #-} Htcc.Parser.Combinators.Program   (conditional)
+import           Htcc.Parser.ConstructionData.Core (incomplete)
+import           Htcc.Utils                        (toNatural)
+import qualified Text.Megaparsec                   as M
 
 constantExp :: (Bits i, Integral i, Show i, Read i) => Parser i i
 constantExp = conditional >>= constantExp'

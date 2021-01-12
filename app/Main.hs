@@ -2,6 +2,7 @@
 module Main where
 
 import           Control.Monad                          (forM_)
+import           Data.Foldable                          (toList)
 import qualified Data.Text.IO                           as T
 import           Data.Version                           (showVersion)
 import           Development.GitRev                     (gitHash)
@@ -10,13 +11,14 @@ import qualified Paths_htcc                             as P
 
 import qualified Data.Text                              as T
 import           Data.Void
-import           Htcc.Asm.Generate                      (casm')
+import           Htcc.Asm                               (casm')
 import qualified Htcc.Asm.Intrinsic.Structure.Internal  as SI
 import           Htcc.Parser                            (ASTs)
 import           Htcc.Parser.Combinators                (parser, runParser)
-import           Htcc.Parser.ConstructionData           (Warnings)
+import           Htcc.Parser.ConstructionData.Core      (Warnings)
 import           Htcc.Parser.ConstructionData.Scope.Var (GlobalVars, Literals)
 import           Htcc.Utils
+import           System.IO                              (hPutStr, stderr)
 import qualified Text.Megaparsec                        as M
 
 data Opts = Opts
@@ -90,8 +92,10 @@ main = do
     forM_ (optInput opts) $ \fname -> do
         txt <- T.readFile fname
         case runParser parser fname txt
-            :: Either (M.ParseErrorBundle T.Text Void) (Warnings Integer, ASTs Integer, GlobalVars Integer, Literals Integer) of
+            :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, GlobalVars Integer, Literals Integer) of
             Left x  -> print x -- putStr $ M.errorBundlePretty x
-            Right r -> runAsm' $ casm' (snd4 r) (thd4 r) (fou4 r)
+            Right r -> do
+                mapM_ (hPutStr stderr . M.errorBundlePretty) $ toList $ fst4 r
+                runAsm' $ casm' (snd4 r) (thd4 r) (fou4 r)
     where
         runAsm' = SI.runAsm :: SI.Asm SI.AsmCodeCtx Integer a -> IO a

@@ -10,9 +10,7 @@ Portability : POSIX
 Parsing and constructing AST from string
 -}
 module Htcc.Parser (
-    module Htcc.Parser.AST,
-    module Htcc.Parser.Parsing
+    module Htcc.Parser.AST
 ) where
 
 import           Htcc.Parser.AST
-import           Htcc.Parser.Parsing
