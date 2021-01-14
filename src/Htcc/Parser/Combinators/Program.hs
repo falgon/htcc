@@ -447,6 +447,7 @@ factor = choice
     [ atNumLit <$> natural
     , atNumLit . fromIntegral . ord <$> charLiteral
     , sizeof
+    , alignof
     , strLiteral
     , identifier'
     , M.try (parens expr)
@@ -460,6 +461,11 @@ factor = choice
                 . maybeToParser "invalid application of 'sizeof' to incomplete type"
             , atNumLit . fromIntegral . CT.sizeof . atype <$> unary
             ]
+
+        alignof = do
+            at <- k_Alignof *> unary
+            if CT.isCTUndef (atype at) then fail "_Alignof must be an expression or type" else
+                pure $ atNumLit $ fromIntegral $ CT.alignof $ atype at
 
         strLiteral = do
             s <- stringLiteral

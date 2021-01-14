@@ -57,10 +57,6 @@ int main()
     assert(1, (2 * 4) == (2 << 2), "(2 * 4) == (2 << 2)");
     assert(1, (8 / 4) == (8 >> 2), "(8 / 4) == (8 >> 2)");
     assert(1, ({ int a = 2 << 4; (a & (a - 1)) == 0; }), "({ int a = 2 << 4; (a & (a - 1)) == 0; })"); // Determining if an integer is a power of 2
-    assert(3, ({ 1; {2;} 3; }), "({ 1; {2;} 3; })");
-    assert(4, ({ int a; sizeof(a); }), "({ int a; sizeof(a); })");
-    assert(4, ({ int a; sizeof a; }), "({ int a; sizeof a; })");
-    assert(8, ({ int* p; sizeof p; }), "({ int* p; sizeof p; })");
     assert(42, ({ int a = 41; ++a; }), "({ int a = 41; ++a; })");
     assert(42, ({ int a = 43; --a; }), "({ int a = 43; --a; })");
     assert(42, ({ int a = 42; a++; }), "({ int a = 41; a++; })");
@@ -102,6 +98,12 @@ int main()
     assert(4, ({ int a; sizeof(a); }), "({ int a; sizeof(a); })");
     assert(4, ({ int a; sizeof a; }), "({ int a; sizeof a; })");
     assert(8, ({ int* p; sizeof p; }), "({ int* p; sizeof p; })");
+    //assert(4, sizeof(int), "sizeof(int)");
+    //assert(8, sizeof(int*), "sizeof(int*)");
+    assert(4, ({ int a; _Alignof(a); }), "({ int a; _Alignof(a); })");
+    assert(8, ({ int* a; _Alignof(a); }), "({ int* a; _Alignof(a); })");
+    //assert(4, _Alignof(int), "_Alignof(int)");
+    //assert(8, _Alignof(int*), "_Alignof(int*)");
     
     printf("All tests are passed!\n");
 

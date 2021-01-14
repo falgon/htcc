@@ -66,21 +66,7 @@ import           Htcc.Utils                         (lor)
 import qualified Text.Megaparsec                    as M
 import qualified Text.Megaparsec.Char               as MC
 import qualified Text.Megaparsec.Char.Lexer         as ML
-{-
-type ConstructionDataState i = StateT (ConstructionData i) Identity
-type Parser i = M.ParsecT Void T.Text (ConstructionDataState i)
 
-runParser ::
-    Parser i (ASTs i)
-    -> FilePath
-    -> T.Text
-    -> Either (M.ParseErrorBundle T.Text Void) (Warnings i, ASTs i, PSV.GlobalVars i, PSV.Literals i)
-runParser p fp input =
-    (warns (snd result),, PSV.globals $ PS.vars $ scope $ snd result, PSV.literals $ PS.vars $ scope $ snd result)
-        <$> fst result
-    where
-        result = runIdentity $ runStateT (M.runParserT p fp input) initConstructionData
--}
 spaceConsumer :: Ord e => M.ParsecT e T.Text m ()
 spaceConsumer = ML.space MC.space1 (ML.skipLineComment "//") (ML.skipBlockComment "/*" "*/")
 
