@@ -64,7 +64,8 @@ import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.Core
 import qualified Htcc.Parser.Combinators.GNUExtensions       as GNU
 import           Htcc.Parser.Combinators.Keywords
-import           Htcc.Parser.Combinators.Type                (arraySuffix,
+import           Htcc.Parser.Combinators.Type                (absDeclType,
+                                                              arraySuffix,
                                                               cType,
                                                               constantExp)
 import           Htcc.Parser.Combinators.Utils               (bracket,
@@ -455,17 +456,24 @@ factor = choice
     , ATEmpty <$ M.eof
     ]
     where
-        sizeof = kSizeof >> choice
-            [ incomplete <$> M.try (parens cType) <*> get
-                >>= fmap (atNumLit . fromIntegral . CT.sizeof)
-                . maybeToParser "invalid application of 'sizeof' to incomplete type"
-            , atNumLit . fromIntegral . CT.sizeof . atype <$> unary
+        memOp p op opS = p *> choice
+            [ memOpType
+            , memOpUnary
             ]
+            where
+                memOpType = incomplete <$> M.try (parens absDeclType) <*> get
+                    >>= fmap (atNumLit . fromIntegral . op) 
+                    . maybeToParser ("invalid application of '" <> opS <> "' to incomplete type")
 
-        alignof = do
-            at <- k_Alignof *> unary
-            if CT.isCTUndef (atype at) then fail "_Alignof must be an expression or type" else
-                pure $ atNumLit $ fromIntegral $ CT.alignof $ atype at
+                memOpUnary = do
+                    u <- unary 
+                    if CT.isCTUndef (atype u) then 
+                        fail $ opS <> " must be an expression or type"
+                    else
+                        pure $ atNumLit $ fromIntegral $ op $ atype u
+
+        sizeof = memOp kSizeof CT.sizeof "sizeof"
+        alignof = memOp k_Alignof CT.alignof "alignof"
 
         strLiteral = do
             s <- stringLiteral
