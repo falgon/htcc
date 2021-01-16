@@ -44,7 +44,7 @@ import           Htcc.Parser.AST.Core                        (ATKind (..),
                                                               ATKindFor (..),
                                                               ATree (..),
                                                               atBlock, atBreak,
-                                                              atCase,
+                                                              atCase, atCast,
                                                               atConditional,
                                                               atContinue,
                                                               atDefFunc,
@@ -140,6 +140,7 @@ global,
     shift,
     add,
     term,
+    cast,
     unary,
     factor :: (Ord i, Bits i, Read i, Show i, Integral i) => Parser i (ATree i)
 
@@ -395,10 +396,15 @@ add = binaryOperator term
     , (symbol "-", \l r -> maybeToParser "invalid operands" $ subKind l r)
     ]
 
-term = binaryOperator unary
+term = binaryOperator cast
     [ (star, binOpCon ATMul)
     , (slash, binOpCon ATDiv)
     , (percent, binOpCon ATMod)
+    ]
+
+cast = choice
+    [ atCast <$> M.try (parens absDeclType) <*> cast
+    , unary
     ]
 
 unary = choice
@@ -462,12 +468,12 @@ factor = choice
             ]
             where
                 memOpType = incomplete <$> M.try (parens absDeclType) <*> get
-                    >>= fmap (atNumLit . fromIntegral . op) 
+                    >>= fmap (atNumLit . fromIntegral . op)
                     . maybeToParser ("invalid application of '" <> opS <> "' to incomplete type")
 
                 memOpUnary = do
-                    u <- unary 
-                    if CT.isCTUndef (atype u) then 
+                    u <- unary
+                    if CT.isCTUndef (atype u) then
                         fail $ opS <> " must be an expression or type"
                     else
                         pure $ atNumLit $ fromIntegral $ op $ atype u
