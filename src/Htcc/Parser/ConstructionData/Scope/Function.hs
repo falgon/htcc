@@ -21,6 +21,7 @@ import qualified Data.Map                                        as M
 import qualified Data.Text                                       as T
 import           GHC.Generics                                    (Generic (..))
 
+import Htcc.Parser.AST.Core (Treealizable (..), ATree (..), ATKind (..), atUnary)
 import qualified Htcc.CRules.Types                               as CT
 import           Htcc.Parser.ConstructionData.Scope.ManagedScope
 import           Htcc.Parser.ConstructionData.Scope.Utils        (internalCE)
@@ -39,6 +40,10 @@ instance ManagedScope (Function i) where
     lookup = M.lookup
     fallBack = flip const
     initial = M.empty
+
+-- TODO: allow function pointer
+instance Treealizable Function where
+    treealize (Function ftype _) = atUnary ATFuncPtr ftype ATEmpty
 
 -- | The typedefs data typedefs
 type Functions i = M.Map T.Text (Function i)

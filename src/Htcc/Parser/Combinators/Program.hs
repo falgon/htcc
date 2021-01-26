@@ -28,7 +28,6 @@ import           Control.Monad.Trans.Maybe                   (MaybeT (..),
 import           Data.Bits                                   (Bits)
 import qualified Data.ByteString.UTF8                        as BSU
 import           Data.Char                                   (ord)
-import           Data.Either                                 (rights)
 import           Data.Functor                                ((<&>))
 import           Data.List                                   (find)
 import           Data.Maybe                                  (fromJust, isJust)
@@ -61,13 +60,13 @@ import           Htcc.Parser.AST.Core                        (ATKind (..),
                                                               isEmptyExprStmt)
 import           Htcc.Parser.AST.Type                        (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
+import           Htcc.Parser.Combinators.ConstExpr           (evalConstexpr)
 import           Htcc.Parser.Combinators.Core
 import qualified Htcc.Parser.Combinators.GNUExtensions       as GNU
 import           Htcc.Parser.Combinators.Keywords
 import           Htcc.Parser.Combinators.Type                (absDeclType,
-                                                              arraySuffix,
-                                                              cType,
-                                                              constantExp)
+                                                              declIdent,
+                                                              funcParams)
 import           Htcc.Parser.Combinators.Utils               (bracket,
                                                               getPosState,
                                                               maybeToParser,
@@ -95,30 +94,6 @@ import qualified Text.Megaparsec.Char                        as MC
 
 import           Text.Megaparsec.Debug                       (dbg)
 
-declIdent :: (Show i, Read i, Bits i, Integral i) => Parser i (CT.StorageClass i, T.Text)
-declIdent = do
-    ty <- M.try cType
-    ident <- identifier
-    (,ident) <$> M.option ty (arraySuffix ty)
-
-declIdentFuncArg :: (Show i, Read i, Bits i, Integral i)
-    => Parser i a
-    -> Parser i (Either (CT.StorageClass i) (CT.StorageClass i, T.Text))
-declIdentFuncArg sep = do
-    ty <- M.try cType
-    anonymousArg ty M.<|> namedArg ty
-    where
-        anonymousArg ty = Left <$> M.option ty (arraySuffix ty) <* sep
-        namedArg ty = do
-            ident <- identifier
-            Right . (,ident) <$> M.option ty (narrowPtr <$> arraySuffix ty) <* sep
-
-        narrowPtr ty
-            | CT.isCTArray ty = maybe ty (CT.mapTypeKind CT.CTPtr) $ CT.deref ty
-            | CT.isIncompleteArray ty =
-                CT.mapTypeKind (\(CT.CTIncomplete (CT.IncompleteArray t')) -> CT.CTPtr t') ty
-            | otherwise = ty
-
 parser, program :: (Integral i, Bits i, Read i, Show i) => Parser i (ASTs i)
 parser = (spaceConsumer >> program) <* M.eof
 program = some global
@@ -145,38 +120,36 @@ global,
     factor :: (Ord i, Bits i, Read i, Show i, Integral i) => Parser i (ATree i)
 
 global = choice
-    [ ATEmpty <$ M.try (cType >> semi)
-    , function
+    [ function
     , gvar
     ]
 
 function = do
     pos <- getPosState
-    (ty, ident) <- M.try (declIdent <* lparen)
-    params <- takeParameters
-    modify resetLocal
-    choice
-        [ declaration ty ident
-        , definition ty ident params pos
-        ]
+    M.try (declIdent <* lparen) >>= \case
+        (_, Nothing) -> fail "expected unqualified-id"
+        (ty, Just ident) -> do
+            (ty', params) <- funcParams ty
+            modify resetLocal
+            choice
+                [ declaration ty' ident
+                , definition ty' ident params pos
+                ]
     where
-        takeParameters =
-            M.manyTill (M.try (declIdentFuncArg comma) M.<|> declIdentFuncArg (M.lookAhead rparen)) rparen
-
-        declaration ty ident =
+        declaration ty ident = 
             void semi
-                >> gets (addFunction False ty (HT.TokenLCNums 1 1, HT.TKIdent ident))
+                >> gets (addFunction False ty (tmpTKIdent ident))
                 >>= \case
                     Right scp' -> ATEmpty <$ put scp'
                     Left err   -> fail $ T.unpack $ fst err
 
-        definition ty ident params pos =
+        definition ty ident params pos = 
             void (M.lookAhead lbrace)
-                >> gets (addFunction True ty (HT.TokenLCNums 1 1, HT.TKIdent ident))
+                >> gets (addFunction True ty (tmpTKIdent ident))
                 >>= \case
                     Right scp' -> do
                         put scp'
-                        params' <- forM (rights params) $ uncurry registerLVar
+                        params' <- forM params $ uncurry registerLVar
                         stmt >>= fromValidFunc params'
                     Left err -> fail $ T.unpack $ fst err
             where
@@ -202,9 +175,9 @@ function = do
                         pure $ atDefFunc ident (if null params' then Nothing else Just params') ty st
                 fromValidFunc _ _ = fail "internal compiler error"
 
-gvar = do
-    (ty, ident) <- declIdent
-    choice
+gvar = declIdent >>= \case
+    (_, Nothing) -> ATEmpty <$ semi
+    (ty, Just ident) -> choice
         [ nonInit ty ident
         , withInit ty ident
         ]
@@ -248,7 +221,7 @@ gvar = do
                 gvarInitWithVal ty' to = addGVarWith ty' (tmpTKIdent ident) (PV.GVarInitWithVal to)
 
                 fromConstant = do
-                    cval <- constantExp
+                    cval <- evalConstexpr
                     gets (gvarInitWithVal ty cval)
                         >>= \case
                             Left err -> fail $ T.unpack $ fst err
@@ -319,7 +292,7 @@ stmt = choice
 
         caseStmt = M.try kCase
             *> ifM (gets isSwitchStmt)
-                ((atCase 0 <$> constantExp <* colon) <*> stmt)
+                ((atCase 0 <$> evalConstexpr <* colon) <*> stmt)
                 (fail "stray 'case'")
 
         defaultStmt = (M.try kDefault <* colon)
@@ -331,11 +304,15 @@ stmt = choice
 
         labelStmt = atLabel <$> M.try (identifier <* colon)
 
-        lvarStmt = choice
-            [ ATEmpty <$ M.try (cType <* semi)
-            , M.try (declIdent <* semi) >>= fmap atNull . uncurry registerLVar
-            , (declIdent <* equal >>= uncurry (varInit assign)) <* semi
-            ]
+        lvarStmt = declIdent >>= \case
+            (_, Nothing) -> ATEmpty <$ semi
+            (ty, Just ident) -> choice
+                [ nonInit ty ident
+                , withInit ty ident
+                ]
+            where
+                nonInit ty ident = semi >> atNull <$> registerLVar ty ident
+                withInit ty ident = equal *> varInit assign ty ident <* semi
 
 expr = assign
 
@@ -504,6 +481,7 @@ factor = choice
                             FoundGVar (PV.GVar t _) -> return $ atGVar t ident
                             FoundLVar sct -> return $ treealize sct
                             FoundEnum sct -> return $ treealize sct
+                            FoundFunc sct -> return $ treealize sct
                             NotFound -> fail $ "The '" <> T.unpack ident <> "' is not defined identifier"
 
                 fnCall ident pos = do

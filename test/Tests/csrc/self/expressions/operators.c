@@ -111,6 +111,18 @@ int main()
     assert(80, sizeof(char*[10]), "sizeof(char*[10])");
     assert(8, sizeof(char (*)[10]), "sizeof(char (*)[10])");
     assert(10, sizeof(char[10]), "sizeof(char[10])");
+    assert(4, ({ int a = 1; sizeof(a = 2); }), "({ int a = 1; sizeof(a = 2); })");
+    assert(1, ({ int a = 1; sizeof(a = 2); a; }), "({ int a = 1; sizeof(a = 2); a; })");
+    assert(24, ({ char* x[3]; sizeof x; }), "({ char* x[3]; sizeof x; })");
+    assert(8, ({ char (*x)[3]; sizeof x; }), "({ char (*x)[3]; sizeof x; })");
+    assert(1, sizeof main, "sizeof main");
+    assert(1, sizeof assert, "sizeof assert");
+    //assert(1, ({ char (x); sizeof x; }), "({ char (x); sizeof x; })");
+    //assert(3, ({ char (x)[3]; sizeof x; }), "({ char (x)[3]; sizeof x; })");
+    //assert(3, ({ char (x)[3]; sizeof x; }), 
+    assert(12, ({ char (x[3])[4]; sizeof x; }), "({ char (x[3])[4]; sizeof x; })");
+    assert(4, ({ char (x[3])[4]; sizeof x[0]; }), "({ char (x[3])[4]; sizeof x[0]; })");
+
     assert(4, ({ int a; _Alignof(a); }), "({ int a; _Alignof(a); })");
     assert(4, ({ int a; _Alignof a; }), "({ int a; _Alignof a; })");
     assert(8, ({ int* a; _Alignof a; }), "({ int* a; _Alignof a; })");
@@ -119,7 +131,6 @@ int main()
     assert(8, _Alignof(int*[10]), "_Alignof(int*[10])");
     assert(8, _Alignof(int(*)[10]), "_Alignof(int(*)[10])");
     assert(4, _Alignof(int[10]), "_Alignof(int[10])");
-    
     assert(1, ({ char a; _Alignof(a); }), "({ char a; _Alignof(a); })");
     assert(1, ({ char a; _Alignof a; }), "({ char a; _Alignof a; })");
     assert(8, ({ char* a; _Alignof a; }), "({ char* a; _Alignof a; })");
@@ -128,7 +139,9 @@ int main()
     assert(8, _Alignof(char*[10]), "_Alignof(char*[10])");
     assert(8, _Alignof(char(*)[10]), "_Alignof(char(*)[10])");
     assert(1, _Alignof(char[10]), "_Alignof(char[10])");
-    printf("All tests are passed!\n");
+    assert(4, ({ int a = 1; _Alignof(a = 2); }), "({ int a = 1; _Alignof(a = 2); })");
+    assert(1, ({ int a = 1; _Alignof(a = 2); a; }), "({ int a = 1; _Alignof(a = 2); a; })");
 
+    printf("All tests are passed!\n");
     return 0;
 }

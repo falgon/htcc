@@ -71,6 +71,7 @@ instance NFData i => NFData (Scoped i)
 data LookupVarResult i = FoundGVar (PV.GVar i)  -- ^ A type constructor indicating that a global variable has been found
     | FoundLVar (PV.LVar i) -- ^ A type constructor indicating that a local variable has been found
     | FoundEnum (SE.Enumerator i) -- ^ A type constructor indicating that a enumerator has been found
+    | FoundFunc (PF.Function i) -- ^ A type constructor indicating that a function has been found
     | NotFound -- ^ A type constructor indicating that it was not found
     deriving (Show, Eq)
 
@@ -140,7 +141,9 @@ lookupVar ident scp = case lookupLVar ident scp of
     Just local -> FoundLVar local
     _ -> case lookupEnumerator ident scp of
         Just enum -> FoundEnum enum
-        _         -> maybe NotFound FoundGVar $ lookupGVar ident scp
+        _         -> case lookupGVar ident scp of
+            Just gvar -> FoundGVar gvar
+            _ -> maybe NotFound FoundFunc $ lookupFunction ident scp
 
 -- | `lookupTag` has a scoped type argument and is the same function as `PS.lookupTag` internally.
 {-# INLINE lookupTag #-}

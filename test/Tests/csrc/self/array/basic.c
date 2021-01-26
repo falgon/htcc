@@ -7,6 +7,7 @@ int printf();
 int exit();
 int strcmp(char* p, char* q);
 int test_num;
+int;
 
 int gr[3];
 //int (*gpa)[3];
@@ -137,6 +138,8 @@ int main()
     assert(0, ({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[1][1]; }), "({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[1][1]; })");
     assert(0, ({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[1][2]; }), "({ int ar[2][3] = { { 1, 2, 3 }, {} }; ar[1][2]; })");
     assert(0, ({ int ar[1][1][1] = {{{}}}; ar[0][0][0]; }), "({ int ar[1][1][1] = {{{}}}; ar[0][0][0]; })");
+    assert(3, ({ char* x[3]; char y; x[0] = &y; y = 3; x[0][0]; }), "({ char* x[3]; char y; x[0] = &y; y = 3; x[0][0]; })");
+    assert(4, ({ char x[3]; char (*y)[3] = x; y[0][0] = 4; y[0][0]; }), "({ char x[3]; char (*y)[3] = x; y[0] = 4; y[0][0]; }");
     
     printf("All tests are passed!\n");
 

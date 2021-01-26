@@ -12,8 +12,9 @@ The storage-class of C language
 {-# LANGUAGE DeriveGeneric #-}
 module Htcc.CRules.Types.StorageClass (
     -- * StorageClass data type and class
-    StorageClass (..),
-    StorageClassBase (..)
+    StorageClass (..)
+  , StorageClassBase (..)
+  , wrapCTFunc
 ) where
 
 import           Control.DeepSeq            (NFData (..))
@@ -137,3 +138,6 @@ instance StorageClassBase StorageClass where
     isSCStatic _            = False
 
 instance NFData i => NFData (StorageClass i)
+
+wrapCTFunc :: StorageClass i -> [StorageClass i] -> StorageClass i
+wrapCTFunc ty params = picksc ty $ CTFunc (toTypeKind ty) $ map fromsc params
