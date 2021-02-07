@@ -138,7 +138,7 @@ data TypeKind i = CTInt -- ^ The type @int@ as C language
     | CTLong (TypeKind i) -- ^ The type @long@ as C language
     | CTBool -- ^ The type @_Bool@ as C language
     | CTVoid -- ^ The type @void@ as C language
-    | CTFunc (TypeKind i) [TypeKind i] -- ^ The type of function as C language
+    | CTFunc (TypeKind i) [(TypeKind i, Maybe T.Text)] -- ^ The type of function as C language
     | CTPtr (TypeKind i) -- ^ The pointer type of `TypeKind`
     | CTArray Natural (TypeKind i) -- ^ The array type
     | CTEnum (TypeKind i) (M.Map T.Text i) -- ^ The enum, has its underlying type and a map
@@ -249,7 +249,7 @@ instance Eq i => Eq (TypeKind i) where
     (==) CTChar CTChar = True
     (==) CTBool CTBool = True
     (==) CTVoid CTVoid = True
-    (==) (CTFunc lty lparams) (CTFunc rty rparams) = lty == rty && lparams == rparams
+    (==) (CTFunc lty lparams) (CTFunc rty rparams) = lty == rty && map fst lparams == map fst rparams
     (==) (CTFunc lty _) rhs = lty == rhs -- function and otherwise
     (==) lhs (CTFunc rty _) = lhs == rty -- function and otherwise
     (==) (CTEnum ut1 m1) (CTEnum ut2 m2) = ut1 == ut2 && m1 == m2

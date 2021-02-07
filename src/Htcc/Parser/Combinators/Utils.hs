@@ -13,29 +13,91 @@ C language parser Combinators
 module Htcc.Parser.Combinators.Utils (
     maybeToParser
   , registerLVar
+  , registerGVar
+  , registerGVarWith
+  , registerStringLiteral
+  , registerFunc
   , bracket
-  , tmpTKIdent
   , getPosState
 ) where
-import           Control.Monad.State               (gets, put)
-import           Control.Natural                   (type (~>))
-import           Data.Bits                         (Bits (..))
-import qualified Data.Text                         as T
-import qualified Htcc.CRules.Types                 as CT
-import           Htcc.Parser.AST.Core              (ATree (..))
+import qualified Data.ByteString.UTF8 as BSU
+import           Control.Monad.State                             (gets, put)
+import           Control.Natural                                 (type (~>))
+import           Data.Bits                                       (Bits (..))
+import qualified Data.Text                                       as T
+import qualified Htcc.CRules.Types                               as CT
+import           Htcc.Parser.AST.Core                            (ATree (..))
 import           Htcc.Parser.Combinators.Core
-import           Htcc.Parser.ConstructionData.Core (addLVar)
-import qualified Htcc.Tokenizer.Token              as HT
-import qualified Text.Megaparsec                   as M
+import           Htcc.Parser.ConstructionData.Core               (ConstructionData,
+                                                                  addGVar,
+                                                                  addGVarWith,
+                                                                  addLVar,
+                                                                  addLiteral,
+                                                                  addFunction)
+import           Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
+import           Htcc.Parser.ConstructionData.Scope.Var (GVarInitWith)
+import qualified Htcc.Tokenizer.Token                            as HT
+import qualified Text.Megaparsec                                 as M
 
 maybeToParser :: String -> Maybe ~> Parser i
 maybeToParser s = maybe (fail s) pure
 
-registerLVar :: (Bits i, Integral i) => CT.StorageClass i -> T.Text -> Parser i (ATree i)
-registerLVar ty ident = gets (addLVar ty (HT.TokenLCNums 1 1, HT.TKIdent ident))
+type PureAdder i = CT.StorageClass i
+    -> HT.TokenLC i
+    -> ConstructionData i
+    -> Either (ASTError i) (ATree i, ConstructionData i)
+
+registerVar :: (Bits i, Integral i)
+    => PureAdder i
+    -> CT.StorageClass i
+    -> T.Text
+    -> Parser i (ATree i)
+registerVar adder ty ident = gets (adder ty (tmpTKIdent ident))
     >>= \case
         Right (lat, scp') -> lat <$ put scp'
-        Left err          -> fail $ T.unpack $ fst err
+        Left err -> fail $ T.unpack $ fst err
+
+registerLVar :: (Bits i, Integral i)
+    => CT.StorageClass i
+    -> T.Text
+    -> Parser i (ATree i)
+registerLVar = registerVar addLVar
+
+registerStringLiteral :: (Bits i, Integral i)
+    => String
+    -> Parser i (ATree i)
+registerStringLiteral s = gets (addLiteral ty (HT.TokenLCNums 1 1, HT.TKString $ BSU.fromString s))
+    >>= \case
+        Right (n, scp) -> n <$ put scp
+        Left err -> fail $ T.unpack $ fst err
+    where
+        ty = CT.SCAuto $ CT.CTArray (fromIntegral $ length s) CT.CTChar
+
+registerGVar :: (Bits i, Integral i)
+    => CT.StorageClass i
+    -> T.Text
+    -> Parser i (ATree i)
+registerGVar = registerVar addGVar
+
+registerGVarWith :: (Bits i, Integral i)
+    => CT.StorageClass i
+    -> T.Text
+    -> GVarInitWith i
+    -> Parser i (ATree i)
+registerGVarWith ty ident to = gets (addGVarWith ty (tmpTKIdent ident) to)
+    >>= \case
+        Right (_, scp) -> ATEmpty <$ put scp
+        Left err -> fail $ T.unpack $ fst err
+
+registerFunc :: (Bits i, Integral i)
+    => Bool
+    -> CT.StorageClass i
+    -> T.Text
+    -> Parser i ()
+registerFunc isDefined ty ident = gets (addFunction isDefined ty (tmpTKIdent ident))
+    >>= \case
+        Right scp -> put scp
+        Left err -> fail $ T.unpack $ fst err
 
 bracket :: Parser i a -> (a -> Parser i b) -> (a -> Parser i c) -> Parser i c
 bracket beg end m = do

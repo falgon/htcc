@@ -117,12 +117,10 @@ int main()
     assert(8, ({ char (*x)[3]; sizeof x; }), "({ char (*x)[3]; sizeof x; })");
     assert(1, sizeof main, "sizeof main");
     assert(1, sizeof assert, "sizeof assert");
-    //assert(1, ({ char (x); sizeof x; }), "({ char (x); sizeof x; })");
-    //assert(3, ({ char (x)[3]; sizeof x; }), "({ char (x)[3]; sizeof x; })");
-    //assert(3, ({ char (x)[3]; sizeof x; }), 
+    assert(1, ({ char (x); sizeof x; }), "({ char (x); sizeof x; })");
+    assert(3, ({ char (x)[3]; sizeof x; }), "({ char (x)[3]; sizeof x; })");
     assert(12, ({ char (x[3])[4]; sizeof x; }), "({ char (x[3])[4]; sizeof x; })");
     assert(4, ({ char (x[3])[4]; sizeof x[0]; }), "({ char (x[3])[4]; sizeof x[0]; })");
-
     assert(4, ({ int a; _Alignof(a); }), "({ int a; _Alignof(a); })");
     assert(4, ({ int a; _Alignof a; }), "({ int a; _Alignof a; })");
     assert(8, ({ int* a; _Alignof a; }), "({ int* a; _Alignof a; })");

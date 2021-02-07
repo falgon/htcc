@@ -16,17 +16,14 @@ module Htcc.Parser.Combinators.Program (
   , compoundStmt
 ) where
 
-import           Control.Monad                               (forM, void, when,
-                                                              (>=>))
+import           Control.Monad                               (void, when, (>=>))
 import           Control.Monad.Combinators                   (choice, some)
 import           Control.Monad.Extra                         (ifM)
-import           Control.Monad.State                         (get, gets, modify,
-                                                              put)
+import           Control.Monad.State                         (get, gets, modify)
 import           Control.Monad.Trans                         (MonadTrans (..))
 import           Control.Monad.Trans.Maybe                   (MaybeT (..),
                                                               runMaybeT)
 import           Data.Bits                                   (Bits)
-import qualified Data.ByteString.UTF8                        as BSU
 import           Data.Char                                   (ord)
 import           Data.Functor                                ((<&>))
 import           Data.List                                   (find)
@@ -62,22 +59,22 @@ import           Htcc.Parser.AST.Type                        (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.ConstExpr           (evalConstexpr)
 import           Htcc.Parser.Combinators.Core
+import           Htcc.Parser.Combinators.Decl                (absDeclType)
+import           Htcc.Parser.Combinators.Decl.Declarator     (declarator)
+import           Htcc.Parser.Combinators.Decl.Spec           (declspec)
 import qualified Htcc.Parser.Combinators.GNUExtensions       as GNU
 import           Htcc.Parser.Combinators.Keywords
-import           Htcc.Parser.Combinators.Type                (absDeclType,
-                                                              declIdent,
-                                                              funcParams)
+import           Htcc.Parser.Combinators.Type                (toNamedParams)
 import           Htcc.Parser.Combinators.Utils               (bracket,
                                                               getPosState,
                                                               maybeToParser,
+                                                              registerFunc,
+                                                              registerGVar,
+                                                              registerGVarWith,
                                                               registerLVar,
-                                                              tmpTKIdent)
+                                                              registerStringLiteral)
 import           Htcc.Parser.Combinators.Var                 (varInit)
-import           Htcc.Parser.ConstructionData.Core           (addFunction,
-                                                              addGVar,
-                                                              addGVarWith,
-                                                              addLiteral,
-                                                              fallBack,
+import           Htcc.Parser.ConstructionData.Core           (fallBack,
                                                               incomplete,
                                                               isSwitchStmt,
                                                               lookupFunction,
@@ -88,14 +85,13 @@ import           Htcc.Parser.ConstructionData.Core           (addFunction,
 import           Htcc.Parser.ConstructionData.Scope          (LookupVarResult (..))
 import qualified Htcc.Parser.ConstructionData.Scope.Function as PSF
 import qualified Htcc.Parser.ConstructionData.Scope.Var      as PV
-import qualified Htcc.Tokenizer.Token                        as HT
 import qualified Text.Megaparsec                             as M
 import qualified Text.Megaparsec.Char                        as MC
 
 import           Text.Megaparsec.Debug                       (dbg)
 
 parser, program :: (Integral i, Bits i, Read i, Show i) => Parser i (ASTs i)
-parser = (spaceConsumer >> program) <* M.eof
+parser = spaceConsumer *> program <* M.eof
 program = some global
 
 global,
@@ -120,38 +116,27 @@ global,
     factor :: (Ord i, Bits i, Read i, Show i, Integral i) => Parser i (ATree i)
 
 global = choice
-    [ function
+    [ M.try function
     , gvar
     ]
 
 function = do
     pos <- getPosState
-    M.try (declIdent <* lparen) >>= \case
-        (_, Nothing) -> fail "expected unqualified-id"
-        (ty, Just ident) -> do
-            (ty', params) <- funcParams ty
-            modify resetLocal
-            choice
-                [ declaration ty' ident
-                , definition ty' ident params pos
+    declspec >>= declarator >>= \case
+        (_, Nothing) -> fail "function name omitted, expected unqualified-id"
+        (ty@(CT.SCAuto (CT.CTFunc _ _)), Just ident) -> modify resetLocal
+            *> choice
+                [ declaration ty ident
+                , definition ty ident pos
                 ]
+        _ -> fail "expected function" -- TODO: currentry, ignore storage class
     where
-        declaration ty ident = 
-            void semi
-                >> gets (addFunction False ty (tmpTKIdent ident))
-                >>= \case
-                    Right scp' -> ATEmpty <$ put scp'
-                    Left err   -> fail $ T.unpack $ fst err
+        declaration ty ident = ATEmpty <$ (semi *> registerFunc False ty ident)
 
-        definition ty ident params pos = 
-            void (M.lookAhead lbrace)
-                >> gets (addFunction True ty (tmpTKIdent ident))
-                >>= \case
-                    Right scp' -> do
-                        put scp'
-                        params' <- forM params $ uncurry registerLVar
-                        stmt >>= fromValidFunc params'
-                    Left err -> fail $ T.unpack $ fst err
+        definition ty ident pos = do
+            registerFunc True ty ident
+            params <- mapM (uncurry registerLVar) =<< toNamedParams ty
+            stmt >>= fromValidFunc params
             where
                 fromValidFunc params' st@(ATNode (ATBlock block) _ _ _)
                     | CT.toTypeKind ty == CT.CTVoid =
@@ -175,20 +160,25 @@ function = do
                         pure $ atDefFunc ident (if null params' then Nothing else Just params') ty st
                 fromValidFunc _ _ = fail "internal compiler error"
 
-gvar = declIdent >>= \case
-    (_, Nothing) -> ATEmpty <$ semi
-    (ty, Just ident) -> choice
-        [ nonInit ty ident
-        , withInit ty ident
+gvar = do
+    ty <- declspec
+    M.choice
+        [ ATEmpty <$ semi
+        , declGVar ty
         ]
     where
-        nonInit ty ident = do
-            void semi
-            ty' <- maybeToParser "defining global variables with a incomplete type" =<< gets (incomplete ty)
-            gets (addGVar ty' (tmpTKIdent ident))
-                >>= \case
-                    Left err -> fail $ T.unpack $ fst err
-                    Right (_, scp) -> ATEmpty <$ put scp
+        declGVar ty = declarator ty >>= \case
+            (_, Nothing) -> fail "variable name omitted, expected unqualified-id"
+            (ty', Just ident) -> choice
+                [ nonInit ty' ident
+                , withInit ty' ident
+                ]
+
+        nonInit ty ident = semi
+            >> gets (incomplete ty)
+            >>= maybeToParser "defining global variables with a incomplete type"
+            >>= flip registerGVar ident
+            >> pure ATEmpty
 
         withInit ty ident = do
             void equal
@@ -196,36 +186,23 @@ gvar = declIdent >>= \case
             gvarInit ty' ident <* semi
 
         gvarInit ty ident = choice
-                [ M.try fromConstant
-                , fromOG
-                ]
+            [ M.try fromConstant
+            , fromOG
+            ]
             where
+                fromConstant = evalConstexpr
+                    >>= registerGVarWith ty ident . PV.GVarInitWithVal
+
                 fromOG = do
                     ast <- conditional
                     case (atkind ast, atkind (atL ast)) of
-                        (ATAddr, ATGVar _ name) -> gets (gvarInitWithOG ty name)
-                            >>= \case
-                                Left err -> fail $ T.unpack $ fst err
-                                Right (_, scp) -> ATEmpty <$ put scp
+                        (ATAddr, ATGVar _ name) -> registerGVarWith ty ident (PV.GVarInitWithOG name)
                         (ATAddr, _) -> fail "invalid initializer in global variable"
                         (ATGVar t name, _)
-                            | CT.isCTArray t -> gets (gvarInitWithOG ty name)
-                                >>= \case
-                                    Left err -> fail $ T.unpack $ fst err
-                                    Right (_, scp) -> ATEmpty <$ put scp
+                            | CT.isCTArray t -> registerGVarWith ty ident (PV.GVarInitWithOG name)
                             -- TODO: support initializing from other global variables
                             | otherwise -> fail "initializer element is not constant"
                         _ -> fail "initializer element is not constant"
-
-                gvarInitWithOG ty' to = addGVarWith ty' (tmpTKIdent ident) (PV.GVarInitWithOG to)
-                gvarInitWithVal ty' to = addGVarWith ty' (tmpTKIdent ident) (PV.GVarInitWithVal to)
-
-                fromConstant = do
-                    cval <- evalConstexpr
-                    gets (gvarInitWithVal ty cval)
-                        >>= \case
-                            Left err -> fail $ T.unpack $ fst err
-                            Right (_, scp) -> ATEmpty <$ put scp
 
 compoundStmt :: (Ord i, Bits i, Read i, Show i, Integral i) => Parser i [ATree i]
 compoundStmt = bracket get (modify . fallBack) $ const $
@@ -304,14 +281,21 @@ stmt = choice
 
         labelStmt = atLabel <$> M.try (identifier <* colon)
 
-        lvarStmt = declIdent >>= \case
-            (_, Nothing) -> ATEmpty <$ semi
-            (ty, Just ident) -> choice
-                [ nonInit ty ident
-                , withInit ty ident
+        lvarStmt = do
+            ty <- M.try declspec
+            M.choice
+                [ ATEmpty <$ semi
+                , declLVar ty
                 ]
             where
-                nonInit ty ident = semi >> atNull <$> registerLVar ty ident
+                declLVar ty = declarator ty >>= \case
+                    (_, Nothing) -> fail "variable name omitted, expected unqualified-id"
+                    (ty', Just ident) -> M.choice
+                        [ nonInit ty' ident
+                        , withInit ty' ident
+                        ]
+
+                nonInit ty ident = semi *> registerLVar ty ident <&> atNull
                 withInit ty ident = equal *> varInit assign ty ident <* semi
 
 expr = assign
@@ -458,14 +442,7 @@ factor = choice
         sizeof = memOp kSizeof CT.sizeof "sizeof"
         alignof = memOp k_Alignof CT.alignof "alignof"
 
-        strLiteral = do
-            s <- stringLiteral
-            lit <- gets $
-                addLiteral (CT.SCAuto $ CT.CTArray (fromIntegral $ length s) CT.CTChar)
-                    (HT.TokenLCNums 1 1, HT.TKString $ BSU.fromString s)
-            case lit of
-                Left err        -> fail $ T.unpack $ fst err
-                Right (nd, scp) -> nd <$ put scp
+        strLiteral = stringLiteral >>= registerStringLiteral
 
         identifier' = do
             pos <- getPosState

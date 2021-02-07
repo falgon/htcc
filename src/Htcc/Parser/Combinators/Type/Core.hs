@@ -12,9 +12,9 @@ C language parser Combinators
 {-# LANGUAGE LambdaCase, OverloadedStrings, TupleSections #-}
 module Htcc.Parser.Combinators.Type.Core (
     arraySuffix
-  , funcParams
-  , declspec
-  , declIdent
+  , typeSuffix
+  -- * Helper functions
+  , toNamedParams
 ) where
 import           Control.Monad                           (mfilter)
 import           Control.Monad.Combinators               (choice)
@@ -23,16 +23,15 @@ import           Control.Monad.Trans.Maybe               (MaybeT (..),
                                                           runMaybeT)
 import           Control.Monad.Trans.State               (gets)
 import           Data.Bits                               (Bits (..))
-import           Data.Either                             (rights)
 import           Data.Functor                            ((<&>))
-import           Data.Maybe                              (fromJust)
+import           Data.Maybe                              (fromJust, isJust)
 import qualified Data.Text                               as T
-import           Data.Tuple.Extra                        (dupe, first)
+import           Data.Tuple.Extra                        (dupe, first, second)
 import qualified Htcc.CRules.Types                       as CT
 import           Htcc.Parser.Combinators.ConstExpr       (evalConstexpr)
 import           Htcc.Parser.Combinators.Core
-import           Htcc.Parser.Combinators.Keywords
-import {-# SOURCE #-} Htcc.Parser.Combinators.Type.NestedDecl
+import {-# SOURCE #-} Htcc.Parser.Combinators.Decl.Declarator
+import           Htcc.Parser.Combinators.Decl.Spec       (declspec)
 import           Htcc.Parser.ConstructionData.Core       (incomplete)
 import           Htcc.Utils                              (toNatural)
 import qualified Text.Megaparsec                         as M
@@ -75,55 +74,48 @@ arraySuffix ty = choice
 
 funcParams :: (Show i, Read i, Integral i, Bits i)
     => CT.StorageClass i
-    -> Parser i (CT.StorageClass i, [(CT.StorageClass i, T.Text)])
-funcParams ty = choice
-    [ (CT.wrapCTFunc ty [], []) <$ (symbol "void" *> rparen)
-    , withParams <&> \p -> (CT.wrapCTFunc ty $ map (either id fst) p, rights p)
-    ]
+    -> Parser i (CT.StorageClass i)
+funcParams ty = lparen
+    *> choice
+        [ [] <$ (symbol "void" *> rparen)
+        , withParams
+        ]
+    <&> CT.wrapCTFunc ty
     where
         withParams = M.manyTill
             (M.try (declIdentFuncParam comma) M.<|> declIdentFuncParam (M.lookAhead rparen))
             rparen
 
-        declIdentFuncParam sep = declIdent >>= \case
-            (ty', Nothing) -> Left ty' <$ sep
-            (ty', Just ident) -> Right (narrowPtr ty', ident) <$ sep
+        declIdentFuncParam sep = do
+            ty' <- M.try declspec
+            M.choice
+                [ (ty', Nothing) <$ sep
+                , declarator ty' >>= \case
+                    (t, Nothing) -> (t, Nothing) <$ sep
+                    (t, Just ident) -> (narrowPtr t, Just ident) <$ sep
+                ]
             where
                 narrowPtr ty'
                     | CT.isCTArray ty' = maybe ty' (CT.mapTypeKind CT.CTPtr) $ CT.deref ty'
                     | CT.isIncompleteArray ty' = flip CT.mapTypeKind ty' $
                         \(CT.CTIncomplete (CT.IncompleteArray ty'')) -> CT.CTPtr ty''
                     | otherwise = ty'
-{-
+
+toNamedParams :: (Show i, Read i, Integral i, Bits i)
+    => CT.StorageClass i
+    -> Parser i [(CT.StorageClass i, T.Text)]
+toNamedParams ty = case CT.toTypeKind ty of
+    (CT.CTFunc _ params) -> pure
+        [ first CT.SCAuto $ second fromJust p
+        | p <- params
+        , isJust $ snd p
+        ]
+    _ -> fail "expected function parameters"
+
 typeSuffix :: (Show i, Read i, Bits i, Integral i)
     => CT.StorageClass i
     -> Parser i (CT.StorageClass i)
 typeSuffix ty = M.option ty $ choice
     [ arraySuffix ty
-    , lparen *> funcParams ty <&> fst
+    , funcParams ty
     ]
--}
-
-declspec',
-    declspec :: (Show i, Read i, Integral i) => Parser i (CT.StorageClass i)
-
-declspec' = choice
-    [ kStatic   *> (CT.SCStatic . CT.toTypeKind <$> declspec')
-    , kRegister *> (CT.SCRegister . CT.toTypeKind <$> declspec')
-    , kAuto     *> declspec'
-    -- , struct
-    , choice kBasicTypes <&> CT.SCAuto . CT.toTypeKind . CT.implicitInt . read' . T.unpack
-    ]
-    where
-        read' :: (Show i, Read i, Integral i)
-            => String
-            -> CT.TypeKind i
-        read' = read
-
-declspec = do
-    pt <- declspec'
-    fn <- CT.ctorPtr . toNatural . length <$> M.many star
-    pure $ fn pt
-
-declIdent :: (Show i, Read i, Bits i, Integral i) => Parser i (CT.StorageClass i, Maybe T.Text)
-declIdent = M.try declspec >>= nestedDeclType

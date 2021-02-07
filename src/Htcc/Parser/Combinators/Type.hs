@@ -11,8 +11,6 @@ C language parser Combinators
 -}
 module Htcc.Parser.Combinators.Type (
     module Htcc.Parser.Combinators.Type.Core
-  , module Htcc.Parser.Combinators.Type.AbsDecl
 ) where
 
 import Htcc.Parser.Combinators.Type.Core
-import Htcc.Parser.Combinators.Type.AbsDecl

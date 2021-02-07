@@ -11,7 +11,8 @@ C language parser Combinators
 -}
 {-# LANGUAGE TupleSections #-}
 module Htcc.Parser.Combinators.Type.Utils (
-    takeCtorPtr
+    starsToPtrCtor
+  , starsToPtr
 ) where
 
 import qualified Htcc.CRules.Types            as CT
@@ -19,5 +20,8 @@ import           Htcc.Parser.Combinators.Core (Parser, star)
 import           Htcc.Utils                   (toNatural)
 import qualified Text.Megaparsec              as M
 
-takeCtorPtr :: Ord i => Parser i (CT.StorageClass i -> CT.StorageClass i)
-takeCtorPtr = CT.ctorPtr . toNatural . length <$> M.many star
+starsToPtrCtor :: Ord i => Parser i (CT.StorageClass i -> CT.StorageClass i)
+starsToPtrCtor = CT.ctorPtr . toNatural . length <$> M.many star
+
+starsToPtr :: Ord i => CT.StorageClass i -> Parser i (CT.StorageClass i)
+starsToPtr ty = starsToPtrCtor <*> pure ty

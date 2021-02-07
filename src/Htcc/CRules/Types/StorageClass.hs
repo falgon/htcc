@@ -23,6 +23,7 @@ import           GHC.Generics               (Generic)
 
 import           Htcc.CRules.Types.CType
 import           Htcc.CRules.Types.TypeKind
+import qualified Data.Text as T
 
 -- | The data type representing `StorageClass`
 data StorageClass i = SCAuto (TypeKind i) -- ^ The @auto@ keyword
@@ -139,5 +140,5 @@ instance StorageClassBase StorageClass where
 
 instance NFData i => NFData (StorageClass i)
 
-wrapCTFunc :: StorageClass i -> [StorageClass i] -> StorageClass i
-wrapCTFunc ty params = picksc ty $ CTFunc (toTypeKind ty) $ map fromsc params
+wrapCTFunc :: StorageClass i -> [(StorageClass i, Maybe T.Text)] -> StorageClass i
+wrapCTFunc ty params = picksc ty $ CTFunc (toTypeKind ty) $ map (first fromsc) params
