@@ -59,9 +59,7 @@ import           Htcc.Parser.AST.Type                        (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.ConstExpr           (evalConstexpr)
 import           Htcc.Parser.Combinators.Core
-import           Htcc.Parser.Combinators.Decl                (absDeclType)
-import           Htcc.Parser.Combinators.Decl.Declarator     (declarator)
-import           Htcc.Parser.Combinators.Decl.Spec           (declspec)
+import           Htcc.Parser.Combinators.Decl                (absDeclarator, declarator, declspec)
 import qualified Htcc.Parser.Combinators.GNUExtensions       as GNU
 import           Htcc.Parser.Combinators.Keywords
 import           Htcc.Parser.Combinators.Type                (toNamedParams)
@@ -364,7 +362,7 @@ term = binaryOperator cast
     ]
 
 cast = choice
-    [ atCast <$> M.try (parens absDeclType) <*> cast
+    [ atCast <$> M.try (parens absDeclarator) <*> cast
     , unary
     ]
 
@@ -428,7 +426,7 @@ factor = choice
             , memOpUnary
             ]
             where
-                memOpType = incomplete <$> M.try (parens absDeclType) <*> get
+                memOpType = incomplete <$> M.try (parens absDeclarator) <*> get
                     >>= fmap (atNumLit . fromIntegral . op)
                     . maybeToParser ("invalid application of '" <> opS <> "' to incomplete type")
 

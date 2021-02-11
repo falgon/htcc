@@ -12,6 +12,7 @@ C language parser Combinators
 {-# LANGUAGE TupleSections #-}
 module Htcc.Parser.Combinators.Decl.Declarator (
     declarator
+  , absDeclarator
 ) where
 
 import           Control.Monad.Fix                  (fix)
@@ -20,6 +21,7 @@ import qualified Data.Text                          as T
 import           Data.Tuple.Extra                   (uncurry3)
 import qualified Htcc.CRules.Types                  as CT
 import           Htcc.Parser.Combinators.Core
+import           Htcc.Parser.Combinators.Decl.Spec  (declspec)
 import           Htcc.Parser.Combinators.Type.Core  (typeSuffix)
 import           Htcc.Parser.Combinators.Type.Utils
 import           Htcc.Utils                         (dropFst3, swap)
@@ -46,3 +48,19 @@ declarator ty = do
             where
                 nested' ptrf ident t =
                     M.option (id, ident, ptrf t) ((id, ident,) . ptrf <$> typeSuffix t)
+
+absDeclarator :: (Integral i, Show i, Read i, Bits i) => Parser i (CT.StorageClass i)
+absDeclarator = do
+    ty <- declspec
+    if CT.isSCStatic ty {- TODO: or register -} then fail "storage-class specifier is not allowed" else do
+        ty' <- starsToPtr ty
+        M.choice
+            [ M.try $ typeSuffix ty'
+            , snd <$> absDeclType' id ty'
+            ]
+    where
+        absDeclType' fn ty = do
+            cpfn <- starsToPtrCtor
+            M.option (cpfn, ty) $ do
+                (cpfn', ty') <- parens $ absDeclType' (fn . cpfn) ty
+                M.option (id, cpfn' ty') ((id,) . cpfn' <$> typeSuffix ty')

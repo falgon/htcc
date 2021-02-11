@@ -10,7 +10,7 @@ int test_num;
 int;
 
 int gr[3];
-//int (*gpa)[3];
+int (*gpa)[3];
 
 int assert(long expected, long actual, char* code)
 {
@@ -26,6 +26,12 @@ int assert(long expected, long actual, char* code)
 
 int gg(int* p) { *p = 42; return 0; } 
 int sum(int* p, int n) { int s = 0; for (int i = 0; i < n; i = i + 1) s = s + *(p + i); return s; }
+void ptr2ar(int (*p)[3])
+{
+    int i = 0;
+    for (; i < sizeof *p / sizeof **p; ++i)
+        p[0][i] = i + 1;
+}
 
 int main()
 {
@@ -140,6 +146,11 @@ int main()
     assert(0, ({ int ar[1][1][1] = {{{}}}; ar[0][0][0]; }), "({ int ar[1][1][1] = {{{}}}; ar[0][0][0]; })");
     assert(3, ({ char* x[3]; char y; x[0] = &y; y = 3; x[0][0]; }), "({ char* x[3]; char y; x[0] = &y; y = 3; x[0][0]; })");
     assert(4, ({ char x[3]; char (*y)[3] = x; y[0][0] = 4; y[0][0]; }), "({ char x[3]; char (*y)[3] = x; y[0] = 4; y[0][0]; }");
+    assert(1, ({ gpa = gr; (*gpa)[0]; }), "({ gpa = gr; (*gpa)[0]; })");
+    assert(2, gpa[0][1], "gpa[0][1]");
+    assert(3, gpa[0][2], "gpa[0][2]");
+    assert(42, ({ int* ar[3]; int x; ar[0] = &x; x = 42; ar[0][0]; }), "({ int* ar[3]; int x; ar[0] = &x; x = 42; ar[0][0]; })");
+    assert(6, ({ int ar[3]; ptr2ar(&ar); sum(ar, sizeof ar / sizeof *ar); }), "({ int ar[3]; ptr2ar(&ar); sum(ar, sizeof ar / sizeof *ar); })");
     
     printf("All tests are passed!\n");
 

@@ -11,8 +11,7 @@ C language parser Combinators
 -}
 {-# LANGUAGE LambdaCase, OverloadedStrings, TupleSections #-}
 module Htcc.Parser.Combinators.Type.Core (
-    arraySuffix
-  , typeSuffix
+    typeSuffix
   -- * Helper functions
   , toNamedParams
 ) where

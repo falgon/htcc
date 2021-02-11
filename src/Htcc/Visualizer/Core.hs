@@ -98,6 +98,7 @@ encodeTree (ATNode (ATCallFunc fname (Just args)) _ lhs rhs) = Node (T.unpack fn
 encodeTree (ATNode ATExprStmt _ lhs _) = encodeTree lhs
 encodeTree (ATNode (ATStmtExpr exps) _ lhs rhs) = Node "({})" $ map encodeTree exps ++ [encodeTree lhs, encodeTree rhs]
 encodeTree (ATNode (ATNull _) _ _ _) = Node "" []
+-- TODO: handle ATFunc
 
 renderNTree :: Tree String -> QDiagram SVG V2 Double Any
 renderNTree nt = renderTree

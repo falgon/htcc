@@ -10,7 +10,6 @@ int test_num;
 
 int g;
 int gr[3];
-//int (*gpa)[3];
 char gc = 1;
 short gsh = 2;
 int gi = 3;
@@ -36,8 +35,7 @@ int sum(int* p, int n) { int s = 0; for (int i = 0; i < n; i = i + 1) s = s + *(
 int sub3(int a, int b, int c) { return a - b - c; }
 int sub3_short(short a, short b, short c) { return a - b - c; }
 int sub3_long(long a, long b, long c) { return a - b - c; }
-/*int ptr2ar(int (*p)[3]) { int i = 0; for (; i < sizeof *p / sizeof **p; i = i + 1) p[0][i] = i + 1; return 0; }
-static int static_fun() { return 42; }*/
+/*static int static_fun() { return 42; }*/
 
 int main()
 {
@@ -112,12 +110,6 @@ int main()
     assert(16, ({ long int a; int long b; sizeof a + sizeof b; }), "({ long int a; int long b; sizeof a + sizeof b; })");
     assert(32, ({ typedef int* p[4]; p a; sizeof a; }), "({ typedef int* p[4]; sizeof p; })");
     assert(8, ({ typedef int (*pp)[4]; pp a; sizeof a; }), "({ typedef int (*p)[4]; sizeof p; })");
-    assert(1, ({ gpa = gr; (*gpa)[0]; }), "({ gpa = gr; (*gpa)[0]; })");
-    assert(2, gpa[0][1], "(*gpa)[1]");
-    assert(3, gpa[0][2], "(*gpa)[2]");
-    assert(42, ({ int* ar[3]; int x; ar[0] = &x; x = 42; ar[0][0]; }), "({ int* ar[3]; int x; ar[0] = &x; x = 42; ar[0][0]; })");
-    assert(42, ({ int ar[3]; int (*p)[3] = ar; p[0][0] = 42; ar[0]; }), "({ int ar[3]; int (*p)[3] = ar; p[0][0] = 42; ar[0]; })");
-    assert(6, ({ int ar[3]; ptr2ar(&ar); sum(ar, sizeof ar / sizeof *ar); }), "({ int ar[3]; ptr2ar(&ar); sum(ar, sizeof ar / sizeof **ar); }");
     assert(42, ({ struct { int (*p)[3]; } x; int ar[3]; x.p = &ar; (*x.p)[0] = 42; ar[0]; }), "({ struct { int (*p)[3]; } x; int ar[3]; x.p = &ar; (*x.p)[0]     = 42; ar[0]; })");
     { void* x; }
     assert(0, ({ _Bool x = 0; x; }), "({ _Bool x = 0; x; })");
