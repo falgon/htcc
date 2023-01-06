@@ -5,9 +5,6 @@
 </p>
 
 <div align="center">
-<a href="https://travis-ci.org/falgon/htcc">
-    <img src="https://travis-ci.org/falgon/htcc.svg?branch=master" alt="Build Status" />
-</a>
 <a href="https://github.com/falgon/htcc/actions?query=workflow%3ACI">
     <img alt="CI" src="https://github.com/falgon/htcc/workflows/CI/badge.svg" />
 </a>
