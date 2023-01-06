@@ -1,4 +1,4 @@
-<h1><p align="center">htcc</a></h1>
+<h1 align="center">htcc</h1>
 
 <p align="center">
 :baby_chick: A tiny C language compiler (x86-64) (WIP)
