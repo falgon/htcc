@@ -95,6 +95,10 @@ library
       Htcc.Parser.ConstructionData.Scope.Var
       Htcc.Parser.Utils
       Htcc.Parser.Utils.Core
+      Text.Megaparsec
+      Text.Megaparsec.Char
+      Text.Megaparsec.Char.Lexer
+      Text.Megaparsec.Debug
       Htcc.Tokenizer
       Htcc.Tokenizer.Core
       Htcc.Tokenizer.Token
@@ -123,7 +127,7 @@ library
     , diagrams-lib
     , diagrams-svg
     , extra
-    , megaparsec
+    , parsec
     , monad-finally
     , monad-loops
     , mono-traversable
@@ -159,7 +163,7 @@ executable htcc
     , extra
     , gitrev
     , htcc
-    , megaparsec
+    , parsec
     , monad-finally
     , monad-loops
     , mono-traversable
@@ -210,7 +214,7 @@ test-suite htcc-test
     , hspec-contrib
     , hspec-core
     , htcc
-    , megaparsec
+    , parsec
     , monad-finally
     , monad-loops
     , mono-traversable
@@ -247,7 +251,7 @@ benchmark criterion
     , diagrams-svg
     , extra
     , htcc
-    , megaparsec
+    , parsec
     , monad-finally
     , monad-loops
     , mono-traversable

@@ -46,7 +46,7 @@ dependencies:
 - diagrams-lib
 - natural-transformation
 - optparse-applicative
-- megaparsec
+- parsec
 - parser-combinators
 - utf8-string
 
