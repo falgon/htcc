@@ -27,7 +27,7 @@ import           Htcc.Parser.Combinators.Core
 import qualified Text.Megaparsec              as M
 import qualified Text.Megaparsec.Char         as MC
 
-pKeyword :: Ord e => T.Text -> M.ParsecT e T.Text m T.Text
+pKeyword :: (Monad m, Ord e) => T.Text -> M.ParsecT e T.Text m T.Text
 pKeyword = flip notFollowedBy (M.takeWhile1P (Just "valid Keyword") CR.isValidChar) . MC.string
 
 kAuto, kBreak, kCase, kChar, kConst, kContinue,
@@ -37,7 +37,7 @@ kAuto, kBreak, kCase, kChar, kConst, kContinue,
     kSizeof, kStatic, kStruct, kSwitch, kTypedef, kUnion,
     kUnsigned, kVoid, kVolatile, kWhile, k_Alignas, k_Alignof,
     k_Atomic, k_Bool, k_Complex, k_Generic, k_Imaginary, k_Noreturn,
-    k_Static_assert, k_Thread_local :: Ord e => M.ParsecT e T.Text m T.Text
+    k_Static_assert, k_Thread_local :: (Monad m, Ord e) => M.ParsecT e T.Text m T.Text
 kAuto = pKeyword "auto"
 kBreak = pKeyword "break"
 kCase = pKeyword "case"
@@ -83,7 +83,7 @@ k_Noreturn = pKeyword "_Noreturn"
 k_Static_assert = pKeyword "_Static_assert"
 k_Thread_local = pKeyword "_Thread_local"
 
-kBasicTypes :: Ord e => [M.ParsecT e T.Text m T.Text]
+kBasicTypes :: (Monad m, Ord e) => [M.ParsecT e T.Text m T.Text]
 kBasicTypes = [
     kChar
   , kDouble
@@ -98,4 +98,3 @@ kBasicTypes = [
   , k_Complex
   , k_Imaginary
   ]
-

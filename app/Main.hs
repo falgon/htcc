@@ -93,7 +93,7 @@ main = do
         txt <- T.readFile fname
         case runParser parser fname txt
             :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, GlobalVars Integer, Literals Integer) of
-            Left x  -> print x -- putStr $ M.errorBundlePretty x
+            Left x  -> putStr $ M.errorBundlePretty x
             Right r -> do
                 mapM_ (hPutStr stderr . M.errorBundlePretty) $ toList $ fst4 r
                 runAsm' $ casm' (snd4 r) (thd4 r) (fou4 r)

@@ -66,30 +66,36 @@ import           Htcc.Utils                         (lor)
 import qualified Text.Megaparsec                    as M
 import qualified Text.Megaparsec.Char               as MC
 import qualified Text.Megaparsec.Char.Lexer         as ML
+import qualified Text.Parsec                        as P
 
-spaceConsumer :: Ord e => M.ParsecT e T.Text m ()
+spaceConsumer :: (Monad m, Ord e) => M.ParsecT e T.Text m ()
 spaceConsumer = ML.space MC.space1 (ML.skipLineComment "//") (ML.skipBlockComment "/*" "*/")
 
-lexeme :: Ord e => M.ParsecT e T.Text m a -> M.ParsecT e T.Text m a
+lexeme :: (Monad m, Ord e) => M.ParsecT e T.Text m a -> M.ParsecT e T.Text m a
 lexeme = ML.lexeme spaceConsumer
 
-symbol :: Ord e => T.Text -> M.ParsecT e T.Text m T.Text
+symbol :: (Monad m, Ord e) => T.Text -> M.ParsecT e T.Text m T.Text
 symbol = ML.symbol spaceConsumer
 
-charLiteral :: Ord e => M.ParsecT e T.Text m Char
-charLiteral = M.between (MC.char '\'') (MC.char '\'') ML.charLiteral <* spaceConsumer
+charLiteral :: (Monad m, Ord e) => M.ParsecT e T.Text m Char
+charLiteral = M.between (MC.char '\'') (MC.char '\'') charBody <* spaceConsumer
+    where
+        -- Keep the historical single-quoted character behavior that the existing
+        -- component tests exercise, while `ML.charLiteral` remains strict enough
+        -- for string-literal parsing.
+        charBody = ML.charLiteral <|> M.ParsecT (P.noneOf ['\\'])
 
-stringLiteral :: Ord e => M.ParsecT e T.Text m String
+stringLiteral :: (Monad m, Ord e) => M.ParsecT e T.Text m String
 stringLiteral = MC.char '\"' *> ((<> "\0") <$> M.manyTill ML.charLiteral (MC.char '\"')) <* spaceConsumer
 
-hexadecimal, octal, decimal, natural, integer :: (Ord e, Num i) => M.ParsecT e T.Text m i
+hexadecimal, octal, decimal, natural, integer :: (Monad m, Ord e, Num i) => M.ParsecT e T.Text m i
 hexadecimal = MC.char '0' >> MC.char' 'x' >> ML.hexadecimal
 octal = MC.char '0' >> ML.octal
 decimal = ML.decimal
 natural = M.try (lexeme hexadecimal) <|> M.try (lexeme octal) <|> lexeme decimal
 integer = ML.signed spaceConsumer natural <|> natural
 
-parens, braces, angles, brackets :: Ord e => M.ParsecT e T.Text m a -> M.ParsecT e T.Text m a
+parens, braces, angles, brackets :: (Monad m, Ord e) => M.ParsecT e T.Text m a -> M.ParsecT e T.Text m a
 parens = between lparen rparen
 braces = between lbrace rbrace
 angles = between langle rangle
@@ -118,7 +124,7 @@ identifier,
     hat,
     tilda,
     vertical,
-    percent :: Ord e => M.ParsecT e T.Text m T.Text
+    percent :: (Monad m, Ord e) => M.ParsecT e T.Text m T.Text
 identifier =
     mappend
         <$> M.takeWhile1P (Just "valid identifier") (lor [isAlpha, (=='_')])
@@ -148,7 +154,7 @@ tilda = symbol "~"
 vertical = symbol "|"
 percent = symbol "%"
 
-notFollowedBy :: Ord e
+notFollowedBy :: (Monad m, Ord e)
     => M.ParsecT e T.Text m a
     -> M.ParsecT e T.Text m b
     -> M.ParsecT e T.Text m a
