@@ -9,12 +9,17 @@ import           Tests.Utils
 
 test :: String -> IO (Int, String)
 test x = flip finally (clean ["tmp"]) $ do
+    htccCmd <- htccCommand
+    asmCmd <- assemblerCommand ["-no-pie", "-x", "assembler", "-o", "tmp", "-"]
     execErrFin $ mconcat
         [ "echo '"
         , T.pack x
-        , "' | stack exec htcc -- /dev/stdin | gcc -no-pie -xassembler -o tmp -"
+        , "' | "
+        , htccCmd
+        , " /dev/stdin | "
+        , asmCmd
         ]
     exec "./tmp"
-        >>= exitCode 
-            (\ec -> (ec, x) <$ (putStr x *> putStrLn " [Compiling]")) 
+        >>= exitCode
+            (\ec -> (ec, x) <$ (putStr x *> putStrLn " [Compiling]"))
             (return (0, x))

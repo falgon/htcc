@@ -24,10 +24,10 @@ int main()
     printf(">>>> tests: expressions/cast\n");
     test_num = 1;
 
-    assert(4, sizeof((int)'a'));
-    assert(1, sizeof((char)42));
-    assert(8, sizeof((int*)42));
-    assert(8, sizeof((char*)42));
+    assert(4, sizeof((int)'a'), "sizeof((int)'a')");
+    assert(1, sizeof((char)42), "sizeof((char)42)");
+    assert(8, sizeof((int*)42), "sizeof((int*)42)");
+    assert(8, sizeof((char*)42), "sizeof((char*)42)");
 
     printf("All tests are passed!\n");
     return 0;

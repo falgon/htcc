@@ -11,19 +11,20 @@ import           Tests.Utils
 test :: String -> [String] -> IO (Int, String)
 test x fnames = let obj = map (++".o") fnames in
     flip finally (clean $ ["tmp", "tmp.s"] ++ obj) $ do
+        htccCmd <- htccCommand
+        linkCmd <- assemblerCommand $ obj ++ ["tmp.s", "-o", "tmp"]
         execErrFin $ mconcat
             [ "echo \'"
             , T.pack x
-            , "\' | stack exec htcc -- /dev/stdin > tmp.s"
+            , "\' | "
+            , htccCmd
+            , " /dev/stdin > tmp.s"
             ]
-        forM_ fnames $ \fname -> execErrFin $ mconcat
-            [ "cc -c test/Tests/csrc/externals/"
-            , T.pack fname
-            , ".c"
-            ]
-        execErrFin $ mconcat
-            [ "gcc "
-            , T.pack (unwords obj)
-            , " tmp.s -o tmp"
-            ]
+        forM_ fnames $ \fname ->
+            assemblerCommand
+                [ "-c"
+                , "test/Tests/csrc/externals/" <> fname <> ".c"
+                ]
+                >>= execErrFin
+        execErrFin linkCmd
         exitCode (,x) (0, x) <$> exec "./tmp"

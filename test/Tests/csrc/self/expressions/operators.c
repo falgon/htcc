@@ -115,8 +115,8 @@ int main()
     assert(1, ({ int a = 1; sizeof(a = 2); a; }), "({ int a = 1; sizeof(a = 2); a; })");
     assert(24, ({ char* x[3]; sizeof x; }), "({ char* x[3]; sizeof x; })");
     assert(8, ({ char (*x)[3]; sizeof x; }), "({ char (*x)[3]; sizeof x; })");
-    assert(1, sizeof main, "sizeof main");
-    assert(1, sizeof assert, "sizeof assert");
+    assert(8, sizeof &main, "sizeof &main");
+    assert(8, sizeof &assert, "sizeof &assert");
     assert(8, sizeof(void (*)()), "sizeof(void (*)())");
     assert(8, sizeof(int (*)(void)), "sizeof(int (*)(void))");
     assert(8, sizeof(int (*)(int, int)), "sizeof(int (*)(int, int))");

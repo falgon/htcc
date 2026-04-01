@@ -10,7 +10,8 @@ type Warnings = SQ.Seq (M.ParseErrorBundle T.Text Void)
 
 data ConstructionData i = ConstructionData
     {
-        warns        :: Warnings,
-        scope        :: AS.Scoped i,
-        isSwitchStmt :: Bool
+        warns                            :: Warnings,
+        scope                            :: AS.Scoped i,
+        isSwitchStmt                     :: Bool,
+        allowSameInputExternalCollisions :: Bool
     }

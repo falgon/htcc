@@ -57,6 +57,7 @@ stackSize (ATNode (ATDefFunc _ args) _ body _) = let ms = f body $ maybe S.empty
     where
         f ATEmpty !s = s
         f (ATNode (ATCallFunc _ (Just arg)) t l r) !s = f (ATNode (ATBlock arg) t l r) s
+        f (ATNode (ATCallPtr (Just arg)) t l r) !s = f (ATNode (ATBlock arg) t l r) s
         f (ATNode (ATLVar t x) _ l r) !s = let i = S.insert (t, x) s in f l i `S.union` f r i
         f (ATNode (ATBlock xs) _ l r) !s = let i = foldr (S.union . (`f` s)) s xs in f l i `S.union` f r i
         f (ATNode (ATStmtExpr xs) t l r) !s = f (ATNode (ATBlock xs) t l r) s
@@ -70,30 +71,61 @@ prologue :: Integral i => i -> SI.Asm IT.TextLabelCtx e ()
 prologue ss = IT.push rbp >> IT.mov rbp rsp >> IT.sub rsp (fromIntegral ss :: Integer)
 
 {-# INLINE epilogue #-}
-epilogue :: SI.Asm IT.TextLabelCtx e ()
-epilogue = retLabel *> IT.leave *> IT.ret
+epilogue :: Ord i => CR.StorageClass i -> SI.Asm IT.TextLabelCtx e ()
+epilogue ty = retLabel *> when (returnsBool ty) normalizeBoolRax *> IT.leave *> IT.ret
     where
         retLabel = SI.Asm $ \x -> do
             cf <- readIORef (SI.curFn x)
             unless (isJust cf) $ err "stray epilogue"
-            T.putStrLn $ ".L.return." <> fromJust cf <> ":"
+            T.hPutStrLn (SI.outHandle x) $ ".L.return." <> fromJust cf <> ":"
+
+        returnsBool sc = case CR.toTypeKind sc of
+            CR.CTFunc retTy _ -> retTy == CR.CTBool
+            _                 -> False
+
+normalizeBoolRax :: SI.Asm IT.TextLabelCtx e ()
+normalizeBoolRax = normalizeBoolWordRax
+
+normalizeBoolWordRax :: SI.Asm IT.TextLabelCtx e ()
+normalizeBoolWordRax = IT.cmp rax (0 :: Int) *> IT.setne al *> IT.movzb rax al
+
+normalizeBoolAbiRax :: SI.Asm IT.TextLabelCtx e ()
+normalizeBoolAbiRax = IT.cmp al (0 :: Int) *> IT.setne al *> IT.movzb rax al
+
+truncateRax :: Ord i => CR.StorageClass i -> SI.Asm IT.TextLabelCtx e ()
+truncateRax t
+    | CR.sizeof t == 1 = IT.movsx rax al
+    | CR.sizeof t == 2 = IT.movsx rax ax
+    | CR.sizeof t == 4 = IT.movsxd rax eax
+    | otherwise = return ()
+
+normalizeCallResultRax :: Ord i => CR.StorageClass i -> SI.Asm IT.TextLabelCtx e ()
+normalizeCallResultRax t
+    | CR.toTypeKind t == CR.CTBool = normalizeBoolAbiRax
+    | needsAbiTruncation (CR.toTypeKind t) && CR.sizeof t < 8 = truncateRax t
+    | otherwise = return ()
+    where
+        needsAbiTruncation ty = case ty of
+            CR.CTChar     -> True
+            CR.CTInt      -> True
+            CR.CTEnum _ _ -> True
+            CR.CTSigned x -> needsAbiTruncation x
+            CR.CTShort x  -> needsAbiTruncation x
+            CR.CTLong x   -> needsAbiTruncation x
+            _             -> False
 
 truncate :: Ord i => CR.StorageClass i -> SI.Asm IT.TextLabelCtx e ()
 truncate ty = do
     IT.pop rax
-    when (CR.toTypeKind ty == CR.CTBool) $ IT.cmp rax (0 :: Int) *> IT.setne al
-    truncate' ty
+    if CR.toTypeKind ty == CR.CTBool
+        then normalizeBoolRax
+        else truncateRax ty
     IT.push rax
-    where
-        truncate' t
-            | CR.sizeof t == 1 = IT.movsx rax al
-            | CR.sizeof t == 2 = IT.movsx rax ax
-            | CR.sizeof t == 4 = IT.movsxd rax eax
-            | otherwise = return ()
 
 genAddr :: (Integral e, Show e, IsOperand i, Integral i, Ord i, IT.UnaryInstruction i, IT.BinaryInstruction i) => ATree i -> SI.Asm IT.TextLabelCtx e ()
 genAddr (ATNode (ATLVar _ v) _ _ _) = IT.lea rax (Ref $ rbp `osub` v) >> IT.push rax
 genAddr (ATNode (ATGVar _ n) _ _ _) = IT.push (IT.Offset n)
+genAddr (ATNode (ATFuncPtr n) _ _ _) = IT.push (IT.Offset n)
 genAddr (ATNode ATDeref _ lhs _) = genStmt lhs
 genAddr (ATNode (ATMemberAcc m) _ lhs _) = do
     genAddr lhs
@@ -115,6 +147,13 @@ load t
     | CR.sizeof t == 4 = IT.pop rax >> IT.movsxd rax (IT.dword IT.Ptr (Ref rax)) >> IT.push rax
     | otherwise = IT.pop rax >> IT.mov rax (Ref rax) >> IT.push rax
 
+nonLoadableDerefType :: CR.StorageClass i -> Bool
+nonLoadableDerefType ty =
+    CR.isArray ty
+        || case CR.toTypeKind ty of
+            CR.CTFunc _ _ -> True
+            _             -> False
+
 store :: Ord i => CR.StorageClass i -> SI.Asm IT.TextLabelCtx e ()
 store t = do
     IT.pop rdi
@@ -135,25 +174,129 @@ increment t = IT.pop rax >> IT.add rax (maybe 1 CR.sizeof $ CR.deref t) >> IT.pu
 decrement :: Ord i => CR.StorageClass i -> SI.Asm IT.TextLabelCtx e ()
 decrement t = IT.pop rax >> IT.sub rax (maybe 1 CR.sizeof $ CR.deref t) >> IT.push rax
 
-genStmt :: (Show e, Integral e, Show i, Integral i, Ord i, IsOperand i, IT.UnaryInstruction i, IT.BinaryInstruction i) => ATree i -> SI.Asm IT.TextLabelCtx e ()
-genStmt (ATNode (ATCallFunc x Nothing) _ _ _) = IT.call x >> IT.push rax
-genStmt (ATNode (ATCallFunc x (Just args)) t _ _) = let (n', toReg, _) = splitAtLen 6 args in do
-    mapM_ genStmt toReg
-    mapM_ IT.pop $ popRegs n'
+genCallTarget :: (Show e, Integral e, Show i, Integral i, Ord i, IsOperand i, IT.UnaryInstruction i, IT.BinaryInstruction i) => ATree i -> SI.Asm IT.TextLabelCtx e ()
+genCallTarget callee
+    | isFunctionDesignator callee = genAddr callee
+    | otherwise = genStmt callee
+    where
+        isFunctionDesignator expr = case CR.toTypeKind (atype expr) of
+            CR.CTFunc _ _ -> True
+            _             -> False
+
+stackArgCount :: [a] -> Int
+stackArgCount = length . drop 6
+
+callAligned
+    :: (Show e, Integral e)
+    => Int
+    -> SI.Asm IT.TextLabelCtx e ()
+    -> SI.Asm IT.TextLabelCtx e ()
+    -> SI.Asm IT.TextLabelCtx e ()
+callAligned nStackArgs prepare invoke = do
+    let callPrepared = do
+            prepare
+            invoke
+            cleanupStackArgs nStackArgs
     n <- IT.incrLbl
     IT.mov rax rsp
+    when (odd nStackArgs) $
+        IT.sub rax (8 :: Int)
     IT.and rax (0x0f :: Int)
     IT.jnz $ IT.ref "call" n
-    IT.mov rax (0 :: Int)
-    IT.call x
+    callPrepared
     IT.jmp $ IT.refEnd n
     IT.label "call" n
     IT.sub rsp (8 :: Int)
-    IT.mov rax (0 :: Int)
-    IT.call x
+    callPrepared
     IT.add rsp (8 :: Int)
     IT.end n
-    when (CR.toTypeKind t == CR.CTBool) $ IT.movzb rax al
+
+invokeIndirect :: (Show e, Integral e) => SI.Asm IT.TextLabelCtx e ()
+invokeIndirect = do
+    IT.mov rax (0 :: Int)
+    IT.call "r11"
+
+prepareCallArgs
+    :: (Show e, Integral e, Show i, Integral i, Ord i, IsOperand i, IT.UnaryInstruction i, IT.BinaryInstruction i)
+    => [ATree i]
+    -> SI.Asm IT.TextLabelCtx e ()
+prepareCallArgs args = do
+    let (nReg, _, stackArgs) = splitAtLen 6 args
+        nArgs = nReg + length stackArgs
+        slotRef base idx = Ref $ base `oadd` (8 * idx :: Int)
+        storeValue base idx expr = do
+            genStmt expr
+            IT.pop rdx
+            IT.mov (slotRef base idx) rdx
+        restoreArgs base = do
+            zipWithM_ (\reg idx -> IT.mov reg (slotRef base idx)) (reverse $ popRegs nReg) [0 .. pred nReg]
+            mapM_ (IT.push . slotRef base) $ reverse [nReg .. pred nArgs]
+    if nArgs == 0
+        then pure ()
+        else do
+            IT.push rbx
+            IT.sub rsp (8 * nArgs)
+            IT.mov rbx rsp
+            zipWithM_ (storeValue rbx) [0..] args
+            IT.mov rax rbx
+            IT.add rsp (8 * nArgs)
+            IT.pop rbx
+            restoreArgs rax
+
+prepareIndirectCall
+    :: (Show e, Integral e, Show i, Integral i, Ord i, IsOperand i, IT.UnaryInstruction i, IT.BinaryInstruction i)
+    => ATree i
+    -> [ATree i]
+    -> SI.Asm IT.TextLabelCtx e ()
+prepareIndirectCall callee args = do
+    let (nReg, _, stackArgs) = splitAtLen 6 args
+        nArgs = nReg + length stackArgs
+        calleeSlot = nArgs
+        nSlots = succ nArgs
+        slotRef base idx = Ref $ base `oadd` (8 * idx :: Int)
+        storeValue base idx expr = do
+            genStmt expr
+            IT.pop rdx
+            IT.mov (slotRef base idx) rdx
+        restoreArgs base = do
+            zipWithM_ (\reg idx -> IT.mov reg (slotRef base idx)) (reverse $ popRegs nReg) [0 .. pred nReg]
+            IT.mov (rn 11) (slotRef base calleeSlot)
+            mapM_ (IT.push . slotRef base) $ reverse [nReg .. pred nArgs]
+    IT.push rbx
+    IT.sub rsp (8 * nSlots)
+    IT.mov rbx rsp
+    genCallTarget callee
+    IT.pop rdx
+    IT.mov (slotRef rbx calleeSlot) rdx
+    zipWithM_ (storeValue rbx) [0..] args
+    IT.mov rax rbx
+    IT.add rsp (8 * nSlots)
+    IT.pop rbx
+    restoreArgs rax
+
+cleanupStackArgs :: Integral e => Int -> SI.Asm IT.TextLabelCtx e ()
+cleanupStackArgs n =
+    when (n > 0) $
+        IT.add rsp (8 * n)
+
+genStmt :: (Show e, Integral e, Show i, Integral i, Ord i, IsOperand i, IT.UnaryInstruction i, IT.BinaryInstruction i) => ATree i -> SI.Asm IT.TextLabelCtx e ()
+genStmt (ATNode (ATCallFunc x Nothing) t _ _) = do
+    callAligned 0 (pure ()) $ IT.mov rax (0 :: Int) >> IT.call x
+    normalizeCallResultRax t
+    IT.push rax
+genStmt (ATNode (ATCallPtr Nothing) t callee _) = do
+    callAligned 0 (genCallTarget callee >> IT.pop (rn 11)) invokeIndirect
+    normalizeCallResultRax t
+    IT.push rax
+genStmt (ATNode (ATCallFunc x (Just args)) t _ _) = do
+    callAligned (stackArgCount args) (prepareCallArgs args) $ do
+        IT.mov rax (0 :: Int)
+        IT.call x
+    normalizeCallResultRax t
+    IT.push rax
+genStmt (ATNode (ATCallPtr (Just args)) t callee _) = do
+    callAligned (stackArgCount args) (prepareIndirectCall callee args) invokeIndirect
+    normalizeCallResultRax t
     IT.push rax
 genStmt (ATNode (ATBlock stmt) _ _ _) = mapM_ genStmt stmt
 genStmt (ATNode (ATStmtExpr stmt) _ _ _) = mapM_ genStmt stmt
@@ -223,6 +366,8 @@ genStmt (ATNode ATReturn _ lhs _) = do
     IT.pop rax
     IT.jmp IT.refReturn
 genStmt (ATNode ATCast t lhs _) = genStmt lhs >> truncate t
+genStmt (ATNode ATSizeof _ lhs _) = IT.push (fromIntegral (CR.sizeof $ atype lhs) :: Integer)
+genStmt (ATNode ATAlignof _ lhs _) = IT.push (fromIntegral (CR.alignof $ atype lhs) :: Integer)
 genStmt (ATNode ATExprStmt _ lhs _) = genStmt lhs >> IT.add rsp (8 :: Int)
 genStmt (ATNode ATBitNot _ lhs _) = do
     genStmt lhs
@@ -297,9 +442,9 @@ genStmt (ATNode ATPostDec t lhs _) = do
     decrement t
     store t
     increment t
-genStmt (ATNode ATComma _ lhs rhs) = genStmt lhs >> genStmt rhs
+genStmt (ATNode ATComma _ lhs rhs) = genStmt lhs >> IT.add rsp (8 :: Int) >> genStmt rhs
 genStmt (ATNode ATAddr _ lhs _) = genAddr lhs
-genStmt (ATNode ATDeref t lhs _) = genStmt lhs >> unless (CR.isCTArray t) (load t)
+genStmt (ATNode ATDeref t lhs _) = genStmt lhs >> unless (nonLoadableDerefType t) (load t)
 genStmt (ATNode ATNot _ lhs _) = do
     genStmt lhs
     IT.pop rax
@@ -310,6 +455,7 @@ genStmt (ATNode ATNot _ lhs _) = do
 genStmt (ATNode (ATNum x) _ _ _)
     | x <= fromIntegral (maxBound :: Int32) = IT.push x
     | otherwise = IT.movabs rax x >> IT.push rax
+genStmt n@(ATNode (ATFuncPtr _) _ _ _) = genAddr n
 genStmt n@(ATNode (ATLVar _ _) t _ _) = genAddr n >> unless (CR.isCTArray t) (load t)
 genStmt n@(ATNode (ATGVar _ _) t _ _) = genAddr n >> unless (CR.isCTArray t) (load t)
 genStmt n@(ATNode (ATMemberAcc _) t _ _) = genAddr n >> unless (CR.isCTArray t) (load t)
@@ -371,16 +517,58 @@ genStmt (ATNode kd ty lhs rhs)
             _ -> SI.errCtx "internal compiler error: asm code generator should not reach here (binOp). Maybe abstract tree is broken it cause (bug)."
 genStmt _ = return ()
 
+spillRegisterParam
+    :: (Integral e, Ord i, IsOperand i, IT.BinaryInstruction i)
+    => ATree i
+    -> [Register]
+    -> SI.Asm IT.TextLabelCtx e ()
+spillRegisterParam (ATNode (ATLVar t o) _ _ _) regs
+    | CR.toTypeKind t == CR.CTBool =
+        maybe
+            (SI.errCtx "internal compiler error: there is no full-width register for a _Bool parameter")
+            (\fullReg -> IT.mov rax fullReg >> normalizeBoolAbiRax >> IT.mov (Ref $ rbp `osub` o) al)
+            (find ((== 8) . byteWidth) regs)
+    | otherwise =
+        maybe
+            (SI.errCtx "internal compiler error: there is no register that fits the specified size")
+            (IT.mov (Ref $ rbp `osub` o))
+            (find ((== CR.sizeof t) . byteWidth) regs)
+spillRegisterParam _ _ =
+    SI.errCtx "internal compiler error: expected local variable parameter slot"
+
+spillStackParam
+    :: (Integral e, Ord i, IsOperand i, IT.BinaryInstruction i)
+    => Integer
+    -> ATree i
+    -> SI.Asm IT.TextLabelCtx e ()
+spillStackParam callerOffset (ATNode (ATLVar t o) _ _ _) = case CR.sizeof t of
+    1
+        | CR.toTypeKind t == CR.CTBool ->
+            loadCallerSlot >> normalizeBoolAbiRax >> IT.mov localSlot al
+        | otherwise ->
+            loadCallerSlot >> IT.mov localSlot al
+    2 -> loadCallerSlot >> IT.mov localSlot ax
+    4 -> loadCallerSlot >> IT.mov localSlot eax
+    8 -> loadCallerSlot >> IT.mov localSlot rax
+    _ -> SI.errCtx "internal compiler error: unsupported stack-passed parameter width"
+    where
+        localSlot = Ref $ rbp `osub` o
+        callerSlot = Ref $ rbp `oadd` callerOffset
+        loadCallerSlot = IT.mov rax callerSlot
+spillStackParam _ _ =
+    SI.errCtx "internal compiler error: expected local variable parameter slot"
+
 textSection' :: (Integral e, Show e, Integral i, IsOperand i, IT.UnaryInstruction i, IT.BinaryInstruction i) => ATree i -> SI.Asm IT.TextSectionCtx e ()
 textSection' lc@(ATNode (ATDefFunc fn margs) ty st _) = do
     unless (CR.isSCStatic ty) $ IT.global fn
     IT.fn fn $ do
         prologue (stackSize lc)
-        when (isJust margs) $ flip (`zipWithM_` fromJust margs) argRegs $ \(ATNode (ATLVar t o) _ _ _) reg ->
-            maybe (SI.errCtx "internal compiler error: there is no register that fits the specified size")
-                (IT.mov (Ref $ rbp `osub` o)) $ find ((== CR.sizeof t) . byteWidth) reg
+        when (isJust margs) $ do
+            let (regArgs, stackArgs) = splitAt 6 $ fromJust margs
+            zipWithM_ spillRegisterParam regArgs argRegs
+            zipWithM_ spillStackParam [16, 24 ..] stackArgs
         genStmt st
-        epilogue
+        epilogue ty
 textSection' ATEmpty = return ()
 textSection' _ = SI.errCtx "internal compiler error: all abstract tree should start from some functions"
 
@@ -392,6 +580,20 @@ dataSection gvars lits = ID.dAta $ do
         PV.GVarInitWithZero    -> ID.label var $ ID.zero (CR.sizeof t)
         PV.GVarInitWithOG ref  -> ID.label var $ ID.quad ref
         PV.GVarInitWithVal val -> ID.label var $ ID.sbyte (CR.sizeof t) val
+        PV.GVarInitWithData ds -> ID.label var $ mapM_ emitInitData ds
+        PV.GVarInitWithAST _   -> SI.errCtx "internal compiler error: unresolved global initializer AST"
+    where
+        emitInitData dat = case dat of
+            PV.GVarInitZeroBytes sz -> ID.zero sz
+            PV.GVarInitBytes sz val -> ID.sbyte sz val
+            PV.GVarInitReloc sz ref addend
+                | sz == 8 -> ID.quad $ formatReloc ref addend
+                | otherwise -> SI.errCtx "internal compiler error: unsupported relocation width in global initializer"
+
+        formatReloc ref addend
+            | addend == 0 = ref
+            | addend > 0 = ref <> "+" <> tshow addend
+            | otherwise = ref <> tshow addend
 
 -- | text section of assembly code
 textSection :: (Integral e, Show e, IsOperand i, Integral i, Show i, IT.UnaryInstruction i, IT.BinaryInstruction i) => [ATree i] -> SI.Asm SI.AsmCodeCtx e ()

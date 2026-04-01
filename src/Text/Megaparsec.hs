@@ -26,6 +26,7 @@ module Text.Megaparsec (
     setInput,
     getSourcePos,
     getParserState,
+    setParserState,
     withRecovery,
     parseError,
     empty,
@@ -79,7 +80,8 @@ data PosState s = PosState
     deriving (Eq, Show)
 
 data ParserState s = ParserState
-    { statePosState :: PosState s
+    { stateInput    :: s
+    , statePosState :: PosState s
     }
     deriving (Eq, Show)
 
@@ -196,9 +198,23 @@ getSourcePos = ParsecT P.getPosition
 
 getParserState :: Monad m => ParsecT e T.Text m (ParserState T.Text)
 getParserState = ParsecT $ do
-    input <- P.getState
-    pos <- P.getPosition
-    pure $ ParserState (PosState input pos)
+    parserState <- PPri.getParserState
+    pure $ ParserState
+        { stateInput = PPri.stateInput parserState
+        , statePosState = PosState
+            { pstateInput = PPri.stateUser parserState
+            , pstateSourcePos = PPri.statePos parserState
+            }
+        }
+
+setParserState :: Monad m => ParserState T.Text -> ParsecT e T.Text m ()
+setParserState parserState = ParsecT $
+    () <$ PPri.setParserState
+        PPri.State
+            { PPri.stateInput = stateInput parserState
+            , PPri.statePos = pstateSourcePos $ statePosState parserState
+            , PPri.stateUser = pstateInput $ statePosState parserState
+            }
 
 withRecovery
     :: Monad m

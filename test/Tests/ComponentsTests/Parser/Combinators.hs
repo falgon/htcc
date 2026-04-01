@@ -2,14 +2,37 @@
 module Tests.ComponentsTests.Parser.Combinators (
     test
 ) where
-import           Data.Char                    (chr)
-import           Data.Either                  (isLeft)
-import qualified Data.Text                    as T
-import           Data.Void                    (Void)
-import qualified Htcc.CRules                  as CR
+import           Control.Monad                               (void)
+import           Control.Monad.Trans.State.Lazy              (runStateT)
+import           Data.Char                                   (chr)
+import           Data.Either                                 (isLeft, isRight)
+import           Data.Functor.Identity                       (runIdentity)
+import qualified Data.Map                                    as MP
+import           Data.Maybe                                  (mapMaybe)
+import qualified Data.Text                                   as T
+import           Data.Void                                   (Void)
+import qualified Htcc.CRules                                 as CR
+import qualified Htcc.CRules.Types                           as CT
+import           Htcc.Parser.AST                             (ASTs, ATKind (..),
+                                                              ATree (..))
 import           Htcc.Parser.Combinators.Core
-import           Test.HUnit                   (Test (..), (~:), (~?=))
-import qualified Text.Megaparsec              as M
+import           Htcc.Parser.Combinators.ParserType          (runParserAllowSameInputExternalCollisions)
+import           Htcc.Parser.Combinators.Program             (assign, parser)
+import           Htcc.Parser.Combinators.Utils               (registerLVar)
+import           Htcc.Parser.Combinators.Var                 (varInit)
+import           Htcc.Parser.ConstructionData.Core           (ConstructionData,
+                                                              Warnings,
+                                                              initConstructionData,
+                                                              lookupLVar)
+import qualified Htcc.Parser.ConstructionData.Scope.Function as PF
+import qualified Htcc.Parser.ConstructionData.Scope.Var      as PV
+import           Test.HUnit                                  (Test (..),
+                                                              assertBool,
+                                                              assertEqual,
+                                                              assertFailure,
+                                                              (~:), (~?=))
+import qualified Text.Megaparsec                             as M
+import qualified Text.Parsec.Pos                             as PP
 
 type TestParser = M.Parsec Void T.Text
 
@@ -182,6 +205,1095 @@ identifierTest = TestLabel "Parser.Combinators.Core.identifier" $
     where
         identifier' = identifier :: TestParser T.Text
 
+runInitializerParser :: Parser Integer a -> T.Text -> Either (M.ParseErrorBundle T.Text Void) a
+runInitializerParser p input =
+    fst $ runIdentity $ runStateT (M.runParserT p "" input) initConstructionData
+
+runInitializerParserState
+    :: Parser Integer a
+    -> T.Text
+    -> Either (M.ParseErrorBundle T.Text Void) (ConstructionData Integer)
+runInitializerParserState p input = case runIdentity $ runStateT (M.runParserT p "" input) initConstructionData of
+    (Left err, _)    -> Left err
+    (Right _, state) -> Right state
+
+parseInitializerAST
+    :: CT.StorageClass Integer
+    -> [(T.Text, CT.StorageClass Integer)]
+    -> T.Text
+    -> Either (M.ParseErrorBundle T.Text Void) (ATree Integer)
+parseInitializerAST ty surroundingVars =
+    runInitializerParser $ do
+        spaceConsumer
+        mapM_ (\(ident, ty') -> void $ registerLVar ty' ident) surroundingVars
+        equal *> varInit assign ty "x" <* semi <* M.eof
+
+parseInitializer :: CT.StorageClass Integer -> [(T.Text, CT.StorageClass Integer)] -> T.Text -> Either (M.ParseErrorBundle T.Text Void) ()
+parseInitializer ty surroundingVars =
+    runInitializerParser $ do
+        spaceConsumer
+        mapM_ (\(ident, ty') -> void $ registerLVar ty' ident) surroundingVars
+        void $ equal *> varInit assign ty "x" <* semi
+        M.eof
+
+inferInitializerType
+    :: CT.StorageClass Integer
+    -> T.Text
+    -> Either (M.ParseErrorBundle T.Text Void) (CT.StorageClass Integer)
+inferInitializerType ty input =
+    inferInitializerTypeWithVars ty [] input
+
+inferInitializerTypeWithVars
+    :: CT.StorageClass Integer
+    -> [(T.Text, CT.StorageClass Integer)]
+    -> T.Text
+    -> Either (M.ParseErrorBundle T.Text Void) (CT.StorageClass Integer)
+inferInitializerTypeWithVars ty surroundingVars input =
+    fmap (PV.lvtype . maybe (error "missing variable x") id . lookupLVar "x") $
+        runInitializerParserState parser' input
+    where
+        parser' = do
+            spaceConsumer
+            mapM_ (\(ident, ty') -> void $ registerLVar ty' ident) surroundingVars
+            void $ equal *> varInit assign ty "x" <* semi
+            M.eof
+
+inferGlobalType
+    :: T.Text
+    -> T.Text
+    -> Either (M.ParseErrorBundle T.Text Void) (CT.StorageClass Integer)
+inferGlobalType ident input =
+    fmap
+        (PV.gvtype . maybe (error $ "missing global variable " <> T.unpack ident) id . MP.lookup ident)
+        $ (\(_, _, gvars, _, _) -> gvars) <$> runParser parser "" input
+
+inferFunctionType
+    :: T.Text
+    -> T.Text
+    -> Either (M.ParseErrorBundle T.Text Void) (CT.StorageClass Integer)
+inferFunctionType ident input =
+    fmap
+        (PF.fntype . maybe (error $ "missing function " <> T.unpack ident) id . MP.lookup ident)
+        $ (\(_, _, _, _, fns) -> fns) <$> runParser parser "" input
+
+parseProgram :: T.Text -> Either (M.ParseErrorBundle T.Text Void) ()
+parseProgram input =
+    () <$ (runParser parser "" input :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, PV.GlobalVars Integer, PV.Literals Integer, PF.Functions Integer))
+
+parseProgramAllowSameInputExternalCollisions :: T.Text -> Either (M.ParseErrorBundle T.Text Void) ()
+parseProgramAllowSameInputExternalCollisions input =
+    () <$
+        ( runParserAllowSameInputExternalCollisions parser "" input
+            :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, PV.GlobalVars Integer, PV.Literals Integer, PF.Functions Integer)
+        )
+
+assertProgramErrorContains :: T.Text -> T.Text -> IO ()
+assertProgramErrorContains errMsg input = case parseProgram input of
+    Left err -> assertBool
+        "unexpected error message"
+        (errMsg `T.isInfixOf` T.pack (show err))
+    Right _ -> assertFailure "expected parse failure"
+
+errorBundleLoc :: M.ParseErrorBundle T.Text Void -> (Int, Int)
+errorBundleLoc err =
+    ( fromIntegral $ PP.sourceLine pos
+    , fromIntegral $ PP.sourceColumn pos
+    )
+    where
+        pos = M.pstateSourcePos $ M.bundlePosState err
+
+pairMembers :: MP.Map T.Text (CT.StructMember Integer)
+pairMembers = MP.fromList
+    [ ("left", CT.StructMember CT.CTInt 0)
+    , ("right", CT.StructMember CT.CTInt 8)
+    ]
+
+pairTy :: CT.StorageClass Integer
+pairTy = CT.SCAuto $ CT.CTStruct pairMembers
+
+boxTy :: CT.StorageClass Integer
+boxTy = CT.SCAuto $ CT.CTStruct $ MP.fromList
+    [ ("pair", CT.StructMember (CT.CTStruct pairMembers) 0)
+    , ("value", CT.StructMember CT.CTInt (CT.sizeof (CT.CTStruct pairMembers)))
+    ]
+
+pairArrayTy :: CT.StorageClass Integer
+pairArrayTy = CT.SCAuto $ CT.CTArray 2 (CT.CTStruct pairMembers)
+
+charPtrTy :: CT.TypeKind Integer
+charPtrTy = CT.CTPtr CT.CTChar
+
+charPtrIncompleteArrayTy :: CT.StorageClass Integer
+charPtrIncompleteArrayTy = CT.SCAuto $ CT.CTIncomplete $ CT.IncompleteArray charPtrTy
+
+charIncompleteArrayTy :: CT.StorageClass Integer
+charIncompleteArrayTy = CT.SCAuto $ CT.CTIncomplete $ CT.IncompleteArray CT.CTChar
+
+fixedCharArrayTy :: CT.StorageClass Integer
+fixedCharArrayTy = CT.SCAuto $ CT.CTArray 3 CT.CTChar
+
+twoCharArrayTy :: CT.StorageClass Integer
+twoCharArrayTy = CT.SCAuto $ CT.CTArray 2 CT.CTChar
+
+oneCharArrayTy :: CT.StorageClass Integer
+oneCharArrayTy = CT.SCAuto $ CT.CTArray 1 CT.CTChar
+
+intArrayTy :: CT.TypeKind Integer
+intArrayTy = CT.CTArray 2 CT.CTInt
+
+intFunctionTy :: CT.TypeKind Integer
+intFunctionTy = CT.CTFunc CT.CTInt [(CT.CTVoid, Nothing)]
+
+intFunctionPtrTy :: CT.StorageClass Integer
+intFunctionPtrTy = CT.SCAuto $ CT.CTPtr intFunctionTy
+
+wideIntArrayTy :: CT.TypeKind Integer
+wideIntArrayTy = CT.CTArray 3 CT.CTInt
+
+wideNestedIntArrayTy :: CT.StorageClass Integer
+wideNestedIntArrayTy = CT.SCAuto $ CT.makeCTArray [2, 3] CT.CTInt
+
+shortCharRowTy :: CT.TypeKind Integer
+shortCharRowTy = CT.CTArray 3 CT.CTChar
+
+nestedIntArrayTy :: CT.StorageClass Integer
+nestedIntArrayTy = CT.SCAuto $ CT.CTArray 2 intArrayTy
+
+fixedOuterIncompleteInnerIntArrayTy :: CT.StorageClass Integer
+fixedOuterIncompleteInnerIntArrayTy = CT.SCAuto $ CT.CTArray 2 $ CT.CTIncomplete $ CT.IncompleteArray CT.CTInt
+
+wideOuterIncompleteInnerIntArrayTy :: CT.StorageClass Integer
+wideOuterIncompleteInnerIntArrayTy = CT.SCAuto $ CT.CTArray 3 $ CT.CTIncomplete $ CT.IncompleteArray CT.CTInt
+
+wideOuterIncompleteInnerCharArrayTy :: CT.StorageClass Integer
+wideOuterIncompleteInnerCharArrayTy = CT.SCAuto $ CT.CTArray 3 $ CT.CTIncomplete $ CT.IncompleteArray CT.CTChar
+
+charRowTy :: CT.TypeKind Integer
+charRowTy = CT.CTArray 4 CT.CTChar
+
+nestedCharArrayTy :: CT.StorageClass Integer
+nestedCharArrayTy = CT.SCAuto $ CT.makeCTArray [2, 4] CT.CTChar
+
+pointerMemberTy :: CT.StorageClass Integer
+pointerMemberTy = CT.SCAuto $ CT.CTStruct $ MP.fromList
+    [ ("ptr", CT.StructMember (CT.CTPtr CT.CTInt) 0)
+    ]
+
+arrayMemberTy :: CT.StorageClass Integer
+arrayMemberTy = CT.SCAuto $ CT.CTStruct $ MP.fromList
+    [ ("values", CT.StructMember intArrayTy 0)
+    , ("value", CT.StructMember CT.CTInt (fromIntegral $ CT.sizeof intArrayTy))
+    ]
+
+charArrayMemberTy :: CT.StorageClass Integer
+charArrayMemberTy = CT.SCAuto $ CT.CTStruct $ MP.fromList
+    [ ("text", CT.StructMember charRowTy 0)
+    , ("value", CT.StructMember CT.CTInt (fromIntegral $ CT.sizeof charRowTy))
+    ]
+
+paddedStructTy :: CT.StorageClass Integer
+paddedStructTy = CT.SCAuto $ CT.CTStruct $ MP.fromList
+    [ ("c", CT.StructMember CT.CTChar 0)
+    , ("i", CT.StructMember CT.CTInt 4)
+    ]
+
+initializerFirstStmtZeroByteOffset :: ATree Integer -> Maybe Integer
+initializerFirstStmtZeroByteOffset ast = case ast of
+    ATNode (ATBlock (stmt:_)) _ _ _ -> initializerStmtZeroByteOffset stmt
+    _                               -> Nothing
+
+initializerZeroByteOffsets :: ATree Integer -> [Integer]
+initializerZeroByteOffsets ast = case ast of
+    ATNode (ATBlock stmts) _ _ _ -> mapMaybe initializerStmtZeroByteOffset stmts
+    _                            -> []
+
+initializerStmtZeroByteOffset :: ATree Integer -> Maybe Integer
+initializerStmtZeroByteOffset (ATNode ATExprStmt _ expr _) = initializerExprZeroByteOffset expr
+initializerStmtZeroByteOffset _                            = Nothing
+
+initializerExprZeroByteOffset :: ATree Integer -> Maybe Integer
+initializerExprZeroByteOffset (ATNode ATAssign _ lhs rhs)
+    | initializerIsZeroLiteral rhs = initializerLhsZeroByteOffset lhs
+    | otherwise = Nothing
+initializerExprZeroByteOffset _ = Nothing
+
+initializerLhsZeroByteOffset :: ATree Integer -> Maybe Integer
+initializerLhsZeroByteOffset (ATNode ATDeref ty ptr _)
+    | CT.toTypeKind ty == CT.CTChar = initializerPointerByteOffset ptr
+    | otherwise = Nothing
+initializerLhsZeroByteOffset _ = Nothing
+
+initializerPointerByteOffset :: ATree Integer -> Maybe Integer
+initializerPointerByteOffset (ATNode ATCast _ lhs _) = initializerPointerByteOffset lhs
+initializerPointerByteOffset (ATNode ATAddPtr _ lhs (ATNode (ATNum offset) _ _ _)) =
+    (+ offset) <$> initializerPointerByteOffset lhs
+initializerPointerByteOffset (ATNode ATAddr _ _ _) = Just 0
+initializerPointerByteOffset _                     = Nothing
+
+initializerIsZeroLiteral :: ATree Integer -> Bool
+initializerIsZeroLiteral (ATNode (ATNum 0) _ _ _) = True
+initializerIsZeroLiteral _                        = False
+
+structInitializerTest :: Test
+structInitializerTest = TestLabel "Parser.Program.struct-initializer" $
+    TestList
+        [ "rejects struct copy initialization without braces" ~:
+            isLeft (parseInitializer pairTy [("y", pairTy)] "= y;") ~?= True
+        , "rejects braced struct copy initialization" ~:
+            isLeft (parseInitializer pairTy [("y", pairTy)] "= { y };") ~?= True
+        , "rejects brace-elided nested struct copy expressions" ~:
+            isLeft (parseInitializer boxTy [("y", pairTy)] "= { y, 3 };") ~?= True
+        , "rejects braced nested struct copy expressions" ~:
+            isLeft (parseInitializer boxTy [("y", pairTy)] "= { { y }, 3 };") ~?= True
+        , "rejects brace-elided array member copy expressions" ~:
+            isLeft (parseInitializer arrayMemberTy [("y", CT.SCAuto intArrayTy)] "= { y, 3 };") ~?= True
+        , "accepts brace-elided nested struct initializers" ~:
+            isRight (parseInitializer boxTy [] "= { 1, 2, 3 };") ~?= True
+        , "accepts brace-elided array members inside struct initializers" ~:
+            isRight (parseInitializer arrayMemberTy [] "= { 1, 2, 3 };") ~?= True
+        , "rejects treating braced array members as part of a single brace-elided struct element" ~:
+            isLeft
+                ( parseInitializer
+                    (CT.SCAuto $ CT.CTArray 1 $ CT.toTypeKind arrayMemberTy)
+                    []
+                    "= { { 1, 2 }, 3 };"
+                )
+                ~?= True
+        , "accepts braced array-of-struct elements whose first member is braced" ~:
+            isRight
+                ( parseInitializer
+                    (CT.SCAuto $ CT.CTArray 2 $ CT.toTypeKind arrayMemberTy)
+                    []
+                    "= { {{1, 2}, 3}, {{4, 5}, 6} };"
+                )
+                ~?= True
+        , "accepts brace-elided array-of-struct initializers" ~:
+            isRight (parseInitializer pairArrayTy [] "= { 1, 2, 3, 4 };") ~?= True
+        , "accepts trailing commas after short brace-elided array-of-struct initializers" ~:
+            isRight (parseInitializer pairArrayTy [] "= { 1, 2, 3, };") ~?= True
+        , "accepts array-to-pointer decay for pointer members inside struct initializers" ~:
+            isRight (parseInitializer pointerMemberTy [("a", CT.SCAuto intArrayTy)] "= { a };") ~?= True
+        , "accepts string literals for leading char-array members in brace-elided struct initializers" ~:
+            isRight
+                ( parseInitializer
+                    (CT.SCAuto $ CT.CTArray 1 $ CT.toTypeKind charArrayMemberTy)
+                    []
+                    "= { \"abc\", 1 };"
+                )
+                ~?= True
+        , TestLabel "zero-fills only omitted struct storage after explicit initialization" $ TestCase $
+            case parseInitializerAST paddedStructTy [] "= { 1 };" of
+                Left err -> assertFailure $ show err
+                Right ast -> do
+                    assertEqual
+                        "explicit member initialization should precede zero fill"
+                        Nothing
+                        (initializerFirstStmtZeroByteOffset ast)
+                    assertEqual
+                        "unexpected zero-filled byte offsets"
+                        [1 .. fromIntegral (pred $ CT.sizeof $ CT.toTypeKind paddedStructTy)]
+                        (initializerZeroByteOffsets ast)
+        ]
+
+incompleteArrayInitializerTest :: Test
+incompleteArrayInitializerTest = TestLabel "Parser.Program.incomplete-array-initializer" $
+    TestList
+        [ "rejects empty brace initialization for incomplete arrays" ~:
+            isLeft
+                (inferInitializerType (CT.SCAuto $ CT.CTIncomplete $ CT.IncompleteArray CT.CTInt) "= {};")
+                ~?= True
+        , "rejects empty brace initialization for incomplete nested arrays" ~:
+            isLeft
+                (inferInitializerType (CT.SCAuto $ CT.CTIncomplete $ CT.IncompleteArray intArrayTy) "= {};")
+                ~?= True
+        , "accepts empty brace initialization for fixed arrays" ~:
+            isRight (parseInitializer (CT.SCAuto intArrayTy) [] "= {};") ~?= True
+        , "infers row count from brace-elided nested arrays" ~:
+            inferInitializerType
+                (CT.SCAuto $ CT.CTArray 2 $ CT.CTIncomplete $ CT.IncompleteArray CT.CTInt)
+                "= { 1, 2, 3, 4 };"
+                ~?= Right (CT.SCAuto $ CT.CTArray 2 intArrayTy)
+        , "accepts brace-elided nested arrays when only the inner bound is inferred" ~:
+            isRight (parseInitializer fixedOuterIncompleteInnerIntArrayTy [] "= { 1, 2, 3, 4 };") ~?= True
+        , "accepts brace-elided initializers when only the immediate inner array bound is inferred" ~:
+            isRight (parseInitializer fixedOuterIncompleteInnerIntArrayTy [] "= { 1, 2, 3, 4, 5, 6 };") ~?= True
+        , "infers only the immediate inner bound for braced nested arrays with fixed outer arrays" ~:
+            inferInitializerType
+                fixedOuterIncompleteInnerIntArrayTy
+                "= {{1, 2}, {3, 4}};"
+                ~?= Right (CT.SCAuto $ CT.CTArray 2 intArrayTy)
+        , "preserves the declared inner width when outer row count is inferred" ~:
+            inferInitializerType
+                wideOuterIncompleteInnerIntArrayTy
+                "= {{1, 2}, {3, 4}, {5, 6}};"
+                ~?= Right (CT.SCAuto $ CT.makeCTArray [3, 3] CT.CTInt)
+        , "preserves the declared inner width even when explicit rows are narrower" ~:
+            inferInitializerType
+                wideOuterIncompleteInnerIntArrayTy
+                "= {{1}, {2, 3}, {4}};"
+                ~?= Right (CT.SCAuto $ CT.makeCTArray [3, 3] CT.CTInt)
+        , "infers only the immediate inner array bound for fixed outer arrays" ~:
+            inferInitializerType
+                fixedOuterIncompleteInnerIntArrayTy
+                "= { 1, 2, 3, 4, 5, 6 };"
+                ~?= Right (CT.SCAuto $ CT.CTArray 2 wideIntArrayTy)
+        , "infers explicit string row width for fixed outer char arrays" ~:
+            inferInitializerType
+                wideOuterIncompleteInnerCharArrayTy
+                "= {\"ab\", \"cd\", \"ef\"};"
+                ~?= Right (CT.SCAuto $ CT.CTArray 3 shortCharRowTy)
+        , "preserves the declared char[][N] row width for direct string rows" ~:
+            inferInitializerType
+                wideOuterIncompleteInnerCharArrayTy
+                "= {\"a\", \"b\", \"c\"};"
+                ~?= Right (CT.SCAuto $ CT.CTArray 3 shortCharRowTy)
+        , "preserves the declared char[][N] row width for braced string rows" ~:
+            inferInitializerType
+                wideOuterIncompleteInnerCharArrayTy
+                "= {{\"a\"}, {\"b\"}, {\"c\"}};"
+                ~?= Right (CT.SCAuto $ CT.CTArray 3 shortCharRowTy)
+        , "preserves the declared char[][N] row width for braced char-list rows" ~:
+            inferInitializerType
+                wideOuterIncompleteInnerCharArrayTy
+                "= {{'a', 'b'}, {'c'}};"
+                ~?= Right (CT.SCAuto $ CT.makeCTArray [2, 3] CT.CTChar)
+        , "preserves the declared char[][N] row width for mixed string and braced char-list rows" ~:
+            inferInitializerType
+                wideOuterIncompleteInnerCharArrayTy
+                "= {\"ab\", {'c'}};"
+                ~?= Right (CT.SCAuto $ CT.makeCTArray [2, 3] CT.CTChar)
+        , "infers only the omitted outer bound for char[][4] braced char-list rows" ~:
+            inferInitializerType
+                (CT.SCAuto $ CT.CTArray 4 $ CT.CTIncomplete $ CT.IncompleteArray CT.CTChar)
+                "= {{'a'}};"
+                ~?= Right (CT.SCAuto $ CT.makeCTArray [1, 4] CT.CTChar)
+        , "rejects overlong string rows when char[][N] only infers the outer bound" ~:
+            isLeft
+                (parseInitializer wideOuterIncompleteInnerCharArrayTy [] "= {\"abcd\"};")
+                ~?= True
+        , "infers pointer arrays when string literals decay to pointer elements" ~:
+            inferInitializerType charPtrIncompleteArrayTy "= { \"x\" };"
+                ~?= Right (CT.SCAuto $ CT.CTArray 1 charPtrTy)
+        , "infers char array length from braced string initializers" ~:
+            inferInitializerType charIncompleteArrayTy "= {\"abc\"};"
+                ~?= Right (CT.SCAuto $ CT.CTArray 4 CT.CTChar)
+        , "accepts braced string initializers for incomplete char arrays" ~:
+            isRight (parseInitializer charIncompleteArrayTy [] "= {\"abc\"};") ~?= True
+        , "infers char[][N] bounds from braced char-list rows" ~:
+            inferInitializerType
+                (CT.SCAuto $ CT.CTIncomplete $ CT.IncompleteArray charRowTy)
+                "= {{'a'}, \"bc\"};"
+                ~?= Right (CT.SCAuto $ CT.makeCTArray [2, 4] CT.CTChar)
+        , "accepts numeric braced char-list rows while inferring char[][N] bounds" ~:
+            inferInitializerType
+                (CT.SCAuto $ CT.CTIncomplete $ CT.IncompleteArray charRowTy)
+                "= {{1}, \"bc\"};"
+                ~?= Right (CT.SCAuto $ CT.makeCTArray [2, 4] CT.CTChar)
+        , "rejects brace-elided nested array copy expressions while probing incomplete array length" ~:
+            isLeft
+                ( inferInitializerTypeWithVars
+                    (CT.SCAuto $ CT.CTIncomplete $ CT.IncompleteArray intArrayTy)
+                    [("b", CT.SCAuto intArrayTy)]
+                    "= { b };"
+                )
+                ~?= True
+        , "rejects brace-elided nested array copy expressions during initialization" ~:
+            isLeft (parseInitializer nestedIntArrayTy [("b", CT.SCAuto intArrayTy)] "= { b };") ~?= True
+        , "accepts braced scalar elements inside brace-elided nested arrays" ~:
+            isRight (parseInitializer nestedIntArrayTy [] "= { 1, {2}, 3 };") ~?= True
+        , "accepts braced rows in fixed nested arrays" ~:
+            isRight (parseInitializer nestedIntArrayTy [] "= {{1, 2}, {3, 4}};") ~?= True
+        , "accepts wide braced rows in fixed nested arrays" ~:
+            isRight (parseInitializer wideNestedIntArrayTy [] "= {{1, 2, 3}, {4, 5, 6}};") ~?= True
+        , "infers row count when brace-elided nested arrays contain braced scalar elements" ~:
+            inferInitializerType
+                (CT.SCAuto $ CT.CTIncomplete $ CT.IncompleteArray intArrayTy)
+                "= { 1, {2}, 3 };"
+                ~?= Right (CT.SCAuto $ CT.CTArray 2 intArrayTy)
+        , "infers element count from brace-elided struct aggregates" ~:
+            inferInitializerType
+                (CT.SCAuto $ CT.CTIncomplete $ CT.IncompleteArray (CT.CTStruct pairMembers))
+                "= { 1, 2, 3, 4 };"
+                ~?= Right (CT.SCAuto $ CT.CTArray 2 (CT.CTStruct pairMembers))
+        , "infers separate elements when struct element initialization starts with braces" ~:
+            inferInitializerType
+                (CT.SCAuto $ CT.CTIncomplete $ CT.IncompleteArray $ CT.toTypeKind arrayMemberTy)
+                "= { { 1, 2 }, 3 };"
+                ~?= Right (CT.SCAuto $ CT.CTArray 2 $ CT.toTypeKind arrayMemberTy)
+        , "infers element count when braced struct elements start with braced array members" ~:
+            inferInitializerType
+                (CT.SCAuto $ CT.CTIncomplete $ CT.IncompleteArray $ CT.toTypeKind arrayMemberTy)
+                "= { {{1, 2}, 3}, {{4, 5}, 6} };"
+                ~?= Right (CT.SCAuto $ CT.CTArray 2 $ CT.toTypeKind arrayMemberTy)
+        , "infers element count when brace-elided struct elements start with string literals" ~:
+            inferInitializerType
+                (CT.SCAuto $ CT.CTIncomplete $ CT.IncompleteArray $ CT.toTypeKind charArrayMemberTy)
+                "= { \"abc\", 1 };"
+                ~?= Right (CT.SCAuto $ CT.CTArray 1 $ CT.toTypeKind charArrayMemberTy)
+        , TestLabel "restores parser position after probing incomplete array length" $ TestCase $
+            case parseInitializer
+                    (CT.SCAuto $ CT.CTIncomplete $ CT.IncompleteArray intArrayTy)
+                    []
+                    "={1,2};@"
+            of
+                Left err -> assertEqual "unexpected error location" (1, 8) (errorBundleLoc err)
+                Right _  -> assertFailure "expected parse failure"
+        , TestLabel "restores parser position after probing direct string length for incomplete char arrays" $ TestCase $
+            case parseInitializer charIncompleteArrayTy [] "=\"abc\";@" of
+                Left err -> assertEqual "unexpected error location" (1, 8) (errorBundleLoc err)
+                Right _  -> assertFailure "expected parse failure"
+        , "rejects excess brace-elided rows in fixed nested arrays" ~:
+            isLeft (parseInitializer nestedIntArrayTy [] "= { 1, 2, 3, 4, 5 };") ~?= True
+        , "accepts trailing commas after short brace-elided nested arrays" ~:
+            isRight (parseInitializer nestedIntArrayTy [] "= { 1, 2, 3, };") ~?= True
+        , "accepts braced string rows in fixed nested char arrays" ~:
+            isRight (parseInitializer nestedCharArrayTy [] "= {{\"abc\"}, {\"def\"}};") ~?= True
+        , "accepts exact-fit fixed char arrays from string literals" ~:
+            isRight (parseInitializer fixedCharArrayTy [] "= \"abc\";") ~?= True
+        , "accepts exact-fit fixed char arrays from braced string literals" ~:
+            isRight (parseInitializer fixedCharArrayTy [] "= {\"abc\"};") ~?= True
+        , "accepts fixed char arrays that omit the trailing terminator when the bound is exact" ~:
+            isRight (parseInitializer twoCharArrayTy [] "= \"ab\";") ~?= True
+        , "accepts single-element fixed char arrays initialized from one-character strings" ~:
+            isRight (parseInitializer oneCharArrayTy [] "= \"x\";") ~?= True
+        , "accepts exact-fit string rows in brace-elided fixed nested char arrays" ~:
+            isRight (parseInitializer (CT.SCAuto $ CT.makeCTArray [1, 3] CT.CTChar) [] "= {\"abc\"};") ~?= True
+        , "accepts exact-fit string rows in braced fixed nested char arrays" ~:
+            isRight (parseInitializer (CT.SCAuto $ CT.makeCTArray [1, 3] CT.CTChar) [] "= {{\"abc\"}};") ~?= True
+        , "rejects overlong fixed char arrays from string literals" ~:
+            isLeft (parseInitializer fixedCharArrayTy [] "= \"abcd\";") ~?= True
+        , "rejects fixed char arrays that exceed the bound before the terminator" ~:
+            isLeft (parseInitializer twoCharArrayTy [] "= \"abc\";") ~?= True
+        , "rejects overlong fixed char arrays from braced string literals" ~:
+            isLeft (parseInitializer fixedCharArrayTy [] "= {\"abcd\"};") ~?= True
+        , "infers row count from braced string rows in incomplete nested char arrays" ~:
+            inferInitializerType
+                (CT.SCAuto $ CT.CTIncomplete $ CT.IncompleteArray charRowTy)
+                "= {{\"abc\"}, {\"def\"}};"
+                ~?= Right nestedCharArrayTy
+        , TestLabel "reports excess fixed-array elements at the offending initializer" $ TestCase $
+            case parseInitializer nestedIntArrayTy [] "= { 1, 2, 3, 4, 5 };" of
+                Left err -> do
+                    assertEqual "unexpected error location" (1, 17) (errorBundleLoc err)
+                    assertBool
+                        "unexpected error message"
+                        (T.isInfixOf "excess elements in array initializer" $ T.pack $ show err)
+                Right _ -> assertFailure "expected parse failure"
+        ]
+
+constantExpressionTest :: Test
+constantExpressionTest = TestLabel "Parser.Program.constant-expression" $
+    TestList
+        [ "accepts '%' in array-bound constant expressions" ~:
+            isRight (parseProgram "int a[5 % 2]; int main(void) { return sizeof a / sizeof a[0] == 1; }")
+                ~?= True
+        , "accepts '%' in case-label constant expressions" ~:
+            isRight (parseProgram "int main(void) { switch (0) { case 5 % 2: return 1; default: return 0; } }")
+                ~?= True
+        , "rejects ',' in array-bound integer constant expressions" ~:
+            isLeft (parseProgram "int a[(1, 2)]; int main(void) { return 0; }")
+                ~?= True
+        , TestLabel "rejects ',' in case-label integer constant expressions" $ TestCase $
+            assertProgramErrorContains
+                "The expression is not constant-expression"
+                "int main(void) { switch (0) { case (1, 2): return 1; default: return 0; } }"
+        , "short-circuits '||' in array-bound constant expressions" ~:
+            isRight (parseProgram "int a[1 || 1 / 0]; int main(void) { return sizeof a / sizeof a[0] == 1; }")
+                ~?= True
+        , "short-circuits '&&' in case-label constant expressions" ~:
+            isRight (parseProgram "int main(void) { switch (0) { case 0 && 1 % 0: return 1; default: return 0; } }")
+                ~?= True
+        , TestLabel "rejects sizeof of incomplete operands in case-label constant expressions" $ TestCase $
+            assertProgramErrorContains
+                "invalid application of 'sizeof' to incomplete type"
+                "int (*p)[]; int main(void) { switch (0) { case sizeof(*p): return 1; default: return 0; } }"
+        , TestLabel "rejects _Alignof of incomplete operands in case-label constant expressions" $ TestCase $
+            assertProgramErrorContains
+                "invalid application of '_Alignof' to incomplete type"
+                "int (*p)[]; int main(void) { switch (0) { case _Alignof(*p): return 1; default: return 0; } }"
+        ]
+
+globalInitializerTest :: Test
+globalInitializerTest = TestLabel "Parser.Program.global-initializer" $
+    TestList
+        [ "accepts file-scope declarations without declarators" ~:
+            isRight (parseProgram "int; int main(void) { return 0; }")
+                ~?= True
+        , "accepts file-scope static declarations without declarators" ~:
+            isRight (parseProgram "static int; int main(void) { return 0; }")
+                ~?= True
+        , TestLabel "rejects file-scope auto declarations without declarators" $ TestCase $
+            assertProgramErrorContains
+                "storage-class specifier is not allowed at file scope"
+                "auto int; int main(void) { return 0; }"
+        , TestLabel "rejects file-scope register declarations without declarators" $ TestCase $
+            assertProgramErrorContains
+                "storage-class specifier is not allowed at file scope"
+                "register int; int main(void) { return 0; }"
+        , "infers file-scope int array bounds from braced initializers" ~:
+            inferGlobalType "a" "int a[] = {1, 2};"
+                ~?= Right (CT.SCAuto $ CT.CTArray 2 CT.CTInt)
+        , "infers file-scope char array bounds from string initializers" ~:
+            inferGlobalType "s" "char s[] = \"x\";"
+                ~?= Right (CT.SCAuto $ CT.CTArray 2 CT.CTChar)
+        , "merges same-file tentative incomplete arrays with later complete declarations" ~:
+            inferGlobalType "x" "int x[]; int x[4];"
+                ~?= Right (CT.SCAuto $ CT.CTArray 4 CT.CTInt)
+        , "merges same-file tentative nested incomplete arrays when only the outermost bound is missing" ~:
+            inferGlobalType "x" "int x[][4]; int x[2][4];"
+                ~?= Right (CT.SCAuto $ CT.makeCTArray [2, 4] CT.CTInt)
+        , "rejects same-file tentative arrays whose element type is an incomplete struct" ~:
+            isLeft (parseProgram "struct S a[];")
+                ~?= True
+        , "rejects same-file tentative arrays whose omitted bound is not the only incompleteness" ~:
+            isLeft (parseProgram "int a[][];")
+                ~?= True
+        , "rejects sizeof on a tentative array before a later completing declaration" ~:
+            isLeft (parseProgram "int x[]; int main(void) { return sizeof x; } int x[4];")
+                ~?= True
+        , "rejects address arithmetic on a tentative array before a later completing declaration" ~:
+            isLeft (parseProgram "int x[]; int main(void) { return ((char*)(&x + 1)) - ((char*)&x); } int x[4];")
+                ~?= True
+        , "rejects pointer arithmetic after a later function-return pointer-to-array redeclaration changes the pointee bound" ~:
+            isLeft (parseProgram "int (*f(void))[]; int *g(void) { return *(f() + 1); } int (*f(void))[4];")
+                ~?= True
+        , "rejects sizeof after a later function-return pointer-to-array redeclaration changes the pointee bound" ~:
+            isLeft (parseProgram "int (*f(void))[]; int main(void) { return sizeof *f(); } int (*f(void))[4];")
+                ~?= True
+        , "rejects _Alignof after a later function-return pointer-to-array redeclaration changes the pointee bound" ~:
+            isLeft (parseProgram "int (*f(void))[]; int main(void) { return _Alignof *f(); } int (*f(void))[4];")
+                ~?= True
+        , "accepts same-file tentative nested incomplete arrays at use sites before finalization" ~:
+            isRight (parseProgram "int x[][4]; int main(void) { return sizeof x[0]; }")
+                ~?= True
+        , "accepts dereferenced omitted-bound array pointers in ordinary expression contexts" ~:
+            isRight
+                (parseProgram "int main(void) { int x[4]; int (*p)[] = (int (*)[])&x; int *q = *p; q[1] = 7; return (*p)[1]; }")
+                ~?= True
+        , "rejects same-file tentative arrays whose omitted bound is not outermost" ~:
+            isLeft (parseProgram "int x[2][]; int x[2][4];")
+                ~?= True
+        , TestLabel "rejects same-file tentative arrays whose later declaration changes rank" $ TestCase $
+            case parseProgram "int x[]; int x[2][4];" of
+                Left err -> assertBool
+                    "unexpected error message"
+                    (T.isInfixOf "redeclaration of 'x' with no linkage" $ T.pack $ show err)
+                Right _ -> assertFailure "expected parse failure"
+        , "accepts file-scope static tentative incomplete arrays" ~:
+            isRight (parseProgram "static int x[];") ~?= True
+        , "accepts file-scope static function definitions" ~:
+            isRight (parseProgram "static int helper(void) { return 1; } int main(void) { return helper(); }") ~?= True
+        , "accepts top-level braced scalar int initializers" ~:
+            isRight (parseInitializer (CT.SCAuto CT.CTInt) [] "= {1};") ~?= True
+        , "accepts top-level braced scalar pointer initializers" ~:
+            isRight (parseInitializer (CT.SCAuto $ CT.CTPtr CT.CTChar) [] "= {\"x\"};") ~?= True
+        , "accepts pointer casts of address constants in file-scope initializers" ~:
+            isRight (parseProgram "int arr[1]; char* p = (char*)arr; int main() { return p == (char*)arr; }")
+                ~?= True
+        , "accepts casted null constants in pointer file-scope initializers" ~:
+            isRight (parseProgram "char *p = (char*)0; int main(void) { return p == 0; }")
+                ~?= True
+        , "accepts nested pointer-cast null constants in pointer file-scope initializers" ~:
+            isRight (parseProgram "int *p = (int*)(void*)0; int main(void) { return p == 0; }")
+                ~?= True
+        , "accepts plain address constants in pointer file-scope initializers" ~:
+            isRight (parseProgram "int g; int* p = &g;")
+                ~?= True
+        , "accepts self-referential address constants in pointer file-scope initializers" ~:
+            isRight (parseProgram "void *p = &p;")
+                ~?= True
+        , "accepts array-subobject decay reached through a dereference in file-scope initializers" ~:
+            isRight (parseProgram "int x[2][4]; int *p = x[0];")
+                ~?= True
+        , "accepts addressed array-subobject elements in file-scope initializers" ~:
+            isRight (parseProgram "int x[2][4]; int *p = &x[0][0];")
+                ~?= True
+        , "accepts address constants with byte addends in pointer file-scope initializers" ~:
+            isRight (parseProgram "int a[2]; int *p = &a[1]; char *q = \"ab\" + 1;")
+                ~?= True
+        , "accepts address constants with non-trivial integer addends in pointer file-scope initializers" ~:
+            isRight (parseProgram "int a[4]; int *p = a + (1 + 1);")
+                ~?= True
+        , "accepts short-circuited logical-and addends in pointer file-scope initializers" ~:
+            isRight (parseProgram "int a[4]; int *p = a + (0 && 1/0);")
+                ~?= True
+        , "accepts short-circuited logical-or elements in aggregate file-scope initializers" ~:
+            isRight (parseProgram "int g[] = {1 || 1/0};")
+                ~?= True
+        , "accepts GNU omitted-middle conditionals in scalar file-scope initializers" ~:
+            isRight (parseProgram "int g = 1 ?: 2; int h = 0 ?: 2; int main(void) { return g == 1 && h == 2; }")
+                ~?= True
+        , "accepts GNU omitted-middle conditionals in array bounds" ~:
+            isRight (parseProgram "int a[42 ?: 7]; int main(void) { return sizeof(a) / sizeof(a[0]) == 42; }")
+                ~?= True
+        , "accepts bare function designators in file-scope pointer initializers" ~:
+            isRight (parseProgram "int foo(void) { return 1; } int (*fp)(void) = foo;")
+                ~?= True
+        , "accepts address-of function designators in file-scope pointer initializers" ~:
+            isRight (parseProgram "int foo(void) { return 1; } int (*fp)(void) = &foo;")
+                ~?= True
+        , "accepts typed null function-pointer casts in file-scope initializers" ~:
+            isRight (parseProgram "int (*fp)(void) = (int (*)(void))0; int main(void) { return fp == 0; }")
+                ~?= True
+        , "accepts explicitly cast function designators in file-scope function-pointer initializers" ~:
+            isRight (parseProgram "int foo(int x) { return x; } int (*fp)(void) = (int (*)(void))foo;")
+                ~?= True
+        , "accepts void-returning bare function designators in file-scope pointer initializers" ~:
+            isRight (parseProgram "void helper(void) {} void (*fp)(void) = helper; int main(void) { return fp != 0; }")
+                ~?= True
+        , "accepts void-returning address-of function designators in file-scope pointer initializers" ~:
+            isRight (parseProgram "void helper(void) {} void (*fp)(void) = &helper; int main(void) { return fp != 0; }")
+                ~?= True
+        , "accepts function designators in aggregate file-scope function-pointer initializers" ~:
+            isRight (parseProgram "int foo(void) { return 1; } int (*fps[1])(void) = { foo }; int main(void) { return fps[0](); }")
+                ~?= True
+        , "accepts same-file redeclarations that refine empty parameter lists to void prototypes" ~:
+            isRight (parseProgram "int foo(); int foo(void) { return 1; }")
+                ~?= True
+        , "accepts same-file function redeclarations that spell int as signed" ~:
+            isRight (parseProgram "int foo(void); signed foo(void); int foo(void) { return 1; }")
+                ~?= True
+        , "accepts same-file function-pointer redeclarations that refine empty parameter lists to void prototypes" ~:
+            isRight (parseProgram "int foo(void) { return 1; } int (*fp)(); int (*fp)(void) = foo;")
+                ~?= True
+        , "rejects same-file pointer-to-array redeclarations that complete an omitted pointee bound" ~:
+            isLeft (parseProgram "int (*p)[]; int (*p)[4]; int main(void) { return 0; }")
+                ~?= True
+        , "rejects same-file pointer-to-array redeclarations that disagree on pointee bounds" ~:
+            isLeft (parseProgram "int (*p)[3]; int (*p)[4]; int main(void) { return 0; }")
+                ~?= True
+        , "rejects same-file function redeclarations that refine pointer-to-array parameter bounds" ~:
+            isLeft (parseProgram "int f(int (*p)[]); int f(int (*p)[4]); int main(void) { return 0; }")
+                ~?= True
+        , "accepts implicit direct calls even when a same-file global already uses the identifier" ~:
+            isRight (parseProgram "int foo; int main(void) { return foo(); }")
+                ~?= True
+        , TestLabel "rejects same-file function declarations that reuse a global identifier" $ TestCase $
+            assertProgramErrorContains
+                "conflicting types for 'bar'"
+                "int bar; int bar(void) { return 0; }"
+        , TestLabel "rejects same-file global declarations that reuse a function identifier" $ TestCase $
+            assertProgramErrorContains
+                "redeclaration of 'bar' with no linkage"
+                "int bar(void) { return 0; } int bar;"
+        , TestLabel "rejects same-file globals that reuse an implicitly declared function identifier" $ TestCase $
+            assertProgramErrorContains
+                "redeclaration of 'bar' with no linkage"
+                "int foo(void) { return bar(); } static int bar;"
+        , TestLabel "rejects same-file redeclarations that only match via function-return equality" $ TestCase $
+            case parseProgram "int *p; int (*p)(void);" of
+                Left err -> assertBool
+                    "unexpected error message"
+                    (T.isInfixOf "redeclaration of 'p' with no linkage" $ T.pack $ show err)
+                Right _ -> assertFailure "expected parse failure"
+        , "accepts same-file tentative globals that spell int as signed" ~:
+            isRight (parseProgram "int x; signed x; int main(void) { return x; }")
+                ~?= True
+        , TestLabel "preserves array declarators for function-pointer objects" $ TestCase $
+            assertEqual
+                "unexpected function-pointer array type"
+                (Right $ CT.SCAuto $ CT.CTArray 2 $ CT.CTPtr intFunctionTy)
+                (inferGlobalType "fps" "int (*fps[2])(void);")
+        , TestLabel "preserves function return declarators when rebuilding nested arrays" $ TestCase $
+            assertEqual
+                "unexpected function return type"
+                (Right $ CT.CTFunc (CT.CTPtr intArrayTy) [(CT.CTVoid, Nothing)])
+                (CT.toTypeKind <$> inferFunctionType "f" "int (*f(void))[2];")
+        , "rejects bare function designators in non-function-pointer file-scope initializers" ~:
+            isLeft (parseProgram "int foo(void) { return 1; } char *p = foo;")
+                ~?= True
+        , "rejects address-of function designators in non-function-pointer file-scope initializers" ~:
+            isLeft (parseProgram "int foo(void) { return 1; } char *p = &foo;")
+                ~?= True
+        , TestLabel "rejects incompatible bare function designators in file-scope function-pointer initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int foo(int x) { return x; } int (*fp)(void) = foo;"
+        , TestLabel "rejects incompatible addressed function designators in file-scope function-pointer initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int foo(int x) { return x; } int (*fp)(void) = &foo;"
+        , TestLabel "rejects incompatible function-pointer values in file-scope function-pointer initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int foo(int x) { return x; } int (*a)(int) = foo; int (*b)(void) = a;"
+        , TestLabel "rejects object-pointer casts of function designators in file-scope function-pointer initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int foo(void) { return 1; } int (*fp)(void) = (int*)foo;"
+        , TestLabel "rejects intermediate object-pointer casts in file-scope function-pointer initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int foo(void) { return 1; } int (*fp)(void) = (int (*)(void))(int*)foo;"
+        , "rejects address constants whose folded addends raise constexpr evaluation errors" ~:
+            isLeft (parseProgram "int a[4]; int *p = a + (1 / 0);")
+                ~?= True
+        , "rejects plain address constants in non-pointer file-scope initializers" ~:
+            isLeft (parseProgram "int g; int x = &g;")
+                ~?= True
+        , "rejects non-pointer casts of address constants in file-scope initializers" ~:
+            isLeft (parseProgram "int arr[1]; int x = (int)arr;") ~?= True
+        , "rejects non-address pointer casts in pointer file-scope initializers" ~:
+            isLeft (parseProgram "char *p = (char*)1;")
+                ~?= True
+        , "rejects non-zero integer constant expressions in pointer file-scope initializers" ~:
+            isLeft (parseProgram "int *p = 1;")
+                ~?= True
+        , "rejects incompatible self-referential object-pointer file-scope initializers" ~:
+            isLeft (parseProgram "int *p = &p;")
+                ~?= True
+        , "rejects non-zero integer constant expressions in function-pointer file-scope initializers" ~:
+            isLeft (parseProgram "int (*fp)(void) = 1 + 1;")
+                ~?= True
+        , TestLabel "rejects comma expressions in scalar file-scope initializers" $ TestCase $
+            assertProgramErrorContains
+                "initializer element is not constant"
+                "int x = (1, 2);"
+        , TestLabel "rejects comma expressions in pointer file-scope initializers" $ TestCase $
+            assertProgramErrorContains
+                "initializer element is not constant"
+                "int x; int *p = (0, &x);"
+        , "rejects pointer-typed casts in non-pointer file-scope initializers" ~:
+            isLeft (parseProgram "int x = (char*)0;")
+                ~?= True
+        ]
+
+scalarInitializerTest :: Test
+scalarInitializerTest = TestLabel "Parser.Program.scalar-initializer" $
+    TestList
+        [ TestLabel "rejects plain void scalar initializers" $ TestCase $
+            case parseProgram "void f(void) {} int main() { int x = f(); return 0; }" of
+                Left err -> assertBool
+                    "unexpected error message"
+                    (T.isInfixOf "void value not ignored as it ought to be" $ T.pack $ show err)
+                Right _ -> assertFailure "expected parse failure"
+        , TestLabel "rejects braced void scalar initializers" $ TestCase $
+            case parseProgram "void f(void) {} int main() { int x = { f() }; return 0; }" of
+                Left err -> assertBool
+                    "unexpected error message"
+                    (T.isInfixOf "void value not ignored as it ought to be" $ T.pack $ show err)
+                Right _ -> assertFailure "expected parse failure"
+        , "rejects bare function designators in local scalar initializers" ~:
+            isLeft (parseProgram "int foo(void) { return 1; } int main(void) { int x = foo; return x; }")
+                ~?= True
+        , "rejects addressed function designators in local scalar initializers" ~:
+            isLeft (parseProgram "int foo(void) { return 1; } int main(void) { char *p = &foo; return p != 0; }")
+                ~?= True
+        , TestLabel "rejects incompatible object-pointer values in local scalar initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int main(void) { int a[2]; char *p = a; return 0; }"
+        , TestLabel "rejects function designators in void-pointer local scalar initializers without a cast" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int helper(void) { return 1; } int main(void) { void *p = helper; return p != 0; }"
+        , "accepts function designators cast to object pointers in local scalar initializers" ~:
+            isRight (parseProgram "int foo(void) { return 1; } int main(void) { char *p = (char *)foo; return p != 0; }")
+                ~?= True
+        , "accepts function designators cast to void pointers in local scalar initializers" ~:
+            isRight (parseProgram "int foo(void) { return 1; } int main(void) { void *p = (void *)foo; return p != 0; }")
+                ~?= True
+        , "accepts function designators cast to integers in local scalar initializers" ~:
+            isRight (parseProgram "int foo(void) { return 1; } int main(void) { long x = (long)foo; return x != 0; }")
+                ~?= True
+        , TestLabel "rejects conditional-wrapped function designators in local scalar initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int foo(void) { return 1; } int main(void) { int x = 1 ? foo : foo; return x; }"
+        , "rejects comma-wrapped function designators in local scalar initializers" ~:
+            isLeft (parseProgram "int foo(void) { return 1; } int main(void) { char *p = (0, foo); return p != 0; }")
+                ~?= True
+        , TestLabel "rejects statement-expression-wrapped function designators in local scalar initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int foo(void) { return 1; } int main(void) { char *p = ({ foo; }); return p != 0; }"
+        , "rejects bare function designators in brace-elided member scalar initializers" ~:
+            isLeft (parseProgram "int foo(void) { return 1; } struct S { int x; }; int main(void) { struct S s = { foo }; return s.x; }")
+                ~?= True
+        , "rejects addressed function designators in brace-elided member scalar initializers" ~:
+            isLeft (parseProgram "int foo(void) { return 1; } struct S { char *p; }; int main(void) { struct S s = { &foo }; return s.p != 0; }")
+                ~?= True
+        , "accepts bare function designators in local function-pointer initializers" ~:
+            isRight (parseProgram "int foo(void) { return 1; } int main(void) { int (*fp)(void) = foo; return fp(); }")
+                ~?= True
+        , TestLabel "rejects incompatible bare function designators in local function-pointer initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int foo(int x) { return x; } int main(void) { int (*fp)(void) = foo; return 0; }"
+        , TestLabel "rejects incompatible addressed function designators in local function-pointer initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int foo(int x) { return x; } int main(void) { int (*fp)(void) = &foo; return 0; }"
+        , TestLabel "rejects integer constants in local function-pointer initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int main(void) { int (*fp)(void) = 1; return 0; }"
+        , TestLabel "rejects object pointers in local function-pointer initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int main(void) { int x; int *p = &x; int (*fp)(void) = p; return 0; }"
+        , TestLabel "rejects object-pointer casts of function designators in local function-pointer initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int foo(void) { return 1; } int main(void) { int (*fp)(void) = (int*)foo; return 0; }"
+        , TestLabel "rejects intermediate object-pointer casts in local function-pointer initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int foo(void) { return 1; } int main(void) { int (*fp)(void) = (int (*)(void))(int*)foo; return 0; }"
+        , "accepts addressed function designators in local function-pointer initializers" ~:
+            isRight (parseProgram "int foo(void) { return 1; } int main(void) { int (*fp)(void) = &foo; return fp(); }")
+                ~?= True
+        , "accepts dereferenced function pointers in local function-pointer initializers" ~:
+            isRight (parseProgram "int foo(void) { return 1; } int main(void) { int (*fp)(void) = foo; int (*gp)(void) = *fp; return gp(); }")
+                ~?= True
+        , "accepts typed null function-pointer casts in local function-pointer initializers" ~:
+            isRight (parseProgram "int main(void) { int (*fp)(void) = (int (*)(void))0; return fp == 0; }")
+                ~?= True
+        , TestLabel "rejects incompatible function-pointer values in local function-pointer initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int foo(int x) { return x; } int main(void) { int (*a)(int) = foo; int (*b)(void) = a; return 0; }"
+        , "accepts void-returning bare function designators in local function-pointer initializers" ~:
+            isRight (parseProgram "void helper(void) {} int main(void) { void (*fp)(void) = helper; return fp != 0; }")
+                ~?= True
+        , "accepts void-returning function designators in aggregate function-pointer initializers" ~:
+            isRight (parseProgram "void helper(void) {} int main(void) { void (*fps[1])(void) = { helper }; return fps[0] != 0; }")
+                ~?= True
+        , TestLabel "rejects incompatible function designators in aggregate function-pointer initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int foo(int x) { return x; } int main(void) { int (*fps[1])(void) = { foo }; return 0; }"
+        , TestLabel "tracks indirect call expressions as their return type for sizeof" $ TestCase $
+            case parseInitializerAST (CT.SCAuto $ CT.CTLong CT.CTInt) [("fp", intFunctionPtrTy)] "= sizeof fp();" of
+                Right
+                    ( ATNode
+                        (ATBlock [ATNode ATExprStmt _ (ATNode ATAssign _ _ (ATNode ATSizeof _ (ATNode (ATCallPtr Nothing) ty _ _) _)) _])
+                        _ _ _
+                    ) ->
+                    assertEqual "unexpected indirect call result type" (CT.SCAuto CT.CTInt) ty
+                Right ast ->
+                    assertFailure $ "unexpected AST: " <> show ast
+                Left err ->
+                    assertFailure $ "unexpected parse error: " <> show err
+        , TestLabel "folds _Alignof over indirect calls using the return type" $ TestCase $
+            case parseInitializerAST (CT.SCAuto $ CT.CTLong CT.CTInt) [("fp", intFunctionPtrTy)] "= _Alignof fp();" of
+                Right
+                    ( ATNode
+                        (ATBlock [ATNode ATExprStmt _ (ATNode ATAssign _ _ (ATNode ATAlignof _ (ATNode (ATCallPtr Nothing) ty _ _) _)) _])
+                        _ _ _
+                    ) ->
+                    assertEqual
+                        "unexpected indirect call result type"
+                        (CT.SCAuto CT.CTInt)
+                        ty
+                Right ast ->
+                    assertFailure $ "unexpected AST: " <> show ast
+                Left err ->
+                    assertFailure $ "unexpected parse error: " <> show err
+        ]
+
+functionDesignatorContextTest :: Test
+functionDesignatorContextTest = TestLabel "Parser.Program.function-designator-context" $
+    TestList
+        [ TestLabel "rejects sizeof on bare function designators" $ TestCase $
+            assertProgramErrorContains
+                "invalid application of 'sizeof' to function type"
+                "int f(void) { return 1; } int main(void) { return sizeof f; }"
+        , TestLabel "rejects _Alignof on bare function designators" $ TestCase $
+            assertProgramErrorContains
+                "invalid application of '_Alignof' to function type"
+                "int f(void) { return 1; } int main(void) { return _Alignof f; }"
+        , TestLabel "rejects incrementing bare function designators" $ TestCase $
+            assertProgramErrorContains
+                "lvalue required as increment operand"
+                "int f(void) { return 1; } int main(void) { ++f; return 0; }"
+        , TestLabel "rejects assigning to bare function designators" $ TestCase $
+            assertProgramErrorContains
+                "lvalue required as left operand of assignment"
+                "int f(void) { return 1; } int main(void) { f = 0; return 0; }"
+        , TestLabel "rejects unary plus on bare function designators" $ TestCase $
+            assertProgramErrorContains
+                "invalid application of '+' to function type"
+                "int f(void) { return 1; } int main(void) { return +f != 0; }"
+        , TestLabel "rejects unary minus on bare function designators" $ TestCase $
+            assertProgramErrorContains
+                "invalid application of '-' to function type"
+                "int f(void) { return 1; } int main(void) { return -f != 0; }"
+        , TestLabel "rejects bitwise not on bare function designators" $ TestCase $
+            assertProgramErrorContains
+                "invalid application of '~' to function type"
+                "int f(void) { return 1; } int main(void) { return ~f; }"
+        ]
+
+functionCallTest :: Test
+functionCallTest = TestLabel "Parser.Program.function-call" $
+    TestList
+        [ "accepts repeated dereference of function pointers in indirect calls" ~:
+            isRight (parseProgram "int inc(int x) { return x + 1; } int main(void) { int (*fp)(int) = inc; return (**fp)(41) - 42; }")
+                ~?= True
+        , "accepts typed null function-pointer casts for function-pointer parameters" ~:
+            isRight (parseProgram "int use(int (*fp)(void)) { return fp == 0; } int main(void) { return use((int (*)(void))0); }")
+                ~?= True
+        , TestLabel "rejects old-style function designators for typed function-pointer parameters when promotions change the type" $ TestCase $
+            assertProgramErrorContains
+                "invalid argument type to function call"
+                "int use(int (*fp)(char)) { return 0; } int foo(); int main(void) { return use(foo); }"
+        , TestLabel "rejects incompatible bare function designators for typed function-pointer parameters" $ TestCase $
+            assertProgramErrorContains
+                "invalid argument type to function call"
+                "int use(int (*fp)(void)) { return fp(); } int f(int x) { return x; } int main(void) { return use(f); }"
+        , TestLabel "rejects integer constants for typed function-pointer parameters" $ TestCase $
+            assertProgramErrorContains
+                "invalid argument type to function call"
+                "int use(int (*fp)(void)) { return fp(); } int main(void) { return use(1); }"
+        , TestLabel "rejects non-null integers for typed object-pointer parameters" $ TestCase $
+            assertProgramErrorContains
+                "invalid argument type to function call"
+                "int use(int *p) { return p == 0; } int main(void) { return use(1); }"
+        , TestLabel "rejects incompatible object pointers for typed pointer parameters" $ TestCase $
+            assertProgramErrorContains
+                "invalid argument type to function call"
+                "int use(char **p) { return p == 0; } int main(void) { int *x = 0; int **pp = &x; return use(pp); }"
+        , TestLabel "rejects too few arguments through typed function pointers" $ TestCase $
+            assertProgramErrorContains
+                "too few arguments to function call"
+                "int inc(int x) { return x + 1; } int main(void) { int (*fp)(int) = inc; return fp(); }"
+        , TestLabel "rejects too many arguments through void function pointers" $ TestCase $
+            assertProgramErrorContains
+                "too many arguments to function call"
+                "int zero(void) { return 0; } int main(void) { int (*fp)(void) = zero; return fp(1); }"
+        , TestLabel "rejects too many arguments after refining empty parameter lists to void prototypes" $ TestCase $
+            assertProgramErrorContains
+                "too many arguments to function call"
+                "int foo(); int foo(void); int main(void) { return foo(1); }"
+        , TestLabel "rejects too many arguments after refining function-pointer redeclarations to void prototypes" $ TestCase $
+            assertProgramErrorContains
+                "too many arguments to function call"
+                "int (*fp)(); int (*fp)(void); int main(void) { return fp(1); }"
+        , TestLabel "rejects too few arguments through complete function prototypes" $ TestCase $
+            assertProgramErrorContains
+                "too few arguments to function call"
+                "int inc(int x) { return x + 1; } int main(void) { return inc(); }"
+        , TestLabel "rejects too many arguments through void function prototypes" $ TestCase $
+            assertProgramErrorContains
+                "too many arguments to function call"
+                "int zero(void) { return 0; } int main(void) { return zero(1); }"
+        ]
+
+conditionalPointerTypeTest :: Test
+conditionalPointerTypeTest = TestLabel "Parser.Program.conditional-pointer-type" $
+    TestList
+        [ "preserves function-pointer results for standard conditionals against null" ~:
+            isRight (parseProgram "int foo(void) { return 7; } int main(void) { return (1 ? foo : 0)(); }")
+                ~?= True
+        , "preserves object-pointer results for standard conditionals against null" ~:
+            isRight (parseProgram "int main(void) { int x = 7; int *p = &x; return *(1 ? p : 0); }")
+                ~?= True
+        , "preserves function-pointer results for GNU omitted conditionals against null" ~:
+            isRight (parseProgram "int foo(void) { return 7; } int main(void) { int (*fp)(void) = foo; return (fp ?: 0)(); }")
+                ~?= True
+        , "preserves object-pointer results for GNU omitted conditionals against null" ~:
+            isRight (parseProgram "int main(void) { int x = 7; int *p = &x; return *(p ?: 0); }")
+                ~?= True
+        , TestLabel "rejects dereferencing standard conditionals that merge void* with object pointers" $ TestCase $
+            assertProgramErrorContains
+                "void value not ignored as it ought to be"
+                "int main(void) { void *vp; int *ip; return *(1 ? vp : ip); }"
+        , TestLabel "rejects dereferencing GNU omitted conditionals that merge void* with object pointers" $ TestCase $
+            assertProgramErrorContains
+                "void value not ignored as it ought to be"
+                "int main(void) { void *vp; int *ip; return *(vp ?: ip); }"
+        , TestLabel "rejects standard conditionals with incompatible object-pointer operands" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands"
+                "int main(void) { int x = 7; char y = 3; int *p = &x; char *q = &y; return *(1 ? p : q); }"
+        , TestLabel "rejects GNU omitted conditionals with incompatible object-pointer operands" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands"
+                "int main(void) { int x = 7; char y = 3; int *p = &x; char *q = &y; return *(p ?: q); }"
+        , "preserves function-pointer results for standard conditionals against void* null casts" ~:
+            isRight
+                (parseProgram "int foo(void) { return 7; } int main(void) { int (*fp)(void) = foo; return (1 ? (void*)0 : fp) == 0; }")
+                ~?= True
+        , "preserves function-pointer results for GNU omitted conditionals against void* null casts" ~:
+            isRight
+                (parseProgram "int foo(void) { return 7; } int main(void) { int (*fp)(void) = foo; return (fp ?: (void*)0) != 0; }")
+                ~?= True
+        ]
+
+functionPointerAssignmentTest :: Test
+functionPointerAssignmentTest = TestLabel "Parser.Program.function-pointer-assignment" $
+    TestList
+        [ "accepts compatible function-pointer assignments from variables" ~:
+            isRight (parseProgram "int foo(void) { return 1; } int main(void) { int (*a)(void) = foo; int (*b)(void) = 0; b = a; return b(); }")
+                ~?= True
+        , "accepts typed null function-pointer casts in function-pointer assignments" ~:
+            isRight (parseProgram "int main(void) { int (*fp)(void) = 0; fp = (int (*)(void))0; return fp == 0; }")
+                ~?= True
+        , TestLabel "rejects old-style function declarations in typed function-pointer initializers when promotions change the type" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int foo(); int main(void) { int (*fp)(char) = foo; return 0; }"
+        , TestLabel "rejects assigning bare function designators to ordinary scalars" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands to assignment"
+                "int helper(void) { return 1; } int main(void) { int x; x = helper; return 0; }"
+        , TestLabel "rejects assigning incompatible object-pointer values" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands to assignment"
+                "int main(void) { char *p = 0; int a[2]; p = a; return 0; }"
+        , TestLabel "rejects assigning function designators to object pointers without a cast" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands to assignment"
+                "int helper(void) { return 1; } int main(void) { void *p = 0; p = helper; return 0; }"
+        , TestLabel "rejects incompatible bare function designators in function-pointer assignments" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands to assignment"
+                "int foo(int x) { return x; } int main(void) { int (*fp)(void) = 0; fp = foo; return 0; }"
+        , TestLabel "rejects assigning old-style function pointers to typed function pointers when promotions change the type" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands to assignment"
+                "int foo(); int main(void) { int (*src)() = foo; int (*dst)(char) = 0; dst = src; return 0; }"
+        , TestLabel "rejects incompatible function-pointer values in function-pointer assignments" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands to assignment"
+                "int foo(int x) { return x; } int main(void) { int (*a)(int) = foo; int (*b)(void) = 0; b = a; return 0; }"
+        , TestLabel "rejects assigning object pointers to function pointers" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands to assignment"
+                "int main(void) { int x; int *p = &x; int (*fp)(void) = 0; fp = p; return 0; }"
+        ]
+
+functionPointerArithmeticTest :: Test
+functionPointerArithmeticTest = TestLabel "Parser.Program.function-pointer-arithmetic" $
+    TestList
+        [ TestLabel "rejects adding to function pointers" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands"
+                "int helper(void) { return 0; } int main(void) { int (*fp)(void) = helper; fp + 1; return 0; }"
+        , TestLabel "rejects subtracting function pointers" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands"
+                "int helper(void) { return 0; } int main(void) { int (*fp)(void) = helper; int (*gp)(void) = helper; return fp - gp; }"
+        ]
+
+sameInputExternalCollisionTest :: Test
+sameInputExternalCollisionTest = TestLabel "Parser.Program.same-input-external-collision" $
+    TestList
+        [ "accepts prototype-before-global collisions in allowSameInputExternalCollisions mode" ~:
+            isRight
+                ( parseProgramAllowSameInputExternalCollisions
+                    "int foo(void); int foo; int main(void) { return 0; }"
+                )
+                ~?= True
+        , "accepts global-before-prototype collisions in allowSameInputExternalCollisions mode" ~:
+            isRight
+                ( parseProgramAllowSameInputExternalCollisions
+                    "int foo; int foo(void); int main(void) { return 0; }"
+                )
+                ~?= True
+        ]
+
 test :: Test
 test = TestLabel "Parser.Combinators.Core" $
     TestList [
@@ -192,4 +1304,15 @@ test = TestLabel "Parser.Combinators.Core" $
       , naturalTest
       , integerTest
       , identifierTest
+      , structInitializerTest
+      , incompleteArrayInitializerTest
+      , constantExpressionTest
+      , globalInitializerTest
+      , scalarInitializerTest
+      , sameInputExternalCollisionTest
+      , functionDesignatorContextTest
+      , functionCallTest
+      , conditionalPointerTypeTest
+      , functionPointerAssignmentTest
+      , functionPointerArithmeticTest
     ]

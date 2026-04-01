@@ -36,7 +36,9 @@ dependencies:
 - containers
 - bytestring
 - deepseq
+- directory
 - safe
+- filepath
 - mtl
 - monad-finally
 - mono-traversable
@@ -48,6 +50,7 @@ dependencies:
 - optparse-applicative
 - parsec
 - parser-combinators
+- unix
 - utf8-string
 
 library:
@@ -67,12 +70,25 @@ executables:
     dependencies:
     - htcc
     - directory
-    - gitrev
+    - filepath
+    - process
+    - template-haskell
+    - unix
 
 tests:
   htcc-test:
     main:                Spec.hs
     source-dirs:         test
+    other-modules:
+    - Tests.ComponentsTests
+    - Tests.ComponentsTests.AsmOutput
+    - Tests.ComponentsTests.Parser.Combinators
+    - Tests.SubProcTests
+    - Tests.SubProcTests.AsmOutput
+    - Tests.SubProcTests.LinkFuncRet
+    - Tests.SubProcTests.LinkFuncStdOut
+    - Tests.SubProcTests.StatementEqual
+    - Tests.Utils
     ghc-options:
     - -threaded
     - -rtsopts
@@ -94,6 +110,7 @@ tests:
     - dhall-json
     - dhall-yaml
     - process
+    - unix
     - utf8-string
 
 benchmarks:

@@ -2,12 +2,14 @@ module Tests.ComponentsTests (
     exec
 ) where
 
-import Tests.Utils hiding (exec)
+import           Tests.Utils                              hiding (exec)
 -- import Test.HUnit (Test (..))
-import Tests.ComponentsTests.Parser.Combinators as PC
+import qualified Tests.ComponentsTests.AsmOutput          as AsmOutput
+import           Tests.ComponentsTests.Parser.Combinators as PC
 
 exec :: IO ()
-exec = runTests $ 
+exec = runTests $
     TestList [
-        PC.test
+        AsmOutput.test
+      , PC.test
     ]

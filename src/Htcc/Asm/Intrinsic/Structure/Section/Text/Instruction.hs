@@ -217,5 +217,4 @@ jnz asm = I.putStrWithIndent "jnz " *> I.unCtx asm
 
 -- | @call@ instruction
 call :: T.Text -> I.Asm TextLabelCtx e ()
-call = intelSyntaxUnary "call"
-
+call arg = I.putStrLnWithIndent $ "call " <> arg

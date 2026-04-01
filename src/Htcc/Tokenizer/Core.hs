@@ -17,6 +17,7 @@ module Htcc.Tokenizer.Core (
 
 import           Control.Applicative                             (Alternative (..))
 import           Control.Conditional                             (ifM)
+import           Control.Monad                                   (replicateM_)
 import           Control.Monad.Extra                             (firstJustM)
 import           Control.Monad.State
 import           Data.Char                                       (digitToInt,

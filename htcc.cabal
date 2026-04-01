@@ -63,6 +63,7 @@ library
       Htcc.CRules.Types.CType
       Htcc.CRules.Types.StorageClass
       Htcc.CRules.Types.TypeKind
+      Htcc.Output
       Htcc.Parser
       Htcc.Parser.AST
       Htcc.Parser.AST.Core
@@ -123,10 +124,12 @@ library
     , cond
     , containers
     , deepseq
+    , directory
     , diagrams-contrib
     , diagrams-lib
     , diagrams-svg
     , extra
+    , filepath
     , parsec
     , monad-finally
     , monad-loops
@@ -139,6 +142,7 @@ library
     , split
     , text
     , transformers
+    , unix
     , utf8-string
   default-language: Haskell2010
 
@@ -161,8 +165,9 @@ executable htcc
     , diagrams-svg
     , directory
     , extra
-    , gitrev
+    , filepath
     , htcc
+    , process
     , parsec
     , monad-finally
     , monad-loops
@@ -173,8 +178,10 @@ executable htcc
     , parser-combinators
     , safe
     , split
+    , template-haskell
     , text
     , transformers
+    , unix
     , utf8-string
   default-language: Haskell2010
 
@@ -183,8 +190,10 @@ test-suite htcc-test
   main-is: Spec.hs
   other-modules:
       Tests.ComponentsTests
+      Tests.ComponentsTests.AsmOutput
       Tests.ComponentsTests.Parser.Combinators
       Tests.SubProcTests
+      Tests.SubProcTests.AsmOutput
       Tests.SubProcTests.LinkFuncRet
       Tests.SubProcTests.LinkFuncStdOut
       Tests.SubProcTests.StatementEqual
@@ -229,6 +238,7 @@ test-suite htcc-test
     , time
     , transformers
     , turtle
+    , unix
     , utf8-string
   default-language: Haskell2010
 

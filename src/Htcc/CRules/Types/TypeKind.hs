@@ -9,7 +9,7 @@ Portability : POSIX
 
 The types of C language
 -}
-{-# LANGUAGE BangPatterns, DeriveGeneric #-}
+{-# LANGUAGE BangPatterns, DeriveGeneric, LambdaCase #-}
 module Htcc.CRules.Types.TypeKind (
     -- * TypeKind data type
     StructMember (..),
@@ -23,6 +23,9 @@ module Htcc.CRules.Types.TypeKind (
     -- * Utilities of C type
     alignas,
     Desg (..),
+    integerPromotedTypeKind,
+    mergeCompatibleTypeKinds,
+    mergeTentativeArrayTypeKinds,
     accessibleIndices,
 ) where
 
@@ -143,13 +146,14 @@ data TypeKind i = CTInt -- ^ The type @int@ as C language
     | CTArray Natural (TypeKind i) -- ^ The array type
     | CTEnum (TypeKind i) (M.Map T.Text i) -- ^ The enum, has its underlying type and a map
     | CTStruct (M.Map T.Text (StructMember i)) -- ^ The struct, has its members and their names.
+    | CTNamedStruct T.Text (M.Map T.Text (StructMember i)) -- ^ A tagged struct definition.
     | CTIncomplete (Incomplete i) -- ^ The incomplete type.
     | CTUndef -- ^ Undefined type
     deriving Generic
 
 {-# INLINE fundamental #-}
 fundamental :: [TypeKind i]
-fundamental = [CTChar, CTInt, CTShort CTUndef, CTLong CTUndef, CTSigned CTUndef, CTVoid]
+fundamental = [CTChar, CTInt, CTBool, CTShort CTUndef, CTLong CTUndef, CTSigned CTUndef, CTVoid]
 
 {-# INLINE isLongShortable #-}
 isLongShortable :: TypeKind i -> Bool
@@ -255,6 +259,7 @@ instance Eq i => Eq (TypeKind i) where
     (==) (CTEnum ut1 m1) (CTEnum ut2 m2) = ut1 == ut2 && m1 == m2
     (==) (CTArray v1 t1) (CTArray v2 t2) = v1 == v2 && t1 == t2
     (==) (CTStruct m1) (CTStruct m2) = m1 == m2
+    (==) (CTNamedStruct tag1 m1) (CTNamedStruct tag2 m2) = tag1 == tag2 && m1 == m2
     (==) CTUndef CTUndef = True
     (==) (CTPtr t1) (CTPtr t2) = t1 == t2
     (==) (CTIncomplete t1) (CTIncomplete t2) = t1 == t2
@@ -279,6 +284,10 @@ instance Show i => Show (TypeKind i) where
     show (CTArray v t) = show t ++ "[" ++ show v ++ "]"
     show (CTEnum _ m) = "enum { " ++ intercalate ", " (map T.unpack $ M.keys m) ++ " }"
     show (CTStruct m) = "struct { " ++ concatMap (\(v, inf) -> show (smType inf) ++ " " ++ T.unpack v ++ "; ") (M.toList m) ++ "}"
+    show (CTNamedStruct tag m) =
+        "struct " ++ T.unpack tag ++ " { "
+            ++ concatMap (\(v, inf) -> show (smType inf) ++ " " ++ T.unpack v ++ "; ") (M.toList m)
+            ++ "}"
     show (CTIncomplete t) = show t
     show CTUndef = "undefined"
 
@@ -327,6 +336,10 @@ instance Ord i => CType (TypeKind i) where
         | M.null m = 1
         | otherwise = let sn = maximumBy (flip (.) smOffset . compare . smOffset) $ M.elems m in
             toNatural $ alignas (toInteger $ smOffset sn + sizeof (smType sn)) (toInteger $ alignof t)
+    sizeof t@(CTNamedStruct _ m)
+        | M.null m = 1
+        | otherwise = let sn = maximumBy (flip (.) smOffset . compare . smOffset) $ M.elems m in
+            toNatural $ alignas (toInteger $ smOffset sn + sizeof (smType sn)) (toInteger $ alignof t)
     sizeof CTUndef = 0
     sizeof (CTIncomplete _) = 0
     sizeof _ = error "sizeof: sould not reach here"
@@ -352,16 +365,19 @@ instance Ord i => CType (TypeKind i) where
     alignof (CTStruct m)
         | M.null m = 1
         | otherwise = maximum $ map (alignof . smType) $ M.elems m
+    alignof (CTNamedStruct _ m)
+        | M.null m = 1
+        | otherwise = maximum $ map (alignof . smType) $ M.elems m
     alignof CTUndef = 0
     alignof _ = error "alignof: sould not reach here"
 
     deref (CTPtr x) = Just x
     deref ct@(CTArray _ _) = Just $ f ct
         where
-            f (CTArray n c@(CTArray _ _)) = CTArray n (f c)
-            f (CTArray _ t)               = t
-            f t                           = t
-    deref (CTIncomplete (IncompleteArray (CTArray _ _))) = Nothing
+            f (CTArray _ t@(CTIncomplete (IncompleteArray _))) = t
+            f (CTArray n c@(CTArray _ _))                      = CTArray n (f c)
+            f (CTArray _ t)                                    = t
+            f t                                                = t
     deref (CTIncomplete (IncompleteArray t)) = Just t
     deref _ = Nothing
 
@@ -378,8 +394,11 @@ instance Ord i => CType (TypeKind i) where
     removeAllExtents x                                  = x
 
     conversion l r
-        | l == r = l
-        | otherwise = max l r
+        | l' == r' = l'
+        | otherwise = max l' r'
+        where
+            l' = integerPromotedTypeKind l
+            r' = integerPromotedTypeKind r
 
     {-# INLINE implicitInt #-}
     implicitInt (CTLong x)   = CTLong $ implicitInt x
@@ -405,8 +424,9 @@ instance TypeKindBase TypeKind where
     isIntegral _            = False
 
     {-# INLINE isCTStruct #-}
-    isCTStruct (CTStruct _) = True
-    isCTStruct _            = False
+    isCTStruct (CTStruct _)        = True
+    isCTStruct (CTNamedStruct _ _) = True
+    isCTStruct _                   = False
 
     {-# INLINE isCTUndef #-}
     isCTUndef CTUndef = True
@@ -466,5 +486,218 @@ alignas !n !aval = pred (n + aval) .&. complement (pred aval)
 
 -- | `lookupMember` search the specified member by its name from `CTStruct`.
 lookupMember :: T.Text -> TypeKind i -> Maybe (StructMember i)
-lookupMember t (CTStruct m) = M.lookup t m
-lookupMember _ _            = Nothing
+lookupMember t (CTStruct m)        = M.lookup t m
+lookupMember t (CTNamedStruct _ m) = M.lookup t m
+lookupMember _ _                   = Nothing
+
+typeKindStructurallyEqual :: Eq i => TypeKind i -> TypeKind i -> Bool
+typeKindStructurallyEqual CTInt CTInt = True
+typeKindStructurallyEqual CTChar CTChar = True
+typeKindStructurallyEqual CTBool CTBool = True
+typeKindStructurallyEqual CTVoid CTVoid = True
+typeKindStructurallyEqual CTUndef CTUndef = True
+typeKindStructurallyEqual (CTFunc lhsRet lhsParams) (CTFunc rhsRet rhsParams) =
+    typeKindStructurallyEqual lhsRet rhsRet
+        && functionParamTypesStructurallyEqual lhsParams rhsParams
+typeKindStructurallyEqual (CTEnum lhsTy lhsMembers) (CTEnum rhsTy rhsMembers) =
+    typeKindStructurallyEqual lhsTy rhsTy && lhsMembers == rhsMembers
+typeKindStructurallyEqual (CTArray lhsLen lhsTy) (CTArray rhsLen rhsTy) =
+    lhsLen == rhsLen && typeKindStructurallyEqual lhsTy rhsTy
+typeKindStructurallyEqual (CTStruct lhsMembers) (CTStruct rhsMembers) =
+    structMembersStructurallyEqual lhsMembers rhsMembers
+typeKindStructurallyEqual (CTNamedStruct lhsTag lhsMembers) (CTNamedStruct rhsTag rhsMembers) =
+    lhsTag == rhsTag && structMembersStructurallyEqual lhsMembers rhsMembers
+typeKindStructurallyEqual (CTPtr lhsTy) (CTPtr rhsTy) =
+    typeKindStructurallyEqual lhsTy rhsTy
+typeKindStructurallyEqual (CTIncomplete lhs) (CTIncomplete rhs) =
+    incompleteTypesStructurallyEqual lhs rhs
+typeKindStructurallyEqual lhs rhs
+    | isQualifier lhs || isQualifier rhs = maybe' False (combTable lhs) $ \lh ->
+        maybe' False (combTable rhs) $ \rh -> lh == rh
+    | otherwise = False
+
+functionParamTypesStructurallyEqual :: Eq i => [(TypeKind i, Maybe T.Text)] -> [(TypeKind i, Maybe T.Text)] -> Bool
+functionParamTypesStructurallyEqual lhs rhs =
+    length lhs == length rhs
+        && and (zipWith (typeKindStructurallyEqual `on` fst) lhs rhs)
+    where
+        on f g x y = f (g x) (g y)
+
+structMembersStructurallyEqual
+    :: Eq i
+    => M.Map T.Text (StructMember i)
+    -> M.Map T.Text (StructMember i)
+    -> Bool
+structMembersStructurallyEqual lhs rhs
+    | M.keysSet lhs /= M.keysSet rhs = False
+    | otherwise =
+        all
+            (\(name, lhsMember) -> maybe False (structMemberStructurallyEqual lhsMember) $ M.lookup name rhs)
+            (M.toList lhs)
+
+structMemberStructurallyEqual :: Eq i => StructMember i -> StructMember i -> Bool
+structMemberStructurallyEqual lhs rhs =
+    smOffset lhs == smOffset rhs
+        && typeKindStructurallyEqual (smType lhs) (smType rhs)
+
+incompleteTypesStructurallyEqual :: Eq i => Incomplete i -> Incomplete i -> Bool
+incompleteTypesStructurallyEqual (IncompleteArray lhsTy) (IncompleteArray rhsTy) =
+    typeKindStructurallyEqual lhsTy rhsTy
+incompleteTypesStructurallyEqual (IncompleteStruct lhsTag) (IncompleteStruct rhsTag) =
+    lhsTag == rhsTag
+incompleteTypesStructurallyEqual _ _ = False
+
+mergeCompatibleTypeKinds :: Eq i => TypeKind i -> TypeKind i -> Maybe (TypeKind i)
+mergeCompatibleTypeKinds = mergeCompatibleTypeKinds' True
+
+mergeCompatibleTypeKinds' :: Eq i => Bool -> TypeKind i -> TypeKind i -> Maybe (TypeKind i)
+mergeCompatibleTypeKinds' _ lhs rhs
+    | typeKindStructurallyEqual lhs rhs = Just rhs
+    | equivalentSignedIntegerSynonym lhs rhs = Just rhs
+mergeCompatibleTypeKinds' _ (CTSigned lhs) (CTSigned rhs) =
+    CTSigned <$> mergeCompatibleTypeKinds' False lhs rhs
+mergeCompatibleTypeKinds' _ (CTShort lhs) (CTShort rhs) =
+    CTShort <$> mergeCompatibleTypeKinds' False lhs rhs
+mergeCompatibleTypeKinds' _ (CTLong lhs) (CTLong rhs) =
+    CTLong <$> mergeCompatibleTypeKinds' False lhs rhs
+mergeCompatibleTypeKinds' _ (CTPtr lhs) (CTPtr rhs) =
+    CTPtr <$> mergeCompatibleTypeKinds' False lhs rhs
+mergeCompatibleTypeKinds' allowExtentInference lhs@(CTArray _ _) rhs@(CTArray _ _) =
+    mergeTentativeArrayTypeKinds' allowExtentInference lhs rhs
+mergeCompatibleTypeKinds' _ (CTFunc lhsRet lhsParams) (CTFunc rhsRet rhsParams) = do
+    retTy <- mergeCompatibleTypeKinds' False lhsRet rhsRet
+    params <- mergeCompatibleFunctionParamLists lhsParams rhsParams
+    pure $ CTFunc retTy params
+mergeCompatibleTypeKinds' allowExtentInference lhs@(CTIncomplete (IncompleteArray _)) rhs@(CTIncomplete (IncompleteArray _)) =
+    mergeTentativeArrayTypeKinds' allowExtentInference lhs rhs
+mergeCompatibleTypeKinds' _ (CTIncomplete (IncompleteStruct lhsTag)) (CTIncomplete (IncompleteStruct rhsTag))
+    | lhsTag == rhsTag =
+        Just $ CTIncomplete $ IncompleteStruct lhsTag
+mergeCompatibleTypeKinds' _ (CTIncomplete (IncompleteStruct lhsTag)) rhs@(CTNamedStruct rhsTag _)
+    | lhsTag == rhsTag =
+        Just rhs
+mergeCompatibleTypeKinds' _ lhs@(CTNamedStruct lhsTag _) (CTIncomplete (IncompleteStruct rhsTag))
+    | lhsTag == rhsTag =
+        Just lhs
+mergeCompatibleTypeKinds' _ (CTEnum lhsTy lhsMembers) (CTEnum rhsTy rhsMembers)
+    | lhsMembers == rhsMembers =
+        CTEnum <$> mergeCompatibleTypeKinds' False lhsTy rhsTy <*> pure lhsMembers
+mergeCompatibleTypeKinds' _ (CTStruct lhsMembers) (CTStruct rhsMembers) =
+    CTStruct <$> mergeCompatibleStructMembers lhsMembers rhsMembers
+mergeCompatibleTypeKinds' _ (CTNamedStruct lhsTag lhsMembers) (CTNamedStruct rhsTag rhsMembers)
+    | lhsTag == rhsTag =
+        CTNamedStruct lhsTag <$> mergeCompatibleStructMembers lhsMembers rhsMembers
+mergeCompatibleTypeKinds' allowExtentInference lhs rhs =
+    mergeTentativeArrayTypeKinds' allowExtentInference lhs rhs
+
+equivalentSignedIntegerSynonym :: Eq i => TypeKind i -> TypeKind i -> Bool
+equivalentSignedIntegerSynonym lhs rhs = case (canonicalSignedIntegerType lhs, canonicalSignedIntegerType rhs) of
+    (Just lhsTy, Just rhsTy) -> lhsTy == rhsTy
+    _                        -> False
+
+canonicalSignedIntegerType :: TypeKind i -> Maybe (TypeKind i)
+canonicalSignedIntegerType CTInt        = Just CTInt
+canonicalSignedIntegerType CTUndef      = Just CTInt
+canonicalSignedIntegerType (CTSigned x) = canonicalSignedIntegerType x
+canonicalSignedIntegerType (CTShort x)  = CTShort <$> canonicalSignedIntegerType x
+canonicalSignedIntegerType (CTLong x)   = CTLong <$> canonicalSignedIntegerType x
+canonicalSignedIntegerType _            = Nothing
+
+mergeCompatibleStructMembers
+    :: Eq i
+    => M.Map T.Text (StructMember i)
+    -> M.Map T.Text (StructMember i)
+    -> Maybe (M.Map T.Text (StructMember i))
+mergeCompatibleStructMembers lhsMembers rhsMembers
+    | M.keysSet lhsMembers /= M.keysSet rhsMembers = Nothing
+    | otherwise = M.traverseWithKey mergeMember lhsMembers
+    where
+        mergeMember name lhsMember = do
+            rhsMember <- M.lookup name rhsMembers
+            if smOffset lhsMember /= smOffset rhsMember
+                then Nothing
+                else
+                    (\mergedTy -> rhsMember { smType = mergedTy })
+                        <$> mergeCompatibleTypeKinds' False (smType lhsMember) (smType rhsMember)
+
+-- | Merge array types for tentative declarations.
+-- Only the outermost missing extent may be inferred; all inner extents and rank
+-- must already match exactly.
+mergeTentativeArrayTypeKinds :: Eq i => TypeKind i -> TypeKind i -> Maybe (TypeKind i)
+mergeTentativeArrayTypeKinds lhs rhs
+    | typeKindStructurallyEqual lhs rhs = Just rhs
+    | equivalentSignedIntegerSynonym lhs rhs = Just rhs
+    | otherwise = mergeTentativeArrayTypeKinds' True lhs rhs
+
+mergeTentativeArrayTypeKinds' :: Eq i => Bool -> TypeKind i -> TypeKind i -> Maybe (TypeKind i)
+mergeTentativeArrayTypeKinds' allowExtentInference (CTArray lhsLen lhsInner) (CTArray rhsLen rhsInner)
+    | lhsLen == rhsLen =
+        CTArray lhsLen <$> mergeCompatibleTypeKinds' allowExtentInference lhsInner rhsInner
+mergeTentativeArrayTypeKinds' allowExtentInference (CTIncomplete (IncompleteArray lhsElemTy)) (CTIncomplete (IncompleteArray rhsElemTy)) =
+    CTIncomplete . IncompleteArray <$> mergeCompatibleTypeKinds' allowExtentInference lhsElemTy rhsElemTy
+mergeTentativeArrayTypeKinds' True (CTIncomplete (IncompleteArray lhsElemTy)) (CTArray rhsLen rhsInnerTy) =
+    CTArray rhsLen <$> mergeCompatibleTypeKinds' False lhsElemTy rhsInnerTy
+mergeTentativeArrayTypeKinds' True (CTArray lhsLen lhsInnerTy) (CTIncomplete (IncompleteArray rhsElemTy)) =
+    CTArray lhsLen <$> mergeCompatibleTypeKinds' False lhsInnerTy rhsElemTy
+mergeTentativeArrayTypeKinds' _ _ _ = Nothing
+
+mergeCompatibleFunctionParamLists :: Eq i => [(TypeKind i, Maybe T.Text)] -> [(TypeKind i, Maybe T.Text)] -> Maybe [(TypeKind i, Maybe T.Text)]
+mergeCompatibleFunctionParamLists lhsParams rhsParams
+    | isUnspecifiedParamList lhsParams
+        && oldStyleCompatibleWithPrototype rhsParamKinds =
+        Just rhsParams
+    | isUnspecifiedParamList rhsParams
+        && oldStyleCompatibleWithPrototype lhsParamKinds =
+        Just lhsParams
+    | length lhsParamKinds == length rhsParamKinds =
+        mapM mergeCompatibleFunctionParam $ zip lhsParams rhsParams
+    | otherwise = Nothing
+    where
+        lhsParamKinds = normalizedFunctionParamKinds lhsParams
+        rhsParamKinds = normalizedFunctionParamKinds rhsParams
+
+        isUnspecifiedParamList [] = True
+        isUnspecifiedParamList _  = False
+
+        oldStyleCompatibleWithPrototype =
+            all (maybe False (const True) . (\ty -> mergeCompatibleTypeKinds ty $ defaultPromotedFunctionParamType ty))
+        mergeCompatibleFunctionParam ((lhsTy, lhsName), (rhsTy, rhsName)) =
+            (\mergedTy -> (mergedTy, rhsName <|> lhsName))
+                <$> ( mergeCompatibleTypeKinds lhsTy rhsTy
+                        <|> mergeCompatibleTypeKinds
+                            (canonicalizeFunctionParamType lhsTy)
+                            (canonicalizeFunctionParamType rhsTy)
+                    )
+
+normalizedFunctionParamKinds :: [(TypeKind i, Maybe T.Text)] -> [TypeKind i]
+normalizedFunctionParamKinds [(CTVoid, Nothing)] = []
+normalizedFunctionParamKinds params =
+    map (canonicalizeFunctionParamType . fst) params
+
+canonicalizeFunctionParamType :: TypeKind i -> TypeKind i
+canonicalizeFunctionParamType (CTArray _ elemTy) = CTPtr elemTy
+canonicalizeFunctionParamType (CTIncomplete (IncompleteArray elemTy)) = CTPtr elemTy
+canonicalizeFunctionParamType (CTFunc retTy params) = CTPtr (CTFunc retTy params)
+canonicalizeFunctionParamType ty = ty
+
+defaultPromotedFunctionParamType :: TypeKind i -> TypeKind i
+defaultPromotedFunctionParamType = integerPromotedTypeKind
+
+integerPromotedTypeKind :: TypeKind i -> TypeKind i
+integerPromotedTypeKind = \case
+    CTChar      -> CTInt
+    CTBool      -> CTInt
+    CTEnum _ _  -> CTInt
+    CTShort _   -> CTInt
+    CTSigned ty
+        | isPromotableQualifiedType ty -> CTInt
+        | otherwise -> CTSigned ty
+    ty          -> ty
+
+isPromotableQualifiedType :: TypeKind i -> Bool
+isPromotableQualifiedType = \case
+    CTChar     -> True
+    CTBool     -> True
+    CTEnum _ _ -> True
+    CTShort _  -> True
+    _          -> False

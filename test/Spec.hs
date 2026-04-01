@@ -16,8 +16,8 @@ import           Dhall.Yaml                (Options (..), defaultOptions,
                                             dhallToYaml)
 import           Htcc.Utils                (tshow)
 import qualified Options.Applicative       as OA
-import           System.Directory          (createDirectoryIfMissing)
-import           System.Directory          (doesDirectoryExist, listDirectory)
+import           System.Directory          (createDirectoryIfMissing,
+                                            doesDirectoryExist, listDirectory)
 import           System.FilePath           ((</>))
 import           System.IO                 (hFlush, stdout)
 import           System.Process            (readCreateProcess, shell)
@@ -92,9 +92,10 @@ genTestAsm' = lift (createDirectoryIfMissing False workDir *> createDirectoryIfM
         mkBin fname = do
             outAsmName <- gets (\n -> T.pack (asmDir </> "spec") <> tshow n <> ".s")
             lift $
+                htccCommand >>= \htccCmd ->
                 T.putStr ("[compiling] " <> fname)
                     *> hFlush stdout
-                    *> execErrFin ("stack exec htcc -- " <> fname <> " > " <> outAsmName)
+                    *> execErrFin (htccCmd <> " " <> fname <> " > " <> outAsmName)
                     *> T.putStrLn (" -> " <> outAsmName)
             outAsmName <$ modify succ
 
@@ -106,10 +107,18 @@ genTestBins' = (genTestAsm' <* put 0) >>= mapM f
     where
         f fname = do
             binName <- gets (\n -> T.pack (workDir </> "spec") <> tshow n <> ".out")
+            asmCmd <- lift $ assemblerCommand
+                [ "-x"
+                , "assembler"
+                , "-no-pie"
+                , "-o"
+                , T.unpack binName
+                , T.unpack fname
+                ]
             lift $
                 T.putStr ("[assembling] " <> fname)
                     *> hFlush stdout
-                    *> execErrFin ("gcc -xassembler -no-pie -o " <> binName <> " " <> fname)
+                    *> execErrFin asmCmd
                     *> T.putStrLn (" -> " <> binName)
             binName <$ modify succ
 

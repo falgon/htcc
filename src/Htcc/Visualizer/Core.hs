@@ -11,6 +11,7 @@ Build AST from C source code
 -}
 {-# LANGUAGE FlexibleContexts, OverloadedStrings #-}
 module Htcc.Visualizer.Core (
+    mkWidth,
     visualize
 ) where
 
@@ -64,6 +65,8 @@ encodeTree (ATNode ATGEQ _ l r) = Node ">=" [encodeTree l, encodeTree r]
 encodeTree (ATNode ATEQ _ l r) = Node "==" [encodeTree l, encodeTree r]
 encodeTree (ATNode ATNEQ _ l r) = Node "!=" [encodeTree l, encodeTree r]
 encodeTree (ATNode ATNot _ l _) = Node "!" [encodeTree l]
+encodeTree (ATNode ATSizeof _ l _) = Node "sizeof" [encodeTree l]
+encodeTree (ATNode ATAlignof _ l _) = Node "_Alignof" [encodeTree l]
 encodeTree (ATNode ATAddr _ l _) = Node "&" [encodeTree l]
 encodeTree (ATNode ATDeref _ l _) = Node "*" [encodeTree l]
 encodeTree (ATNode ATAssign _ l r) = Node "=" [encodeTree l, encodeTree r]
@@ -91,10 +94,13 @@ encodeTree (ATNode (ATLabel lbl) _ l r) = Node (":" ++ T.unpack lbl) [encodeTree
 encodeTree (ATNode (ATBlock xs) _ _ _) = Node "{}" $ map encodeTree xs
 encodeTree (ATNode (ATLVar t o) _ l r) = Node (show t ++ " lvar" ++ show o) [encodeTree l, encodeTree r]
 encodeTree (ATNode (ATGVar t n) _ l r) = Node (show t ++ " " ++ T.unpack n) [encodeTree l, encodeTree r]
+encodeTree (ATNode (ATFuncPtr name) _ _ _) = Node ("funcptr " ++ T.unpack name) []
 encodeTree (ATNode (ATDefFunc fname Nothing) t lhs _) = Node (show (CT.toTypeKind t) ++ " " ++ T.unpack fname ++ "()") [encodeTree lhs]
 encodeTree (ATNode (ATDefFunc fname (Just args)) t lhs _) = Node (show (CT.toTypeKind t) ++ " " ++ T.unpack fname ++ "(some arguments)") $ map encodeTree args ++ [encodeTree lhs]
 encodeTree (ATNode (ATCallFunc fname Nothing) _ lhs rhs) = Node (T.unpack fname ++ "()") [encodeTree lhs, encodeTree rhs]
 encodeTree (ATNode (ATCallFunc fname (Just args)) _ lhs rhs) = Node (T.unpack fname ++ "(some arguments)") $ map encodeTree args ++ [encodeTree lhs, encodeTree rhs]
+encodeTree (ATNode (ATCallPtr Nothing) _ lhs rhs) = Node "(*)(...)" [encodeTree lhs, encodeTree rhs]
+encodeTree (ATNode (ATCallPtr (Just args)) _ lhs rhs) = Node "(*)(some arguments)" $ encodeTree lhs : map encodeTree args ++ [encodeTree rhs]
 encodeTree (ATNode ATExprStmt _ lhs _) = encodeTree lhs
 encodeTree (ATNode (ATStmtExpr exps) _ lhs rhs) = Node "({})" $ map encodeTree exps ++ [encodeTree lhs, encodeTree rhs]
 encodeTree (ATNode (ATNull _) _ _ _) = Node "" []

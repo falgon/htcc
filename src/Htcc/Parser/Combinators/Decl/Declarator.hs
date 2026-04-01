@@ -47,7 +47,24 @@ declarator ty = do
                     ]
             where
                 nested' ptrf ident t =
-                    M.option (id, ident, ptrf t) ((id, ident,) . ptrf <$> typeSuffix t)
+                    M.option
+                        (id, ident, rebuildTy $ ptrf baseTy)
+                        ((id, ident,) . rebuildTy . ptrf <$> typeSuffix baseTy)
+                    where
+                        (baseTyKind, rebuildTyKind) = dctorDirectSuffix $ CT.toTypeKind t
+                        baseTy = CT.mapTypeKind (const baseTyKind) t
+                        rebuildTy ty''' = CT.mapTypeKind (const $ rebuildTyKind $ CT.toTypeKind ty''') t
+
+                dctorDirectSuffix (CT.CTArray n ty''') =
+                    let (baseTyKind, rebuildTyKind) = dctorDirectSuffix ty'''
+                     in (baseTyKind, CT.CTArray n . rebuildTyKind)
+                dctorDirectSuffix (CT.CTIncomplete (CT.IncompleteArray ty''')) =
+                    let (baseTyKind, rebuildTyKind) = dctorDirectSuffix ty'''
+                     in (baseTyKind, CT.CTIncomplete . CT.IncompleteArray . rebuildTyKind)
+                dctorDirectSuffix (CT.CTFunc retTy params) =
+                    let (baseTyKind, rebuildTyKind) = dctorDirectSuffix retTy
+                     in (baseTyKind, (`CT.CTFunc` params) . rebuildTyKind)
+                dctorDirectSuffix ty''' = (ty''', id)
 
 absDeclarator :: (Integral i, Show i, Read i, Bits i) => Parser i (CT.StorageClass i)
 absDeclarator = do

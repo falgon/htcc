@@ -16,6 +16,7 @@ module Htcc.Asm.Intrinsic.Structure.Internal (
     AsmCodeCtx,
     unCtx,
     runAsm,
+    runAsmWithHandle,
     putStrWithIndent,
     putStrLnWithIndent,
     errCtx,
@@ -28,17 +29,19 @@ import           Control.Monad.Finally (MonadFinally (..))
 import           Data.IORef            (IORef, newIORef, writeIORef)
 import qualified Data.Text             as T
 import qualified Data.Text.IO          as T
+import           System.IO             (Handle, stdout)
 
 import           Htcc.Utils            (err)
 
 -- | Counter and label information used when generating assembly code
 data AsmInfo e = AsmInfo
     {
-        inLabel :: Bool, -- ^ the flag that indicates whether it is inside the label. If True, indent by single tab,
-        lblCnt  :: IORef e, -- ^ the label counter
-        brkCnt  :: IORef (Maybe e), -- ^ the @break@ label counter
-        cntCnt  :: IORef (Maybe e), -- ^ the @continue@ label counter
-        curFn   :: IORef (Maybe T.Text) -- ^ the function being processed
+        inLabel   :: Bool, -- ^ the flag that indicates whether it is inside the label. If True, indent by single tab,
+        outHandle :: Handle, -- ^ output destination for generated assembly
+        lblCnt    :: IORef e, -- ^ the label counter
+        brkCnt    :: IORef (Maybe e), -- ^ the @break@ label counter
+        cntCnt    :: IORef (Maybe e), -- ^ the @continue@ label counter
+        curFn     :: IORef (Maybe T.Text) -- ^ the function being processed
     }
 
 -- | A monad that represents the context of the assembly code
@@ -80,21 +83,25 @@ unCtx = Asm . unAsm
 
 -- | the executor that outputs assembly code
 runAsm :: (Num e, Enum e) => Asm AsmCodeCtx e a -> IO a
-runAsm asm = do
-    putStrLn ".intel_syntax noprefix"
+runAsm = runAsmWithHandle stdout
+
+-- | the executor that outputs assembly code to the specified handle
+runAsmWithHandle :: (Num e, Enum e) => Handle -> Asm AsmCodeCtx e a -> IO a
+runAsmWithHandle h asm = do
+    T.hPutStrLn h ".intel_syntax noprefix"
     c <- newIORef 0
     brk <- newIORef Nothing
     cnt <- newIORef Nothing
     fn <- newIORef Nothing
-    unAsm asm (AsmInfo False c brk cnt fn)
+    unAsm asm (AsmInfo False h c brk cnt fn)
 
 -- | print a string with indentation, output is broken on a new line
 putStrLnWithIndent :: T.Text -> Asm ctx e ()
-putStrLnWithIndent s = Asm $ \x -> T.putStrLn $ if inLabel x then '\t' `T.cons` s else s
+putStrLnWithIndent s = Asm $ \x -> T.hPutStrLn (outHandle x) $ if inLabel x then '\t' `T.cons` s else s
 
 -- | print a string with indentation
 putStrWithIndent :: T.Text -> Asm ctx e ()
-putStrWithIndent s = Asm $ \x -> T.putStr $ if inLabel x then '\t' `T.cons` s else s
+putStrWithIndent s = Asm $ \x -> T.hPutStr (outHandle x) $ if inLabel x then '\t' `T.cons` s else s
 
 -- | The error context.
 -- when this is executed,

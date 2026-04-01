@@ -15,25 +15,28 @@ module Htcc.Parser.Combinators.Type.Core (
   -- * Helper functions
   , toNamedParams
 ) where
-import           Control.Monad                           (mfilter)
-import           Control.Monad.Combinators               (choice)
-import           Control.Monad.Trans                     (MonadTrans (..))
-import           Control.Monad.Trans.Maybe               (MaybeT (..),
-                                                          runMaybeT)
-import           Control.Monad.Trans.State               (gets)
-import           Data.Bits                               (Bits (..))
-import           Data.Functor                            ((<&>))
-import           Data.Maybe                              (fromJust, isJust)
-import qualified Data.Text                               as T
-import           Data.Tuple.Extra                        (dupe, first, second)
-import qualified Htcc.CRules.Types                       as CT
-import           Htcc.Parser.Combinators.ConstExpr       (evalConstexpr)
-import           Htcc.Parser.Combinators.Core
-import {-# SOURCE #-} Htcc.Parser.Combinators.Decl.Declarator
-import           Htcc.Parser.Combinators.Decl.Spec       (declspec)
-import           Htcc.Parser.ConstructionData.Core       (incomplete)
-import           Htcc.Utils                              (toNatural)
-import qualified Text.Megaparsec                         as M
+import                          Control.Monad                           (mfilter)
+import                          Control.Monad.Combinators               (choice)
+import                          Control.Monad.Trans                     (MonadTrans (..))
+import                          Control.Monad.Trans.Maybe               (MaybeT (..),
+                                                                         runMaybeT)
+import                          Control.Monad.Trans.State               (gets)
+import                          Data.Bits                               (Bits (..))
+import                          Data.Functor                            ((<&>))
+import                          Data.Maybe                              (fromJust,
+                                                                         isJust)
+import                qualified Data.Text                               as T
+import                          Data.Tuple.Extra                        (dupe,
+                                                                         first,
+                                                                         second)
+import                qualified Htcc.CRules.Types                       as CT
+import                          Htcc.Parser.Combinators.ConstExpr       (evalConstexpr)
+import                          Htcc.Parser.Combinators.Core
+import {-# SOURCE #-}           Htcc.Parser.Combinators.Decl.Declarator
+import                          Htcc.Parser.Combinators.Decl.Spec       (declspec)
+import                          Htcc.Parser.ConstructionData.Core       (incomplete)
+import                          Htcc.Utils                              (toNatural)
+import                qualified Text.Megaparsec                         as M
 
 arraySuffix :: (Show i, Read i, Bits i, Integral i)
     => CT.StorageClass i
@@ -76,7 +79,7 @@ funcParams :: (Show i, Read i, Integral i, Bits i)
     -> Parser i (CT.StorageClass i)
 funcParams ty = lparen
     *> choice
-        [ [] <$ (symbol "void" *> rparen)
+        [ [(CT.SCAuto CT.CTVoid, Nothing)] <$ (symbol "void" *> rparen)
         , withParams
         ]
     <&> CT.wrapCTFunc ty
@@ -107,6 +110,7 @@ toNamedParams ty = case CT.toTypeKind ty of
     (CT.CTFunc _ params) -> pure
         [ first CT.SCAuto $ second fromJust p
         | p <- params
+        , fst p /= CT.CTVoid
         , isJust $ snd p
         ]
     _ -> fail "expected function parameters"

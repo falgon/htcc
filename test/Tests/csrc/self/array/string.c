@@ -33,8 +33,10 @@ int main()
     assert('e', ({ char s[] = "hoge"; s[3]; }), "({ char s[] = \"hoge\"; s[3]; })");
     assert(0, ({ char s[] = "hoge"; s[4]; }), "({ char s[] = \"hoge\"; s[4]; })");
     assert(0, ({ char s1[] = "hoge"; char s2[] = "hoge"; strcmp(s1, s2); }), "({ char s1[] = \"hoge\"; char s2[] = \"hoge\"; strcmp(s1, s2); })");
-    assert(1, ({ char s1[] = "a"; char s2[] = "b"; 0 < strcmp(s1, s2); }), "({ char s1[] = \"a\"; char s2[] = \"b\"; 0 < strcmp(s1, s2); })");
+    assert(0, ({ char s1[] = "a"; char s2[] = "b"; 0 < strcmp(s1, s2); }), "({ char s1[] = \"a\"; char s2[] = \"b\"; 0 < strcmp(s1, s2); })");
     assert(5, ({ char s[] = "hoge"; sizeof s; }), "({ char s[] = \"hoge\"; sizeof s; })");
+    assert(3, ({ char s[3] = "abc"; sizeof s; }), "({ char s[3] = \"abc\"; sizeof s; })");
+    assert('c', ({ char s[3] = "abc"; s[2]; }), "({ char s[3] = \"abc\"; s[2]; })");
     assert('a', ({ char str[2][4] = { "abc", "def" }; str[0][0]; }), "({ char str[2][4] = { \"abc\", \"def\" }; str[0][0]; })");
     assert('b', ({ char str[2][4] = { "abc", "def" }; str[0][1]; }), "({ char str[2][4] = { \"abc\", \"def\" }; str[0][1]; })");
     assert('c', ({ char str[2][4] = { "abc", "def" }; str[0][2]; }), "({ char str[2][4] = { \"abc\", \"def\" }; str[0][2]; })");
@@ -51,6 +53,8 @@ int main()
     assert('e', ({ char str[][4] = { "abc", "def" }; str[1][1]; }), "({ char str[][4] = { \"abc\", \"def\" }; str[1][1]; })");
     assert('f', ({ char str[][4] = { "abc", "def" }; str[1][2]; }), "({ char str[][4] = { \"abc\", \"def\" }; str[1][2]; })");
     assert(0, ({ char str[][4] = { "abc", "def" }; str[1][3]; }), "({ char str[][4] = { \"abc\", \"def\" }; str[1][3]; })");
+    assert(3, ({ char str[][3] = { "abc" }; sizeof str[0]; }), "({ char str[][3] = { \"abc\" }; sizeof str[0]; })");
+    assert('c', ({ char str[][3] = { "abc" }; str[0][2]; }), "({ char str[][3] = { \"abc\" }; str[0][2]; })");
     assert(92, "\\"[0], "\"\\\\\"[0]");
 
     printf("All tests are passed!\n");

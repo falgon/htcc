@@ -39,30 +39,30 @@ module Htcc.Parser.ConstructionData.Core (
     incomplete
 ) where
 
-import           Data.Bits                                       (Bits (..))
-import           Data.Maybe                                      (fromJust)
-import qualified Data.Sequence                                   as SQ
-import qualified Data.Text                                       as T
-import           Data.Tuple.Extra                                (second)
+import                          Data.Bits                                       (Bits (..))
+import                          Data.Maybe                                      (fromJust)
+import                qualified Data.Sequence                                   as SQ
+import                qualified Data.Text                                       as T
+import                          Data.Tuple.Extra                                (second)
 
-import qualified Htcc.CRules.Types                               as CT
-import           Htcc.Parser.AST.Core                            (ATree (..))
-import           Htcc.Parser.ConstructionData.Scope              (LookupVarResult (..))
-import qualified Htcc.Parser.ConstructionData.Scope              as AS
-import qualified Htcc.Parser.ConstructionData.Scope.Enumerator   as SE
-import qualified Htcc.Parser.ConstructionData.Scope.Function     as PF
-import           Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
-import qualified Htcc.Parser.ConstructionData.Scope.Tag          as PS
-import qualified Htcc.Parser.ConstructionData.Scope.Typedef      as PT
-import qualified Htcc.Parser.ConstructionData.Scope.Var          as PV
-import qualified Htcc.Tokenizer.Token                            as HT
+import                qualified Htcc.CRules.Types                               as CT
+import                          Htcc.Parser.AST.Core                            (ATree (..))
+import                          Htcc.Parser.ConstructionData.Scope              (LookupVarResult (..))
+import                qualified Htcc.Parser.ConstructionData.Scope              as AS
+import                qualified Htcc.Parser.ConstructionData.Scope.Enumerator   as SE
+import                qualified Htcc.Parser.ConstructionData.Scope.Function     as PF
+import                          Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
+import                qualified Htcc.Parser.ConstructionData.Scope.Tag          as PS
+import                qualified Htcc.Parser.ConstructionData.Scope.Typedef      as PT
+import                qualified Htcc.Parser.ConstructionData.Scope.Var          as PV
+import                qualified Htcc.Tokenizer.Token                            as HT
 
-import           Control.Monad.State                             (modify)
-import           Data.List.NonEmpty                              (NonEmpty (..))
-import qualified Data.Set                                        as S
-import           Data.Void
-import {-# SOURCE #-} Htcc.Parser.Combinators.ParserType
-import qualified Text.Megaparsec                                 as M
+import                          Control.Monad.State                             (modify)
+import                          Data.List.NonEmpty                              (NonEmpty (..))
+import                qualified Data.Set                                        as S
+import                          Data.Void
+import {-# SOURCE #-}           Htcc.Parser.Combinators.ParserType
+import                qualified Text.Megaparsec                                 as M
 
 -- | The warning messages type
 type Warnings = SQ.Seq (M.ParseErrorBundle T.Text Void)
@@ -71,9 +71,10 @@ type Warnings = SQ.Seq (M.ParseErrorBundle T.Text Void)
 -- Contains error messages and scope information.
 data ConstructionData i = ConstructionData -- ^ The constructor of ConstructionData
     {
-        warns        :: Warnings, -- ^ The warning messages
-        scope        :: AS.Scoped i, -- ^ Scope type
-        isSwitchStmt :: Bool -- ^ When the statement is @switch@, this flag will be `True`, otherwise will be `False`.
+        warns                            :: Warnings, -- ^ The warning messages
+        scope                            :: AS.Scoped i, -- ^ Scope type
+        isSwitchStmt                     :: Bool, -- ^ When the statement is @switch@, this flag will be `True`, otherwise will be `False`.
+        allowSameInputExternalCollisions :: Bool -- ^ When `True`, same-input globals and function declarations may coexist so multi-input `-o` merge can resolve them.
     } deriving Show
 
 {-# INLINE applyScope #-}
@@ -96,11 +97,22 @@ addLVar = addVar AS.addLVar
 --
 -- >>> second (\x -> y { scope = x }) <$> Htcc.Parser.AST.Scope.addGVar ty tkn (scope x)
 addGVar :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ATree i, ConstructionData i)
-addGVar = addVar AS.addGVar
+addGVar ty tkn cd =
+    addVar
+        (if allowSameInputExternalCollisions cd then AS.addGVarAllowFunctionConflict else AS.addGVar)
+        ty
+        tkn
+        cd
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.addGVarWith` for variable @x@ of tye `ConstructionData`.
 addGVarWith :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> PV.GVarInitWith i -> ConstructionData i -> Either (ASTError i) (ATree i, ConstructionData i)
-addGVarWith ty tkn iw cd = applyScope cd <$> AS.addGVarWith ty tkn iw (scope cd)
+addGVarWith ty tkn iw cd =
+    applyScope cd <$>
+        (if allowSameInputExternalCollisions cd then AS.addGVarWithAllowFunctionConflict else AS.addGVarWith)
+            ty
+            tkn
+            iw
+            (scope cd)
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.addLiteral` for variable @x@ of type `ConstructionData`.
 -- This function is equivalent to
@@ -195,8 +207,15 @@ addTypedef ty tkn cd = (\x -> cd { scope = x }) <$> AS.addTypedef ty tkn (scope 
 -- This function is equivalent to
 --
 -- >>> (\y -> x { scope = y }) <$> Htcc.Parser.AST.Scope.addFunction ty tkn (scope x)
-addFunction :: Num i => Bool -> CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ConstructionData i)
-addFunction fd ty tkn cd = (\x -> cd { scope = x }) <$> AS.addFunction fd ty tkn (scope cd)
+addFunction :: (Eq i, Num i) => Bool -> Bool -> CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ConstructionData i)
+addFunction fd isImplicit ty tkn cd =
+    (\x -> cd { scope = x }) <$>
+        (if allowSameInputExternalCollisions cd then AS.addFunctionAllowGlobalConflict else AS.addFunction)
+            fd
+            isImplicit
+            ty
+            tkn
+            (scope cd)
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.addEnumerator` for variable @x@ of type `ConstructionData`.
 -- This function is equivalent to
@@ -208,7 +227,7 @@ addEnumerator ty tkn n cd = (\x -> cd { scope = x }) <$> AS.addEnumerator ty tkn
 -- | Shortcut to the initial state of `ConstructionData`.
 {-# INLINE initConstructionData #-}
 initConstructionData :: ConstructionData i
-initConstructionData = ConstructionData SQ.empty AS.initScope False
+initConstructionData = ConstructionData SQ.empty AS.initScope False False
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.resetLocal` for variable @x@ of type `ConstructionData`.
 -- This function is equivalent to

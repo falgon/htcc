@@ -7,7 +7,6 @@ int printf();
 int exit();
 int strcmp(char* p, char* q);
 int test_num;
-int;
 
 int gr[3];
 int (*gpa)[3];

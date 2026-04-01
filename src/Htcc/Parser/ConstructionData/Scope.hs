@@ -9,7 +9,7 @@ Portability : POSIX
 
 The Data type of variables and its utilities used in parsing
 -}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric, OverloadedStrings #-}
 module Htcc.Parser.ConstructionData.Scope (
     -- * The types
     Scoped (..),
@@ -17,11 +17,14 @@ module Htcc.Parser.ConstructionData.Scope (
     -- * Operations for scope
     addLVar,
     addGVar,
+    addGVarAllowFunctionConflict,
     addGVarWith,
+    addGVarWithAllowFunctionConflict,
     addLiteral,
     addTag,
     addTypedef,
     addFunction,
+    addFunctionAllowGlobalConflict,
     addEnumerator,
     succNest,
     fallBack,
@@ -79,6 +82,29 @@ data LookupVarResult i = FoundGVar (PV.GVar i)  -- ^ A type constructor indicati
 applyVars :: Scoped i -> (a, PV.Vars i) -> (a, Scoped i)
 applyVars sc = second (\x -> sc { vars = x })
 
+{-# INLINE identifierFromToken #-}
+identifierFromToken :: HT.TokenLC i -> Maybe T.Text
+identifierFromToken (_, HT.TKIdent ident) = Just ident
+identifierFromToken _                     = Nothing
+
+{-# INLINE rejectFunctionNameConflict #-}
+rejectFunctionNameConflict :: HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) ()
+rejectFunctionNameConflict tkn sc = case identifierFromToken tkn of
+    Just ident
+        | Just _ <- lookupFunction ident sc ->
+            Left ("redeclaration of '" <> ident <> "' with no linkage", tkn)
+    _ ->
+        Right ()
+
+{-# INLINE rejectGlobalNameConflict #-}
+rejectGlobalNameConflict :: HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) ()
+rejectGlobalNameConflict tkn sc = case identifierFromToken tkn of
+    Just ident
+        | Just _ <- lookupGVar ident sc ->
+            Left ("conflicting types for '" <> ident <> "'", tkn)
+    _ ->
+        Right ()
+
 {-# INLINE addVar #-}
 addVar :: (Integral i, Bits i) => (CT.StorageClass i -> HT.TokenLC i -> PV.Vars i -> Either (T.Text, HT.TokenLC i) (ATree i, PV.Vars i)) -> CT.StorageClass i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
 addVar f ty tkn sc = applyVars sc <$> f ty tkn (vars sc)
@@ -91,12 +117,22 @@ addLVar ty tkn scp = addVar (PV.addLVar $ curNestDepth scp) ty tkn scp
 -- | `addGVar` has a scoped type argument and is the same function as `PV.addGVar` internally.
 {-# INLINE addGVar #-}
 addGVar :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
-addGVar = addVar PV.addGVar
+addGVar ty tkn sc = rejectFunctionNameConflict tkn sc *> addVar PV.addGVar ty tkn sc
+
+{-# INLINE addGVarAllowFunctionConflict #-}
+addGVarAllowFunctionConflict :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
+addGVarAllowFunctionConflict ty tkn sc = addVar PV.addGVar ty tkn sc
 
 -- | `addGVarWith` has a scoped type argument and is the same function as `PV.addLiteral` internally.
 {-# INLINE addGVarWith #-}
 addGVarWith :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> PV.GVarInitWith i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
-addGVarWith ty tkn iw sc = applyVars sc <$> PV.addGVarWith ty tkn iw (vars sc)
+addGVarWith ty tkn iw sc =
+    rejectFunctionNameConflict tkn sc *> (applyVars sc <$> PV.addGVarWith ty tkn iw (vars sc))
+
+{-# INLINE addGVarWithAllowFunctionConflict #-}
+addGVarWithAllowFunctionConflict :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> PV.GVarInitWith i -> Scoped i -> Either (SM.ASTError i) (ATree i, Scoped i)
+addGVarWithAllowFunctionConflict ty tkn iw sc =
+    applyVars sc <$> PV.addGVarWith ty tkn iw (vars sc)
 
 -- | `addLiteral` has a scoped type argument and is the same function as `PV.addLiteral` internally.
 {-# INLINE addLiteral #-}
@@ -143,7 +179,7 @@ lookupVar ident scp = case lookupLVar ident scp of
         Just enum -> FoundEnum enum
         _         -> case lookupGVar ident scp of
             Just gvar -> FoundGVar gvar
-            _ -> maybe NotFound FoundFunc $ lookupFunction ident scp
+            _         -> maybe NotFound FoundFunc $ lookupFunction ident scp
 
 -- | `lookupTag` has a scoped type argument and is the same function as `PS.lookupTag` internally.
 {-# INLINE lookupTag #-}
@@ -177,8 +213,14 @@ addTypedef ty tkn sc = (\x -> sc { typedefs = x }) <$> PT.add (curNestDepth sc) 
 
 -- | `addFunction` has a scoped type argument and is the same function as `PT.add` internally.
 {-# INLINE addFunction #-}
-addFunction :: Num i => Bool -> CT.StorageClass i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (Scoped i)
-addFunction fd ty tkn sc = (\x -> sc { functions = x }) <$> PF.add fd ty tkn (functions sc)
+addFunction :: (Eq i, Num i) => Bool -> Bool -> CT.StorageClass i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (Scoped i)
+addFunction fd isImplicit ty tkn sc =
+    rejectGlobalNameConflict tkn sc *> ((\x -> sc { functions = x }) <$> PF.add fd isImplicit ty tkn (functions sc))
+
+{-# INLINE addFunctionAllowGlobalConflict #-}
+addFunctionAllowGlobalConflict :: (Eq i, Num i) => Bool -> Bool -> CT.StorageClass i -> HT.TokenLC i -> Scoped i -> Either (SM.ASTError i) (Scoped i)
+addFunctionAllowGlobalConflict fd isImplicit ty tkn sc =
+    (\x -> sc { functions = x }) <$> PF.add fd isImplicit ty tkn (functions sc)
 
 -- | `addEnumerator` has a scoped type argument and is the same function as `SE.add` internally.
 {-# INLINE addEnumerator #-}
