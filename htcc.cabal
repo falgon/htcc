@@ -1,4 +1,4 @@
-cabal-version: 1.12
+cabal-version: 2.0
 
 -- This file has been generated from package.yaml by hpack version 0.33.0.
 --
@@ -63,6 +63,7 @@ library
       Htcc.CRules.Types.CType
       Htcc.CRules.Types.StorageClass
       Htcc.CRules.Types.TypeKind
+      Htcc.MegaparsecCompat
       Htcc.Output
       Htcc.Parser
       Htcc.Parser.AST
@@ -96,10 +97,6 @@ library
       Htcc.Parser.ConstructionData.Scope.Var
       Htcc.Parser.Utils
       Htcc.Parser.Utils.Core
-      Text.Megaparsec
-      Text.Megaparsec.Char
-      Text.Megaparsec.Char.Lexer
-      Text.Megaparsec.Debug
       Htcc.Tokenizer
       Htcc.Tokenizer.Core
       Htcc.Tokenizer.Token
@@ -113,7 +110,14 @@ library
       Htcc.Utils.Tuple
       Htcc.Visualizer
       Htcc.Visualizer.Core
+      Htcc.WarningSuppression
   other-modules:
+      Text.Megaparsec
+      Text.Megaparsec.Char
+      Text.Megaparsec.Char.Lexer
+      Text.Megaparsec.Debug
+      Paths_htcc
+  autogen-modules:
       Paths_htcc
   hs-source-dirs:
       src
@@ -138,6 +142,8 @@ library
     , natural-transformation
     , optparse-applicative
     , parser-combinators
+    , prettyprinter
+    , prettyprinter-ansi-terminal
     , safe
     , split
     , text
@@ -149,6 +155,8 @@ library
 executable htcc
   main-is: Main.hs
   other-modules:
+      Paths_htcc
+  autogen-modules:
       Paths_htcc
   hs-source-dirs:
       app
@@ -168,6 +176,7 @@ executable htcc
     , filepath
     , htcc
     , process
+    , stm
     , parsec
     , monad-finally
     , monad-loops
@@ -176,6 +185,8 @@ executable htcc
     , natural-transformation
     , optparse-applicative
     , parser-combinators
+    , prettyprinter
+    , prettyprinter-ansi-terminal
     , safe
     , split
     , template-haskell
@@ -188,9 +199,13 @@ executable htcc
 test-suite htcc-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
+  build-tool-depends:
+      htcc:htcc
   other-modules:
+      Tests.CommandSelection
       Tests.ComponentsTests
       Tests.ComponentsTests.AsmOutput
+      Tests.ComponentsTests.CommandSelection
       Tests.ComponentsTests.Parser.Combinators
       Tests.SubProcTests
       Tests.SubProcTests.AsmOutput
@@ -198,6 +213,8 @@ test-suite htcc-test
       Tests.SubProcTests.LinkFuncStdOut
       Tests.SubProcTests.StatementEqual
       Tests.Utils
+      Paths_htcc
+  autogen-modules:
       Paths_htcc
   hs-source-dirs:
       test
@@ -231,6 +248,8 @@ test-suite htcc-test
     , natural-transformation
     , optparse-applicative
     , parser-combinators
+    , prettyprinter
+    , prettyprinter-ansi-terminal
     , process
     , safe
     , split
@@ -246,6 +265,8 @@ benchmark criterion
   type: exitcode-stdio-1.0
   main-is: bench/Criterion.hs
   other-modules:
+      Paths_htcc
+  autogen-modules:
       Paths_htcc
   ghc-options: -O2
   build-depends:
@@ -269,6 +290,8 @@ benchmark criterion
     , natural-transformation
     , optparse-applicative
     , parser-combinators
+    , prettyprinter
+    , prettyprinter-ansi-terminal
     , safe
     , split
     , text

@@ -21,9 +21,9 @@ import           Control.DeepSeq            (NFData (..))
 import           Data.Tuple.Extra           (first, second)
 import           GHC.Generics               (Generic)
 
+import qualified Data.Text                  as T
 import           Htcc.CRules.Types.CType
 import           Htcc.CRules.Types.TypeKind
-import qualified Data.Text as T
 
 -- | The data type representing `StorageClass`
 data StorageClass i = SCAuto (TypeKind i) -- ^ The @auto@ keyword

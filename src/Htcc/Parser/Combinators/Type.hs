@@ -13,4 +13,4 @@ module Htcc.Parser.Combinators.Type (
     module Htcc.Parser.Combinators.Type.Core
 ) where
 
-import Htcc.Parser.Combinators.Type.Core
+import           Htcc.Parser.Combinators.Type.Core

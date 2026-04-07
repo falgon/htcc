@@ -1,4 +1,5 @@
 name:                htcc
+cabal-version:       2.0
 version:             0.0.0.1
 synopsis:            The full scratch implementation of tiny C compiler (x86_64)
 description: |
@@ -50,16 +51,99 @@ dependencies:
 - optparse-applicative
 - parsec
 - parser-combinators
+- prettyprinter
+- prettyprinter-ansi-terminal
 - unix
 - utf8-string
 
 library:
   source-dirs: src
+  generated-other-modules:
+  - Paths_htcc
+  exposed-modules:
+  - Htcc.Asm
+  - Htcc.Asm.Generate
+  - Htcc.Asm.Generate.Core
+  - Htcc.Asm.Intrinsic
+  - Htcc.Asm.Intrinsic.Operand
+  - Htcc.Asm.Intrinsic.Register
+  - Htcc.Asm.Intrinsic.Structure
+  - Htcc.Asm.Intrinsic.Structure.Internal
+  - Htcc.Asm.Intrinsic.Structure.Section.Data
+  - Htcc.Asm.Intrinsic.Structure.Section.Text
+  - Htcc.Asm.Intrinsic.Structure.Section.Text.Directive
+  - Htcc.Asm.Intrinsic.Structure.Section.Text.Instruction
+  - Htcc.Asm.Intrinsic.Structure.Section.Text.Operations
+  - Htcc.CRules
+  - Htcc.CRules.Char
+  - Htcc.CRules.LexicalElements
+  - Htcc.CRules.Preprocessor
+  - Htcc.CRules.Preprocessor.Core
+  - Htcc.CRules.Preprocessor.Punctuators
+  - Htcc.CRules.Types
+  - Htcc.CRules.Types.CType
+  - Htcc.CRules.Types.StorageClass
+  - Htcc.CRules.Types.TypeKind
+  - Htcc.MegaparsecCompat
+  - Htcc.Output
+  - Htcc.WarningSuppression
+  - Htcc.Parser
+  - Htcc.Parser.AST
+  - Htcc.Parser.AST.Core
+  - Htcc.Parser.AST.DeduceKind
+  - Htcc.Parser.AST.Type
+  - Htcc.Parser.Combinators
+  - Htcc.Parser.Combinators.BasicOperator
+  - Htcc.Parser.Combinators.ConstExpr
+  - Htcc.Parser.Combinators.Core
+  - Htcc.Parser.Combinators.Decl
+  - Htcc.Parser.Combinators.Decl.Declarator
+  - Htcc.Parser.Combinators.Decl.Spec
+  - Htcc.Parser.Combinators.GNUExtensions
+  - Htcc.Parser.Combinators.Keywords
+  - Htcc.Parser.Combinators.ParserType
+  - Htcc.Parser.Combinators.Program
+  - Htcc.Parser.Combinators.Type
+  - Htcc.Parser.Combinators.Type.Core
+  - Htcc.Parser.Combinators.Type.Utils
+  - Htcc.Parser.Combinators.Utils
+  - Htcc.Parser.Combinators.Var
+  - Htcc.Parser.ConstructionData.Core
+  - Htcc.Parser.ConstructionData.Scope
+  - Htcc.Parser.ConstructionData.Scope.Enumerator
+  - Htcc.Parser.ConstructionData.Scope.Function
+  - Htcc.Parser.ConstructionData.Scope.ManagedScope
+  - Htcc.Parser.ConstructionData.Scope.Tag
+  - Htcc.Parser.ConstructionData.Scope.Typedef
+  - Htcc.Parser.ConstructionData.Scope.Utils
+  - Htcc.Parser.ConstructionData.Scope.Var
+  - Htcc.Parser.Utils
+  - Htcc.Parser.Utils.Core
+  - Htcc.Tokenizer
+  - Htcc.Tokenizer.Core
+  - Htcc.Tokenizer.Token
+  - Htcc.Utils
+  - Htcc.Utils.Bool
+  - Htcc.Utils.CompilationState
+  - Htcc.Utils.List
+  - Htcc.Utils.NaturalTransformations
+  - Htcc.Utils.Print
+  - Htcc.Utils.Text
+  - Htcc.Utils.Tuple
+  - Htcc.Visualizer
+  - Htcc.Visualizer.Core
+  other-modules:
+  - Text.Megaparsec
+  - Text.Megaparsec.Char
+  - Text.Megaparsec.Char.Lexer
+  - Text.Megaparsec.Debug
 
 executables:
   htcc:
     main:                Main.hs
     source-dirs:         app
+    generated-other-modules:
+    - Paths_htcc
     ghc-options:
     - -threaded
     - -rtsopts
@@ -72,6 +156,7 @@ executables:
     - directory
     - filepath
     - process
+    - stm
     - template-haskell
     - unix
 
@@ -79,9 +164,15 @@ tests:
   htcc-test:
     main:                Spec.hs
     source-dirs:         test
+    generated-other-modules:
+    - Paths_htcc
+    build-tool-depends:
+    - htcc:htcc
     other-modules:
+    - Tests.CommandSelection
     - Tests.ComponentsTests
     - Tests.ComponentsTests.AsmOutput
+    - Tests.ComponentsTests.CommandSelection
     - Tests.ComponentsTests.Parser.Combinators
     - Tests.SubProcTests
     - Tests.SubProcTests.AsmOutput
@@ -116,6 +207,8 @@ tests:
 benchmarks:
     criterion:
         main: bench/Criterion.hs
+        generated-other-modules:
+        - Paths_htcc
         ghc-options:
         - -O2
         dependencies:

@@ -14,6 +14,7 @@ module Htcc.Asm.Generate (
     InputCCode,
     normalizeAsmInput,
     prepareAsmInput,
+    prepareVisualizableInput,
     -- * Generator
     casm',
     casmNormalized'
@@ -118,6 +119,10 @@ normalizeAsmInput :: (Integral i, Bits i, Read i, Show i, Ord i)
 normalizeAsmInput atl gvars = do
     normalizedGVars <- normalizeGlobalInitializers gvars
     pure (retypeResolvedGlobalRefs normalizedGVars atl, normalizedGVars)
+
+data MergedRevalidationMode
+    = StrictMergedRevalidation
+    | VisualizableMergedRevalidation
 
 mergedCallableSignature :: Ord i => CT.StorageClass i -> Maybe (CT.StorageClass i, Maybe [CT.StorageClass i])
 mergedCallableSignature ty = case CT.toTypeKind ty of
@@ -320,13 +325,17 @@ refreshMergedValueTypes funcs maybeGVars = go
 
 revalidateMergedFunctionTree
     :: (Ord i, Bits i, Integral i)
-    => PF.Functions i
+    => MergedRevalidationMode
+    -> PF.Functions i
     -> Maybe (GlobalVars i)
-    -> Bool
     -> ATree i
     -> Either String (ATree i)
-revalidateMergedFunctionTree funcs maybeGVars validateAssignments = revalidateTree M.empty Nothing
+revalidateMergedFunctionTree mode funcs maybeGVars = revalidateTree M.empty Nothing
     where
+        validateDeferredCodegenChecks = case mode of
+            StrictMergedRevalidation       -> True
+            VisualizableMergedRevalidation -> False
+
         lastMaybe [] = Nothing
         lastMaybe xs = Just $ last xs
 
@@ -413,16 +422,16 @@ revalidateMergedFunctionTree funcs maybeGVars validateAssignments = revalidateTr
             lhs' <- revalidateTree currentParamTys nestedReturnTy lhs
             rhs' <- revalidateTree currentParamTys currentReturnTy rhs
             let (kind'', ty') = refreshKindAndType kind' ty lhs' rhs'
-            when (validateAssignments && invalidAssignmentOperands kind'' lhs rhs lhs' rhs') $
+            when (validateDeferredCodegenChecks && invalidAssignmentOperands kind'' lhs rhs lhs' rhs') $
                 Left "invalid operands to assignment"
-            when (invalidIncompletePointerArithmetic kind'' lhs' rhs') $
+            when (validateDeferredCodegenChecks && invalidIncompletePointerArithmetic kind'' lhs' rhs') $
                 Left "invalid use of pointer to incomplete type"
-            when (invalidIncompleteMemOp kind'' lhs') $
+            when (validateDeferredCodegenChecks && invalidIncompleteMemOp kind'' lhs') $
                 Left $ case kind'' of
                     ATSizeof -> "invalid application of 'sizeof' to incomplete type"
                     ATAlignof -> "invalid application of '_Alignof' to incomplete type"
                     _ -> "internal compiler error: unexpected incomplete memory operator"
-            when (invalidReturnValue currentReturnTy kind'' lhs') $
+            when (validateDeferredCodegenChecks && invalidReturnValue currentReturnTy kind'' lhs') $
                 Left "invalid return type"
             pure $ ATNode kind'' ty' lhs' rhs'
 
@@ -478,8 +487,18 @@ revalidateMergedFunctionCalls
     -> GlobalVars i
     -> ASTs i
     -> Either String (ASTs i)
-revalidateMergedFunctionCalls funcs gvars =
-    traverse $ revalidateMergedFunctionTree funcs (Just gvars) True
+revalidateMergedFunctionCalls =
+    revalidateMergedFunctionCallsWithMode StrictMergedRevalidation
+
+revalidateMergedFunctionCallsWithMode
+    :: (Ord i, Bits i, Integral i)
+    => MergedRevalidationMode
+    -> PF.Functions i
+    -> GlobalVars i
+    -> ASTs i
+    -> Either String (ASTs i)
+revalidateMergedFunctionCallsWithMode mode funcs gvars =
+    traverse $ revalidateMergedFunctionTree mode funcs (Just gvars)
 
 revalidateMergedGlobalInitializers
     :: (Ord i, Bits i, Integral i)
@@ -539,6 +558,23 @@ prepareAsmInput funcs asts gvars = do
     (normalizedAsts, normalizedGVars) <- normalizeAsmInput asts revalidatedGVars
     revalidatedAsts <- revalidateMergedFunctionCalls funcs normalizedGVars normalizedAsts
     pure (revalidatedAsts, normalizedGVars)
+
+prepareVisualizableInput
+    :: (Integral i, Bits i, Read i, Show i, Ord i)
+    => PF.Functions i
+    -> ASTs i
+    -> GlobalVars i
+    -> Either String (ASTs i, GlobalVars i)
+prepareVisualizableInput funcs asts gvars = do
+    let materializedGVars = M.map materializeTentativeIncompleteArray gvars
+        retypedAsts = retypeResolvedGlobalRefs materializedGVars asts
+    revalidatedAsts <-
+        revalidateMergedFunctionCallsWithMode
+            VisualizableMergedRevalidation
+            funcs
+            materializedGVars
+            retypedAsts
+    pure (revalidatedAsts, materializedGVars)
 
 casmNormalized' :: (Show e, Show i, Integral e, Integral i, Ord i, IsOperand i, IT.UnaryInstruction i, IT.BinaryInstruction i)
     => ASTs i

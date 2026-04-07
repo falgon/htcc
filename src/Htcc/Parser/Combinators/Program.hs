@@ -62,8 +62,7 @@ import           Htcc.Parser.AST.Core                        (ATKind (..),
                                                               atReturn,
                                                               atSwitch, atUnary,
                                                               atWhile,
-                                                              fromATKindFor,
-                                                              isEmptyExprStmt)
+                                                              fromATKindFor)
 import           Htcc.Parser.AST.Type                        (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.ConstExpr           (evalConstexpr)
@@ -947,14 +946,12 @@ stmt = choice
                 initSect <- ATForInit
                     <$> choice [ATEmpty <$ semi, M.try (atExprStmt <$> expr <* semi), lvarStmt]
                 condSect <- ATForCond
-                    <$> choice [atNumLit 1 <$ semi, expr <* semi]
+                    <$> choice [ATEmpty <$ semi, expr <* semi]
                 incrSect <- ATForIncr
                     <$> M.option ATEmpty (atExprStmt <$> expr)
-                pure
-                    [ x | x <- [initSect, condSect, incrSect]
-                    , case fromATKindFor x of ATEmpty -> False; x' -> not $ isEmptyExprStmt x'
-                    ]
-            atFor es <$ semi M.<|> atFor . (es <>) . (:[]) . ATForStmt <$> stmt
+                pure [initSect, condSect, incrSect]
+            atFor (es <> [ATForStmt ATEmpty]) <$ semi
+                M.<|> atFor . (es <>) . (:[]) . ATForStmt <$> stmt
 
         breakStmt = atBreak <$ (M.try kBreak *> semi)
 

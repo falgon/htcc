@@ -13,7 +13,9 @@ import qualified Data.Text                                   as T
 import           Data.Void                                   (Void)
 import qualified Htcc.CRules                                 as CR
 import qualified Htcc.CRules.Types                           as CT
+import qualified Htcc.MegaparsecCompat                       as M
 import           Htcc.Parser.AST                             (ASTs, ATKind (..),
+                                                              ATKindFor (..),
                                                               ATree (..))
 import           Htcc.Parser.Combinators.Core
 import           Htcc.Parser.Combinators.ParserType          (runParserAllowSameInputExternalCollisions)
@@ -31,7 +33,6 @@ import           Test.HUnit                                  (Test (..),
                                                               assertEqual,
                                                               assertFailure,
                                                               (~:), (~?=))
-import qualified Text.Megaparsec                             as M
 import qualified Text.Parsec.Pos                             as PP
 
 type TestParser = M.Parsec Void T.Text
@@ -279,6 +280,11 @@ inferFunctionType ident input =
 parseProgram :: T.Text -> Either (M.ParseErrorBundle T.Text Void) ()
 parseProgram input =
     () <$ (runParser parser "" input :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, PV.GlobalVars Integer, PV.Literals Integer, PF.Functions Integer))
+
+parseProgramAsts :: T.Text -> Either (M.ParseErrorBundle T.Text Void) (ASTs Integer)
+parseProgramAsts input =
+    (\(_, asts, _, _, _) -> asts)
+        <$> (runParser parser "" input :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, PV.GlobalVars Integer, PV.Literals Integer, PF.Functions Integer))
 
 parseProgramAllowSameInputExternalCollisions :: T.Text -> Either (M.ParseErrorBundle T.Text Void) ()
 parseProgramAllowSameInputExternalCollisions input =
@@ -983,6 +989,30 @@ scalarInitializerTest = TestLabel "Parser.Program.scalar-initializer" $
             assertProgramErrorContains
                 "invalid initializer for scalar object"
                 "int main(void) { int a[2]; char *p = a; return 0; }"
+        , TestLabel "rejects multidimensional array expressions in local object-pointer initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int main(void) { int a[2][3]; int *p = a; return 0; }"
+        , TestLabel "rejects array expressions in local pointer-to-array initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "int main(void) { char a[3]; char (*p)[3] = a; return 0; }"
+        , TestLabel "rejects multidimensional array expressions in object-pointer assignments" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands to assignment"
+                "int main(void) { int a[2][3]; int *p = 0; p = a; return 0; }"
+        , TestLabel "rejects bare arrays in pointer-to-array assignments" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands to assignment"
+                "int main(void) { char a[3]; char (*p)[3] = 0; p = a; return 0; }"
+        , TestLabel "rejects multidimensional array expressions in object-pointer function arguments" $ TestCase $
+            assertProgramErrorContains
+                "invalid argument type to function call"
+                "int sink(int *p) { return p[0]; } int main(void) { int a[2][3]; return sink(a); }"
+        , TestLabel "rejects bare arrays in pointer-to-array function arguments" $ TestCase $
+            assertProgramErrorContains
+                "invalid argument type to function call"
+                "int sink(char (*p)[3]) { return (*p)[0]; } int main(void) { char a[3]; return sink(a); }"
         , TestLabel "rejects function designators in void-pointer local scalar initializers without a cast" $ TestCase $
             assertProgramErrorContains
                 "invalid initializer for scalar object"
@@ -1277,6 +1307,28 @@ functionPointerArithmeticTest = TestLabel "Parser.Program.function-pointer-arith
                 "int helper(void) { return 0; } int main(void) { int (*fp)(void) = helper; int (*gp)(void) = helper; return fp - gp; }"
         ]
 
+emptyForBodyPreservationTest :: Test
+emptyForBodyPreservationTest = TestLabel "Parser.Program.empty-for-body-preservation" $ TestCase $
+    case parseProgramAsts "int main(void) { for(;;); }" of
+        Left err -> assertFailure $ show err
+        Right
+            [ ATNode
+                (ATDefFunc "main" _)
+                _
+                (ATNode (ATBlock [ATNode (ATFor clauses) _ _ _]) _ _ _)
+                _
+            ] ->
+                assertEqual
+                    "parsed empty-body for-loops should preserve init, condition, increment, and body placeholders"
+                    [ ATForInit ATEmpty
+                    , ATForCond ATEmpty
+                    , ATForIncr ATEmpty
+                    , ATForStmt ATEmpty
+                    ]
+                    clauses
+        Right asts ->
+            assertFailure $ "unexpected AST shape: " <> show asts
+
 sameInputExternalCollisionTest :: Test
 sameInputExternalCollisionTest = TestLabel "Parser.Program.same-input-external-collision" $
     TestList
@@ -1315,4 +1367,5 @@ test = TestLabel "Parser.Combinators.Core" $
       , conditionalPointerTypeTest
       , functionPointerAssignmentTest
       , functionPointerArithmeticTest
+      , emptyForBodyPreservationTest
     ]

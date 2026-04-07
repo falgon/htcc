@@ -6,6 +6,7 @@ module Tests.ComponentsTests.AsmOutput (
 import           Control.Exception                           (IOException,
                                                               finally, try)
 import qualified Data.ByteString                             as B
+import qualified Data.ByteString.Char8                       as BC
 import           Data.Either                                 (isLeft)
 import qualified Data.Map.Strict                             as Map
 import qualified Data.Text                                   as T
@@ -13,14 +14,18 @@ import qualified Data.Text.IO                                as T
 import           Data.Void                                   (Void)
 import           Htcc.Asm                                    (casm',
                                                               normalizeAsmInput,
-                                                              prepareAsmInput)
+                                                              prepareAsmInput,
+                                                              prepareVisualizableInput)
 import qualified Htcc.Asm.Intrinsic.Structure.Internal       as SI
 import qualified Htcc.CRules.Types                           as CT
+import qualified Htcc.MegaparsecCompat                       as M
 import           Htcc.Output                                 (ReplacementOutputMode (..),
                                                               creationMaskedOutputMode,
                                                               replaceExistingOutputFromPathWith,
-                                                              withReplacementOutputPath)
+                                                              withReplacementOutputPath,
+                                                              withReplacementOutputPathAndResolvedPath)
 import           Htcc.Parser                                 (ASTs, ATKind (..),
+                                                              ATKindFor (..),
                                                               ATree (..))
 import           Htcc.Parser.Combinators                     (parser, runParser)
 import           Htcc.Parser.ConstructionData.Core           (Warnings)
@@ -31,18 +36,29 @@ import           Htcc.Parser.ConstructionData.Scope.Var      (GVar (..),
                                                               Literals,
                                                               materializeTentativeIncompleteArray)
 import           Htcc.Visualizer                             (mkWidth,
-                                                              visualize)
+                                                              visualize,
+                                                              writeVisualization)
+import           Htcc.WarningSuppression                     (CompilerWarningFilterDecision (..),
+                                                              dropCompilerWarningOutput,
+                                                              emptyIncrementalCompilerWarningFilter,
+                                                              feedIncrementalCompilerWarningFilter,
+                                                              finalizeIncrementalCompilerWarningFilter)
+import qualified Htcc.WarningSuppression                     as WS
 import           System.Directory                            (createDirectory,
                                                               doesDirectoryExist,
                                                               getTemporaryDirectory,
                                                               removeDirectory,
+                                                              removeDirectoryRecursive,
                                                               removeFile)
+import           System.FilePath                             (takeDirectory,
+                                                              (</>))
 import           System.IO                                   (IOMode (ReadMode, WriteMode),
                                                               hClose,
                                                               openTempFile,
                                                               withBinaryFile)
 import           System.IO.Error                             (catchIOError)
 import           System.Posix.Files                          (createLink,
+                                                              createSymbolicLink,
                                                               fileMode,
                                                               getFileStatus,
                                                               intersectFileModes,
@@ -59,7 +75,6 @@ import           Test.HUnit                                  (Test (..),
                                                               assertBool,
                                                               assertEqual,
                                                               assertFailure)
-import qualified Text.Megaparsec                             as M
 
 parseAsmSource :: T.Text -> IO (ASTs Integer, GlobalVars Integer, Literals Integer, PF.Functions Integer)
 parseAsmSource source =
@@ -97,6 +112,31 @@ renderVisualization source = do
     where
         ignoreIOException = flip catchIOError $ const $ pure ()
 
+renderVisualizationFromAsts :: ASTs Integer -> IO T.Text
+renderVisualizationFromAsts asts = do
+    tmpDir <- getTemporaryDirectory
+    (path, h) <- openTempFile tmpDir "htcc-components-visualizer-ast.svg"
+    flip finally (ignoreIOException (hClose h) >> ignoreIOException (removeFile path)) $ do
+        hClose h
+        visualize asts (mkWidth 200) path
+        T.readFile path
+    where
+        ignoreIOException = flip catchIOError $ const $ pure ()
+
+withVisualizerSymlinkPaths :: String -> String -> (FilePath -> FilePath -> IO a) -> IO a
+withVisualizerSymlinkPaths targetName aliasName action = do
+    tmpDir <- getTemporaryDirectory
+    probeDir <- mkdtemp (tmpDir </> "htcc-components-visualizer-symlinkXXXXXX")
+    let targetPath = probeDir </> targetName
+        aliasPath = probeDir </> aliasName
+        cleanup =
+            ignoreIOException (removeFile aliasPath)
+                >> ignoreIOException (removeFile targetPath)
+                >> ignoreIOException (removeDirectory probeDir)
+    flip finally cleanup $
+        action targetPath aliasPath
+    where
+        ignoreIOException = flip catchIOError $ const $ pure ()
 assertContains :: String -> [T.Text] -> T.Text -> IO ()
 assertContains label needles haystack =
     assertBool label $ all (`T.isInfixOf` haystack) needles
@@ -1351,6 +1391,194 @@ hardLinkedRenameReplacementPreservesAliasTest =
     where
         ignoreIOException = flip catchIOError $ const $ pure ()
 
+withReplacementOutputPathAndResolvedPathDirectFallbackTest :: Test
+withReplacementOutputPathAndResolvedPathDirectFallbackTest =
+    TestLabel "Asm.Output.with-replacement-output-path-and-resolved-path-direct-fallback" $ TestCase $ do
+        tmpDir <- getTemporaryDirectory
+        targetDir <- mkdtemp (tmpDir </> "htcc-output-direct-fallbackXXXXXX")
+        let targetPath = targetDir </> "htcc-output-target"
+            replacementOutput = "#!/bin/sh\nexit 0\n"
+            cleanup = do
+                ignoreIOException $ setFileMode targetDir 0o755
+                ignoreIOException $ removeFile targetPath
+                ignoreIOException $ removeDirectoryRecursive targetDir
+        flip finally cleanup $ do
+            T.writeFile targetPath "#!/bin/sh\nexit 99\n"
+            setFileMode targetPath 0o644
+            setFileMode targetDir 0o555
+            (finalPath, stagedPath) <-
+                withReplacementOutputPathAndResolvedPath PreserveReplacementOutputModeKeepingExecutableBits targetPath $ \tmpOutputPath -> do
+                    T.writeFile tmpOutputPath replacementOutput
+                    setFileMode tmpOutputPath 0o755
+                    pure tmpOutputPath
+            replacedOutput <- T.readFile targetPath
+            assertEqual
+                "direct fallback should report the final destination path rather than the temporary staging path"
+                targetPath
+                finalPath
+            assertBool
+                "direct fallback should stage the replacement away from the target directory"
+                (stagedPath /= targetPath && takeDirectory stagedPath /= targetDir)
+            assertEqual "direct fallback should replace the target output" replacementOutput replacedOutput
+    where
+        ignoreIOException = flip catchIOError $ const $ pure ()
+
+suppressWarnsRunAsmPreservesDirectiveLikePostWarningOutputTest :: Test
+suppressWarnsRunAsmPreservesDirectiveLikePostWarningOutputTest =
+    TestLabel "Asm.Output.suppress-warns-run-asm-preserves-directive-like-post-warning-output" $ TestCase $
+        let filteredStderr =
+                dropCompilerWarningOutput $
+                    BC.unlines
+                        [ "warning: this warning should be suppressed"
+                        , ".section keep"
+                        , "# generated by fake HTCC_ASSEMBLER wrapper"
+                        , "1 warning generated."
+                        ]
+            expectedStderr =
+                BC.unlines
+                    [ ".section keep"
+                    , "# generated by fake HTCC_ASSEMBLER wrapper"
+                    , "1 warning generated."
+                    ]
+         in do
+                assertEqual
+                    "summary-shaped output should be preserved once unrelated post-warning output intervenes"
+                    expectedStderr
+                    filteredStderr
+
+suppressWarnsRunAsmPreservesLeadInForRetainedErrorTest :: Test
+suppressWarnsRunAsmPreservesLeadInForRetainedErrorTest =
+    TestLabel "Asm.Output.suppress-warns-run-asm-preserves-lead-in-for-retained-error" $ TestCase $
+        let filteredStderr =
+                dropCompilerWarningOutput $
+                    BC.unlines
+                        [ "In file included from fake-header.h:1:"
+                        , "                 from fake-source.c:2:"
+                        , "warning: this warning should be suppressed"
+                        , "1 warning generated."
+                        , "error: fake HTCC_ASSEMBLER failure"
+                        ]
+            expectedStderr =
+                BC.unlines
+                    [ "In file included from fake-header.h:1:"
+                    , "                 from fake-source.c:2:"
+                    , "error: fake HTCC_ASSEMBLER failure"
+                    ]
+         in do
+                assertEqual
+                    "lead-in lines should stay attached when a retained error follows the suppressed warning"
+                    expectedStderr
+                    filteredStderr
+                assertBool "suppressed warning text should be removed" $
+                    not $
+                        "warning: this warning should be suppressed" `BC.isInfixOf` filteredStderr
+
+suppressWarnsRunAsmPreservesWarningLabelErrorSnippetTest :: Test
+suppressWarnsRunAsmPreservesWarningLabelErrorSnippetTest =
+    TestLabel "Asm.Output.suppress-warns-run-asm-preserves-warning-label-error-snippet" $ TestCase $
+        let filteredStderr =
+                dropCompilerWarningOutput $
+                    BC.unlines
+                        [ "warning: this warning should be suppressed"
+                        , "{standard input}:1:1: error: fake HTCC_ASSEMBLER failure"
+                        , "warning: return 1;"
+                        , "^~~~~~~~~~~~~~~~~"
+                        ]
+         in do
+                assertBool "standalone warnings should still be suppressed" $
+                    not $
+                        "warning: this warning should be suppressed" `BC.isInfixOf` filteredStderr
+                assertBool "the real error should be preserved" $
+                    "error: fake HTCC_ASSEMBLER failure" `BC.isInfixOf` filteredStderr
+                assertBool "warning-label snippets should not be suppressed" $
+                    "warning: return 1;" `BC.isInfixOf` filteredStderr
+                assertBool "the snippet caret should remain attached" $
+                    "^~~~~~~~~~~~~~~~~" `BC.isInfixOf` filteredStderr
+
+suppressWarnsRunAsmSuppressesLocatedWarningsFromParenthesizedPathsTest :: Test
+suppressWarnsRunAsmSuppressesLocatedWarningsFromParenthesizedPathsTest =
+    TestLabel "Asm.Output.suppress-warns-run-asm-suppresses-located-warnings-from-parenthesized-paths" $ TestCase $
+        let filteredStderr =
+                dropCompilerWarningOutput $
+                    BC.unlines
+                        [ "/tmp/a(b)=c/x.c:1:1: warning: this warning should be suppressed"
+                        , "1 warning generated."
+                        , ".section keep"
+                        ]
+            expectedStderr =
+                BC.unlines
+                    [ ".section keep"
+                    ]
+         in assertEqual
+                "located warnings should still be suppressed when the diagnostic path contains parentheses or equals signs"
+                expectedStderr
+                filteredStderr
+
+incrementalWarningFilterRetainsStandalonePartialOutputTest :: Test
+incrementalWarningFilterRetainsStandalonePartialOutputTest =
+    TestLabel "Asm.Output.incremental-warning-filter-retains-standalone-partial-output" $ TestCase $
+        let promptChunk = ("stdout: wrapper prompt", "stdout: wrapper prompt")
+            (_, decisions) =
+                feedIncrementalCompilerWarningFilter
+                    fst
+                    snd
+                    emptyIncrementalCompilerWarningFilter
+                    [promptChunk]
+         in case decisions of
+                [RetainCompilerWarningFilterChunk retainedChunk] ->
+                    assertEqual
+                        "standalone partial output should be retained immediately"
+                        promptChunk
+                        retainedChunk
+                _ ->
+                    assertFailure $
+                        "expected a retained prompt chunk, got " <> show (length decisions) <> " decisions"
+
+incrementalWarningFilterDefersPartialWarningPrefixTest :: Test
+incrementalWarningFilterDefersPartialWarningPrefixTest =
+    TestLabel "Asm.Output.incremental-warning-filter-defers-partial-warning-prefix" $ TestCase $
+        let warningChunk = ("warning: fake HTCC_ASSEMBLER warning", "warning: fake HTCC_ASSEMBLER warning")
+            (warningFilter, decisions) =
+                feedIncrementalCompilerWarningFilter
+                    fst
+                    snd
+                    emptyIncrementalCompilerWarningFilter
+                    [warningChunk]
+            finalDecisions =
+                finalizeIncrementalCompilerWarningFilter
+                    fst
+                    snd
+                    warningFilter
+         in do
+                assertBool
+                    "partial warning prefixes should remain deferred until more input or finalization"
+                    (null decisions)
+                case finalDecisions of
+                    [SuppressCompilerWarningFilterChunk suppressedChunk] ->
+                        assertEqual
+                            "finalization should still suppress the deferred warning chunk"
+                            warningChunk
+                            suppressedChunk
+                    _ ->
+                        assertFailure $
+                            "expected a suppressed warning chunk after finalization, got "
+                                <> show (length finalDecisions)
+                                <> " decisions"
+
+incompleteWarningSuppressionFlushesRetainedPromptPrefixTest :: Test
+incompleteWarningSuppressionFlushesRetainedPromptPrefixTest =
+    TestLabel "Asm.Output.incomplete-warning-suppression-flushes-retained-prompt-prefix" $ TestCase $
+        assertBool
+            "non-diagnostic interactive prompt text should not stay buffered waiting for a newline"
+            (not $ WS.incompleteCompilerOutputNeedsMoreInputForWarningSuppression "stdout: wrapper prompt")
+
+incompleteWarningSuppressionKeepsLocatedWarningPrefixBufferedTest :: Test
+incompleteWarningSuppressionKeepsLocatedWarningPrefixBufferedTest =
+    TestLabel "Asm.Output.incomplete-warning-suppression-keeps-located-warning-prefix-buffered" $ TestCase $
+        assertBool
+            "partial located warning prefixes still need buffering so later bytes can be suppressed as one diagnostic"
+            (WS.incompleteCompilerOutputNeedsMoreInputForWarningSuppression "{standard input}:1:1: warn")
+
 indirectFunctionPointerStackArgAlignmentTest :: Test
 indirectFunctionPointerStackArgAlignmentTest = TestLabel "Asm.Output.indirect-function-pointer-stack-arg-alignment" $ TestCase $ do
     asm <- renderAsm "long sum7(long a, long b, long c, long d, long e, long f, long g) { return a + b + c + d + e + f + g; } int main(void) { long (*fp)(long, long, long, long, long, long, long); fp = sum7; return fp(1, 2, 3, 4, 5, 6, 7) - 28; }"
@@ -1569,6 +1797,15 @@ assertPrepareAsmInputError label source expected = do
         Right _ ->
             assertFailure $ label <> ": expected asm input preparation failure"
 
+assertPrepareVisualizableInputError :: String -> T.Text -> String -> IO ()
+assertPrepareVisualizableInputError label source expected = do
+    (asts, gvars, _, funcs) <- parseAsmSource source
+    case prepareVisualizableInput funcs asts gvars of
+        Left err ->
+            assertEqual label expected err
+        Right _ ->
+            assertFailure $ label <> ": expected visualizable input preparation failure"
+
 functionCallRefinementRevalidationTest :: Test
 functionCallRefinementRevalidationTest = TestLabel "Asm.Output.function-call-refinement-revalidation" $ TestCase $
     assertPrepareAsmInputError
@@ -1693,6 +1930,34 @@ pointerAddSubAssignIncompleteRevalidationFailureTest = TestLabel "Asm.Output.poi
         "int (*f(void))[]; int main(void) { int (*p)[] = f(); p += 1; return 0; }"
         "invalid use of pointer to incomplete type"
 
+visualizableInputAcceptsAsmNormalizationFailureTest :: Test
+visualizableInputAcceptsAsmNormalizationFailureTest =
+    TestLabel "Visualizer.prepare-input-accepts-asm-normalization-failure" $ TestCase $ do
+        let source =
+                "int (*f(void))[]; int main(void) { int (*p)[] = f(); ++p; return 0; }"
+        (asts, gvars, _, funcs) <- parseAsmSource source
+        case prepareVisualizableInput funcs asts gvars of
+            Left err ->
+                assertFailure $
+                    "visualizable input preparation should keep parseable incomplete-pointer arithmetic renderable: "
+                        <> err
+            Right (preparedAsts, _) -> do
+                svg <- renderVisualizationFromAsts preparedAsts
+                assertBool
+                    "visualizable input preparation should still produce a renderable AST"
+                    ("<svg" `T.isInfixOf` svg
+                        && "main" `T.isInfixOf` svg
+                        && "return" `T.isInfixOf` svg
+                    )
+
+visualizableInputFunctionCallRefinementRevalidationTest :: Test
+visualizableInputFunctionCallRefinementRevalidationTest =
+    TestLabel "Visualizer.prepare-input-function-call-refinement-revalidation" $ TestCase $
+        assertPrepareVisualizableInputError
+            "visualizable input preparation should still reject merged direct calls with too many arguments"
+            "int foo(); int main(void) { return foo(1); } int foo(void) { return 0; }"
+            "too many arguments to function call"
+
 incompleteGlobalSelfReferenceRejectedTest :: Test
 incompleteGlobalSelfReferenceRejectedTest = TestLabel "Asm.Output.incomplete-global-self-reference-rejected" $ TestCase $
     assertBool
@@ -1718,6 +1983,334 @@ visualizerFunctionDesignatorTest = TestLabel "Visualizer.function-designator" $ 
         "visualizer renders bare function designators emitted as ATFuncPtr nodes"
         ("<svg" `T.isInfixOf` svg && "foo" `T.isInfixOf` svg)
 
+visualizerPrunesEmptyDescendantsTest :: Test
+visualizerPrunesEmptyDescendantsTest = TestLabel "Visualizer.prunes-empty-descendants" $ TestCase $ do
+    let intTy :: CT.StorageClass Integer
+        intTy = CT.SCAuto CT.CTInt
+        nullTy :: CT.StorageClass Integer
+        nullTy = CT.SCUndef CT.CTUndef
+        literal = ATNode (ATNum 0) intTy ATEmpty ATEmpty
+        wrappedLiteral = ATNode (ATNull literal) nullTy ATEmpty ATEmpty
+        ast = ATNode ATReturn intTy wrappedLiteral ATEmpty
+    svg <- renderVisualizationFromAsts [ast]
+    assertBool
+        "visualizer should keep renderable descendants hidden behind ATNull wrappers"
+        ("return" `T.isInfixOf` svg && "0 (" `T.isInfixOf` svg)
+    assertBool
+        "visualizer should not emit placeholder Null nodes for empty descendants"
+        (not $ "Null" `T.isInfixOf` svg)
+    assertEqual
+        "visualizer should only render the meaningful return and literal nodes"
+        2
+        (T.count "<text " svg)
+
+visualizerPreservesNullStatementsInBlocksTest :: Test
+visualizerPreservesNullStatementsInBlocksTest =
+    TestLabel "Visualizer.preserves-null-statements-in-blocks" $ TestCase $ do
+        nullStatementSvg <- renderVisualization "int main(void) { ; }"
+        emptyBlockSvg <- renderVisualization "int main(void) { }"
+        assertBool
+            "visualizer should render null statements inside statement lists instead of pruning them as empty descendants"
+            ("Null" `T.isInfixOf` nullStatementSvg)
+        assertBool
+            "visualizer should distinguish a block containing ';' from an actually empty block"
+            (T.count "<text " nullStatementSvg > T.count "<text " emptyBlockSvg)
+
+visualizerPreservesOmittedConditionalMiddleTest :: Test
+visualizerPreservesOmittedConditionalMiddleTest =
+    TestLabel "Visualizer.preserves-omitted-conditional-middle" $ TestCase $ do
+        let intTy :: CT.StorageClass Integer
+            intTy = CT.SCAuto CT.CTInt
+            cond = ATNode (ATNum 1) intTy ATEmpty ATEmpty
+            alternative = ATNode (ATNum 2) intTy ATEmpty ATEmpty
+            ast = ATNode (ATConditional cond ATEmpty alternative) intTy ATEmpty ATEmpty
+        svg <- renderVisualizationFromAsts [ast]
+        assertBool
+            "visualizer should keep GNU omitted-middle conditionals renderable"
+            ("?:" `T.isInfixOf` svg && "1 (" `T.isInfixOf` svg && "2 (" `T.isInfixOf` svg)
+        assertEqual
+            "visualizer should render a placeholder child for the omitted middle expression"
+            1
+            (T.count "Null" svg)
+        assertEqual
+            "visualizer should render the conditional operator, both operands, and the placeholder"
+            4
+            (T.count "<text " svg)
+
+visualizerPreservesEmptyForSectionsTest :: Test
+visualizerPreservesEmptyForSectionsTest =
+    TestLabel "Visualizer.preserves-empty-for-sections" $ TestCase $ do
+        let intTy :: CT.StorageClass Integer
+            intTy = CT.SCAuto CT.CTInt
+            nullTy :: CT.StorageClass Integer
+            nullTy = CT.SCUndef CT.CTUndef
+            literal = ATNode (ATNum 0) intTy ATEmpty ATEmpty
+            body = ATNode ATReturn intTy literal ATEmpty
+            ast =
+                ATNode
+                    (ATFor
+                        [ ATForInit ATEmpty
+                        , ATForCond ATEmpty
+                        , ATForIncr ATEmpty
+                        , ATForStmt body
+                        ]
+                    )
+                    nullTy
+                    ATEmpty
+                    ATEmpty
+        svg <- renderVisualizationFromAsts [ast]
+        assertBool
+            "visualizer should render for-loop bodies alongside empty section placeholders"
+            ("for" `T.isInfixOf` svg && "return" `T.isInfixOf` svg && "0 (" `T.isInfixOf` svg)
+        assertEqual
+            "visualizer should keep placeholders for omitted init, condition, and increment sections"
+            3
+            (T.count "Null" svg)
+        assertEqual
+            "visualizer should render the loop, three placeholders, the return, and the literal"
+            6
+            (T.count "<text " svg)
+
+visualizerPreservesParsedEmptyForSectionsTest :: Test
+visualizerPreservesParsedEmptyForSectionsTest =
+    TestLabel "Visualizer.preserves-parsed-empty-for-sections" $ TestCase $ do
+        svg <- renderVisualization "int main(){for(;;) return 1;}"
+        assertBool
+            "visualizer should preserve omitted for-loop sections from parsed input"
+            ("for" `T.isInfixOf` svg && "return" `T.isInfixOf` svg && "1 (" `T.isInfixOf` svg)
+        assertEqual
+            "visualizer should preserve parsed placeholders for omitted init, condition, and increment sections"
+            3
+            (T.count "Null" svg)
+
+visualizerPreservesParsedEmptyForBodyTest :: Test
+visualizerPreservesParsedEmptyForBodyTest =
+    TestLabel "Visualizer.preserves-parsed-empty-for-body" $ TestCase $ do
+        svg <- renderVisualization "int main(){for(;;);}"
+        assertBool
+            "visualizer should keep parsed empty-body for-loops visible"
+            ("for" `T.isInfixOf` svg)
+        assertEqual
+            "visualizer should preserve parsed placeholders for omitted init, condition, increment, and body sections"
+            4
+            (T.count "Null" svg)
+
+visualizerPreservesEmptyControlFlowBodiesTest :: Test
+visualizerPreservesEmptyControlFlowBodiesTest =
+    TestLabel "Visualizer.preserves-empty-control-flow-bodies" $ TestCase $ do
+        let intTy :: CT.StorageClass Integer
+            intTy = CT.SCAuto CT.CTInt
+            nullTy :: CT.StorageClass Integer
+            nullTy = CT.SCUndef CT.CTUndef
+            ifWithoutBodies =
+                ATNode
+                    ATElse
+                    nullTy
+                    (ATNode
+                        ATIf
+                        nullTy
+                        (ATNode (ATNum 1) intTy ATEmpty ATEmpty)
+                        ATEmpty
+                    )
+                    ATEmpty
+            whileWithoutBody =
+                ATNode
+                    ATWhile
+                    nullTy
+                    (ATNode (ATNum 1) intTy ATEmpty ATEmpty)
+                    ATEmpty
+        svg <- renderVisualizationFromAsts [ifWithoutBodies, whileWithoutBody]
+        assertBool
+            "visualizer should keep empty control-flow bodies visible alongside their predicates"
+            ("if" `T.isInfixOf` svg
+                && "else" `T.isInfixOf` svg
+                && "while" `T.isInfixOf` svg
+                && "1 (" `T.isInfixOf` svg
+            )
+        assertEqual
+            "visualizer should render placeholder children for empty if/else/while statement bodies"
+            3
+            (T.count "Null" svg)
+
+visualizerPreservesEmptySwitchBodiesTest :: Test
+visualizerPreservesEmptySwitchBodiesTest =
+    TestLabel "Visualizer.preserves-empty-switch-bodies" $ TestCase $ do
+        let intTy :: CT.StorageClass Integer
+            intTy = CT.SCAuto CT.CTInt
+            nullTy :: CT.StorageClass Integer
+            nullTy = CT.SCUndef CT.CTUndef
+            cond = ATNode (ATNum 1) intTy ATEmpty ATEmpty
+            switchStmt =
+                ATNode
+                    (ATSwitch cond [])
+                    nullTy
+                    ATEmpty
+                    ATEmpty
+        svg <- renderVisualizationFromAsts [switchStmt]
+        assertBool
+            "visualizer should keep empty switch bodies visible alongside their predicates"
+            ("switch" `T.isInfixOf` svg
+                && "1 (" `T.isInfixOf` svg
+            )
+        assertEqual
+            "visualizer should render placeholder children for empty switch bodies"
+            2
+            (T.count "Null" svg)
+        assertEqual
+            "visualizer should render the switch, its condition, and both empty-body placeholders"
+            4
+            (T.count "<text " svg)
+
+visualizerPreservesEmptySwitchLabelBodiesTest :: Test
+visualizerPreservesEmptySwitchLabelBodiesTest =
+    TestLabel "Visualizer.preserves-empty-switch-label-bodies" $ TestCase $ do
+        let intTy :: CT.StorageClass Integer
+            intTy = CT.SCAuto CT.CTInt
+            nullTy :: CT.StorageClass Integer
+            nullTy = CT.SCUndef CT.CTUndef
+            cond = ATNode (ATNum 1) intTy ATEmpty ATEmpty
+            emptyStmt = ATNode (ATNull ATEmpty) nullTy ATEmpty ATEmpty
+            caseStmt = ATNode (ATCase 0 1) nullTy emptyStmt ATEmpty
+            defaultStmt = ATNode (ATDefault 0) nullTy emptyStmt ATEmpty
+            switchStmt =
+                ATNode
+                    (ATSwitch cond [caseStmt, defaultStmt])
+                    nullTy
+                    ATEmpty
+                    ATEmpty
+        svg <- renderVisualizationFromAsts [switchStmt]
+        assertBool
+            "visualizer should keep empty switch label bodies visible"
+            ("switch" `T.isInfixOf` svg
+                && "case 1" `T.isInfixOf` svg
+                && "default" `T.isInfixOf` svg
+            )
+        assertEqual
+            "visualizer should render placeholders for empty case/default statement bodies"
+            2
+            (T.count "Null" svg)
+        assertEqual
+            "visualizer should render the switch, its condition, both labels, and two placeholders"
+            6
+            (T.count "<text " svg)
+
+visualizerEmptyAstRejectsExistingOutputTest :: Test
+visualizerEmptyAstRejectsExistingOutputTest = TestLabel "Visualizer.empty-ast-rejects-existing-output" $ TestCase $ do
+    tmpDir <- getTemporaryDirectory
+    (path, h) <- openTempFile tmpDir "htcc-components-visualizer-empty.svg"
+    flip finally (ignoreIOException (hClose h) >> ignoreIOException (removeFile path)) $ do
+        hClose h
+        T.writeFile path "stale output"
+        result <- try
+            (writeVisualization ([] :: ASTs Integer) (mkWidth 200) path)
+            :: IO (Either IOException ())
+        contents <- T.readFile path
+        assertBool
+            "empty ASTs should fail instead of reporting success"
+            (isLeft result)
+        assertEqual
+            "empty ASTs should not overwrite an existing SVG target after failing"
+            "stale output"
+            contents
+    where
+        ignoreIOException = flip catchIOError $ const $ pure ()
+
+visualizerDeclarationOnlyAstRejectsExistingOutputTest :: Test
+visualizerDeclarationOnlyAstRejectsExistingOutputTest = TestLabel "Visualizer.declaration-only-ast-rejects-existing-output" $ TestCase $ do
+    tmpDir <- getTemporaryDirectory
+    (path, h) <- openTempFile tmpDir "htcc-components-visualizer-decl-only.svg"
+    flip finally (ignoreIOException (hClose h) >> ignoreIOException (removeFile path)) $ do
+        hClose h
+        T.writeFile path "stale output"
+        (asts, _, _, _) <- parseAsmSource "int g;"
+        result <- try
+            (writeVisualization asts (mkWidth 200) path)
+            :: IO (Either IOException ())
+        contents <- T.readFile path
+        assertBool
+            "declaration-only ASTs should fail instead of reporting success"
+            (isLeft result)
+        assertEqual
+            "declaration-only ASTs should not overwrite an existing SVG target after failing"
+            "stale output"
+            contents
+    where
+        ignoreIOException = flip catchIOError $ const $ pure ()
+
+visualizerRejectsNonSvgOutputTest :: Test
+visualizerRejectsNonSvgOutputTest = TestLabel "Visualizer.rejects-non-svg-output" $ TestCase $ do
+    tmpDir <- getTemporaryDirectory
+    (path, h) <- openTempFile tmpDir "htcc-components-visualizer-invalid.png"
+    flip finally (ignoreIOException (hClose h) >> ignoreIOException (removeFile path)) $ do
+        hClose h
+        T.writeFile path "stale output"
+        (asts, _, _, _) <- parseAsmSource "int main(void) { return 0; }"
+        result <- try
+            (writeVisualization asts (mkWidth 200) path)
+            :: IO (Either IOException ())
+        contents <- T.readFile path
+        assertBool
+            "non-SVG outputs should be rejected before rendering"
+            (isLeft result)
+        case result of
+            Left ioErr ->
+                assertBool
+                    "non-SVG failures should explain the required extension"
+                    ("AST visualization output path must use the .svg extension" `T.isInfixOf` T.pack (show ioErr))
+            Right _ ->
+                assertFailure "non-SVG outputs should not render successfully"
+        assertEqual
+            "non-SVG failures should not overwrite an existing target"
+            "stale output"
+            contents
+    where
+        ignoreIOException = flip catchIOError $ const $ pure ()
+
+visualizerRejectsSymlinkedNonSvgOutputTargetTest :: Test
+visualizerRejectsSymlinkedNonSvgOutputTargetTest = TestLabel "Visualizer.rejects-symlinked-non-svg-output-target" $ TestCase $ do
+    withVisualizerSymlinkPaths "target.txt" "alias.svg" $ \targetPath aliasPath -> do
+        T.writeFile targetPath "stale output"
+        createSymbolicLink targetPath aliasPath
+        (asts, _, _, _) <- parseAsmSource "int main(void) { return 0; }"
+        result <- try
+            (writeVisualization asts (mkWidth 200) aliasPath)
+            :: IO (Either IOException ())
+        contents <- T.readFile targetPath
+        assertBool
+            "symlinked non-SVG targets should be rejected before rendering"
+            (isLeft result)
+        case result of
+            Left ioErr ->
+                assertBool
+                    "symlink target failures should explain the required extension"
+                    ("AST visualization output path must use the .svg extension" `T.isInfixOf` T.pack (show ioErr))
+            Right _ ->
+                assertFailure "symlinked non-SVG targets should not render successfully"
+        assertEqual
+            "symlink target failures should not overwrite the resolved target"
+            "stale output"
+            contents
+
+visualizerAcceptsSymlinkAliasToSvgTargetTest :: Test
+visualizerAcceptsSymlinkAliasToSvgTargetTest = TestLabel "Visualizer.accepts-symlink-alias-to-svg-target" $ TestCase $ do
+    withVisualizerSymlinkPaths "target.svg" "current" $ \targetPath aliasPath -> do
+        T.writeFile targetPath "stale output"
+        createSymbolicLink targetPath aliasPath
+        (asts, _, _, _) <- parseAsmSource "int main(void) { return 0; }"
+        result <- try
+            (writeVisualization asts (mkWidth 200) aliasPath)
+            :: IO (Either IOException ())
+        contents <- T.readFile targetPath
+        case result of
+            Left ioErr ->
+                assertFailure $
+                    "symlink aliases that resolve to SVG targets should render successfully, but failed with: "
+                        <> show ioErr
+            Right _ ->
+                assertBool
+                    "symlink aliases that resolve to SVG targets should update the resolved SVG"
+                    ("<svg" `T.isInfixOf` contents && contents /= "stale output")
+
 test :: Test
 test = TestLabel "Asm.Output" $
     TestList
@@ -1742,6 +2335,8 @@ test = TestLabel "Asm.Output" $
         , pointerAddSubAssignRefinementRevalidationTest
         , pointerIncDecIncompleteRevalidationFailureTest
         , pointerAddSubAssignIncompleteRevalidationFailureTest
+        , visualizableInputAcceptsAsmNormalizationFailureTest
+        , visualizableInputFunctionCallRefinementRevalidationTest
         , tentativeIncompleteArrayTest
         , tentativeIncompleteArrayDecayRetypeFallbackTest
         , tentativeIncompleteArraySizeofFallbackTest
@@ -1801,6 +2396,15 @@ test = TestLabel "Asm.Output" $
         , creationMaskedOutputModeMatchesActualCreationTest
         , hardLinkedFallbackReplacementRejectedTest
         , hardLinkedRenameReplacementPreservesAliasTest
+        , withReplacementOutputPathAndResolvedPathDirectFallbackTest
+        , suppressWarnsRunAsmPreservesDirectiveLikePostWarningOutputTest
+        , suppressWarnsRunAsmPreservesLeadInForRetainedErrorTest
+        , suppressWarnsRunAsmPreservesWarningLabelErrorSnippetTest
+        , suppressWarnsRunAsmSuppressesLocatedWarningsFromParenthesizedPathsTest
+        , incrementalWarningFilterRetainsStandalonePartialOutputTest
+        , incrementalWarningFilterDefersPartialWarningPrefixTest
+        , incompleteWarningSuppressionFlushesRetainedPromptPrefixTest
+        , incompleteWarningSuppressionKeepsLocatedWarningPrefixBufferedTest
         , indirectFunctionPointerStackArgAlignmentTest
         , indirectFunctionLateStackArgCallOrderTest
         , objectPointerGlobalAddressMismatchRejectedTest
@@ -1815,4 +2419,18 @@ test = TestLabel "Asm.Output" $
         , globalInitializerStmtExprArrayDecaySizeofTest
         , visualizerSizeofExprTest
         , visualizerFunctionDesignatorTest
+        , visualizerPrunesEmptyDescendantsTest
+        , visualizerPreservesNullStatementsInBlocksTest
+    , visualizerPreservesOmittedConditionalMiddleTest
+    , visualizerPreservesEmptyForSectionsTest
+    , visualizerPreservesParsedEmptyForSectionsTest
+    , visualizerPreservesParsedEmptyForBodyTest
+    , visualizerPreservesEmptyControlFlowBodiesTest
+        , visualizerPreservesEmptySwitchBodiesTest
+        , visualizerPreservesEmptySwitchLabelBodiesTest
+        , visualizerEmptyAstRejectsExistingOutputTest
+        , visualizerDeclarationOnlyAstRejectsExistingOutputTest
+        , visualizerRejectsNonSvgOutputTest
+        , visualizerRejectsSymlinkedNonSvgOutputTargetTest
+        , visualizerAcceptsSymlinkAliasToSvgTargetTest
         ]

@@ -1,25 +1,48 @@
 {-# LANGUAGE LambdaCase, TemplateHaskell #-}
 module Main where
 
-import           Control.Exception                           (evaluate, finally)
+import           Control.Applicative                         ((<|>))
+import           Control.Concurrent                          (forkIO,
+                                                              threadDelay,
+                                                              yield)
+import           Control.Concurrent.MVar                     (MVar,
+                                                              newEmptyMVar,
+                                                              putMVar, takeMVar)
+import           Control.Concurrent.STM                      (STM, TVar,
+                                                              atomically, check,
+                                                              newTVarIO, orElse,
+                                                              readTVar,
+                                                              writeTVar)
+import           Control.Exception                           (SomeException,
+                                                              bracket, evaluate,
+                                                              finally, throwIO,
+                                                              try)
 import           Control.Monad                               (foldM, forM_,
-                                                              when)
+                                                              unless, when)
+import           Data.Bits                                   (Bits (shiftL, (.&.), (.|.)))
 import           Data.Bool                                   (bool)
 import qualified Data.ByteString                             as B
+import qualified Data.ByteString.Char8                       as BC
 import           Data.Char                                   (isAlpha,
                                                               isAlphaNum,
                                                               isSpace, toLower)
-import           Data.Foldable                               (toList)
-import           Data.List                                   (isInfixOf,
+import           Data.Functor                                ((<&>))
+import           Data.IORef                                  (modifyIORef',
+                                                              newIORef,
+                                                              readIORef,
+                                                              writeIORef)
+import           Data.List                                   (foldl',
+                                                              intercalate,
+                                                              isInfixOf,
                                                               isPrefixOf,
-                                                              mapAccumL,
+                                                              mapAccumL, sortOn,
                                                               stripPrefix)
 import           Data.List.NonEmpty                          (NonEmpty (..))
-import           Data.Maybe                                  (fromMaybe,
+import           Data.Maybe                                  (fromMaybe, isJust,
                                                               mapMaybe)
 import qualified Data.Text.IO                                as T
 import           Data.Version                                (showVersion)
-import           Data.Word                                   (Word8)
+import           Data.Word                                   (Word64, Word8)
 import           Language.Haskell.TH.Syntax                  (addDependentFile,
                                                               lift, runIO)
 import qualified Options.Applicative                         as OA
@@ -29,15 +52,25 @@ import qualified Data.Map.Strict                             as Map
 import qualified Data.Set                                    as Set
 import qualified Data.Text                                   as T
 import           Data.Void
+import           Diagrams.Prelude                            (V2)
+import           Diagrams.Size                               (SizeSpec)
+import           Diagrams.TwoD.Size                          (mkSizeSpec2D)
+import           GHC.Conc                                    (threadWaitReadSTM)
+import           GHC.IO.Exception                            (IOErrorType (NoSuchThing, PermissionDenied, ResourceExhausted))
+import           GHC.IO.Handle                               (hDuplicate)
 import           Htcc.Asm                                    (casmNormalized',
-                                                              prepareAsmInput)
+                                                              prepareAsmInput,
+                                                              prepareVisualizableInput)
 import qualified Htcc.Asm.Intrinsic.Structure.Internal       as SI
 import qualified Htcc.CRules.Types                           as CT
+import qualified Htcc.MegaparsecCompat                       as M
 import           Htcc.Output                                 (ReplacementOutputMode (..),
                                                               creationMaskedOutputMode,
+                                                              resolveReplacementOutputPath,
                                                               stagedOutputMode,
                                                               temporaryWritableMode,
-                                                              withReplacementOutputPath)
+                                                              withReplacementOutputPath,
+                                                              withReplacementOutputPathAndResolvedPath)
 import           Htcc.Parser                                 (ASTs, ATKind (..),
                                                               ATKindFor (..),
                                                               ATree (..))
@@ -52,10 +85,25 @@ import           Htcc.Parser.ConstructionData.Scope.Var      (GVar (..),
                                                               Literal (..),
                                                               Literals)
 import           Htcc.Utils
+import           Htcc.Visualizer                             (validateVisualizationOutputPath,
+                                                              writeVisualization)
+import           Htcc.WarningSuppression                     (CompilerOutputChunk,
+                                                              CompilerWarningFilterDecision (..),
+                                                              IncrementalCompilerWarningFilter,
+                                                              emptyIncrementalCompilerWarningFilter,
+                                                              feedIncrementalCompilerWarningFilter,
+                                                              filterCompilerOutputChunks,
+                                                              finalCompilerOutputChunk,
+                                                              finalizeIncrementalCompilerWarningFilter,
+                                                              incompleteCompilerOutputNeedsMoreInputForWarningSuppression,
+                                                              newlineByte,
+                                                              normalizeCompilerOutputLine,
+                                                              splitCompleteCompilerOutputChunks)
 import           Numeric.Natural                             (Natural)
 import           System.Directory                            (canonicalizePath,
                                                               doesFileExist,
                                                               executable,
+                                                              getCurrentDirectory,
                                                               getPermissions,
                                                               getTemporaryDirectory,
                                                               makeAbsolute,
@@ -64,56 +112,111 @@ import           System.Environment                          (getEnvironment,
                                                               lookupEnv)
 import           System.Exit                                 (ExitCode (..),
                                                               exitFailure)
-import           System.FilePath                             (normalise,
+import           System.FilePath                             (isAbsolute,
+                                                              normalise,
                                                               searchPathSeparator,
                                                               takeFileName,
                                                               (</>))
+import           System.Info                                 (os)
 import           System.IO                                   (Handle,
                                                               IOMode (ReadMode, WriteMode),
-                                                              hClose, hPutStr,
+                                                              hClose, hFlush,
+                                                              hPutStr,
+                                                              hSetBinaryMode,
                                                               openTempFile,
-                                                              stderr, withFile)
+                                                              stderr, stdout,
+                                                              withFile)
 import           System.IO.Error                             (catchIOError,
-                                                              isDoesNotExistError)
+                                                              ioeGetErrorString,
+                                                              ioeGetErrorType,
+                                                              isDoesNotExistError,
+                                                              isEOFError)
 import           System.Posix.Files                          (deviceID, fileID,
                                                               fileMode,
+                                                              fileSize,
                                                               getFileStatus,
                                                               getSymbolicLinkStatus,
                                                               groupExecuteMode,
                                                               intersectFileModes,
                                                               isRegularFile,
-                                                              isSymbolicLink,
                                                               otherExecuteMode,
                                                               ownerExecuteMode,
                                                               ownerReadMode,
                                                               setFileMode,
                                                               unionFileModes)
-import           System.Posix.Types                          (FileMode)
+import           System.Posix.IO                             (FdOption (NonBlockingRead),
+                                                              closeFd,
+                                                              handleToFd,
+                                                              setFdOption)
+import qualified System.Posix.IO.ByteString                  as PB
+import           System.Posix.Signals                        (nullSignal,
+                                                              signalProcessGroup)
+import           System.Posix.Types                          (FileMode,
+                                                              ProcessGroupID)
 import           System.Process                              (CreateProcess (..),
+                                                              ProcessHandle,
+                                                              StdStream (CreatePipe, Inherit),
                                                               createProcess,
-                                                              proc,
+                                                              getPid, proc,
                                                               readCreateProcessWithExitCode,
                                                               readProcessWithExitCode,
-                                                              showCommandForUser,
-                                                              waitForProcess)
-import qualified Text.Megaparsec                             as M
+                                                              waitForProcess,
+                                                              withCreateProcess)
+import           System.Timeout                              (timeout)
 import qualified Text.Parsec                                 as Parsec
 import           Text.Read                                   (readMaybe)
 
 data Opts = Opts
-    { optIsRunAsm  :: !Bool
-    , optIsVerbose :: !Bool
-    , optOutput    :: Maybe FilePath
-    , optInput     :: [FilePath]
+    { optIsRunAsm      :: !Bool
+    , optIsVerbose     :: !Bool
+    , optVisualizeAst  :: !Bool
+    , optImgResolution :: !(Maybe String)
+    , optSuppressWarns :: !Bool
+    , optOutput        :: Maybe FilePath
+    , optInput         :: [FilePath]
     } deriving (Read, Show)
 
 output :: OA.Parser (Maybe String)
-output = OA.optional $ OA.strOption $ mconcat [
-    OA.metavar "<file>"
-  , OA.long "output"
-  , OA.short 'o'
-  , OA.help "Place the output into <file>"
+output = OA.optional $ outputOption <|> legacyOutputOption
+    where
+        outputHelp = "Place the output into <file> (legacy alias: --out)"
+        outputOption = OA.strOption $ mconcat [
+            OA.metavar "<file>"
+          , OA.long "output"
+          , OA.short 'o'
+          , OA.help outputHelp
+          ]
+        legacyOutputOption = OA.strOption $ mconcat [
+            OA.metavar "<file>"
+          , OA.long "out"
+          , OA.internal
+          ]
+
+visualizeAst :: OA.Parser Bool
+visualizeAst = OA.switch $ mconcat [
+    OA.long "visualize-ast"
+  , OA.help "Visualize ASTs instead of emitting assembly"
   ]
+
+imgResolution :: OA.Parser (Maybe String)
+imgResolution = OA.optional $ OA.strOption $ mconcat [
+    OA.metavar "RESOLUTION"
+  , OA.long "img-resolution"
+  , OA.help "Specify the output size for --visualize-ast as WIDTHxHEIGHT (default: 640x480)"
+  ]
+
+suppressWarns :: OA.Parser Bool
+suppressWarns = canonicalFlag <|> legacyFlag <|> pure False
+    where
+        canonicalFlag = OA.flag' True $ mconcat
+            [ OA.long "suppress-warns"
+            , OA.short 'w'
+            , OA.help "Disable all warning messages (legacy alias: --supress-warns)"
+            ]
+        legacyFlag = OA.flag' True $ mconcat
+            [ OA.long "supress-warns"
+            , OA.internal
+            ]
 
 input :: OA.Parser [String]
 input = OA.some $ OA.strArgument $ mconcat [
@@ -139,6 +242,9 @@ programOptions :: OA.Parser Opts
 programOptions = Opts
     <$> isRunAsm
     <*> isVerbose
+    <*> visualizeAst
+    <*> imgResolution
+    <*> suppressWarns
     <*> output
     <*> input
 
@@ -203,114 +309,355 @@ nonEmptyEnv :: Maybe String -> Maybe String
 nonEmptyEnv (Just s) | all isSpace s = Nothing
 nonEmptyEnv x         = x
 
-shellWords :: String -> Either String [String]
-shellWords commandLine =
+data ShellWordSpan = ShellWordSpan
+    { shellWordSpanText                      :: String
+    , shellWordSpanAllowsPosixExpansion      :: Bool
+    , shellWordSpanAllowsPosixFieldSplitting :: Bool
+    }
+
+data ParsedShellWord = ParsedShellWord
+    { parsedShellWordSpans               :: [ShellWordSpan]
+    , parsedShellWordPreservesEmptyField :: Bool
+    }
+
+newtype CompilerEnvOverrideSpec = CompilerEnvOverrideSpec
+    { compilerEnvOverrideSpans :: [ShellWordSpan]
+    }
+
+data PosixShellContext
+    = PosixShellLiteralContext
+    | PosixShellDoubleQuotedContext
+    | PosixShellUnquotedContext
+    deriving (Eq)
+
+data ShellWordChar = ShellWordChar
+    { shellWordCharText    :: Char
+    , shellWordCharContext :: PosixShellContext
+    }
+
+shellWordText :: ParsedShellWord -> String
+shellWordText =
+    concatMap shellWordSpanText . parsedShellWordSpans
+
+environmentAssignmentName :: ParsedShellWord -> Maybe String
+environmentAssignmentName parsedWord =
+    case span isAssignmentNameChar $ shellWordCharsFromSpans $ parsedShellWordSpans parsedWord of
+        (firstChar:remainingNameChars, equalsChar:_)
+            | startsLikeIdentifier (shellWordCharText firstChar)
+                && all (isEnvironmentVariableNameChar . shellWordCharText) remainingNameChars
+                && shellWordCharContext equalsChar == PosixShellUnquotedContext
+                && shellWordCharText equalsChar == '=' ->
+                Just $ map shellWordCharText (firstChar : remainingNameChars)
+        _ ->
+            Nothing
+    where
+        isAssignmentNameChar wordChar =
+            shellWordCharContext wordChar == PosixShellUnquotedContext
+                && isEnvironmentVariableNameChar (shellWordCharText wordChar)
+
+isEnvironmentAssignmentWord :: ParsedShellWord -> Bool
+isEnvironmentAssignmentWord =
+    isJust . environmentAssignmentName
+
+literalShellWordSpan :: String -> ShellWordSpan
+literalShellWordSpan text =
+    ShellWordSpan
+        { shellWordSpanText = text
+        , shellWordSpanAllowsPosixExpansion = False
+        , shellWordSpanAllowsPosixFieldSplitting = False
+        }
+
+doubleQuotedExpandableShellWordSpan :: String -> ShellWordSpan
+doubleQuotedExpandableShellWordSpan text =
+    ShellWordSpan
+        { shellWordSpanText = text
+        , shellWordSpanAllowsPosixExpansion = True
+        , shellWordSpanAllowsPosixFieldSplitting = False
+        }
+
+unquotedExpandableShellWordSpan :: String -> ShellWordSpan
+unquotedExpandableShellWordSpan text =
+    ShellWordSpan
+        { shellWordSpanText = text
+        , shellWordSpanAllowsPosixExpansion = True
+        , shellWordSpanAllowsPosixFieldSplitting = True
+        }
+
+coalesceShellWordSpans :: [ShellWordSpan] -> [ShellWordSpan]
+coalesceShellWordSpans =
+    foldr
+        (\currentSpan accumulatedSpans ->
+            case accumulatedSpans of
+                nextSpan : remainingSpans
+                    | shellWordSpanAllowsPosixExpansion currentSpan
+                        == shellWordSpanAllowsPosixExpansion nextSpan
+                        && shellWordSpanAllowsPosixFieldSplitting currentSpan
+                        == shellWordSpanAllowsPosixFieldSplitting nextSpan ->
+                        nextSpan
+                            { shellWordSpanText =
+                                shellWordSpanText currentSpan <> shellWordSpanText nextSpan
+                            }
+                            : remainingSpans
+                _ ->
+                    currentSpan : accumulatedSpans
+        )
+        []
+
+dropShellWordSpanChars :: Int -> [ShellWordSpan] -> [ShellWordSpan]
+dropShellWordSpanChars charsToDrop spans
+    | charsToDrop <= 0 = spans
+    | otherwise =
+        case spans of
+            [] ->
+                []
+            currentSpan : remainingSpans ->
+                let spanText = shellWordSpanText currentSpan
+                    spanLength = length spanText
+                 in if charsToDrop < spanLength
+                        then
+                            currentSpan
+                                { shellWordSpanText = drop charsToDrop spanText
+                                }
+                                : remainingSpans
+                        else
+                            dropShellWordSpanChars (charsToDrop - spanLength) remainingSpans
+
+shellWordsWithContext :: String -> Either String [ParsedShellWord]
+shellWordsWithContext commandLine =
     either (Left . show) Right $ Parsec.parse shellParser "<compiler>" commandLine
     where
         shellParser = skipSpaces *> Parsec.sepEndBy word spaces <* Parsec.eof
         skipSpaces = Parsec.skipMany $ Parsec.satisfy isSpace
         spaces = Parsec.skipMany1 $ Parsec.satisfy isSpace
-        word = concat <$> Parsec.many1 chunk
-        chunk = Parsec.choice [singleQuoted, doubleQuoted, escaped, bare]
-        singleQuoted = Parsec.char '\'' *> Parsec.manyTill Parsec.anyChar (Parsec.char '\'')
-        doubleQuoted = concat <$> (Parsec.char '"' *> Parsec.manyTill doubleChunk (Parsec.char '"'))
-        doubleChunk = Parsec.choice [doubleEscaped, pure <$> Parsec.noneOf "\""]
+        word = buildParsedShellWord <$> Parsec.many1 chunk
+        chunk
+            | os == "mingw32" =
+                Parsec.choice [doubleQuoted, caretEscaped, bare]
+            | otherwise =
+                Parsec.choice [singleQuoted, doubleQuoted, escaped, bare]
+        singleQuoted = do
+            text <- Parsec.char '\'' *> Parsec.manyTill Parsec.anyChar (Parsec.char '\'')
+            pure (True, [literalShellWordSpan text])
+        doubleQuoted =
+            fmap ((,) True . coalesceShellWordSpans . concat) $
+                Parsec.char '"' *> Parsec.manyTill doubleChunk (Parsec.char '"')
+        doubleChunk
+            | os == "mingw32" =
+                Parsec.choice
+                    [ doubleEscaped
+                    , doublePercentEscaped
+                    , doublePercentChar
+                    , doubleCaretEscaped
+                    , doubleBare
+                    ]
+            | otherwise =
+                Parsec.choice [doubleEscaped, doubleBare]
+        doubleBare =
+            pure . pure . doubleQuotedExpandableShellWordSpan
+                =<< Parsec.many1 (Parsec.satisfy isDoubleBareChar)
         doubleEscaped = do
             _ <- Parsec.char '\\'
             c <- Parsec.anyChar
-            pure $ case c of
+            pure . pure . literalShellWordSpan $ case c of
                 '\\' -> "\\"
                 '"'  -> "\""
                 '`'  -> "`"
                 '$'  -> "$"
                 '\n' -> ""
                 _    -> ['\\', c]
-        escaped = Parsec.char '\\' *> (pure <$> Parsec.anyChar)
-        bare = Parsec.many1 $ Parsec.noneOf "'\"\\ \t\r\n"
+        doublePercentEscaped = do
+            _ <- Parsec.try $ Parsec.string "%%"
+            pure [literalShellWordSpan "%"]
+        doublePercentChar = do
+            _ <- Parsec.char '%'
+            pure [doubleQuotedExpandableShellWordSpan "%"]
+        doubleCaretEscaped = do
+            _ <- Parsec.char '^'
+            c <- Parsec.anyChar
+            pure [literalShellWordSpan [c]]
+        escaped = do
+            _ <- Parsec.char '\\'
+            c <- Parsec.anyChar
+            pure $ (False, [literalShellWordSpan $ case c of
+                '\n' -> ""
+                _    -> [c]
+                ])
+        caretEscaped = do
+            _ <- Parsec.char '^'
+            c <- Parsec.anyChar
+            pure (False, [literalShellWordSpan [c]])
+        bare = do
+            text <- Parsec.many1 (Parsec.satisfy isBareNonBackslashChar)
+            pure (False, [unquotedExpandableShellWordSpan text])
+
+        buildParsedShellWord chunks =
+            ParsedShellWord
+                { parsedShellWordSpans =
+                    coalesceShellWordSpans $ concatMap snd chunks
+                , parsedShellWordPreservesEmptyField =
+                    any fst chunks
+                }
+
+        isBareNonBackslashChar c =
+            not (isSpace c)
+                && c /= '"'
+                && (os /= "mingw32" || c /= '^')
+                && (os == "mingw32" || c /= '\'')
+                && (os == "mingw32" || c /= '\\')
+
+        isDoubleBareChar c =
+            c /= '"'
+                && c /= '\\'
+                && (os /= "mingw32" || c /= '%')
+                && (os /= "mingw32" || c /= '^')
+
+shellWords :: String -> Either String [String]
+shellWords =
+    fmap (map shellWordText) . shellWordsWithContext
 
 data CompilerCommand = CompilerCommand
-    { compilerEnvOverrides :: [(String, String)]
-    , compilerExecutable   :: FilePath
-    , compilerArguments    :: [String]
+    { compilerEnvOverrides     :: [(String, String)]
+    , compilerEnvOverrideSpecs :: Maybe [CompilerEnvOverrideSpec]
+    , compilerExecutable       :: FilePath
+    , compilerArguments        :: [String]
     }
 
 resolveCompilerCommand :: String -> IO CompilerCommand
-resolveCompilerCommand compiler = do
-    parts <- case shellWords compiler of
+resolveCompilerCommand =
+    resolveCompilerCommandIn Nothing
+
+resolveCompilerCommandIn :: Maybe FilePath -> String -> IO CompilerCommand
+resolveCompilerCommandIn maybeWorkingDir compiler = do
+    parsedParts <- case shellWordsWithContext compiler of
         Left parseErr -> ioError . userError $
             "failed to parse compiler command " <> show compiler <> ": " <> parseErr
         Right [] -> ioError . userError $
             "empty compiler command: " <> show compiler
         Right xs -> pure xs
-    let (envAssignments, compilerParts) = span isEnvironmentAssignmentWord parts
-        envOverrides = Map.fromList $ map splitEnvironmentAssignment envAssignments
+    let (envAssignmentWords, initialCompilerWords) =
+            span isEnvironmentAssignmentWord parsedParts
+        (initialEnvOverrides, initialEnvOverrideSpecs) =
+            unzip $ map splitEnvironmentAssignment envAssignmentWords
+    baseEnvironment <- baseProcessEnvironment maybeWorkingDir
+    let expandedEnvOverrides =
+            environmentFromList $
+                expandEnvironmentOverridesWithBaseEnvironment
+                    baseEnvironment
+                    initialEnvOverrides
+                    (Just initialEnvOverrideSpecs)
+        compilerWordExpansionEnvironment
+            | os == "mingw32" =
+                Map.union expandedEnvOverrides baseEnvironment
+            | otherwise =
+                baseEnvironment
+        compilerResolutionEnvironment =
+            Map.union expandedEnvOverrides baseEnvironment
+        compilerParts =
+            concatMap
+                (expandParsedShellWordIntoArguments compilerWordExpansionEnvironment)
+                initialCompilerWords
+        envOverrides = initialEnvOverrides
+        envOverrideSpecs = initialEnvOverrideSpecs
     when (null compilerParts) . ioError . userError $
         "empty compiler command: " <> show compiler
-    resolvedPrefix <- findExecutablePrefix envOverrides compilerParts
+    resolvedPrefix <-
+        findExecutablePrefix
+            maybeWorkingDir
+            compilerResolutionEnvironment
+            (hasExplicitSearchPathOverride envOverrides)
+            compilerParts
     pure $
         case resolvedPrefix of
             Just (compilerLen, resolvedCompiler) ->
                 CompilerCommand
-                    { compilerEnvOverrides = map splitEnvironmentAssignment envAssignments
+                    { compilerEnvOverrides = envOverrides
+                    , compilerEnvOverrideSpecs = Just envOverrideSpecs
                     , compilerExecutable = resolvedCompiler
                     , compilerArguments = drop compilerLen compilerParts
                     }
             Nothing ->
                 CompilerCommand
-                    { compilerEnvOverrides = map splitEnvironmentAssignment envAssignments
+                    { compilerEnvOverrides = envOverrides
+                    , compilerEnvOverrideSpecs = Just envOverrideSpecs
                     , compilerExecutable = head compilerParts
                     , compilerArguments = tail compilerParts
                     }
     where
-        isEnvironmentAssignmentWord word = case span (/= '=') word of
-            ([], _) -> False
-            (name, '=':_) ->
-                let startsLikeIdentifier c = isAlpha c || c == '_'
-                 in startsLikeIdentifier (head name) && all (\c -> isAlphaNum c || c == '_') name
-            _ -> False
+        splitEnvironmentAssignment word =
+            case environmentAssignmentName word of
+                Just name ->
+                    ( (name, value)
+                    , CompilerEnvOverrideSpec $
+                        dropShellWordSpanChars (length name + 1) (parsedShellWordSpans word)
+                    )
+                    where
+                        value = drop (length name + 1) (shellWordText word)
+                Nothing ->
+                    error "internal compiler error"
 
-        splitEnvironmentAssignment word = case span (/= '=') word of
-            (name, '=':value) -> (name, value)
-            _                 -> error "internal compiler error"
+        hasExplicitSearchPathOverride overrides' =
+            any
+                ((== environmentNameKey "PATH") . environmentNameKey . fst)
+                overrides'
 
-        findExecutablePrefix _ [] = pure Nothing
-        findExecutablePrefix envOverrides' (cmd:_) = do
-            resolved <- resolveExecutableCommand envOverrides' cmd
+        findExecutablePrefix _ _ _ [] = pure Nothing
+        findExecutablePrefix maybeWorkingDir' envOverrides' explicitSearchPathOverride (cmd:_) = do
+            resolved <-
+                resolveExecutableCommand
+                    maybeWorkingDir'
+                    envOverrides'
+                    explicitSearchPathOverride
+                    cmd
             pure $ fmap (\resolvedCmd -> (1, resolvedCmd)) resolved
 
-        resolveExecutableCommand envOverrides' cmd = do
+        resolveExecutableCommand maybeWorkingDir' envOverrides' explicitSearchPathOverride cmd = do
             case hasExplicitPath cmd of
-                True -> localExecutablePath cmd
+                True -> localExecutablePath maybeWorkingDir' cmd
                 False ->
-                    firstResolved $
-                        [ findExecutableInSearchPath envOverrides' cmd
-                        ]
-                            <> [localExecutablePath cmd | not (hasOverriddenSearchPath envOverrides')]
+                    findExecutableInSearchPath
+                        maybeWorkingDir'
+                        envOverrides'
+                        explicitSearchPathOverride
+                        cmd
 
-        findExecutableInSearchPath envOverrides' cmd = do
+        findExecutableInSearchPath maybeWorkingDir' envOverrides' explicitSearchPathOverride cmd = do
             pathValue <- maybe
                 (fromMaybe "" <$> lookupEnv "PATH")
                 pure
-                (Map.lookup "PATH" envOverrides')
-            firstResolved $
-                map (localExecutablePath . searchPathCommand cmd) $
+                (environmentLookup "PATH" envOverrides')
+            maybeResolvedFromPath <- firstResolved $
+                map (localExecutablePath maybeWorkingDir' . searchPathCommand cmd) $
                     searchPathEntries pathValue
+            case maybeResolvedFromPath of
+                Just resolvedFromPath ->
+                    pure $ Just resolvedFromPath
+                Nothing
+                    | explicitSearchPathOverride ->
+                        pure Nothing
+                    | otherwise ->
+                        localExecutablePath maybeWorkingDir' cmd
 
         searchPathCommand cmd ""  = cmd
         searchPathCommand cmd dir = dir </> cmd
-
-        hasOverriddenSearchPath = Map.member "PATH"
 
         searchPathEntries pathValue = case break (== searchPathSeparator) pathValue of
             (dir, [])       -> [dir]
             (dir, _:remain) -> dir : searchPathEntries remain
 
-        localExecutablePath cmd = do
-            isLocalFile <- doesFileExist cmd
-            isLocalExec <- if isLocalFile then executable <$> getPermissions cmd else pure False
+        localExecutablePath maybeWorkingDir' cmd = do
+            let candidatePath =
+                    normalise $
+                        case maybeWorkingDir' of
+                            Just workingDir
+                                | not (isAbsolute cmd) ->
+                                    workingDir </> cmd
+                            _ ->
+                                cmd
+            isLocalFile <- doesFileExist candidatePath
+            isLocalExec <- if isLocalFile then executable <$> getPermissions candidatePath else pure False
             pure $
                 if isLocalExec
-                    then Just $ normalizeLocalExecutablePath cmd
+                    then Just $ normalizeLocalExecutablePath maybeWorkingDir' cmd candidatePath
                     else Nothing
 
         hasExplicitPath = any (`elem` ['/', '\\'])
@@ -320,7 +667,8 @@ resolveCompilerCommand compiler = do
             resolved <- resolvePath
             maybe (firstResolved resolvePaths) (pure . Just) resolved
 
-        normalizeLocalExecutablePath cmd
+        normalizeLocalExecutablePath maybeWorkingDir' cmd candidatePath
+            | maybe False (const True) maybeWorkingDir' && not (isAbsolute cmd) = candidatePath
             | hasExplicitPath cmd = cmd
             | otherwise = "./" <> cmd
 
@@ -328,50 +676,2616 @@ compilerInvocationArgs :: CompilerCommand -> [String] -> [String]
 compilerInvocationArgs compiler extraArgs =
     compilerArguments compiler <> extraArgs
 
-compilerProcessEnv :: [(String, String)] -> IO (Maybe [(String, String)])
-compilerProcessEnv [] = pure Nothing
-compilerProcessEnv overrides =
-    Just . Map.toList . Map.union (Map.fromList overrides) . Map.fromList
-        <$> getEnvironment
+expandEnvironmentOverrides
+    :: Maybe FilePath
+    -> [(String, String)]
+    -> Maybe [CompilerEnvOverrideSpec]
+    -> IO [(String, String)]
+expandEnvironmentOverrides maybeWorkingDir overrides maybeOverrideSpecs = do
+    baseEnvironment <- baseProcessEnvironment maybeWorkingDir
+    pure $
+        expandEnvironmentOverridesWithBaseEnvironment
+            baseEnvironment
+            overrides
+            maybeOverrideSpecs
+
+expandEnvironmentOverridesWithBaseEnvironment
+    :: Map.Map String String
+    -> [(String, String)]
+    -> Maybe [CompilerEnvOverrideSpec]
+    -> [(String, String)]
+expandEnvironmentOverridesWithBaseEnvironment baseEnvironment overrides maybeOverrideSpecs =
+    reverse . snd $
+        foldl'
+            expandOverride
+            (baseEnvironment, [])
+            (zipOverrideSpecs overrides maybeOverrideSpecs)
+    where
+        expandOverride (expansionEnvironment, expandedOverrides) ((name, value), maybeOverrideSpec) =
+            let expandedValue = maybe
+                    (expandEnvironmentValue expansionEnvironment value)
+                    (expandEnvironmentValueWithShellSpans expansionEnvironment)
+                    maybeOverrideSpec
+             in ( environmentInsert name expandedValue expansionEnvironment
+                , (name, expandedValue) : expandedOverrides
+                )
+
+baseProcessEnvironment :: Maybe FilePath -> IO (Map.Map String String)
+baseProcessEnvironment maybeWorkingDir = do
+    baseEnvironment <- environmentFromList <$> getEnvironment
+    case maybeWorkingDir of
+        Just workingDir ->
+            pure $ environmentInsert "PWD" workingDir baseEnvironment
+        Nothing ->
+            case environmentLookup "PWD" baseEnvironment of
+                Just _ ->
+                    pure baseEnvironment
+                Nothing -> do
+                    workingDir <- getCurrentDirectory
+                    pure $ environmentInsert "PWD" workingDir baseEnvironment
+
+environmentNameKey :: String -> String
+environmentNameKey name
+    | os == "mingw32" = map toLower name
+    | otherwise = name
+
+environmentFromList :: [(String, String)] -> Map.Map String String
+environmentFromList =
+    Map.fromList . map (\(name, value) -> (environmentNameKey name, value))
+
+environmentInsert :: String -> String -> Map.Map String String -> Map.Map String String
+environmentInsert name value =
+    Map.insert (environmentNameKey name) value
+
+environmentLookup :: String -> Map.Map String String -> Maybe String
+environmentLookup name =
+    Map.lookup (environmentNameKey name)
+
+expandEnvironmentValue :: Map.Map String String -> String -> String
+expandEnvironmentValue expansionEnvironment =
+    expandForHost
+    where
+        expandForHost
+            | os == "mingw32" =
+                expandWindowsEnvironmentVariables expansionEnvironment '!'
+                    . expandWindowsEnvironmentVariables expansionEnvironment '%'
+            | otherwise =
+                expandPosixEnvironmentVariables expansionEnvironment
+
+expandParsedShellWord :: Map.Map String String -> ParsedShellWord -> String
+expandParsedShellWord expansionEnvironment =
+    expandShellWordSpans expansionEnvironment . parsedShellWordSpans
+
+expandParsedShellWordIntoArguments :: Map.Map String String -> ParsedShellWord -> [String]
+expandParsedShellWordIntoArguments expansionEnvironment parsedWord
+    | os == "mingw32" =
+        let expandedWord =
+                expandParsedShellWord expansionEnvironment parsedWord
+            fields =
+                if parsedShellWordAllowsWindowsRetokenization parsedWord
+                    then
+                        case shellWordsWithContext expandedWord of
+                            Right expandedWords ->
+                                map shellWordText expandedWords
+                            Left _ ->
+                                [expandedWord]
+                    else
+                        [expandedWord]
+         in if null fields && parsedShellWordPreservesEmptyField parsedWord
+                then [""]
+                else fields
+    | otherwise =
+        let fields =
+                splitExpandedShellWord $
+                    expandShellWordChars
+                        PosixTildeExpansionForShellWord
+                        expansionEnvironment
+                        (shellWordCharsFromSpans $ parsedShellWordSpans parsedWord)
+         in if null fields && parsedShellWordPreservesEmptyField parsedWord
+                then [""]
+                else fields
+
+parsedShellWordAllowsWindowsRetokenization :: ParsedShellWord -> Bool
+parsedShellWordAllowsWindowsRetokenization =
+    all shellWordSpanAllowsPosixFieldSplitting . parsedShellWordSpans
+
+expandShellWordSpans :: Map.Map String String -> [ShellWordSpan] -> String
+expandShellWordSpans expansionEnvironment spans
+    | os == "mingw32" =
+        concatMap
+            (expandWindowsShellWordSpan expansionEnvironment)
+            spans
+    | otherwise =
+        concatMap expandedShellWordFragmentText $
+            expandShellWordChars
+                PosixTildeExpansionForShellWord
+                expansionEnvironment
+                (shellWordCharsFromSpans spans)
+
+expandWindowsShellWordSpan :: Map.Map String String -> ShellWordSpan -> String
+expandWindowsShellWordSpan expansionEnvironment wordSpan
+    | shellWordSpanAllowsPosixExpansion wordSpan =
+        expandEnvironmentValue
+            expansionEnvironment
+            (shellWordSpanText wordSpan)
+    | otherwise =
+        shellWordSpanText wordSpan
+
+expandEnvironmentValueWithShellSpans :: Map.Map String String -> CompilerEnvOverrideSpec -> String
+expandEnvironmentValueWithShellSpans expansionEnvironment overrideSpec
+    | os == "mingw32" =
+        concatMap
+            (expandWindowsShellWordSpan expansionEnvironment)
+            (compilerEnvOverrideSpans overrideSpec)
+    | otherwise =
+        concatMap expandedShellWordFragmentText $
+            expandShellWordChars
+                PosixTildeExpansionForAssignmentValue
+                expansionEnvironment
+                (shellWordCharsFromSpans $ compilerEnvOverrideSpans overrideSpec)
+
+data ExpandedShellWordFragment = ExpandedShellWordFragment
+    { expandedShellWordFragmentText                      :: String
+    , expandedShellWordFragmentAllowsPosixFieldSplitting :: Bool
+    }
+
+data PosixTildeExpansionMode
+    = PosixTildeExpansionForShellWord
+    | PosixTildeExpansionForAssignmentValue
+    deriving (Eq)
+
+shellWordSpanContext :: ShellWordSpan -> PosixShellContext
+shellWordSpanContext wordSpan
+    | shellWordSpanAllowsPosixExpansion wordSpan =
+        if shellWordSpanAllowsPosixFieldSplitting wordSpan
+            then PosixShellUnquotedContext
+            else PosixShellDoubleQuotedContext
+    | otherwise =
+        PosixShellLiteralContext
+
+shellWordCharsFromSpans :: [ShellWordSpan] -> [ShellWordChar]
+shellWordCharsFromSpans =
+    concatMap $ \wordSpan ->
+        shellWordCharsFromTextWithContext
+            (shellWordSpanContext wordSpan)
+            (shellWordSpanText wordSpan)
+
+shellWordCharsFromTextWithContext :: PosixShellContext -> String -> [ShellWordChar]
+shellWordCharsFromTextWithContext wordContext =
+    map (\c -> ShellWordChar {shellWordCharText = c, shellWordCharContext = wordContext})
+
+shellContextAllowsPosixExpansion :: PosixShellContext -> Bool
+shellContextAllowsPosixExpansion context =
+    context /= PosixShellLiteralContext
+
+shellContextAllowsPosixFieldSplitting :: PosixShellContext -> Bool
+shellContextAllowsPosixFieldSplitting context =
+    context == PosixShellUnquotedContext
+
+coalesceExpandedShellWordFragments :: [ExpandedShellWordFragment] -> [ExpandedShellWordFragment]
+coalesceExpandedShellWordFragments =
+    foldr
+        (\currentFragment accumulatedFragments ->
+            case accumulatedFragments of
+                nextFragment : remainingFragments
+                    | expandedShellWordFragmentAllowsPosixFieldSplitting currentFragment
+                        == expandedShellWordFragmentAllowsPosixFieldSplitting nextFragment ->
+                        nextFragment
+                            { expandedShellWordFragmentText =
+                                expandedShellWordFragmentText currentFragment
+                                    <> expandedShellWordFragmentText nextFragment
+                            }
+                            : remainingFragments
+                _ ->
+                    currentFragment : accumulatedFragments
+        )
+        []
+
+expandShellWordChars
+    :: PosixTildeExpansionMode
+    -> Map.Map String String
+    -> [ShellWordChar]
+    -> [ExpandedShellWordFragment]
+expandShellWordChars tildeExpansionMode expansionEnvironment =
+    coalesceExpandedShellWordFragments . go True
+    where
+        go _ [] = []
+        go tildePrefixAllowed (currentChar:remainingChars)
+            | Just tildeFragment <-
+                expandPosixTildePrefix
+                    tildeExpansionMode
+                    expansionEnvironment
+                    tildePrefixAllowed
+                    currentChar
+                    remainingChars =
+                tildeFragment : go False remainingChars
+            | shellWordCharText currentChar == '$'
+                && shellContextAllowsPosixExpansion (shellWordCharContext currentChar) =
+                case
+                    parsePosixParameterExpansionInShellWord
+                        (shellWordCharContext currentChar)
+                        remainingChars
+                of
+                    Just (parameterExpansion, trailingChars) ->
+                        expandPosixParameterExpansionInShellWord
+                            tildeExpansionMode
+                            expansionEnvironment
+                            parameterExpansion
+                            <> go False trailingChars
+                    Nothing ->
+                        literalFragment currentChar
+                            : go (tildePrefixContinuesAfterChar tildeExpansionMode currentChar) remainingChars
+            | otherwise =
+                literalFragment currentChar
+                    : go (tildePrefixContinuesAfterChar tildeExpansionMode currentChar) remainingChars
+
+        literalFragment wordChar =
+            ExpandedShellWordFragment
+                { expandedShellWordFragmentText = [shellWordCharText wordChar]
+                , expandedShellWordFragmentAllowsPosixFieldSplitting =
+                    shellContextAllowsPosixFieldSplitting (shellWordCharContext wordChar)
+                }
+
+        expandPosixTildePrefix expansionMode expansionEnvironment' tildePrefixAllowed' wordChar trailingChars
+            | not tildePrefixAllowed' = Nothing
+            | shellWordCharContext wordChar /= PosixShellUnquotedContext = Nothing
+            | shellWordCharText wordChar /= '~' = Nothing
+            | not (posixTildePrefixTerminatedBy expansionMode trailingChars) = Nothing
+            | otherwise =
+                Just $
+                    ExpandedShellWordFragment
+                        { expandedShellWordFragmentText =
+                            fromMaybe "~" $ environmentLookup "HOME" expansionEnvironment'
+                        , expandedShellWordFragmentAllowsPosixFieldSplitting = False
+                        }
+
+        posixTildePrefixTerminatedBy _ [] = True
+        posixTildePrefixTerminatedBy expansionMode (nextChar:_)
+            | shellWordCharContext nextChar /= PosixShellUnquotedContext = False
+            | shellWordCharText nextChar == '/' = True
+            | otherwise =
+                expansionMode == PosixTildeExpansionForAssignmentValue
+                    && shellWordCharText nextChar == ':'
+
+        tildePrefixContinuesAfterChar expansionMode wordChar =
+            expansionMode == PosixTildeExpansionForAssignmentValue
+                && shellWordCharContext wordChar == PosixShellUnquotedContext
+                && shellWordCharText wordChar == ':'
+
+splitExpandedShellWord :: [ExpandedShellWordFragment] -> [String]
+splitExpandedShellWord =
+    reverse . finalizeSplitState . foldl' splitFragment ([], [])
+    where
+        splitFragment splitState fragment =
+            foldl'
+                (splitCharacter $ expandedShellWordFragmentAllowsPosixFieldSplitting fragment)
+                splitState
+                (expandedShellWordFragmentText fragment)
+
+        splitCharacter allowsFieldSplitting (completedFields, currentFieldReversed) c
+            | allowsFieldSplitting && isSpace c =
+                finalizeCurrentField (completedFields, currentFieldReversed)
+            | otherwise =
+                (completedFields, c : currentFieldReversed)
+
+        finalizeSplitState =
+            fst . finalizeCurrentField
+
+        finalizeCurrentField (completedFields, currentFieldReversed)
+            | null currentFieldReversed =
+                (completedFields, [])
+            | otherwise =
+                (reverse currentFieldReversed : completedFields, [])
+
+expandPosixEnvironmentVariables :: Map.Map String String -> String -> String
+expandPosixEnvironmentVariables expansionEnvironment = go
+    where
+        go [] = []
+        go ('$':xs) =
+            case parsePosixParameterExpansion xs of
+                Just (parameterExpansion, remaining) ->
+                    expandPosixParameterExpansion expansionEnvironment parameterExpansion
+                        <> go remaining
+                Nothing ->
+                    '$' : go xs
+        go (x:xs) =
+            x : go xs
+
+data PosixParameterExpansionWordMode
+    = PosixParameterUseDefaultWord Bool
+    | PosixParameterUseAlternativeWord Bool
+
+data PosixParameterExpansion
+    = PosixSimpleParameterExpansion PosixShellContext String
+    | PosixBracedParameterExpansion
+        PosixShellContext
+        String
+        (Maybe (PosixParameterExpansionWordMode, [ShellWordChar]))
+
+parsePosixParameterExpansionInShellWord
+    :: PosixShellContext
+    -> [ShellWordChar]
+    -> Maybe (PosixParameterExpansion, [ShellWordChar])
+parsePosixParameterExpansionInShellWord expansionContext chars =
+    case chars of
+        wordChar : remainingChars
+            | shellWordCharText wordChar == '{' ->
+                parseBracedPosixParameterExpansionInShellWord expansionContext remainingChars
+            | isEnvironmentVariableName name ->
+                Just
+                    ( PosixSimpleParameterExpansion expansionContext name
+                    , trailingChars
+                    )
+            where
+                (nameSuffixChars, trailingChars) =
+                    span (isEnvironmentVariableNameChar . shellWordCharText) remainingChars
+                name =
+                    shellWordCharText wordChar : map shellWordCharText nameSuffixChars
+        _ ->
+            Nothing
+
+parseBracedPosixParameterExpansionInShellWord
+    :: PosixShellContext
+    -> [ShellWordChar]
+    -> Maybe (PosixParameterExpansion, [ShellWordChar])
+parseBracedPosixParameterExpansionInShellWord expansionContext chars = do
+    (name, remainingChars) <- parseEnvironmentVariableNamePrefixInShellWord chars
+    case remainingChars of
+        wordChar : trailingChars
+            | shellWordCharText wordChar == '}'
+                && shellWordCharContext wordChar == expansionContext ->
+                    Just
+                        ( PosixBracedParameterExpansion expansionContext name Nothing
+                        , trailingChars
+                        )
+        colonChar : operatorChar : trailingChars
+            | shellWordCharText colonChar == ':'
+                && shellWordCharContext colonChar == expansionContext
+                && shellWordCharContext operatorChar == expansionContext
+                && shellWordCharText operatorChar `elem` ['-', '+'] -> do
+                    (wordChars, restChars) <-
+                        takePosixParameterExpansionWordInShellWord expansionContext trailingChars
+                    Just
+                        ( PosixBracedParameterExpansion
+                            expansionContext
+                            name
+                            ( Just
+                                ( posixParameterExpansionWordMode
+                                    True
+                                    (shellWordCharText operatorChar)
+                                , wordChars
+                                )
+                            )
+                        , restChars
+                        )
+        operatorChar : trailingChars
+            | shellWordCharContext operatorChar == expansionContext
+                && shellWordCharText operatorChar `elem` ['-', '+'] -> do
+                    (wordChars, restChars) <-
+                        takePosixParameterExpansionWordInShellWord expansionContext trailingChars
+                    Just
+                        ( PosixBracedParameterExpansion
+                            expansionContext
+                            name
+                            ( Just
+                                ( posixParameterExpansionWordMode
+                                    False
+                                    (shellWordCharText operatorChar)
+                                , wordChars
+                                )
+                            )
+                        , restChars
+                        )
+        _ ->
+            Nothing
+
+parseEnvironmentVariableNamePrefixInShellWord
+    :: [ShellWordChar]
+    -> Maybe (String, [ShellWordChar])
+parseEnvironmentVariableNamePrefixInShellWord chars =
+    case chars of
+        wordChar : remainingChars
+            | isEnvironmentVariableName name ->
+                Just (name, trailingChars)
+            where
+                (nameSuffixChars, trailingChars) =
+                    span (isEnvironmentVariableNameChar . shellWordCharText) remainingChars
+                name =
+                    shellWordCharText wordChar : map shellWordCharText nameSuffixChars
+        _ ->
+            Nothing
+
+takePosixParameterExpansionWordInShellWord
+    :: PosixShellContext
+    -> [ShellWordChar]
+    -> Maybe ([ShellWordChar], [ShellWordChar])
+takePosixParameterExpansionWordInShellWord expansionContext =
+    go [] []
+    where
+        go _ _ [] =
+            Nothing
+        go nestedExpansionContexts accumulatedChars (currentChar:remainingChars)
+            | Just (nestedContext, trailingChars) <-
+                parseNestedExpansionStart currentChar remainingChars =
+                let nextChar = head remainingChars
+                 in go
+                        (nestedContext : nestedExpansionContexts)
+                        (nextChar : currentChar : accumulatedChars)
+                        trailingChars
+            | shellWordCharText currentChar == '}' =
+                case nestedExpansionContexts of
+                    nestedContext : remainingContexts
+                        | shellWordCharContext currentChar == nestedContext ->
+                            go remainingContexts (currentChar : accumulatedChars) remainingChars
+                    []
+                        | shellWordCharContext currentChar == expansionContext ->
+                            Just (reverse accumulatedChars, remainingChars)
+                    _ ->
+                        go nestedExpansionContexts (currentChar : accumulatedChars) remainingChars
+            | otherwise =
+                go nestedExpansionContexts (currentChar : accumulatedChars) remainingChars
+
+        parseNestedExpansionStart currentChar remainingChars =
+            case remainingChars of
+                nextChar : trailingChars
+                    | shellWordCharText currentChar == '$'
+                        && shellContextAllowsPosixExpansion (shellWordCharContext currentChar)
+                        && shellWordCharContext nextChar == shellWordCharContext currentChar
+                        && shellWordCharText nextChar == '{' ->
+                            Just (shellWordCharContext currentChar, trailingChars)
+                _ ->
+                    Nothing
+
+parsePosixParameterExpansion :: String -> Maybe (PosixParameterExpansion, String)
+parsePosixParameterExpansion ('{':xs) =
+    parseBracedPosixParameterExpansion xs
+parsePosixParameterExpansion (x:xs)
+    | isEnvironmentVariableName name =
+        Just (PosixSimpleParameterExpansion PosixShellUnquotedContext name, remaining)
+    where
+        (nameSuffix, remaining) = span isEnvironmentVariableNameChar xs
+        name = x : nameSuffix
+parsePosixParameterExpansion _ =
+    Nothing
+
+parseBracedPosixParameterExpansion :: String -> Maybe (PosixParameterExpansion, String)
+parseBracedPosixParameterExpansion xs = do
+    (name, remaining) <- parseEnvironmentVariableNamePrefix xs
+    case remaining of
+        '}':rest ->
+            Just
+                ( PosixBracedParameterExpansion
+                    PosixShellUnquotedContext
+                    name
+                    Nothing
+                , rest
+                )
+        ':':op:rest
+            | op `elem` ['-', '+'] -> do
+                (word, trailing) <- takePosixParameterExpansionWord rest
+                Just
+                    ( PosixBracedParameterExpansion
+                        PosixShellUnquotedContext
+                        name
+                        ( Just
+                            ( posixParameterExpansionWordMode True op
+                            , shellWordCharsFromTextWithContext PosixShellUnquotedContext word
+                            )
+                        )
+                    , trailing
+                    )
+        op:rest
+            | op `elem` ['-', '+'] -> do
+                (word, trailing) <- takePosixParameterExpansionWord rest
+                Just
+                    ( PosixBracedParameterExpansion
+                        PosixShellUnquotedContext
+                        name
+                        ( Just
+                            ( posixParameterExpansionWordMode False op
+                            , shellWordCharsFromTextWithContext PosixShellUnquotedContext word
+                            )
+                        )
+                    , trailing
+                    )
+        _ ->
+            Nothing
+
+parseEnvironmentVariableNamePrefix :: String -> Maybe (String, String)
+parseEnvironmentVariableNamePrefix (x:xs)
+    | isEnvironmentVariableName name =
+        Just (name, remaining)
+    where
+        (nameSuffix, remaining) = span isEnvironmentVariableNameChar xs
+        name = x : nameSuffix
+parseEnvironmentVariableNamePrefix _ =
+    Nothing
+
+takePosixParameterExpansionWord :: String -> Maybe (String, String)
+takePosixParameterExpansionWord =
+    go (0 :: Int) []
+    where
+        go _ _ [] =
+            Nothing
+        go nested acc ('$':'{':xs) =
+            go (nested + 1) ('{' : '$' : acc) xs
+        go 0 acc ('}':xs) =
+            Just (reverse acc, xs)
+        go nested acc ('}':xs) =
+            go (nested - 1) ('}' : acc) xs
+        go nested acc (x:xs) =
+            go nested (x : acc) xs
+
+posixParameterExpansionWordMode :: Bool -> Char -> PosixParameterExpansionWordMode
+posixParameterExpansionWordMode colonSensitive operator =
+    case operator of
+        '-' ->
+            PosixParameterUseDefaultWord colonSensitive
+        '+' ->
+            PosixParameterUseAlternativeWord colonSensitive
+        _ ->
+            error "internal compiler error"
+
+expandPosixParameterExpansion :: Map.Map String String -> PosixParameterExpansion -> String
+expandPosixParameterExpansion expansionEnvironment parameterExpansion =
+    concatMap expandedShellWordFragmentText $
+        expandPosixParameterExpansionInShellWord
+            PosixTildeExpansionForShellWord
+            expansionEnvironment
+            parameterExpansion
+
+expandPosixParameterExpansionInShellWord
+    :: PosixTildeExpansionMode
+    -> Map.Map String String
+    -> PosixParameterExpansion
+    -> [ExpandedShellWordFragment]
+expandPosixParameterExpansionInShellWord
+    tildeExpansionMode
+    expansionEnvironment
+    parameterExpansion =
+    case parameterExpansion of
+        PosixSimpleParameterExpansion expansionContext name ->
+            renderExpandedValue expansionContext $
+                fromMaybe "" (environmentLookup name expansionEnvironment)
+        PosixBracedParameterExpansion expansionContext name Nothing ->
+            renderExpandedValue expansionContext $
+                fromMaybe "" (environmentLookup name expansionEnvironment)
+        PosixBracedParameterExpansion expansionContext name (Just (wordMode, wordChars)) ->
+            let maybeValue = environmentLookup name expansionEnvironment
+                isSet = isJust maybeValue
+                isSetAndNonEmpty = maybe False (not . null) maybeValue
+                expandedWord =
+                    expandShellWordChars
+                        tildeExpansionMode
+                        expansionEnvironment
+                        wordChars
+             in case wordMode of
+                    PosixParameterUseDefaultWord colonSensitive
+                        | posixParameterShouldUseDefaultWord colonSensitive isSet isSetAndNonEmpty ->
+                            expandedWord
+                        | otherwise ->
+                            renderExpandedValue expansionContext $ fromMaybe "" maybeValue
+                    PosixParameterUseAlternativeWord colonSensitive
+                        | posixParameterShouldUseAlternativeWord colonSensitive isSet isSetAndNonEmpty ->
+                            expandedWord
+                        | otherwise ->
+                            renderExpandedValue expansionContext ""
+    where
+        renderExpandedValue expansionContext value =
+            [ ExpandedShellWordFragment
+                { expandedShellWordFragmentText = value
+                , expandedShellWordFragmentAllowsPosixFieldSplitting =
+                    shellContextAllowsPosixFieldSplitting expansionContext
+                }
+            ]
+
+posixParameterShouldUseDefaultWord :: Bool -> Bool -> Bool -> Bool
+posixParameterShouldUseDefaultWord colonSensitive isSet isSetAndNonEmpty
+    | colonSensitive =
+        not isSetAndNonEmpty
+    | otherwise =
+        not isSet
+
+posixParameterShouldUseAlternativeWord :: Bool -> Bool -> Bool -> Bool
+posixParameterShouldUseAlternativeWord colonSensitive isSet isSetAndNonEmpty
+    | colonSensitive =
+        isSetAndNonEmpty
+    | otherwise =
+        isSet
+
+expandWindowsEnvironmentVariables :: Map.Map String String -> Char -> String -> String
+expandWindowsEnvironmentVariables expansionEnvironment delimiter = go
+    where
+        go [] = []
+        go (x:xs)
+            | x /= delimiter =
+                x : go xs
+            | otherwise =
+                case break (== delimiter) xs of
+                    (name, _:rest)
+                        | isWindowsEnvironmentVariableName name ->
+                            fromMaybe "" (environmentLookup name expansionEnvironment) <> go rest
+                    _ ->
+                        delimiter : go xs
+
+isEnvironmentVariableName :: String -> Bool
+isEnvironmentVariableName [] = False
+isEnvironmentVariableName (x:xs) =
+    startsLikeIdentifier x && all isEnvironmentVariableNameChar xs
+
+startsLikeIdentifier :: Char -> Bool
+startsLikeIdentifier c =
+    isAlpha c || c == '_'
+
+isEnvironmentVariableNameChar :: Char -> Bool
+isEnvironmentVariableNameChar c =
+    isAlphaNum c || c == '_'
+
+isWindowsEnvironmentVariableName :: String -> Bool
+isWindowsEnvironmentVariableName name =
+    not (null name) && all isWindowsEnvironmentVariableNameChar name
+
+isWindowsEnvironmentVariableNameChar :: Char -> Bool
+isWindowsEnvironmentVariableNameChar c =
+    not (isSpace c) && c /= '"' && c /= '%' && c /= '!'
+
+compilerProcessEnv :: CompilerCommand -> IO (Maybe [(String, String)])
+compilerProcessEnv compiler
+    | null (compilerEnvOverrides compiler) = pure Nothing
+    | otherwise = do
+        expandedOverrides <-
+            expandEnvironmentOverrides
+                Nothing
+                (compilerEnvOverrides compiler)
+                (compilerEnvOverrideSpecs compiler)
+        Just . Map.toList . Map.union (environmentFromList expandedOverrides)
+            <$> baseProcessEnvironment Nothing
 
 showCompilerCommandForUser :: CompilerCommand -> [String] -> String
 showCompilerCommandForUser compiler extraArgs =
-    case compilerEnvOverrides compiler of
-        [] ->
-            showCommandForUser
-                (compilerExecutable compiler)
-                (compilerInvocationArgs compiler extraArgs)
-        overrides ->
-            showCommandForUser
-                "env"
-                ( map (\(name, value) -> name <> "=" <> value) overrides
-                    <> [compilerExecutable compiler]
-                    <> compilerInvocationArgs compiler extraArgs
-                )
+    renderCompilerCommandForUserHost os compiler extraArgs
+
+renderCompilerCommandForUserHost :: String -> CompilerCommand -> [String] -> String
+renderCompilerCommandForUserHost hostOs compiler extraArgs
+    | hostOs == "mingw32" =
+        intercalate " && " $
+            (if windowsCommandNeedsDelayedExpansion
+                then ["setlocal EnableDelayedExpansion"]
+                else []
+            )
+                <> map renderWindowsEnvOverride (compilerEnvOverrides compiler)
+                <> [renderCommandWords]
+    | otherwise =
+        unwords $
+            renderPosixEnvAssignments
+                <> quotedCommandWords
+    where
+        quoteWord = shellQuoteForHost hostOs
+        renderPosixEnvAssignments =
+            zipOverrideSpecs (compilerEnvOverrides compiler) (compilerEnvOverrideSpecs compiler)
+                <&> uncurry renderPosixEnvAssignment
+        commandWords =
+            compilerExecutable compiler : compilerInvocationArgs compiler extraArgs
+        windowsCommandNeedsDelayedExpansion =
+            not (null (compilerEnvOverrides compiler))
+                || any ('!' `elem`) commandWords
+        quotedCommandWords =
+            map quoteWord commandWords
+        renderCommandWords =
+            unwords quotedCommandWords
+        renderPosixEnvAssignment (name, value) maybeOverrideSpec =
+            name
+                <> "="
+                <> maybe
+                    (quoteWord value)
+                    renderPosixEnvOverrideSpec
+                    maybeOverrideSpec
+        renderWindowsEnvOverride (name, value) =
+            "set " <> cmdExeSetAssignmentQuote (name <> "=" <> value)
+        renderPosixEnvOverrideSpec (CompilerEnvOverrideSpec spans) =
+            let wordChars = shellWordCharsFromSpans spans
+             in maybe
+                    (renderPosixShellWordChars wordChars)
+                    (renderUniformPosixShellWordChars wordChars)
+                    (uniformShellWordContext wordChars)
+
+zipOverrideSpecs
+    :: [(String, String)]
+    -> Maybe [CompilerEnvOverrideSpec]
+    -> [((String, String), Maybe CompilerEnvOverrideSpec)]
+zipOverrideSpecs overrides maybeOverrideSpecs =
+    case maybeOverrideSpecs of
+        Just overrideSpecs
+            | length overrideSpecs == length overrides ->
+                zip overrides $ map Just overrideSpecs
+        _ ->
+            map (\override -> (override, Nothing)) overrides
+
+shellQuoteForHost :: String -> String -> String
+shellQuoteForHost hostOs
+    | hostOs == "mingw32" = cmdExeQuote
+    | otherwise = shellQuote
+
+cmdExeQuote :: String -> String
+cmdExeQuote =
+    quoteWindowsCommandWord . escapeWindowsDelayedExpansion . escapeWindowsPercentExpansion
+
+cmdExeSetAssignmentQuote :: String -> String
+cmdExeSetAssignmentQuote =
+    (\value -> "\"" <> value <> "\"")
+        . concatMap escapeWindowsSetAssignmentQuote
+        . escapeWindowsSetAssignmentExpansion
+
+escapeWindowsSetAssignmentQuote :: Char -> String
+escapeWindowsSetAssignmentQuote c
+    | c == '"' = "\"\""
+    | otherwise = [c]
+
+escapeWindowsPercentExpansion :: String -> String
+escapeWindowsPercentExpansion =
+    concatMap $ \c ->
+        if c == '%'
+            then "%%"
+            else [c]
+
+escapeWindowsDelayedExpansion :: String -> String
+escapeWindowsDelayedExpansion =
+    concatMap $ \c ->
+        if c == '!'
+            then "^!"
+            else [c]
+
+escapeWindowsSetAssignmentExpansion :: String -> String
+escapeWindowsSetAssignmentExpansion [] = []
+escapeWindowsSetAssignmentExpansion ('%':xs) =
+    case break (== '%') xs of
+        (name, '%':rest)
+            | isWindowsEnvironmentVariableName name ->
+                "!" <> name <> "!" <> escapeWindowsSetAssignmentExpansion rest
+        _ ->
+            "%%" <> escapeWindowsSetAssignmentExpansion xs
+escapeWindowsSetAssignmentExpansion ('!':xs) =
+    "^!" <> escapeWindowsSetAssignmentExpansion xs
+escapeWindowsSetAssignmentExpansion (x:xs) =
+    x : escapeWindowsSetAssignmentExpansion xs
+
+quoteWindowsCommandWord :: String -> String
+quoteWindowsCommandWord word =
+    "\"" <> go word <> "\""
+    where
+        go [] = []
+        go xs =
+            let (backslashes, rest) = span (== '\\') xs
+                escapedBackslashes n = replicate n '\\'
+             in case rest of
+                    [] ->
+                        escapedBackslashes (2 * length backslashes)
+                    '"':ys ->
+                        escapedBackslashes (2 * length backslashes + 1)
+                            <> "\""
+                            <> go ys
+                    c:ys ->
+                        backslashes <> [c] <> go ys
+
+uniformShellWordContext :: [ShellWordChar] -> Maybe PosixShellContext
+uniformShellWordContext [] = Nothing
+uniformShellWordContext (firstChar:remainingChars)
+    | all ((== shellWordCharContext firstChar) . shellWordCharContext) remainingChars =
+        Just $ shellWordCharContext firstChar
+    | otherwise =
+        Nothing
+
+renderUniformPosixShellWordChars :: [ShellWordChar] -> PosixShellContext -> String
+renderUniformPosixShellWordChars wordChars context =
+    case context of
+        PosixShellLiteralContext ->
+            shellQuote wordText
+        PosixShellDoubleQuotedContext ->
+            "\"" <> renderPosixDoubleQuotedExpandableText wordText <> "\""
+        PosixShellUnquotedContext ->
+            renderPosixShellWordChars wordChars
+    where
+        wordText = map shellWordCharText wordChars
+
+renderPosixDoubleQuotedExpandableText :: String -> String
+renderPosixDoubleQuotedExpandableText [] = []
+renderPosixDoubleQuotedExpandableText ('$':xs) =
+    case parsePosixParameterExpansion xs of
+        Just (parameterExpansion, remaining) ->
+            renderPosixParameterExpansion parameterExpansion
+                <> renderPosixDoubleQuotedExpandableText remaining
+        Nothing ->
+            "\\$" <> renderPosixDoubleQuotedExpandableText xs
+renderPosixDoubleQuotedExpandableText (x:xs) =
+    escapePosixDoubleQuotedChar x <> renderPosixDoubleQuotedExpandableText xs
+
+renderPosixShellWordChars :: [ShellWordChar] -> String
+renderPosixShellWordChars [] = shellQuote ""
+renderPosixShellWordChars chars =
+    renderNonEmptyPosixShellWordChars chars
+
+renderPosixParameterExpansionWord :: [ShellWordChar] -> String
+renderPosixParameterExpansionWord [] = []
+renderPosixParameterExpansionWord chars =
+    renderNonEmptyPosixShellWordChars chars
+
+renderNonEmptyPosixShellWordChars :: [ShellWordChar] -> String
+renderNonEmptyPosixShellWordChars [] = []
+renderNonEmptyPosixShellWordChars chars@(currentChar:_)
+    | shellWordCharContext currentChar == PosixShellLiteralContext =
+        let (segment, remainingChars) =
+                span
+                    ((== PosixShellLiteralContext) . shellWordCharContext)
+                    chars
+         in shellQuote (map shellWordCharText segment)
+                <> renderNonEmptyPosixShellWordChars remainingChars
+    | shellWordCharContext currentChar == PosixShellDoubleQuotedContext =
+        "\"" <> renderDoubleQuotedShellWordChars chars
+    | otherwise =
+        renderUnquotedShellWordChars chars
+
+renderDoubleQuotedShellWordChars :: [ShellWordChar] -> String
+renderDoubleQuotedShellWordChars [] = "\""
+renderDoubleQuotedShellWordChars chars@(currentChar:remainingChars)
+    | shellWordCharContext currentChar /= PosixShellDoubleQuotedContext =
+        "\"" <> renderNonEmptyPosixShellWordChars chars
+    | shellWordCharText currentChar == '$' =
+        case
+            parsePosixParameterExpansionInShellWord
+                PosixShellDoubleQuotedContext
+                remainingChars
+        of
+            Just (parameterExpansion, trailingChars) ->
+                renderPosixParameterExpansion parameterExpansion
+                    <> renderDoubleQuotedShellWordChars trailingChars
+            Nothing ->
+                "\\$" <> renderDoubleQuotedShellWordChars remainingChars
+    | shellWordCharText currentChar == '`' =
+        "\\`" <> renderDoubleQuotedShellWordChars remainingChars
+    | otherwise =
+        escapePosixDoubleQuotedChar (shellWordCharText currentChar)
+            <> renderDoubleQuotedShellWordChars remainingChars
+
+renderUnquotedShellWordChars :: [ShellWordChar] -> String
+renderUnquotedShellWordChars [] = []
+renderUnquotedShellWordChars chars@(currentChar:remainingChars)
+    | shellWordCharContext currentChar /= PosixShellUnquotedContext =
+        renderNonEmptyPosixShellWordChars chars
+    | shellWordCharText currentChar == '$' =
+        case
+            parsePosixParameterExpansionInShellWord
+                PosixShellUnquotedContext
+                remainingChars
+        of
+            Just (parameterExpansion, trailingChars) ->
+                renderPosixParameterExpansion parameterExpansion
+                    <> renderUnquotedShellWordChars trailingChars
+            Nothing ->
+                "\\$" <> renderUnquotedShellWordChars remainingChars
+    | shellWordCharText currentChar == '`' =
+        "\\`" <> renderUnquotedShellWordChars remainingChars
+    | otherwise =
+        escapePosixUnquotedChar (shellWordCharText currentChar)
+            <> renderUnquotedShellWordChars remainingChars
+
+escapePosixUnquotedChar :: Char -> String
+escapePosixUnquotedChar c
+    | isSpace c || c `elem` ['\\', '"', '\'', '#', ';', '&', '|', '<', '>', '*', '?', '[', ']', '(', ')', '{', '}'] =
+        ['\\', c]
+    | otherwise =
+        [c]
+
+renderPosixParameterExpansion :: PosixParameterExpansion -> String
+renderPosixParameterExpansion parameterExpansion =
+    case parameterExpansion of
+        PosixSimpleParameterExpansion _ name ->
+            '$' : name
+        PosixBracedParameterExpansion _ name Nothing ->
+            "${" <> name <> "}"
+        PosixBracedParameterExpansion _ name (Just (wordMode, word)) ->
+            "${"
+                <> name
+                <> renderPosixParameterExpansionWordMode wordMode
+                <> renderPosixParameterExpansionWord word
+                <> "}"
+
+renderPosixParameterExpansionWordMode :: PosixParameterExpansionWordMode -> String
+renderPosixParameterExpansionWordMode wordMode =
+    case wordMode of
+        PosixParameterUseDefaultWord colonSensitive ->
+            bool "-" ":-" colonSensitive
+        PosixParameterUseAlternativeWord colonSensitive ->
+            bool "+" ":+" colonSensitive
+
+escapePosixDoubleQuotedChar :: Char -> String
+escapePosixDoubleQuotedChar c
+    | c == '\\' =
+        "\\\\"
+    | c == '"' =
+        "\\\""
+    | c == '$' =
+        "\\$"
+    | c == '`' =
+        "\\`"
+    | otherwise =
+        [c]
+
+shellQuote :: String -> String
+shellQuote word =
+    "'" <> concatMap escapeShellQuoteChar word <> "'"
+    where
+        escapeShellQuoteChar '\''
+            = "'\"'\"'"
+        escapeShellQuoteChar c
+            = [c]
 
 readCompilerProcessWithExitCode :: CompilerCommand -> [String] -> IO (ExitCode, String, String)
 readCompilerProcessWithExitCode compiler extraArgs = do
-    processEnv <- compilerProcessEnv $ compilerEnvOverrides compiler
+    processEnv <- compilerProcessEnv compiler
     readCreateProcessWithExitCode
         (proc (compilerExecutable compiler) (compilerInvocationArgs compiler extraArgs))
             { env = processEnv
             }
         ""
 
-callCompilerProcess :: CompilerCommand -> [String] -> IO ()
-callCompilerProcess compiler extraArgs = do
-    processEnv <- compilerProcessEnv $ compilerEnvOverrides compiler
-    (_, _, _, processHandle) <- createProcess
+data CompilerOutputStream
+    = CompilerStdout
+    | CompilerStderr
+    deriving (Eq, Ord, Show)
+
+data CapturedCompilerOutputChunk = CapturedCompilerOutputChunk
+    { capturedCompilerOutputStream :: CompilerOutputStream
+    , capturedCompilerOutputIndex  :: Int
+    , capturedCompilerOutputChunk  :: CompilerOutputChunk
+    }
+
+type CapturedCompilerOutputKey = (CompilerOutputStream, Int)
+
+data SuppressibleCapturedCompilerOutputChunk = SuppressibleCapturedCompilerOutputChunk
+    { suppressibleCapturedCompilerOutputKeys  :: [CapturedCompilerOutputKey]
+    , suppressibleCapturedCompilerOutputChunk :: CompilerOutputChunk
+    }
+
+data CapturedCompilerOutputDecision
+    = RetainCapturedCompilerOutput
+    | SuppressCapturedCompilerOutput
+    deriving (Eq)
+
+data IncrementalStreamWarningSuppressionState = IncrementalStreamWarningSuppressionState
+    { incrementalStreamWarningPendingChunk  :: Maybe ([CapturedCompilerOutputKey], [B.ByteString])
+    , incrementalStreamWarningChunkFilter   :: IncrementalCompilerWarningFilter SuppressibleCapturedCompilerOutputChunk
+    }
+
+data IncrementalCompilerWarningSuppressionState = IncrementalCompilerWarningSuppressionState
+    { incrementalCompilerWarningStdoutState :: IncrementalStreamWarningSuppressionState
+    , incrementalCompilerWarningStderrState :: IncrementalStreamWarningSuppressionState
+    , incrementalCompilerWarningChunkFilter :: IncrementalCompilerWarningFilter SuppressibleCapturedCompilerOutputChunk
+    , incrementalCompilerWarningPending     :: [CapturedCompilerOutputChunk]
+    , incrementalCompilerWarningDecisions   :: Map.Map CapturedCompilerOutputKey CapturedCompilerOutputDecision
+    }
+
+readCompilerProcessWithExitCodeChunks
+    :: StdStream
+    -> CompilerCommand
+    -> [String]
+    -> IO (ExitCode, [CapturedCompilerOutputChunk])
+readCompilerProcessWithExitCodeChunks =
+    readCompilerProcessWithExitCodeChunksUntil (\_ -> pure False)
+
+readCompilerProcessWithExitCodeChunksUntil
+    :: (IO [CapturedCompilerOutputChunk] -> IO Bool)
+    -> StdStream
+    -> CompilerCommand
+    -> [String]
+    -> IO (ExitCode, [CapturedCompilerOutputChunk])
+readCompilerProcessWithExitCodeChunksUntil postExitDrainSatisfied stdinStream compiler extraArgs = do
+    capturedChunksRef <- newIORef []
+    let readCapturedChunks =
+            reverse <$> readIORef capturedChunksRef
+    (exitCode, ()) <-
+        foldCompilerProcessWithExitCodeChunksUntil
+            (postExitDrainSatisfied readCapturedChunks)
+            stdinStream
+            compiler
+            extraArgs
+            ()
+            (\() capturedChunk -> modifyIORef' capturedChunksRef (capturedChunk :) *> pure ())
+    capturedChunks <- readCapturedChunks
+    pure (exitCode, capturedChunks)
+
+foldCompilerProcessWithExitCodeChunks
+    :: StdStream
+    -> CompilerCommand
+    -> [String]
+    -> a
+    -> (a -> CapturedCompilerOutputChunk -> IO a)
+    -> IO (ExitCode, a)
+foldCompilerProcessWithExitCodeChunks =
+    foldCompilerProcessWithExitCodeChunksUntil (pure False)
+
+foldCompilerProcessWithExitCodeChunksUntil
+    :: IO Bool
+    -> StdStream
+    -> CompilerCommand
+    -> [String]
+    -> a
+    -> (a -> CapturedCompilerOutputChunk -> IO a)
+    -> IO (ExitCode, a)
+foldCompilerProcessWithExitCodeChunksUntil postExitDrainSatisfied stdinStream compiler extraArgs initialAcc accumulateChunk = do
+    processEnv <- compilerProcessEnv compiler
+    withCreateProcess
         (proc (compilerExecutable compiler) (compilerInvocationArgs compiler extraArgs))
             { env = processEnv
+            , std_in = stdinStream
+            , std_out = CreatePipe
+            , std_err = CreatePipe
+            , create_group = True
+            } $ \maybeInputHandle maybeStdoutHandle maybeStderrHandle processHandle -> do
+                maybe (pure ()) hClose maybeInputHandle
+                stdoutHandle <- requireCapturedHandle "stdout" maybeStdoutHandle
+                stderrHandle <- requireCapturedHandle "stderr" maybeStderrHandle
+                hSetBinaryMode stdoutHandle True
+                hSetBinaryMode stderrHandle True
+                processExitVar <- newTVarIO False
+                processGroupId <- compilerProcessGroupIdForHandle processHandle
+                capturedChunksVar <- newEmptyMVar
+                _ <- forkIO $
+                    putMVar capturedChunksVar =<< try
+                        ( foldCompilerOutputChunks
+                            processGroupId
+                            postExitDrainSatisfied
+                            processExitVar
+                            stdoutHandle
+                            stderrHandle
+                            initialAcc
+                            accumulateChunk
+                        )
+                exitCode <- waitForProcess processHandle
+                atomically $ writeTVar processExitVar True
+                capturedChunks <- takeCapturedResult capturedChunksVar
+                pure (exitCode, capturedChunks)
+
+readCompilerProcessWithExitCodeBytes :: CompilerCommand -> [String] -> IO (ExitCode, B.ByteString, B.ByteString)
+readCompilerProcessWithExitCodeBytes =
+    readCompilerProcessWithExitCodeBytesUntil (\_ -> pure False)
+
+readCompilerProcessWithExitCodeBytesUntil
+    :: (IO [CapturedCompilerOutputChunk] -> IO Bool)
+    -> CompilerCommand
+    -> [String]
+    -> IO (ExitCode, B.ByteString, B.ByteString)
+readCompilerProcessWithExitCodeBytesUntil postExitDrainSatisfied compiler extraArgs = do
+    (exitCode, capturedChunks) <-
+        readCompilerProcessWithExitCodeChunksUntil
+            postExitDrainSatisfied
+            CreatePipe
+            compiler
+            extraArgs
+    pure
+        ( exitCode
+        , compilerOutputBytesForStream CompilerStdout capturedChunks
+        , compilerOutputBytesForStream CompilerStderr capturedChunks
+        )
+
+requireCapturedHandle :: String -> Maybe Handle -> IO Handle
+requireCapturedHandle handleName =
+    maybe
+        ( ioError . userError $
+            "failed to capture compiler " <> handleName <> " output"
+        )
+        pure
+
+compilerProcessGroupIdForHandle :: ProcessHandle -> IO (Maybe ProcessGroupID)
+compilerProcessGroupIdForHandle =
+    fmap (fmap fromIntegral) . getPid
+
+compilerProcessGroupAlive :: Maybe ProcessGroupID -> IO Bool
+compilerProcessGroupAlive =
+    maybe
+        (pure False)
+        ( \processGroup ->
+            catchIOError
+                (signalProcessGroup nullSignal processGroup *> pure True)
+                ( \ioErr ->
+                    case ioeGetErrorType ioErr of
+                        NoSuchThing      -> pure False
+                        PermissionDenied -> pure True
+                        _                -> ioError ioErr
+                )
+        )
+
+waitForCompilerProcessPostExitCompletion :: Maybe ProcessGroupID -> IO Bool -> IO ()
+waitForCompilerProcessPostExitCompletion processGroupId postExitSatisfied =
+    go
+    where
+        go = do
+            postExitCompleted <- postExitSatisfied
+            processGroupStillAlive <- compilerProcessGroupAlive processGroupId
+            unless (postExitCompleted || not processGroupStillAlive) $ do
+                threadDelay compilerOutputDrainAfterExitPollMicros
+                go
+
+capturedCompilerTargetLineAvailableAfterExit :: IO [CapturedCompilerOutputChunk] -> IO Bool
+capturedCompilerTargetLineAvailableAfterExit readCapturedChunks = do
+    capturedChunks <- readCapturedChunks
+    pure $
+        any isCompleteTargetLine $
+            completeStdoutLines $
+                compilerOutputBytesForStream CompilerStdout capturedChunks
+    where
+        completeStdoutLines bytes
+            | B.null bytes = []
+            | B.last bytes == newlineByte = BC.lines bytes
+            | otherwise =
+                case BC.lines bytes of
+                    []     -> []
+                    lines' -> init lines'
+
+        isCompleteTargetLine line =
+            let trimmedLine = trimProbeLine line
+             in not (B.null trimmedLine)
+                    && BC.any (== '-') trimmedLine
+                    && not (BC.any isSpace trimmedLine)
+
+        trimProbeLine =
+            BC.reverse . BC.dropWhile isSpace . BC.reverse . BC.dropWhile isSpace
+
+waitForCompilerProcessGroupQuiescenceAfterExit :: IO Bool
+-- Fallback for compiler invocations that do not have a more specific readiness
+-- signal than process-group quiescence.
+waitForCompilerProcessGroupQuiescenceAfterExit = pure False
+
+stabilizePostExitPredicate :: IO Bool -> IO (IO Bool)
+stabilizePostExitPredicate isReady = do
+    wasReadyRef <- newIORef False
+    pure $ do
+        ready <- isReady
+        wasReady <- readIORef wasReadyRef
+        writeIORef wasReadyRef ready
+        pure (ready && wasReady)
+
+stabilizePostExitFingerprint :: Eq a => IO (Maybe a) -> IO (IO Bool)
+stabilizePostExitFingerprint readFingerprint = do
+    previousFingerprintRef <- newIORef Nothing
+    pure $ do
+        fingerprint <- readFingerprint
+        previousFingerprint <- readIORef previousFingerprintRef
+        writeIORef previousFingerprintRef fingerprint
+        pure $
+            case fingerprint of
+                Just _  -> previousFingerprint == fingerprint
+                Nothing -> False
+
+compilerObjectOutputFingerprintAfterExit :: FilePath -> IO (Maybe (Integer, Integer, Integer))
+compilerObjectOutputFingerprintAfterExit path =
+    catchIOError
+        (do
+            status <- getSymbolicLinkStatus path
+            let outputSize = fromIntegral (fileSize status) :: Integer
+            pure $
+                if isRegularFile status
+                    && outputSize > minimumStableCompilerObjectOutputBytes
+                    then
+                        Just
+                            ( fromIntegral (deviceID status)
+                            , fromIntegral (fileID status)
+                            , outputSize
+                            )
+                    else Nothing
+        )
+        (\ioErr -> if isDoesNotExistError ioErr then pure Nothing else ioError ioErr)
+
+stabilizeCompilerObjectOutputAfterExit :: FilePath -> IO (IO Bool)
+stabilizeCompilerObjectOutputAfterExit =
+    stabilizePostExitFingerprint . compilerObjectOutputFingerprintAfterExit
+
+foldCompilerOutputChunks
+    :: Maybe ProcessGroupID
+    -> IO Bool
+    -> TVar Bool
+    -> Handle
+    -> Handle
+    -> a
+    -> (a -> CapturedCompilerOutputChunk -> IO a)
+    -> IO a
+foldCompilerOutputChunks processGroupId postExitDrainSatisfied processExitVar stdoutHandle stderrHandle initialAcc accumulateChunk = do
+    stdoutFd <- handleToFd stdoutHandle
+    stderrFd <- handleToFd stderrHandle
+    -- Keep captured pipes nonblocking from the start so readiness races or
+    -- HUP-only wakeups cannot strand us in a blocking read while leaked child
+    -- writers still hold the pipe open.
+    setFdOption stdoutFd NonBlockingRead True
+    setFdOption stderrFd NonBlockingRead True
+    (stdoutReady, closeStdoutWait) <- threadWaitReadSTM stdoutFd
+    (stderrReady, closeStderrWait) <- threadWaitReadSTM stderrFd
+    let cleanup =
+            ignoreIOException closeStdoutWait
+                *> ignoreIOException closeStderrWait
+                *> ignoreIOException (closeFd stdoutFd)
+                *> ignoreIOException (closeFd stderrFd)
+    flip finally cleanup $
+        go
+            initialAcc
+            []
+            []
+            B.empty
+            B.empty
+            True
+            True
+            0
+            0
+            CompilerStdout
+            stdoutReady
+            stderrReady
+            stdoutFd
+            stderrFd
+    where
+        go acc stdoutPendingChunks stderrPendingChunks stdoutTrailingBytes stderrTrailingBytes stdoutOpen stderrOpen stdoutIndex stderrIndex preferredStream stdoutReady stderrReady stdoutFd stderrFd
+            | not stdoutOpen
+                && not stderrOpen
+                && null stdoutPendingChunks
+                && null stderrPendingChunks =
+                pure acc
+            | otherwise = do
+                shouldReadOtherStreamBeforePending <-
+                    shouldReadOtherOutputStreamBeforePending
+                        stdoutOpen
+                        stderrOpen
+                        stdoutPendingChunks
+                        stderrPendingChunks
+                        stdoutReady
+                        stderrReady
+                case
+                        ( shouldReadOtherStreamBeforePending
+                        , nextPendingOutputStream
+                            preferredStream
+                            stdoutPendingChunks
+                            stderrPendingChunks
+                        )
+                    of
+                    (False, Just outputStream) ->
+                        do
+                            (acc', stdoutPendingChunks', stderrPendingChunks', stdoutIndex', stderrIndex') <-
+                                emitPendingCapturedCompilerOutputChunk
+                                    outputStream
+                                    acc
+                                    stdoutPendingChunks
+                                    stderrPendingChunks
+                                    stdoutIndex
+                                    stderrIndex
+                            let preferredStream'
+                                    | stdoutOpen && stderrOpen = flipCompilerOutputStream outputStream
+                                    | otherwise = preferredStream
+                            yield
+                            go
+                                acc'
+                                stdoutPendingChunks'
+                                stderrPendingChunks'
+                                stdoutTrailingBytes
+                                stderrTrailingBytes
+                                stdoutOpen
+                                stderrOpen
+                                stdoutIndex'
+                                stderrIndex'
+                                preferredStream'
+                                stdoutReady
+                                stderrReady
+                                stdoutFd
+                                stderrFd
+                    _ -> do
+                        maybeOutputStream <-
+                            waitForNextOutputStreamOrExit
+                                processExitVar
+                                preferredStream
+                                stdoutOpen
+                                stderrOpen
+                                stdoutReady
+                                stderrReady
+                        case maybeOutputStream of
+                            Nothing -> do
+                                ( acc'
+                                    , stdoutPendingChunks'
+                                    , stderrPendingChunks'
+                                    , stdoutIndex'
+                                    , stderrIndex'
+                                    ) <-
+                                        drainCompilerOutputAfterExit
+                                            acc
+                                            stdoutPendingChunks
+                                            stderrPendingChunks
+                                            stdoutTrailingBytes
+                                            stderrTrailingBytes
+                                            stdoutOpen
+                                            stderrOpen
+                                            stdoutIndex
+                                            stderrIndex
+                                            preferredStream
+                                            stdoutReady
+                                            stderrReady
+                                            stdoutFd
+                                            stderrFd
+                                go
+                                    acc'
+                                    stdoutPendingChunks'
+                                    stderrPendingChunks'
+                                    B.empty
+                                    B.empty
+                                    False
+                                    False
+                                    stdoutIndex'
+                                    stderrIndex'
+                                    preferredStream
+                                    stdoutReady
+                                    stderrReady
+                                    stdoutFd
+                                    stderrFd
+                            Just outputStream -> do
+                                (acc', stdoutTrailingBytes', stderrTrailingBytes', stdoutIndex', stderrIndex') <-
+                                    flushPendingTrailingOutputChunkBefore
+                                        outputStream
+                                        acc
+                                        stdoutTrailingBytes
+                                        stderrTrailingBytes
+                                        stdoutIndex
+                                        stderrIndex
+                                let (outputFd, trailingBytes) =
+                                        case outputStream of
+                                            CompilerStdout ->
+                                                (stdoutFd, stdoutTrailingBytes')
+                                            CompilerStderr ->
+                                                (stderrFd, stderrTrailingBytes')
+                                maybeReadResult <- readCompilerOutputByte outputFd
+                                case maybeReadResult of
+                                    Nothing -> case outputStream of
+                                        CompilerStdout ->
+                                            let (stdoutPendingChunks', stdoutIndex'') =
+                                                    queuePendingCapturedCompilerOutputChunks
+                                                        CompilerStdout
+                                                        stdoutIndex'
+                                                        (finalCompilerOutputChunk stdoutTrailingBytes')
+                                                        stdoutPendingChunks
+                                             in go
+                                                    acc'
+                                                    stdoutPendingChunks'
+                                                    stderrPendingChunks
+                                                    B.empty
+                                                    stderrTrailingBytes'
+                                                    False
+                                                    stderrOpen
+                                                    stdoutIndex''
+                                                    stderrIndex'
+                                                    preferredStream
+                                                    stdoutReady
+                                                    stderrReady
+                                                    stdoutFd
+                                                    stderrFd
+                                        CompilerStderr ->
+                                            let (stderrPendingChunks', stderrIndex'') =
+                                                    queuePendingCapturedCompilerOutputChunks
+                                                        CompilerStderr
+                                                        stderrIndex'
+                                                        (finalCompilerOutputChunk stderrTrailingBytes')
+                                                        stderrPendingChunks
+                                             in go
+                                                    acc'
+                                                    stdoutPendingChunks
+                                                    stderrPendingChunks'
+                                                    stdoutTrailingBytes'
+                                                    B.empty
+                                                    stdoutOpen
+                                                    False
+                                                    stdoutIndex'
+                                                    stderrIndex''
+                                                    preferredStream
+                                                    stdoutReady
+                                                    stderrReady
+                                                    stdoutFd
+                                                    stderrFd
+                                    Just CompilerOutputReadEOF -> case outputStream of
+                                        CompilerStdout ->
+                                            let (stdoutPendingChunks', stdoutIndex'') =
+                                                    queuePendingCapturedCompilerOutputChunks
+                                                        CompilerStdout
+                                                        stdoutIndex'
+                                                        (finalCompilerOutputChunk stdoutTrailingBytes')
+                                                        stdoutPendingChunks
+                                             in go
+                                                    acc'
+                                                    stdoutPendingChunks'
+                                                    stderrPendingChunks
+                                                    B.empty
+                                                    stderrTrailingBytes'
+                                                    False
+                                                    stderrOpen
+                                                    stdoutIndex''
+                                                    stderrIndex'
+                                                    preferredStream
+                                                    stdoutReady
+                                                    stderrReady
+                                                    stdoutFd
+                                                    stderrFd
+                                        CompilerStderr ->
+                                            let (stderrPendingChunks', stderrIndex'') =
+                                                    queuePendingCapturedCompilerOutputChunks
+                                                        CompilerStderr
+                                                        stderrIndex'
+                                                        (finalCompilerOutputChunk stderrTrailingBytes')
+                                                        stderrPendingChunks
+                                             in go
+                                                    acc'
+                                                    stdoutPendingChunks
+                                                    stderrPendingChunks'
+                                                    stdoutTrailingBytes'
+                                                    B.empty
+                                                    stdoutOpen
+                                                    False
+                                                    stdoutIndex'
+                                                    stderrIndex''
+                                                    preferredStream
+                                                    stdoutReady
+                                                    stderrReady
+                                                    stdoutFd
+                                                    stderrFd
+                                    Just CompilerOutputReadWouldBlock -> do
+                                        yield
+                                        go
+                                            acc'
+                                            stdoutPendingChunks
+                                            stderrPendingChunks
+                                            stdoutTrailingBytes'
+                                            stderrTrailingBytes'
+                                            stdoutOpen
+                                            stderrOpen
+                                            stdoutIndex'
+                                            stderrIndex'
+                                            preferredStream
+                                            stdoutReady
+                                            stderrReady
+                                            stdoutFd
+                                            stderrFd
+                                    Just (CompilerOutputReadBytes bytes) -> do
+                                        let (completedChunks, remainingTrailingBytes) =
+                                                splitCompleteCompilerOutputChunks (trailingBytes <> bytes)
+                                            readyChunks =
+                                                completedChunks
+                                                    <> finalCompilerOutputChunk remainingTrailingBytes
+                                            readyChunkCount = length readyChunks
+                                        ( acc''
+                                            , stdoutPendingChunks'
+                                            , stderrPendingChunks'
+                                            , stdoutIndex''
+                                            , stderrIndex''
+                                            ) <-
+                                                captureCompletedCompilerOutputChunks
+                                                    outputStream
+                                                    readyChunks
+                                                    acc'
+                                                    stdoutPendingChunks
+                                                    stderrPendingChunks
+                                                    stdoutIndex'
+                                                    stderrIndex'
+                                        let preferredStream'
+                                                | stdoutOpen && stderrOpen = flipCompilerOutputStream outputStream
+                                                | otherwise = preferredStream
+                                        when (readyChunkCount > 0) yield
+                                        go
+                                            acc''
+                                            stdoutPendingChunks'
+                                            stderrPendingChunks'
+                                            B.empty
+                                            B.empty
+                                            stdoutOpen
+                                            stderrOpen
+                                            stdoutIndex''
+                                            stderrIndex''
+                                            preferredStream'
+                                            stdoutReady
+                                            stderrReady
+                                            stdoutFd
+                                            stderrFd
+
+        nextPendingOutputStream preferredStream stdoutPendingChunks stderrPendingChunks =
+            case preferredStream of
+                CompilerStdout
+                    | not (null stdoutPendingChunks) -> Just CompilerStdout
+                    | not (null stderrPendingChunks) -> Just CompilerStderr
+                CompilerStderr
+                    | not (null stderrPendingChunks) -> Just CompilerStderr
+                    | not (null stdoutPendingChunks) -> Just CompilerStdout
+                _ ->
+                    Nothing
+
+        shouldReadOtherOutputStreamBeforePending stdoutOpen stderrOpen stdoutPendingChunks stderrPendingChunks stdoutReady stderrReady =
+            case (stdoutOpen, stderrOpen, stdoutPendingChunks, stderrPendingChunks) of
+                (True, True, _ : _, []) ->
+                    outputStreamReadyNow stderrReady
+                (True, True, [], _ : _) ->
+                    outputStreamReadyNow stdoutReady
+                _ ->
+                    pure False
+
+        outputStreamReadyNow ready =
+            atomically $ (ready >> pure True) `orElse` pure False
+
+        captureCompletedCompilerOutputChunks outputStream completedChunks acc stdoutPendingChunks stderrPendingChunks stdoutIndex stderrIndex =
+            case outputStream of
+                CompilerStdout ->
+                    let completedChunkCount = length completedChunks
+                     in do
+                        (acc', stdoutPendingChunks') <-
+                            captureCompletedCompilerOutputChunksForStream
+                                CompilerStdout
+                                stdoutIndex
+                                completedChunks
+                                acc
+                                stdoutPendingChunks
+                        pure
+                            ( acc'
+                            , stdoutPendingChunks'
+                            , stderrPendingChunks
+                            , stdoutIndex + completedChunkCount
+                            , stderrIndex
+                            )
+                CompilerStderr ->
+                    let completedChunkCount = length completedChunks
+                     in do
+                        (acc', stderrPendingChunks') <-
+                            captureCompletedCompilerOutputChunksForStream
+                                CompilerStderr
+                                stderrIndex
+                                completedChunks
+                                acc
+                                stderrPendingChunks
+                        pure
+                            ( acc'
+                            , stdoutPendingChunks
+                            , stderrPendingChunks'
+                            , stdoutIndex
+                            , stderrIndex + completedChunkCount
+                            )
+
+        captureCompletedCompilerOutputChunksForStream outputStream startIndex completedChunks acc pendingChunks =
+            case buildCapturedCompilerOutputChunks outputStream startIndex completedChunks of
+                nextChunk:remainingChunks
+                    | null pendingChunks ->
+                        do
+                            acc' <- accumulateChunk acc nextChunk
+                            pure (acc', remainingChunks)
+                    | otherwise ->
+                        pure (acc, pendingChunks <> (nextChunk : remainingChunks))
+                [] ->
+                    pure (acc, pendingChunks)
+
+        queuePendingCapturedCompilerOutputChunks outputStream startIndex outputChunks pendingChunks =
+            let indexedChunks =
+                    buildCapturedCompilerOutputChunks outputStream startIndex outputChunks
+             in ( pendingChunks <> indexedChunks
+                , startIndex + length indexedChunks
+                )
+
+        emitPendingCapturedCompilerOutputChunk outputStream acc stdoutPendingChunks stderrPendingChunks stdoutIndex stderrIndex =
+            case outputStream of
+                CompilerStdout ->
+                    case stdoutPendingChunks of
+                        nextChunk:remainingChunks ->
+                            do
+                                acc' <- accumulateChunk acc nextChunk
+                                pure
+                                    ( acc'
+                                    , remainingChunks
+                                    , stderrPendingChunks
+                                    , stdoutIndex
+                                    , stderrIndex
+                                    )
+                        [] ->
+                            pure (acc, [], stderrPendingChunks, stdoutIndex, stderrIndex)
+                CompilerStderr ->
+                    case stderrPendingChunks of
+                        nextChunk:remainingChunks ->
+                            do
+                                acc' <- accumulateChunk acc nextChunk
+                                pure
+                                    ( acc'
+                                    , stdoutPendingChunks
+                                    , remainingChunks
+                                    , stdoutIndex
+                                    , stderrIndex
+                                    )
+                        [] ->
+                            pure (acc, stdoutPendingChunks, [], stdoutIndex, stderrIndex)
+
+        flushPendingTrailingOutputChunkBefore outputStream acc stdoutTrailingBytes stderrTrailingBytes stdoutIndex stderrIndex =
+            case outputStream of
+                CompilerStdout -> do
+                    acc' <- emitTrailingOutputChunk accumulateChunk CompilerStderr stderrIndex stderrTrailingBytes acc
+                    pure
+                        ( acc'
+                        , stdoutTrailingBytes
+                        , B.empty
+                        , stdoutIndex
+                        , stderrIndex + pendingTrailingOutputChunkCount stderrTrailingBytes
+                        )
+                CompilerStderr -> do
+                    acc' <- emitTrailingOutputChunk accumulateChunk CompilerStdout stdoutIndex stdoutTrailingBytes acc
+                    pure
+                        ( acc'
+                        , B.empty
+                        , stderrTrailingBytes
+                        , stdoutIndex + pendingTrailingOutputChunkCount stdoutTrailingBytes
+                        , stderrIndex
+                        )
+
+        waitForNextOutputStreamOrExit
+            :: TVar Bool
+            -> CompilerOutputStream
+            -> Bool
+            -> Bool
+            -> STM ()
+            -> STM ()
+            -> IO (Maybe CompilerOutputStream)
+        waitForNextOutputStreamOrExit processExitVar' preferredStream stdoutOpen stderrOpen stdoutReady stderrReady =
+            atomically $
+                waitForNextOutputStreamStm
+                    preferredStream
+                    stdoutOpen
+                    stderrOpen
+                    stdoutReady
+                    stderrReady
+                    `orElse` waitForProcessExit processExitVar'
+
+        waitForNextOutputStreamStm
+            :: CompilerOutputStream
+            -> Bool
+            -> Bool
+            -> STM ()
+            -> STM ()
+            -> STM (Maybe CompilerOutputStream)
+        waitForNextOutputStreamStm preferredStream stdoutOpen stderrOpen stdoutReady stderrReady
+            | stdoutOpen && stderrOpen =
+                case preferredStream of
+                    CompilerStdout ->
+                        (stdoutReady >> pure (Just CompilerStdout))
+                            `orElse` (stderrReady >> pure (Just CompilerStderr))
+                    CompilerStderr ->
+                        (stderrReady >> pure (Just CompilerStderr))
+                            `orElse` (stdoutReady >> pure (Just CompilerStdout))
+            | stdoutOpen =
+                stdoutReady >> pure (Just CompilerStdout)
+            | stderrOpen =
+                stderrReady >> pure (Just CompilerStderr)
+            | otherwise =
+                pure Nothing
+
+        waitForProcessExit :: TVar Bool -> STM (Maybe CompilerOutputStream)
+        waitForProcessExit processExitVar' = do
+            processExited <- readTVar processExitVar'
+            check processExited
+            pure Nothing
+
+        -- Keep draining until the wrapper's meaningful side effects are ready.
+        -- Once the caller-specific completion condition is satisfied, stop
+        -- waiting for EOF from inherited pipe holders and finish with the bytes
+        -- that were already observed.
+        drainCompilerOutputAfterExit
+            acc
+            stdoutPendingChunks
+            stderrPendingChunks
+            stdoutTrailingBytes
+            stderrTrailingBytes
+            stdoutOpen
+            stderrOpen
+            stdoutIndex
+            stderrIndex
+            preferredStream
+            stdoutReady
+            stderrReady
+            stdoutFd
+            stderrFd = do
+                when stdoutOpen $ setFdOption stdoutFd NonBlockingRead True
+                when stderrOpen $ setFdOption stderrFd NonBlockingRead True
+                drainCapturedCompilerOutputAfterExit
+                    acc
+                    stdoutPendingChunks
+                    stderrPendingChunks
+                    stdoutTrailingBytes
+                    stderrTrailingBytes
+                    stdoutOpen
+                    stderrOpen
+                    stdoutIndex
+                    stderrIndex
+                    preferredStream
+                    stdoutReady
+                    stderrReady
+                    stdoutFd
+                    stderrFd
+
+        drainCapturedCompilerOutputAfterExit
+            acc
+            stdoutPendingChunks
+            stderrPendingChunks
+            stdoutTrailingBytes
+            stderrTrailingBytes
+            stdoutOpen
+            stderrOpen
+            stdoutIndex
+            stderrIndex
+            preferredStream
+            stdoutReady
+            stderrReady
+            stdoutFd
+            stderrFd
+                | not stdoutOpen && not stderrOpen =
+                    let (stdoutPendingChunks', stdoutIndex') =
+                            queuePendingCapturedCompilerOutputChunks
+                                CompilerStdout
+                                stdoutIndex
+                                (finalCompilerOutputChunk stdoutTrailingBytes)
+                                stdoutPendingChunks
+                        (stderrPendingChunks', stderrIndex') =
+                            queuePendingCapturedCompilerOutputChunks
+                                CompilerStderr
+                                stderrIndex
+                                (finalCompilerOutputChunk stderrTrailingBytes)
+                                stderrPendingChunks
+                     in pure
+                            ( acc
+                            , stdoutPendingChunks'
+                            , stderrPendingChunks'
+                            , stdoutIndex'
+                            , stderrIndex'
+                            )
+                | otherwise =
+                    case nextDrainOutputStream preferredStream stdoutOpen stderrOpen of
+                        Nothing ->
+                            let (stdoutPendingChunks', stdoutIndex') =
+                                    queuePendingCapturedCompilerOutputChunks
+                                        CompilerStdout
+                                        stdoutIndex
+                                        (finalCompilerOutputChunk stdoutTrailingBytes)
+                                        stdoutPendingChunks
+                                (stderrPendingChunks', stderrIndex') =
+                                    queuePendingCapturedCompilerOutputChunks
+                                        CompilerStderr
+                                        stderrIndex
+                                        (finalCompilerOutputChunk stderrTrailingBytes)
+                                        stderrPendingChunks
+                             in pure
+                                    ( acc
+                                    , stdoutPendingChunks'
+                                    , stderrPendingChunks'
+                                    , stdoutIndex'
+                                    , stderrIndex'
+                                    )
+                        Just outputStream -> do
+                            (acc', stdoutTrailingBytes', stderrTrailingBytes', stdoutIndex', stderrIndex') <-
+                                flushPendingTrailingOutputChunkBefore
+                                    outputStream
+                                    acc
+                                    stdoutTrailingBytes
+                                    stderrTrailingBytes
+                                    stdoutIndex
+                                    stderrIndex
+                            let (outputFd, trailingBytes) =
+                                    case outputStream of
+                                        CompilerStdout ->
+                                            (stdoutFd, stdoutTrailingBytes')
+                                        CompilerStderr ->
+                                            (stderrFd, stderrTrailingBytes')
+                            maybeBytes <- readDrainedCompilerOutputByte outputFd
+                            case maybeBytes of
+                                Nothing ->
+                                    closeDrainedCompilerOutputStreamAfterExit
+                                        outputStream
+                                        acc'
+                                        stdoutPendingChunks
+                                        stderrPendingChunks
+                                        stdoutTrailingBytes'
+                                        stderrTrailingBytes'
+                                        stdoutOpen
+                                        stderrOpen
+                                        stdoutIndex'
+                                        stderrIndex'
+                                        preferredStream
+                                        stdoutReady
+                                        stderrReady
+                                        stdoutFd
+                                        stderrFd
+                                Just CompilerOutputReadEOF ->
+                                    closeDrainedCompilerOutputStreamAfterExit
+                                        outputStream
+                                        acc'
+                                        stdoutPendingChunks
+                                        stderrPendingChunks
+                                        stdoutTrailingBytes'
+                                        stderrTrailingBytes'
+                                        stdoutOpen
+                                        stderrOpen
+                                        stdoutIndex'
+                                        stderrIndex'
+                                        preferredStream
+                                        stdoutReady
+                                        stderrReady
+                                        stdoutFd
+                                        stderrFd
+                                Just CompilerOutputReadWouldBlock -> do
+                                    postExitSatisfied <- postExitDrainSatisfied
+                                    processGroupStillAlive <- compilerProcessGroupAlive processGroupId
+                                    if postExitSatisfied || not processGroupStillAlive
+                                        then
+                                            closeDrainedCompilerOutputStreamAfterExit
+                                                outputStream
+                                                acc'
+                                                stdoutPendingChunks
+                                                stderrPendingChunks
+                                                stdoutTrailingBytes'
+                                                stderrTrailingBytes'
+                                                stdoutOpen
+                                                stderrOpen
+                                                stdoutIndex'
+                                                stderrIndex'
+                                                preferredStream
+                                                stdoutReady
+                                                stderrReady
+                                                stdoutFd
+                                                stderrFd
+                                        else do
+                                            maybeOutputStream <-
+                                                waitForDrainedCompilerOutputStreamAfterExit
+                                                    preferredStream
+                                                    stdoutOpen
+                                                    stderrOpen
+                                                    stdoutReady
+                                                    stderrReady
+                                            case maybeOutputStream of
+                                                Just preferredStream' ->
+                                                    drainCapturedCompilerOutputAfterExit
+                                                        acc'
+                                                        stdoutPendingChunks
+                                                        stderrPendingChunks
+                                                        stdoutTrailingBytes'
+                                                        stderrTrailingBytes'
+                                                        stdoutOpen
+                                                        stderrOpen
+                                                        stdoutIndex'
+                                                        stderrIndex'
+                                                        preferredStream'
+                                                        stdoutReady
+                                                        stderrReady
+                                                        stdoutFd
+                                                        stderrFd
+                                                Nothing ->
+                                                    drainCapturedCompilerOutputAfterExit
+                                                        acc'
+                                                        stdoutPendingChunks
+                                                        stderrPendingChunks
+                                                        stdoutTrailingBytes'
+                                                        stderrTrailingBytes'
+                                                        stdoutOpen
+                                                        stderrOpen
+                                                        stdoutIndex'
+                                                        stderrIndex'
+                                                        preferredStream
+                                                        stdoutReady
+                                                        stderrReady
+                                                        stdoutFd
+                                                        stderrFd
+                                Just (CompilerOutputReadBytes bytes) -> do
+                                    let (completedChunks, remainingTrailingBytes) =
+                                            splitCompleteCompilerOutputChunks (trailingBytes <> bytes)
+                                        readyChunks =
+                                            completedChunks
+                                                <> finalCompilerOutputChunk remainingTrailingBytes
+                                        readyChunkCount = length readyChunks
+                                    ( acc''
+                                        , stdoutPendingChunks'
+                                        , stderrPendingChunks'
+                                        , stdoutIndex''
+                                        , stderrIndex''
+                                        ) <-
+                                            captureCompletedCompilerOutputChunks
+                                                outputStream
+                                                readyChunks
+                                                acc'
+                                                stdoutPendingChunks
+                                                stderrPendingChunks
+                                                stdoutIndex'
+                                                stderrIndex'
+                                    let preferredStream'
+                                            | stdoutOpen && stderrOpen = flipCompilerOutputStream outputStream
+                                            | otherwise = preferredStream
+                                    if readyChunkCount > 0
+                                        then
+                                            drainCapturedCompilerOutputAfterExit
+                                                acc''
+                                                stdoutPendingChunks'
+                                                stderrPendingChunks'
+                                                B.empty
+                                                B.empty
+                                                stdoutOpen
+                                                stderrOpen
+                                                stdoutIndex''
+                                                stderrIndex''
+                                                preferredStream'
+                                                stdoutReady
+                                                stderrReady
+                                                stdoutFd
+                                                stderrFd
+                                        else
+                                            closeDrainedCompilerOutputStreamAfterExit
+                                                outputStream
+                                                acc''
+                                                stdoutPendingChunks'
+                                                stderrPendingChunks'
+                                                B.empty
+                                                B.empty
+                                                stdoutOpen
+                                                stderrOpen
+                                                stdoutIndex''
+                                                stderrIndex''
+                                                preferredStream'
+                                                stdoutReady
+                                                stderrReady
+                                                stdoutFd
+                                                stderrFd
+
+        closeDrainedCompilerOutputStreamAfterExit
+            outputStream
+            acc
+            stdoutPendingChunks
+            stderrPendingChunks
+            stdoutTrailingBytes
+            stderrTrailingBytes
+            stdoutOpen
+            stderrOpen
+            stdoutIndex
+            stderrIndex
+            preferredStream
+            stdoutReady
+            stderrReady
+            stdoutFd
+            stderrFd =
+                case outputStream of
+                    CompilerStdout ->
+                        let (stdoutPendingChunks', stdoutIndex') =
+                                queuePendingCapturedCompilerOutputChunks
+                                    CompilerStdout
+                                    stdoutIndex
+                                    (finalCompilerOutputChunk stdoutTrailingBytes)
+                                    stdoutPendingChunks
+                         in drainCapturedCompilerOutputAfterExit
+                                acc
+                                stdoutPendingChunks'
+                                stderrPendingChunks
+                                B.empty
+                                stderrTrailingBytes
+                                False
+                                stderrOpen
+                                stdoutIndex'
+                                stderrIndex
+                                preferredStream
+                                stdoutReady
+                                stderrReady
+                                stdoutFd
+                                stderrFd
+                    CompilerStderr ->
+                        let (stderrPendingChunks', stderrIndex') =
+                                queuePendingCapturedCompilerOutputChunks
+                                    CompilerStderr
+                                    stderrIndex
+                                    (finalCompilerOutputChunk stderrTrailingBytes)
+                                    stderrPendingChunks
+                         in drainCapturedCompilerOutputAfterExit
+                                acc
+                                stdoutPendingChunks
+                                stderrPendingChunks'
+                                stdoutTrailingBytes
+                                B.empty
+                                stdoutOpen
+                                False
+                                stdoutIndex
+                                stderrIndex'
+                                preferredStream
+                                stdoutReady
+                                stderrReady
+                                stdoutFd
+                                stderrFd
+
+        nextDrainOutputStream preferredStream stdoutOpen stderrOpen =
+            case preferredStream of
+                CompilerStdout
+                    | stdoutOpen -> Just CompilerStdout
+                    | stderrOpen -> Just CompilerStderr
+                CompilerStderr
+                    | stderrOpen -> Just CompilerStderr
+                    | stdoutOpen -> Just CompilerStdout
+                _ ->
+                    Nothing
+
+        waitForDrainedCompilerOutputStreamAfterExit
+            :: CompilerOutputStream
+            -> Bool
+            -> Bool
+            -> STM ()
+            -> STM ()
+            -> IO (Maybe CompilerOutputStream)
+        waitForDrainedCompilerOutputStreamAfterExit preferredStream stdoutOpen stderrOpen stdoutReady stderrReady =
+            fromMaybe Nothing
+                <$> timeout
+                    compilerOutputDrainAfterExitPollMicros
+                    (atomically $ waitForNextOutputStreamStm preferredStream stdoutOpen stderrOpen stdoutReady stderrReady)
+
+        readCompilerOutputByte fd =
+            catchIOError
+                ( do
+                    bytes <- PB.fdRead fd (fromIntegral compilerOutputReadChunkSize)
+                    pure . Just $
+                        if B.null bytes
+                            then CompilerOutputReadEOF
+                            else CompilerOutputReadBytes bytes
+                )
+                ( \ioErr ->
+                    if isEOFError ioErr
+                        then pure Nothing
+                        else
+                            if ioeGetErrorType ioErr == ResourceExhausted
+                                then pure $ Just CompilerOutputReadWouldBlock
+                                else ioError ioErr
+                )
+
+        readDrainedCompilerOutputByte fd =
+            catchIOError
+                ( do
+                    bytes <- PB.fdRead fd (fromIntegral compilerOutputReadChunkSize)
+                    pure . Just $
+                        if B.null bytes
+                            then CompilerOutputReadEOF
+                            else CompilerOutputReadBytes bytes
+                )
+                ( \ioErr ->
+                    if isEOFError ioErr
+                        then pure Nothing
+                        else
+                            if ioeGetErrorType ioErr == ResourceExhausted
+                                then pure $ Just CompilerOutputReadWouldBlock
+                                else ioError ioErr
+                )
+
+compilerOutputReadChunkSize :: Int
+compilerOutputReadChunkSize = 4096
+
+compilerOutputDrainAfterExitPollMicros :: Int
+compilerOutputDrainAfterExitPollMicros = 50000
+
+minimumStableCompilerObjectOutputBytes :: Integer
+minimumStableCompilerObjectOutputBytes = 20
+
+data CompilerOutputReadResult
+    = CompilerOutputReadEOF
+    | CompilerOutputReadWouldBlock
+    | CompilerOutputReadBytes !B.ByteString
+
+pendingTrailingOutputChunkCount :: B.ByteString -> Int
+pendingTrailingOutputChunkCount trailingBytes
+    | B.null trailingBytes =
+        0
+    | otherwise =
+        1
+
+buildCapturedCompilerOutputChunks
+    :: CompilerOutputStream
+    -> Int
+    -> [CompilerOutputChunk]
+    -> [CapturedCompilerOutputChunk]
+buildCapturedCompilerOutputChunks outputStream startIndex outputChunks =
+    zipWith mkCapturedChunk [startIndex ..] outputChunks
+    where
+        mkCapturedChunk outputIndex outputChunk =
+            CapturedCompilerOutputChunk
+                { capturedCompilerOutputStream = outputStream
+                , capturedCompilerOutputIndex = outputIndex
+                , capturedCompilerOutputChunk = outputChunk
+                }
+
+emitTrailingOutputChunk
+    :: (a -> CapturedCompilerOutputChunk -> IO a)
+    -> CompilerOutputStream
+    -> Int
+    -> B.ByteString
+    -> a
+    -> IO a
+emitTrailingOutputChunk accumulateChunk outputStream nextIndex trailingBytes acc =
+    foldM
+        accumulateChunk
+        acc
+        (buildCapturedCompilerOutputChunks outputStream nextIndex (finalCompilerOutputChunk trailingBytes))
+
+flipCompilerOutputStream :: CompilerOutputStream -> CompilerOutputStream
+flipCompilerOutputStream = \case
+    CompilerStdout -> CompilerStderr
+    CompilerStderr -> CompilerStdout
+
+emptyIncrementalStreamWarningSuppressionState :: IncrementalStreamWarningSuppressionState
+emptyIncrementalStreamWarningSuppressionState =
+    IncrementalStreamWarningSuppressionState
+        { incrementalStreamWarningPendingChunk = Nothing
+        , incrementalStreamWarningChunkFilter = emptyIncrementalCompilerWarningFilter
+        }
+
+emptyIncrementalCompilerWarningSuppressionState :: IncrementalCompilerWarningSuppressionState
+emptyIncrementalCompilerWarningSuppressionState =
+    IncrementalCompilerWarningSuppressionState
+        { incrementalCompilerWarningStdoutState = emptyIncrementalStreamWarningSuppressionState
+        , incrementalCompilerWarningStderrState = emptyIncrementalStreamWarningSuppressionState
+        , incrementalCompilerWarningChunkFilter = emptyIncrementalCompilerWarningFilter
+        , incrementalCompilerWarningPending = []
+        , incrementalCompilerWarningDecisions = Map.empty
+        }
+
+processIncrementalCompilerWarningSuppressionChunk
+    :: Handle
+    -> Handle
+    -> IncrementalCompilerWarningSuppressionState
+    -> CapturedCompilerOutputChunk
+    -> IO IncrementalCompilerWarningSuppressionState
+processIncrementalCompilerWarningSuppressionChunk stdoutHandle stderrHandle suppressionState capturedChunk =
+    flushIncrementalCompilerWarningSuppressionState stdoutHandle stderrHandle $
+        applyCompilerWarningFilterDecisions decisions suppressionState''
+    where
+        outputStream = capturedCompilerOutputStream capturedChunk
+        streamState =
+            streamWarningSuppressionState outputStream suppressionState
+        (streamState', maybeCompletedChunk, localDecisions) =
+            feedIncrementalStreamWarningSuppressionState streamState capturedChunk
+        suppressionState' =
+            setStreamWarningSuppressionState outputStream streamState' $
+                suppressionState
+                    { incrementalCompilerWarningPending =
+                        incrementalCompilerWarningPending suppressionState <> [capturedChunk]
+                    }
+        (chunkFilter', completedChunkDecisions) =
+            case maybeCompletedChunk of
+                Nothing ->
+                    (incrementalCompilerWarningChunkFilter suppressionState', [])
+                Just completedChunk ->
+                    feedIncrementalCompilerWarningFilter
+                        (fst . suppressibleCapturedCompilerOutputChunk)
+                        (snd . suppressibleCapturedCompilerOutputChunk)
+                        (incrementalCompilerWarningChunkFilter suppressionState')
+                        [completedChunk]
+        suppressionState'' =
+            suppressionState'
+                { incrementalCompilerWarningChunkFilter = chunkFilter'
+                }
+        decisions =
+            localDecisions <> completedChunkDecisions
+
+finalizeIncrementalCompilerWarningSuppression
+    :: Handle
+    -> Handle
+    -> IncrementalCompilerWarningSuppressionState
+    -> IO IncrementalCompilerWarningSuppressionState
+finalizeIncrementalCompilerWarningSuppression stdoutHandle stderrHandle suppressionState =
+    flushIncrementalCompilerWarningSuppressionState stdoutHandle stderrHandle $
+        applyCompilerWarningFilterDecisions finalDecisions suppressionState'
+    where
+        pendingPartialChunks =
+            orderPendingSuppressibleChunks
+                (incrementalCompilerWarningPending suppressionState)
+                (mapMaybe streamPendingSuppressibleCapturedCompilerOutputChunk
+                    [ incrementalCompilerWarningStdoutState suppressionState
+                    , incrementalCompilerWarningStderrState suppressionState
+                    ]
+                )
+        (chunkFilter', pendingChunkDecisions) =
+            foldl'
+                feedPendingSuppressibleChunk
+                ( incrementalCompilerWarningChunkFilter suppressionState
+                , []
+                )
+                pendingPartialChunks
+        finalDecisions =
+            pendingChunkDecisions
+                <> finalizeIncrementalCompilerWarningFilter
+                    (fst . suppressibleCapturedCompilerOutputChunk)
+                    (snd . suppressibleCapturedCompilerOutputChunk)
+                    chunkFilter'
+        suppressionState' =
+            suppressionState
+                { incrementalCompilerWarningStdoutState = emptyIncrementalStreamWarningSuppressionState
+                , incrementalCompilerWarningStderrState = emptyIncrementalStreamWarningSuppressionState
+                , incrementalCompilerWarningChunkFilter = chunkFilter'
+                }
+        feedPendingSuppressibleChunk (chunkFilter, accumulatedDecisions) suppressibleChunk =
+            let (nextChunkFilter, chunkDecisions) =
+                    feedIncrementalCompilerWarningFilter
+                        (fst . suppressibleCapturedCompilerOutputChunk)
+                        (snd . suppressibleCapturedCompilerOutputChunk)
+                        chunkFilter
+                        [suppressibleChunk]
+             in (nextChunkFilter, accumulatedDecisions <> chunkDecisions)
+
+feedIncrementalStreamWarningSuppressionState
+    :: IncrementalStreamWarningSuppressionState
+    -> CapturedCompilerOutputChunk
+    -> ( IncrementalStreamWarningSuppressionState
+       , Maybe SuppressibleCapturedCompilerOutputChunk
+       , [CompilerWarningFilterDecision SuppressibleCapturedCompilerOutputChunk]
+       )
+feedIncrementalStreamWarningSuppressionState streamState capturedChunk =
+    let pendingChunk =
+            appendCapturedCompilerOutputChunk
+                (incrementalStreamWarningPendingChunk streamState)
+                capturedChunk
+        suppressibleChunk =
+            buildSuppressibleCapturedCompilerOutputChunk pendingChunk
+     in if capturedCompilerOutputChunkEndsLine capturedChunk
+            then
+                ( streamState
+                    { incrementalStreamWarningPendingChunk = Nothing
+                    }
+                , Just suppressibleChunk
+                , []
+                )
+            else
+                if incompleteCompilerOutputNeedsMoreInputForWarningSuppression
+                    (snd $ suppressibleCapturedCompilerOutputChunk suppressibleChunk)
+                    then
+                        -- Keep only warning-like incomplete chunks buffered so
+                        -- safe interactive output still reaches the terminal
+                        -- before the wrapped tool emits a newline or exits.
+                        ( streamState
+                            { incrementalStreamWarningPendingChunk = Just pendingChunk
+                            }
+                        , Nothing
+                        , []
+                        )
+                    else
+                        ( streamState
+                            { incrementalStreamWarningPendingChunk = Nothing
+                            }
+                        , Just suppressibleChunk
+                        , []
+                        )
+
+streamPendingSuppressibleCapturedCompilerOutputChunk
+    :: IncrementalStreamWarningSuppressionState
+    -> Maybe SuppressibleCapturedCompilerOutputChunk
+streamPendingSuppressibleCapturedCompilerOutputChunk streamState =
+    buildSuppressibleCapturedCompilerOutputChunk
+        <$> incrementalStreamWarningPendingChunk streamState
+
+orderPendingSuppressibleChunks
+    :: [CapturedCompilerOutputChunk]
+    -> [SuppressibleCapturedCompilerOutputChunk]
+    -> [SuppressibleCapturedCompilerOutputChunk]
+orderPendingSuppressibleChunks pendingChunks =
+    sortOn earliestPendingChunkPosition
+    where
+        pendingChunkPositions =
+            Map.fromList $
+                zip (map capturedCompilerOutputKey pendingChunks) [0 :: Int ..]
+        earliestPendingChunkPosition suppressibleChunk =
+            minimum $
+                map
+                    (\outputKey -> Map.findWithDefault maxBound outputKey pendingChunkPositions)
+                    (suppressibleCapturedCompilerOutputKeys suppressibleChunk)
+
+streamWarningSuppressionState
+    :: CompilerOutputStream
+    -> IncrementalCompilerWarningSuppressionState
+    -> IncrementalStreamWarningSuppressionState
+streamWarningSuppressionState outputStream suppressionState =
+    case outputStream of
+        CompilerStdout ->
+            incrementalCompilerWarningStdoutState suppressionState
+        CompilerStderr ->
+            incrementalCompilerWarningStderrState suppressionState
+
+setStreamWarningSuppressionState
+    :: CompilerOutputStream
+    -> IncrementalStreamWarningSuppressionState
+    -> IncrementalCompilerWarningSuppressionState
+    -> IncrementalCompilerWarningSuppressionState
+setStreamWarningSuppressionState outputStream streamState suppressionState =
+    case outputStream of
+        CompilerStdout ->
+            suppressionState
+                { incrementalCompilerWarningStdoutState = streamState
+                }
+        CompilerStderr ->
+            suppressionState
+                { incrementalCompilerWarningStderrState = streamState
+                }
+
+applyCompilerWarningFilterDecisions
+    :: [CompilerWarningFilterDecision SuppressibleCapturedCompilerOutputChunk]
+    -> IncrementalCompilerWarningSuppressionState
+    -> IncrementalCompilerWarningSuppressionState
+applyCompilerWarningFilterDecisions decisions suppressionState =
+    suppressionState
+        { incrementalCompilerWarningDecisions =
+            foldl'
+                applyCompilerWarningFilterDecision
+                (incrementalCompilerWarningDecisions suppressionState)
+                decisions
+        }
+
+applyCompilerWarningFilterDecision
+    :: Map.Map CapturedCompilerOutputKey CapturedCompilerOutputDecision
+    -> CompilerWarningFilterDecision SuppressibleCapturedCompilerOutputChunk
+    -> Map.Map CapturedCompilerOutputKey CapturedCompilerOutputDecision
+applyCompilerWarningFilterDecision decisionMap decision =
+    foldl'
+        (\decisionMap' outputKey -> Map.insert outputKey capturedDecision decisionMap')
+        decisionMap
+        outputKeys
+    where
+        (capturedDecision, suppressibleChunk) =
+            case decision of
+                RetainCompilerWarningFilterChunk chunk ->
+                    (RetainCapturedCompilerOutput, chunk)
+                SuppressCompilerWarningFilterChunk chunk ->
+                    (SuppressCapturedCompilerOutput, chunk)
+        outputKeys =
+            suppressibleCapturedCompilerOutputKeys suppressibleChunk
+
+flushIncrementalCompilerWarningSuppressionState
+    :: Handle
+    -> Handle
+    -> IncrementalCompilerWarningSuppressionState
+    -> IO IncrementalCompilerWarningSuppressionState
+flushIncrementalCompilerWarningSuppressionState stdoutHandle stderrHandle suppressionState =
+    go
+        (incrementalCompilerWarningPending suppressionState)
+        (incrementalCompilerWarningDecisions suppressionState)
+        []
+    where
+        go [] decisionMap reversedPendingChunks =
+            pure $
+                suppressionState
+                    { incrementalCompilerWarningPending = reverse reversedPendingChunks
+                    , incrementalCompilerWarningDecisions = decisionMap
+                    }
+        go (capturedChunk:remainingChunks) decisionMap reversedPendingChunks =
+            case Map.lookup (capturedCompilerOutputKey capturedChunk) decisionMap of
+                Nothing ->
+                    go remainingChunks decisionMap (capturedChunk : reversedPendingChunks)
+                Just capturedDecision -> do
+                    when (capturedDecision == RetainCapturedCompilerOutput) $
+                        replayCapturedCompilerOutputBytes
+                            (capturedCompilerOutputDestinationHandle stdoutHandle stderrHandle capturedChunk)
+                            (fst $ capturedCompilerOutputChunk capturedChunk)
+                    go
+                        remainingChunks
+                        (Map.delete (capturedCompilerOutputKey capturedChunk) decisionMap)
+                        reversedPendingChunks
+
+capturedCompilerOutputDestinationHandle :: Handle -> Handle -> CapturedCompilerOutputChunk -> Handle
+capturedCompilerOutputDestinationHandle stdoutHandle stderrHandle capturedChunk =
+    case capturedCompilerOutputStream capturedChunk of
+        CompilerStdout -> stdoutHandle
+        CompilerStderr -> stderrHandle
+
+takeCapturedResult :: MVar (Either SomeException a) -> IO a
+takeCapturedResult outputVar =
+    takeMVar outputVar >>= either throwIO pure
+
+compilerOutputBytesForStream
+    :: CompilerOutputStream
+    -> [CapturedCompilerOutputChunk]
+    -> B.ByteString
+compilerOutputBytesForStream outputStream =
+    B.concat
+        . map (fst . capturedCompilerOutputChunk)
+        . filter ((== outputStream) . capturedCompilerOutputStream)
+
+capturedCompilerOutputKey
+    :: CapturedCompilerOutputChunk
+    -> CapturedCompilerOutputKey
+capturedCompilerOutputKey capturedChunk =
+    ( capturedCompilerOutputStream capturedChunk
+    , capturedCompilerOutputIndex capturedChunk
+    )
+
+appendCapturedCompilerOutputChunk
+    :: Maybe ([CapturedCompilerOutputKey], [B.ByteString])
+    -> CapturedCompilerOutputChunk
+    -> ([CapturedCompilerOutputKey], [B.ByteString])
+appendCapturedCompilerOutputChunk maybePending capturedChunk =
+    let (pendingKeys, pendingBytes) = fromMaybe ([], []) maybePending
+        (chunkBytes, _) = capturedCompilerOutputChunk capturedChunk
+     in ( capturedCompilerOutputKey capturedChunk : pendingKeys
+        , chunkBytes : pendingBytes
+        )
+
+buildSuppressibleCapturedCompilerOutputChunk
+    :: ([CapturedCompilerOutputKey], [B.ByteString])
+    -> SuppressibleCapturedCompilerOutputChunk
+buildSuppressibleCapturedCompilerOutputChunk (reversedKeys, reversedBytes) =
+    let chunkBytes = B.concat $ reverse reversedBytes
+     in SuppressibleCapturedCompilerOutputChunk
+            { suppressibleCapturedCompilerOutputKeys = reverse reversedKeys
+            , suppressibleCapturedCompilerOutputChunk =
+                (chunkBytes, normalizeCompilerOutputLine chunkBytes)
             }
-    waitForProcess processHandle >>= \case
-        ExitSuccess -> pure ()
-        exitCode ->
-            ioError . userError $
-                showCompilerCommandForUser compiler extraArgs
-                    <> " failed with "
-                    <> show exitCode
+
+capturedCompilerOutputChunkEndsLine :: CapturedCompilerOutputChunk -> Bool
+capturedCompilerOutputChunkEndsLine capturedChunk =
+    let (chunkBytes, _) = capturedCompilerOutputChunk capturedChunk
+     in not (B.null chunkBytes) && B.last chunkBytes == newlineByte
+
+groupCapturedCompilerOutputChunksForWarningSuppression
+    :: [CapturedCompilerOutputChunk]
+    -> [SuppressibleCapturedCompilerOutputChunk]
+groupCapturedCompilerOutputChunksForWarningSuppression capturedChunks =
+    orderPendingSuppressibleChunks capturedChunks (completedChunks <> pendingChunks)
+    where
+        (incrementalStdoutPendingChunk, incrementalStderrPendingChunk, completedChunks) =
+            foldl'
+                step
+                (Nothing, Nothing, [])
+                capturedChunks
+        pendingChunks =
+            mapMaybe
+                (fmap buildSuppressibleCapturedCompilerOutputChunk)
+                [ incrementalStdoutPendingChunk
+                , incrementalStderrPendingChunk
+                ]
+
+        step (stdoutPendingChunk, stderrPendingChunk, accumulatedChunks) capturedChunk =
+            let pendingChunk =
+                    appendCapturedCompilerOutputChunk
+                        (case capturedCompilerOutputStream capturedChunk of
+                            CompilerStdout -> stdoutPendingChunk
+                            CompilerStderr -> stderrPendingChunk
+                        )
+                        capturedChunk
+                completedChunk =
+                    if capturedCompilerOutputChunkEndsLine capturedChunk
+                        then [buildSuppressibleCapturedCompilerOutputChunk pendingChunk]
+                        else []
+             in case capturedCompilerOutputStream capturedChunk of
+                    CompilerStdout ->
+                        ( if null completedChunk then Just pendingChunk else Nothing
+                        , stderrPendingChunk
+                        , accumulatedChunks <> completedChunk
+                        )
+                    CompilerStderr ->
+                        ( stdoutPendingChunk
+                        , if null completedChunk then Just pendingChunk else Nothing
+                        , accumulatedChunks <> completedChunk
+                        )
+
+compilerOutputBytesForSuppressibleChunks
+    :: CompilerOutputStream
+    -> [SuppressibleCapturedCompilerOutputChunk]
+    -> B.ByteString
+compilerOutputBytesForSuppressibleChunks outputStream =
+    B.concat
+        . map (fst . suppressibleCapturedCompilerOutputChunk)
+        . filter
+            ( \capturedChunk ->
+                maybe False ((== outputStream) . fst) $
+                    case suppressibleCapturedCompilerOutputKeys capturedChunk of
+                        outputKey:_ -> Just outputKey
+                        []          -> Nothing
+            )
+
+readCompilerProcessWithExitCodeProbeSuppressingWarnings
+    :: CompilerCommand
+    -> [String]
+    -> IO (ExitCode, String, String)
+readCompilerProcessWithExitCodeProbeSuppressingWarnings =
+    readCompilerProcessWithExitCodeProbeSuppressingWarningsUntil (\_ -> pure False)
+
+readCompilerProcessWithExitCodeProbeSuppressingWarningsUntil
+    :: (IO [CapturedCompilerOutputChunk] -> IO Bool)
+    -> CompilerCommand
+    -> [String]
+    -> IO (ExitCode, String, String)
+readCompilerProcessWithExitCodeProbeSuppressingWarningsUntil postExitDrainSatisfied compiler extraArgs = do
+    (exitCode, capturedChunks) <-
+        readCompilerProcessWithExitCodeChunksUntil
+            postExitDrainSatisfied
+            CreatePipe
+            compiler
+            extraArgs
+    let retainedChunks =
+            filterCompilerOutputChunks
+                (fst . suppressibleCapturedCompilerOutputChunk)
+                (snd . suppressibleCapturedCompilerOutputChunk)
+                (groupCapturedCompilerOutputChunksForWarningSuppression capturedChunks)
+    pure
+        ( exitCode
+        , BC.unpack $
+            compilerOutputBytesForSuppressibleChunks CompilerStdout retainedChunks
+        , BC.unpack $
+            compilerOutputBytesForSuppressibleChunks CompilerStderr retainedChunks
+        )
+
+readCompilerProcessWithExitCodeProbe
+    :: Bool
+    -> CompilerCommand
+    -> [String]
+    -> IO (ExitCode, String, String)
+readCompilerProcessWithExitCodeProbe =
+    readCompilerProcessWithExitCodeProbeUntil (\_ -> pure False)
+
+readCompilerProcessWithExitCodeProbeUntil
+    :: (IO [CapturedCompilerOutputChunk] -> IO Bool)
+    -> Bool
+    -> CompilerCommand
+    -> [String]
+    -> IO (ExitCode, String, String)
+readCompilerProcessWithExitCodeProbeUntil postExitDrainSatisfied suppressWarnsOutput compiler extraArgs
+    | suppressWarnsOutput =
+        readCompilerProcessWithExitCodeProbeSuppressingWarningsUntil
+            postExitDrainSatisfied
+            compiler
+            extraArgs
+    | otherwise = do
+        (exitCode, stdoutBytes, stderrBytes) <-
+            readCompilerProcessWithExitCodeBytesUntil
+                postExitDrainSatisfied
+                compiler
+                extraArgs
+        pure (exitCode, BC.unpack stdoutBytes, BC.unpack stderrBytes)
+
+callCompilerProcess :: Bool -> CompilerCommand -> [String] -> IO ()
+callCompilerProcess =
+    callCompilerProcessUntil (pure False)
+
+callCompilerProcessUntil :: IO Bool -> Bool -> CompilerCommand -> [String] -> IO ()
+callCompilerProcessUntil postExitDrainSatisfied suppressWarnsOutput compiler extraArgs
+    | suppressWarnsOutput = do
+        (exitCode, _) <-
+            bracket (hDuplicate stdout) hClose $ \stdoutHandle ->
+                bracket (hDuplicate stderr) hClose $ \stderrHandle -> do
+                    hSetBinaryMode stdoutHandle True
+                    hSetBinaryMode stderrHandle True
+                    (exitCode', suppressionState') <-
+                        foldCompilerProcessWithExitCodeChunksUntil
+                            postExitDrainSatisfied
+                            Inherit
+                            compiler
+                            extraArgs
+                            emptyIncrementalCompilerWarningSuppressionState
+                            (processIncrementalCompilerWarningSuppressionChunk stdoutHandle stderrHandle)
+                    finalizedSuppressionState <-
+                        finalizeIncrementalCompilerWarningSuppression
+                            stdoutHandle
+                            stderrHandle
+                            suppressionState'
+                    pure (exitCode', finalizedSuppressionState)
+        handleCompilerProcessExit compiler extraArgs exitCode
+    | otherwise = do
+        processEnv <- compilerProcessEnv compiler
+        (_, _, _, processHandle) <- createProcess
+            (proc (compilerExecutable compiler) (compilerInvocationArgs compiler extraArgs))
+                { env = processEnv
+                , create_group = True
+                }
+        processGroupId <- compilerProcessGroupIdForHandle processHandle
+        exitCode <- waitForProcess processHandle
+        when (exitCode == ExitSuccess) $
+            waitForCompilerProcessPostExitCompletion processGroupId postExitDrainSatisfied
+        handleCompilerProcessExit compiler extraArgs exitCode
+
+handleCompilerProcessExit :: CompilerCommand -> [String] -> ExitCode -> IO ()
+handleCompilerProcessExit compiler extraArgs = \case
+    ExitSuccess -> pure ()
+    exitCode ->
+        ioError . userError $
+            showCompilerCommandForUser compiler extraArgs
+                <> " failed with "
+                <> show exitCode
+
+replayCapturedCompilerOutputBytes :: Handle -> B.ByteString -> IO ()
+replayCapturedCompilerOutputBytes destination bytes
+    | B.null bytes = pure ()
+    | otherwise = do
+        B.hPut destination bytes
+        hFlush destination
 
 withReadableFile :: FilePath -> FileMode -> IO a -> IO a
 withReadableFile path originalMode action
@@ -382,58 +3296,533 @@ withReadableFile path originalMode action
     where
         readableMode = originalMode `unionFileModes` ownerReadMode
 
+shouldValidateRunnableLinkedOutput :: FilePath -> IO Bool
+shouldValidateRunnableLinkedOutput path =
+    catchIOError
+        (isRegularFile <$> getSymbolicLinkStatus path)
+        (\ioErr -> if isDoesNotExistError ioErr then pure True else ioError ioErr)
+
 validateRunnableLinkedOutput :: FilePath -> Maybe String -> IO Bool
 validateRunnableLinkedOutput path maybeProbeMarker =
     catchIOError
         (do
             status <- getSymbolicLinkStatus path
             if isRegularFile status
-                then
-                    withReadableFile path (fileMode status) $ do
-                        bytes <- B.readFile path
-                        pure $
-                            intersectFileModes (fileMode status) executableFileMode /= 0
-                                && looksRunnableLinkedOutput bytes
-                                && maybe True (`probeMarkerPresent` bytes) maybeProbeMarker
+                then do
+                    let originalMode = fileMode status
+                        hasExecuteBits =
+                            intersectFileModes originalMode executableFileMode /= 0
+                    if not hasExecuteBits
+                        then pure False
+                        else do
+                            withReadableFile path originalMode $ do
+                                bytes <- B.readFile path
+                                let markerPresent = maybe
+                                        True
+                                        (\probeMarker -> probeMarkerPresent probeMarker bytes)
+                                        maybeProbeMarker
+                                    linkedOutputOk =
+                                        maybe
+                                            False
+                                            hasRunnableLinkedElfProgramHeadersAndInterpreter
+                                            (parseLinkedOutputElf bytes)
+                                pure $ markerPresent && linkedOutputOk
                 else pure False
         )
         (\ioErr -> if isDoesNotExistError ioErr then pure False else ioError ioErr)
-
-shouldValidateRunnableLinkedOutput :: FilePath -> IO Bool
-shouldValidateRunnableLinkedOutput path =
-    catchIOError
-        (do
-            status <- getSymbolicLinkStatus path
-            pure $ isRegularFile status || isSymbolicLink status
-        )
-        (\ioErr -> if isDoesNotExistError ioErr then pure True else ioError ioErr)
 
 probeMarkerPresent :: String -> B.ByteString -> Bool
 probeMarkerPresent probeMarker =
     B.isInfixOf $ B.pack $ map (fromIntegral . fromEnum) probeMarker
 
+data LinkedOutputElf = LinkedOutputElf
+    { linkedOutputElfBytes                  :: B.ByteString
+    , linkedOutputElfDataEncoding           :: Word8
+    , linkedOutputElfOsAbi                  :: Word8
+    , linkedOutputElfType                   :: Int
+    , linkedOutputElfFileSize               :: Word64
+    , linkedOutputElfEntryPoint             :: Word64
+    , linkedOutputElfProgramHeaderOffset    :: Word64
+    , linkedOutputElfProgramHeaderEntrySize :: Int
+    , linkedOutputElfProgramHeaderCount     :: Int
+    }
+
 looksRunnableLinkedOutput :: B.ByteString -> Bool
-looksRunnableLinkedOutput bytes
-    | B.length bytes < 4 = False
-    | B.take 4 bytes /= elfMagic = False
-    | B.length bytes < 20 = False
-    | otherwise =
-        elfClass == 2
-            && elfMachine == 62
-            && elfType == 2
+looksRunnableLinkedOutput bytes =
+    maybe False hasRunnableLinkedElfProgramHeadersAndInterpreter $
+        parseLinkedOutputElf bytes
+
+linkedOutputElfHasStandaloneInterpreterDynamicSection :: LinkedOutputElf -> Bool
+linkedOutputElfHasStandaloneInterpreterDynamicSection elf =
+    any hasStandaloneInterpreterDynamicSection [0 .. linkedOutputElfProgramHeaderCount elf - 1]
     where
+        hasStandaloneInterpreterDynamicSection headerIndex =
+            let headerOffset = linkedOutputElfProgramHeaderEntryOffset elf headerIndex
+             in linkedOutputElfHasValidProgramHeaderBounds elf headerOffset
+                    && linkedOutputElfProgramHeaderType elf headerOffset == elfProgramHeaderTypeDynamic
+                    && maybe
+                        False
+                        (uncurry $ linkedOutputElfDynamicEntriesDescribeStandaloneInterpreter elf)
+                        (linkedOutputElfProgramHeaderFileRange elf headerOffset)
+
+linkedOutputElfDynamicEntriesDescribeStandaloneInterpreter
+    :: LinkedOutputElf
+    -> Word64
+    -> Word64
+    -> Bool
+linkedOutputElfDynamicEntriesDescribeStandaloneInterpreter elf dynamicOffset dynamicSize
+    | dynamicSize < fromIntegral elfDynamicEntrySize = False
+    | dynamicSize `mod` fromIntegral elfDynamicEntrySize /= 0 = False
+    | otherwise =
+        let dynamicEnd = dynamicOffset + dynamicSize
+            go entryOffset
+                | entryOffset >= dynamicEnd = False
+                | otherwise =
+                    let entryTag = linkedOutputElfDynamicEntryTag elf entryOffset
+                     in if entryTag == elfDynamicTagNull
+                            then True
+                            else
+                                entryTag /= elfDynamicTagNeeded
+                                    && go (entryOffset + fromIntegral elfDynamicEntrySize)
+         in go dynamicOffset
+
+parseLinkedOutputElf :: B.ByteString -> Maybe LinkedOutputElf
+parseLinkedOutputElf bytes
+    | B.length bytes < elfHeaderSize = Nothing
+    | B.take 4 bytes /= elfMagic = Nothing
+    | elfClass /= elfClass64Bit = Nothing
+    | elfData `notElem` [elfDataLittleEndian, elfDataBigEndian] = Nothing
+    | elfIdentVersion /= elfCurrentVersion = Nothing
+    | elfMachine /= elfMachineX86_64 = Nothing
+    | elfType `notElem` [elfTypeExecutable, elfTypeSharedObject] = Nothing
+    | elfVersion /= fromIntegral elfCurrentVersion = Nothing
+    | elfHeaderByteSize /= elfHeaderSize = Nothing
+    | elfProgramHeaderEntrySize < elfProgramHeaderSize = Nothing
+    | elfProgramHeaderCount == 0 = Nothing
+    | not (rangeWithinFile elfProgramHeaderOffset elfProgramHeaderTableSize linkedFileSize) = Nothing
+    | otherwise =
+        Just LinkedOutputElf
+            { linkedOutputElfBytes = bytes
+            , linkedOutputElfDataEncoding = elfData
+            , linkedOutputElfOsAbi = elfOsAbi
+            , linkedOutputElfType = elfType
+            , linkedOutputElfFileSize = linkedFileSize
+            , linkedOutputElfEntryPoint = elfEntryPoint
+            , linkedOutputElfProgramHeaderOffset = elfProgramHeaderOffset
+            , linkedOutputElfProgramHeaderEntrySize = elfProgramHeaderEntrySize
+            , linkedOutputElfProgramHeaderCount = elfProgramHeaderCount
+            }
+    where
+        linkedFileSize = fromIntegral $ B.length bytes
         elfClass = B.index bytes 4
         elfData = B.index bytes 5
+        elfIdentVersion = B.index bytes 6
+        elfOsAbi = B.index bytes 7
         elfType = decodeElfHalfWord elfData (B.index bytes 16) (B.index bytes 17) :: Int
         elfMachine = decodeElfHalfWord elfData (B.index bytes 18) (B.index bytes 19) :: Int
+        elfVersion =
+            decodeElfWord32
+                elfData
+                [ B.index bytes 20
+                , B.index bytes 21
+                , B.index bytes 22
+                , B.index bytes 23
+                ] ::
+                Int
+        elfEntryPoint =
+            decodeElfWord64
+                elfData
+                [ B.index bytes 24
+                , B.index bytes 25
+                , B.index bytes 26
+                , B.index bytes 27
+                , B.index bytes 28
+                , B.index bytes 29
+                , B.index bytes 30
+                , B.index bytes 31
+                ]
+        elfProgramHeaderOffset =
+            decodeElfWord64
+                elfData
+                [ B.index bytes 32
+                , B.index bytes 33
+                , B.index bytes 34
+                , B.index bytes 35
+                , B.index bytes 36
+                , B.index bytes 37
+                , B.index bytes 38
+                , B.index bytes 39
+                ]
+        elfHeaderByteSize = decodeElfHalfWord elfData (B.index bytes 52) (B.index bytes 53) :: Int
+        elfProgramHeaderEntrySize =
+            decodeElfHalfWord elfData (B.index bytes 54) (B.index bytes 55) :: Int
+        elfProgramHeaderCount =
+            decodeElfHalfWord elfData (B.index bytes 56) (B.index bytes 57) :: Int
+        elfProgramHeaderTableSize =
+            fromIntegral elfProgramHeaderEntrySize * fromIntegral elfProgramHeaderCount
 
-decodeElfHalfWord :: Num a => Word8 -> Word8 -> Word8 -> a
+hasRunnableLinkedElfProgramHeadersAndInterpreter :: LinkedOutputElf -> Bool
+hasRunnableLinkedElfProgramHeadersAndInterpreter elf =
+    linkedOutputElfHasRunnableInterpreterLayout elf
+        && any (linkedOutputElfHasRunnableProgramHeader elf) [0 .. linkedOutputElfProgramHeaderCount elf - 1]
+
+linkedOutputElfHasRunnableInterpreterLayout :: LinkedOutputElf -> Bool
+linkedOutputElfHasRunnableInterpreterLayout elf =
+    case linkedOutputElfInterpreterPath elf of
+        Just (Just _) ->
+            True
+        Just Nothing ->
+            ( linkedOutputElfType elf == elfTypeExecutable
+                && not (linkedOutputElfHasDynamicProgramHeader elf)
+            )
+                || linkedOutputElfHasStandaloneStaticPieLayout elf
+        Nothing ->
+            False
+
+linkedOutputElfHasDynamicProgramHeader :: LinkedOutputElf -> Bool
+linkedOutputElfHasDynamicProgramHeader elf =
+    any hasDynamicProgramHeader [0 .. linkedOutputElfProgramHeaderCount elf - 1]
+    where
+        hasDynamicProgramHeader headerIndex =
+            let headerOffset = linkedOutputElfProgramHeaderEntryOffset elf headerIndex
+             in linkedOutputElfHasValidProgramHeaderBounds elf headerOffset
+                    && linkedOutputElfProgramHeaderType elf headerOffset == elfProgramHeaderTypeDynamic
+
+linkedOutputElfInterpreterPath :: LinkedOutputElf -> Maybe (Maybe FilePath)
+linkedOutputElfInterpreterPath elf =
+    case filter isInterpreterProgramHeader [0 .. linkedOutputElfProgramHeaderCount elf - 1] of
+        [] ->
+            Just Nothing
+        [headerIndex] -> do
+            let headerOffset = linkedOutputElfProgramHeaderEntryOffset elf headerIndex
+                interpreterOffset = linkedOutputElfProgramHeaderFileOffset elf headerOffset
+                interpreterSize = linkedOutputElfProgramHeaderFileSize elf headerOffset
+            if not (linkedOutputElfHasValidProgramHeaderBounds elf headerOffset)
+                || interpreterSize <= 1
+                || interpreterSize > linkedOutputElfProgramHeaderMemorySize elf headerOffset
+                || not (rangeWithinFile interpreterOffset interpreterSize (linkedOutputElfFileSize elf))
+                then Nothing
+                else do
+                    interpreterBytes <- linkedOutputElfNullTerminatedBytes elf interpreterOffset interpreterSize
+                    let interpreterPath = BC.unpack interpreterBytes
+                    if null interpreterPath || head interpreterPath /= '/'
+                        then Nothing
+                        else Just $ Just interpreterPath
+        _ ->
+            Nothing
+    where
+        isInterpreterProgramHeader headerIndex =
+            let headerOffset = linkedOutputElfProgramHeaderEntryOffset elf headerIndex
+             in linkedOutputElfHasValidProgramHeaderBounds elf headerOffset
+                    && linkedOutputElfProgramHeaderType elf headerOffset == elfProgramHeaderTypeInterp
+
+linkedOutputElfNullTerminatedBytes
+    :: LinkedOutputElf
+    -> Word64
+    -> Word64
+    -> Maybe B.ByteString
+linkedOutputElfNullTerminatedBytes elf start size
+    | size == 0 = Nothing
+    | otherwise =
+        let rawBytes =
+                B.take (fromIntegral size) $
+                    B.drop (fromIntegral start) $
+                        linkedOutputElfBytes elf
+         in case B.unsnoc rawBytes of
+                Just (payloadBytes, trailingByte)
+                    | trailingByte == 0 && not (B.null payloadBytes) && B.all (/= 0) payloadBytes ->
+                        Just payloadBytes
+                _ ->
+                    Nothing
+
+linkedOutputElfHasStaticPieDynamicFlags :: LinkedOutputElf -> Bool
+linkedOutputElfHasStaticPieDynamicFlags elf =
+    linkedOutputElfType elf == elfTypeSharedObject
+        && any (linkedOutputElfProgramHeaderHasStaticPieFlag elf) [0 .. linkedOutputElfProgramHeaderCount elf - 1]
+
+linkedOutputElfHasStandaloneStaticPieLayout :: LinkedOutputElf -> Bool
+linkedOutputElfHasStandaloneStaticPieLayout elf =
+    linkedOutputElfHasStaticPieDynamicFlags elf
+        && linkedOutputElfHasStandaloneInterpreterDynamicSection elf
+
+linkedOutputElfProgramHeaderHasStaticPieFlag :: LinkedOutputElf -> Int -> Bool
+linkedOutputElfProgramHeaderHasStaticPieFlag elf headerIndex =
+    let headerOffset = linkedOutputElfProgramHeaderEntryOffset elf headerIndex
+     in linkedOutputElfHasValidProgramHeaderBounds elf headerOffset
+            && linkedOutputElfProgramHeaderType elf headerOffset == elfProgramHeaderTypeDynamic
+            && maybe
+                False
+                (uncurry $ linkedOutputElfDynamicEntriesContainStaticPieFlag elf)
+                (linkedOutputElfProgramHeaderFileRange elf headerOffset)
+
+linkedOutputElfDynamicEntriesContainStaticPieFlag :: LinkedOutputElf -> Word64 -> Word64 -> Bool
+linkedOutputElfDynamicEntriesContainStaticPieFlag elf dynamicOffset dynamicSize
+    | dynamicSize < fromIntegral elfDynamicEntrySize = False
+    | dynamicSize `mod` fromIntegral elfDynamicEntrySize /= 0 = False
+    | otherwise =
+        let dynamicEnd = dynamicOffset + dynamicSize
+            go entryOffset
+                | entryOffset >= dynamicEnd = False
+                | otherwise =
+                    let entryTag = linkedOutputElfDynamicEntryTag elf entryOffset
+                        entryValue = linkedOutputElfDynamicEntryValue elf entryOffset
+                     in if entryTag == elfDynamicTagNull
+                            then False
+                            else
+                                ( entryTag == elfDynamicTagFlags1
+                                    && entryValue .&. elfDynamicFlag1Pie /= 0
+                                )
+                                    || go (entryOffset + fromIntegral elfDynamicEntrySize)
+         in go dynamicOffset
+
+linkedOutputElfHasRunnableProgramHeader :: LinkedOutputElf -> Int -> Bool
+linkedOutputElfHasRunnableProgramHeader elf headerIndex =
+    let headerOffset = linkedOutputElfProgramHeaderEntryOffset elf headerIndex
+     in linkedOutputElfHasValidProgramHeaderBounds elf headerOffset
+            && linkedOutputElfProgramHeaderType elf headerOffset == elfProgramHeaderTypeLoad
+            && linkedOutputElfProgramHeaderFileSize elf headerOffset > 0
+            && linkedOutputElfProgramHeaderFileSize elf headerOffset
+                <= linkedOutputElfProgramHeaderMemorySize elf headerOffset
+            && rangeWithinFile
+                (linkedOutputElfProgramHeaderFileOffset elf headerOffset)
+                (linkedOutputElfProgramHeaderFileSize elf headerOffset)
+                (linkedOutputElfFileSize elf)
+            && linkedOutputElfProgramHeaderContainsEntryPoint elf headerOffset
+            && linkedOutputElfProgramHeaderFlags elf headerOffset .&. elfProgramHeaderFlagExecute /= 0
+
+linkedOutputElfHasValidProgramHeaderBounds :: LinkedOutputElf -> Word64 -> Bool
+linkedOutputElfHasValidProgramHeaderBounds elf headerOffset =
+    rangeWithinFile headerOffset (fromIntegral elfProgramHeaderSize) (linkedOutputElfFileSize elf)
+
+linkedOutputElfProgramHeaderFileRange :: LinkedOutputElf -> Word64 -> Maybe (Word64, Word64)
+linkedOutputElfProgramHeaderFileRange elf headerOffset =
+    let fileOffset = linkedOutputElfProgramHeaderFileOffset elf headerOffset
+        segmentFileSize = linkedOutputElfProgramHeaderFileSize elf headerOffset
+        memorySize = linkedOutputElfProgramHeaderMemorySize elf headerOffset
+     in if segmentFileSize == 0
+            || segmentFileSize > memorySize
+            || not (rangeWithinFile fileOffset segmentFileSize (linkedOutputElfFileSize elf))
+            then Nothing
+            else Just (fileOffset, segmentFileSize)
+
+linkedOutputElfProgramHeaderEntryOffset :: LinkedOutputElf -> Int -> Word64
+linkedOutputElfProgramHeaderEntryOffset elf headerIndex =
+    linkedOutputElfProgramHeaderOffset elf
+        + fromIntegral headerIndex * fromIntegral (linkedOutputElfProgramHeaderEntrySize elf)
+
+linkedOutputElfProgramHeaderType :: LinkedOutputElf -> Word64 -> Int
+linkedOutputElfProgramHeaderType elf headerOffset =
+    decodeElfWord32
+        (linkedOutputElfDataEncoding elf)
+        [ linkedOutputElfByteAt elf headerOffset 0
+        , linkedOutputElfByteAt elf headerOffset 1
+        , linkedOutputElfByteAt elf headerOffset 2
+        , linkedOutputElfByteAt elf headerOffset 3
+        ] ::
+        Int
+
+linkedOutputElfProgramHeaderFlags :: LinkedOutputElf -> Word64 -> Int
+linkedOutputElfProgramHeaderFlags elf headerOffset =
+    decodeElfWord32
+        (linkedOutputElfDataEncoding elf)
+        [ linkedOutputElfByteAt elf headerOffset 4
+        , linkedOutputElfByteAt elf headerOffset 5
+        , linkedOutputElfByteAt elf headerOffset 6
+        , linkedOutputElfByteAt elf headerOffset 7
+        ] ::
+        Int
+
+linkedOutputElfProgramHeaderFileOffset :: LinkedOutputElf -> Word64 -> Word64
+linkedOutputElfProgramHeaderFileOffset elf headerOffset =
+    decodeElfWord64
+        (linkedOutputElfDataEncoding elf)
+        [ linkedOutputElfByteAt elf headerOffset 8
+        , linkedOutputElfByteAt elf headerOffset 9
+        , linkedOutputElfByteAt elf headerOffset 10
+        , linkedOutputElfByteAt elf headerOffset 11
+        , linkedOutputElfByteAt elf headerOffset 12
+        , linkedOutputElfByteAt elf headerOffset 13
+        , linkedOutputElfByteAt elf headerOffset 14
+        , linkedOutputElfByteAt elf headerOffset 15
+        ]
+
+linkedOutputElfProgramHeaderVirtualAddress :: LinkedOutputElf -> Word64 -> Word64
+linkedOutputElfProgramHeaderVirtualAddress elf headerOffset =
+    decodeElfWord64
+        (linkedOutputElfDataEncoding elf)
+        [ linkedOutputElfByteAt elf headerOffset 16
+        , linkedOutputElfByteAt elf headerOffset 17
+        , linkedOutputElfByteAt elf headerOffset 18
+        , linkedOutputElfByteAt elf headerOffset 19
+        , linkedOutputElfByteAt elf headerOffset 20
+        , linkedOutputElfByteAt elf headerOffset 21
+        , linkedOutputElfByteAt elf headerOffset 22
+        , linkedOutputElfByteAt elf headerOffset 23
+        ]
+
+linkedOutputElfProgramHeaderFileSize :: LinkedOutputElf -> Word64 -> Word64
+linkedOutputElfProgramHeaderFileSize elf headerOffset =
+    decodeElfWord64
+        (linkedOutputElfDataEncoding elf)
+        [ linkedOutputElfByteAt elf headerOffset 32
+        , linkedOutputElfByteAt elf headerOffset 33
+        , linkedOutputElfByteAt elf headerOffset 34
+        , linkedOutputElfByteAt elf headerOffset 35
+        , linkedOutputElfByteAt elf headerOffset 36
+        , linkedOutputElfByteAt elf headerOffset 37
+        , linkedOutputElfByteAt elf headerOffset 38
+        , linkedOutputElfByteAt elf headerOffset 39
+        ]
+
+linkedOutputElfProgramHeaderMemorySize :: LinkedOutputElf -> Word64 -> Word64
+linkedOutputElfProgramHeaderMemorySize elf headerOffset =
+    decodeElfWord64
+        (linkedOutputElfDataEncoding elf)
+        [ linkedOutputElfByteAt elf headerOffset 40
+        , linkedOutputElfByteAt elf headerOffset 41
+        , linkedOutputElfByteAt elf headerOffset 42
+        , linkedOutputElfByteAt elf headerOffset 43
+        , linkedOutputElfByteAt elf headerOffset 44
+        , linkedOutputElfByteAt elf headerOffset 45
+        , linkedOutputElfByteAt elf headerOffset 46
+        , linkedOutputElfByteAt elf headerOffset 47
+        ]
+
+linkedOutputElfDynamicEntryTag :: LinkedOutputElf -> Word64 -> Word64
+linkedOutputElfDynamicEntryTag elf entryOffset =
+    decodeElfWord64
+        (linkedOutputElfDataEncoding elf)
+        [ linkedOutputElfByteAt elf entryOffset 0
+        , linkedOutputElfByteAt elf entryOffset 1
+        , linkedOutputElfByteAt elf entryOffset 2
+        , linkedOutputElfByteAt elf entryOffset 3
+        , linkedOutputElfByteAt elf entryOffset 4
+        , linkedOutputElfByteAt elf entryOffset 5
+        , linkedOutputElfByteAt elf entryOffset 6
+        , linkedOutputElfByteAt elf entryOffset 7
+        ]
+
+linkedOutputElfDynamicEntryValue :: LinkedOutputElf -> Word64 -> Word64
+linkedOutputElfDynamicEntryValue elf entryOffset =
+    decodeElfWord64
+        (linkedOutputElfDataEncoding elf)
+        [ linkedOutputElfByteAt elf entryOffset 8
+        , linkedOutputElfByteAt elf entryOffset 9
+        , linkedOutputElfByteAt elf entryOffset 10
+        , linkedOutputElfByteAt elf entryOffset 11
+        , linkedOutputElfByteAt elf entryOffset 12
+        , linkedOutputElfByteAt elf entryOffset 13
+        , linkedOutputElfByteAt elf entryOffset 14
+        , linkedOutputElfByteAt elf entryOffset 15
+        ]
+
+linkedOutputElfProgramHeaderContainsEntryPoint :: LinkedOutputElf -> Word64 -> Bool
+linkedOutputElfProgramHeaderContainsEntryPoint elf headerOffset =
+    rangeContainsPoint
+        (linkedOutputElfProgramHeaderVirtualAddress elf headerOffset)
+        (linkedOutputElfProgramHeaderMemorySize elf headerOffset)
+        (linkedOutputElfEntryPoint elf)
+
+linkedOutputElfByteAt :: LinkedOutputElf -> Word64 -> Int -> Word8
+linkedOutputElfByteAt elf headerOffset relativeOffset =
+    B.index
+        (linkedOutputElfBytes elf)
+        (fromIntegral $ headerOffset + fromIntegral relativeOffset)
+
+decodeElfHalfWord :: (Bits a, Num a) => Word8 -> Word8 -> Word8 -> a
 decodeElfHalfWord elfData byte18 byte19
-    | elfData == 2 = fromIntegral byte18 * 256 + fromIntegral byte19
-    | otherwise = fromIntegral byte18 + fromIntegral byte19 * 256
+    = decodeElfUnsigned elfData [byte18, byte19]
+
+decodeElfWord32 :: (Bits a, Num a) => Word8 -> [Word8] -> a
+decodeElfWord32 = decodeElfUnsigned
+
+decodeElfWord64 :: (Bits a, Num a) => Word8 -> [Word8] -> a
+decodeElfWord64 = decodeElfUnsigned
+
+decodeElfUnsigned :: (Bits a, Num a) => Word8 -> [Word8] -> a
+decodeElfUnsigned elfData =
+    foldl'
+        (\acc nextByte -> acc `shiftL` 8 .|. fromIntegral nextByte)
+        0
+        . orderedBytes
+    where
+        orderedBytes
+            | elfData == elfDataBigEndian = id
+            | otherwise = reverse
+
+rangeWithinFile :: Word64 -> Word64 -> Word64 -> Bool
+rangeWithinFile start size totalFileSize =
+    start <= totalFileSize && size <= totalFileSize - start
+
+rangeContainsPoint :: Word64 -> Word64 -> Word64 -> Bool
+rangeContainsPoint start size point =
+    size > 0 && point >= start && point - start < size
 
 elfMagic :: B.ByteString
 elfMagic = B.pack [0x7f, 0x45, 0x4c, 0x46]
+
+elfClass64Bit :: Word8
+elfClass64Bit = 2
+
+elfCurrentVersion :: Word8
+elfCurrentVersion = 1
+
+elfDataLittleEndian :: Word8
+elfDataLittleEndian = 1
+
+elfDataBigEndian :: Word8
+elfDataBigEndian = 2
+
+elfOsAbiSystemV :: Word8
+elfOsAbiSystemV = 0
+
+elfOsAbiLinux :: Word8
+elfOsAbiLinux = 3
+
+elfOsAbiFreeBsd :: Word8
+elfOsAbiFreeBsd = 9
+
+elfTypeExecutable :: Int
+elfTypeExecutable = 2
+
+elfTypeSharedObject :: Int
+elfTypeSharedObject = 3
+
+elfMachineX86_64 :: Int
+elfMachineX86_64 = 62
+
+elfHeaderSize :: Int
+elfHeaderSize = 64
+
+elfProgramHeaderSize :: Int
+elfProgramHeaderSize = 56
+
+elfProgramHeaderTypeLoad :: Int
+elfProgramHeaderTypeLoad = 1
+
+elfProgramHeaderTypeDynamic :: Int
+elfProgramHeaderTypeDynamic = 2
+
+elfProgramHeaderTypeInterp :: Int
+elfProgramHeaderTypeInterp = 3
+
+elfProgramHeaderFlagExecute :: Int
+elfProgramHeaderFlagExecute = 0x1
+
+elfDynamicEntrySize :: Int
+elfDynamicEntrySize = 16
+
+elfDynamicTagNull :: Word64
+elfDynamicTagNull = 0
+
+elfDynamicTagNeeded :: Word64
+elfDynamicTagNeeded = 1
+
+elfDynamicTagFlags1 :: Word64
+elfDynamicTagFlags1 = 0x6ffffffb
+
+elfDynamicFlag1Pie :: Word64
+elfDynamicFlag1Pie = 0x08000000
 
 markerSectionAsm :: String -> String -> String
 markerSectionAsm label marker = unlines
@@ -443,25 +3832,59 @@ markerSectionAsm label marker = unlines
     , ".text"
     ]
 
+x86_64ElfRunnableLinkedOutputMarkerAsm :: String -> String
+x86_64ElfRunnableLinkedOutputMarkerAsm runnableOutputMarker =
+    unlines [".intel_syntax noprefix"]
+        <> markerSectionAsm ".L.htcc_runnable_output_marker_payload" runnableOutputMarker
+        <> unlines
+            [ ".section .init_array,\"aw\",@init_array"
+            , "    .quad .L.htcc_runnable_output_marker_ctor"
+            , ".text"
+            , ".L.htcc_runnable_output_marker_ctor:"
+            , "    lea rax, [rip + .L.htcc_runnable_output_marker_payload]"
+            , "    ret"
+            ]
+
+makeRunnableLinkedOutputMarker :: FilePath -> FilePath -> FilePath -> String
+makeRunnableLinkedOutputMarker asmPath objPath markerObjPath =
+    "htcc-output-marker:"
+        <> takeFileName asmPath
+        <> ":"
+        <> takeFileName objPath
+        <> ":"
+        <> takeFileName markerObjPath
+
+x86_64ElfProbeAsm :: String -> String
+x86_64ElfProbeAsm probeMarker =
+    unlines [".intel_syntax noprefix"]
+        <> markerSectionAsm "htcc_probe_marker" probeMarker
+        <> unlines
+            [ ".global main"
+            , "main:"
+            , "    lea rdx, [rip + htcc_probe_marker]"
+            , "    xor eax, eax"
+            , "    ret"
+            ]
+
 escapeAsmString :: String -> String
 escapeAsmString = concatMap $ \case
     '"' -> "\\\""
     '\\' -> "\\\\"
     c -> [c]
 
-asmCompiler :: IO CompilerCommand
-asmCompiler = do
+asmCompiler :: Bool -> IO CompilerCommand
+asmCompiler suppressWarnsOutput = do
     htccAssembler <- nonEmptyEnv <$> lookupEnv "HTCC_ASSEMBLER"
     compilerSpec <- resolveCompilerCommand $ fromMaybe "gcc" htccAssembler
-    ensureX86_64ElfCompiler compilerSpec
+    ensureX86_64ElfCompiler suppressWarnsOutput compilerSpec
     pure compilerSpec
 
 data CompilerProbeFailure
     = CompilerAssemblyProbeFailure
     | CompilerLinkProbeFailure
 
-ensureX86_64ElfCompiler :: CompilerCommand -> IO ()
-ensureX86_64ElfCompiler compilerSpec = do
+ensureX86_64ElfCompiler :: Bool -> CompilerCommand -> IO ()
+ensureX86_64ElfCompiler suppressWarnsOutput compilerSpec = do
     detectedTargets <- probeCompilerTargets compilerSpec
     probeResult <- probeCompilerInvocation compilerSpec
     case probeResult of
@@ -491,6 +3914,17 @@ ensureX86_64ElfCompiler compilerSpec = do
             ioError . userError $
                 "HTCC_ASSEMBLER assembled an x86_64-ELF object but failed a link probe for -r; choose a compiler driver that supports both assembly and linking for -r"
 
+        wrapCompilerProbeIOError compilerSpec' args action =
+            catchIOError
+                action
+                ( \ioErr ->
+                    ioError . userError $
+                        "failed to start HTCC_ASSEMBLER probe "
+                            <> showCompilerCommandForUser compilerSpec' args
+                            <> ": "
+                            <> ioeGetErrorString ioErr
+                )
+
         probeCompilerTargets compilerSpec' =
             mapMaybe id <$> mapM (probeCompilerTarget compilerSpec')
                 [ "-dumpmachine"
@@ -498,61 +3932,107 @@ ensureX86_64ElfCompiler compilerSpec = do
                 ]
 
         probeCompilerTarget compilerSpec' probeArg = do
-            catchIOError
-                (do
-                    (exitCode, stdout', _) <- readCompilerProcessWithExitCode compilerSpec' [probeArg]
-                    pure $ case exitCode of
-                        ExitSuccess   -> nonEmptyTrimmed stdout'
-                        ExitFailure _ -> Nothing
-                )
-                (const $ pure Nothing)
+            (exitCode, stdout', _) <-
+                wrapCompilerProbeIOError compilerSpec' [probeArg] $
+                    readCompilerProcessWithExitCodeProbeUntil
+                        capturedCompilerTargetLineAvailableAfterExit
+                        suppressWarnsOutput
+                        compilerSpec'
+                        [probeArg]
+            pure $ case exitCode of
+                ExitSuccess   -> nonEmptyTrimmed stdout'
+                ExitFailure _ -> Nothing
 
         probeCompilerInvocation compilerSpec' =
             withProbeFile "htcc-probe-.s" $ \asmPath asmHandle -> do
                 withProbeFile "htcc-probe-.o" $ \objPath objHandle -> do
-                    let probeMarker = makeProbeMarker asmPath objPath
-                    hPutStr asmHandle $ x86_64ElfProbeAsm probeMarker
-                    hClose asmHandle
-                    setFileMode objPath temporaryWritableMode
-                    hClose objHandle
-                    let assembleArgs = asmAssembleArgs objPath asmPath
-                    probeProcessResult <- probeCommandExitCode compilerSpec' assembleArgs
-                    case probeProcessResult of
-                        Just ExitSuccess -> do
-                            probeTarget <- detectProbeObjectTarget objPath
-                            case probeTarget of
-                                Just target
-                                    | isX86_64ElfTarget target -> do
-                                        linkSucceeded <- probeCompilerLink compilerSpec' objPath probeMarker
-                                        pure $
-                                            if linkSucceeded
-                                                then Right target
-                                                else Left CompilerLinkProbeFailure
-                                    | otherwise -> pure $ Right target
-                                Nothing ->
+                    withProbeFile "htcc-probe-marker-.s" $ \markerAsmPath markerAsmHandle -> do
+                        withProbeFile "htcc-probe-marker-.o" $ \markerObjPath markerObjHandle -> do
+                            let probeMarker =
+                                    makeRunnableLinkedOutputMarker asmPath objPath markerObjPath
+                            hPutStr asmHandle $ x86_64ElfProbeAsm probeMarker
+                            hClose asmHandle
+                            hPutStr
+                                markerAsmHandle
+                                (x86_64ElfRunnableLinkedOutputMarkerAsm probeMarker)
+                            hClose markerAsmHandle
+                            setFileMode objPath temporaryWritableMode
+                            hClose objHandle
+                            setFileMode markerObjPath temporaryWritableMode
+                            hClose markerObjHandle
+                            let assembleArgs = asmAssembleArgs objPath asmPath
+                                markerAssembleArgs =
+                                    asmAssembleArgs markerObjPath markerAsmPath
+                            assemblePostExitDrainSatisfied <-
+                                stabilizeCompilerObjectOutputAfterExit objPath
+                            probeProcessResult <-
+                                probeCommandExitCode
+                                    compilerSpec'
+                                    assembleArgs
+                                    assemblePostExitDrainSatisfied
+                            case probeProcessResult of
+                                Just ExitSuccess -> do
+                                    probeTarget <- detectProbeObjectTarget objPath
+                                    case probeTarget of
+                                        Just target
+                                            | isX86_64ElfTarget target -> do
+                                                markerAssemblePostExitDrainSatisfied <-
+                                                    stabilizeCompilerObjectOutputAfterExit
+                                                        markerObjPath
+                                                markerProbeProcessResult <-
+                                                    probeCommandExitCode
+                                                        compilerSpec'
+                                                        markerAssembleArgs
+                                                        markerAssemblePostExitDrainSatisfied
+                                                case markerProbeProcessResult of
+                                                    Just ExitSuccess -> do
+                                                        linkSucceeded <-
+                                                            probeCompilerLink
+                                                                compilerSpec'
+                                                                objPath
+                                                                markerObjPath
+                                                                probeMarker
+                                                        pure $
+                                                            if linkSucceeded
+                                                                then Right target
+                                                                else Left CompilerLinkProbeFailure
+                                                    _ ->
+                                                        pure $ Left CompilerLinkProbeFailure
+                                            | otherwise -> pure $ Right target
+                                        Nothing ->
+                                            pure $ Left CompilerAssemblyProbeFailure
+                                _ ->
                                     pure $ Left CompilerAssemblyProbeFailure
-                        _ ->
-                            pure $ Left CompilerAssemblyProbeFailure
 
-        probeCompilerLink compilerSpec' objPath probeMarker =
+        probeCompilerLink compilerSpec' objPath markerObjPath probeMarker =
             withProbeFile "htcc-probe-.out" $ \outputPath outputHandle -> do
                 creationMode <- creationMaskedOutputMode
                 setFileMode outputPath $
                     stagedOutputMode PreserveReplacementOutputModeKeepingExecutableBits creationMode
                 hClose outputHandle
-                let linkArgs = asmLinkArgs outputPath objPath
-                probeProcessResult <- probeCommandExitCode compilerSpec' linkArgs
+                let linkArgs = asmRunnableLinkArgs outputPath objPath markerObjPath
+                linkPostExitDrainSatisfied <-
+                    stabilizePostExitPredicate $
+                        validateRunnableLinkedOutput outputPath (Just probeMarker)
+                probeProcessResult <-
+                    probeCommandExitCode
+                        compilerSpec'
+                        linkArgs
+                        linkPostExitDrainSatisfied
                 case probeProcessResult of
-                    Just ExitSuccess -> validateRunnableLinkedOutput outputPath (Just probeMarker)
+                    Just ExitSuccess ->
+                        validateRunnableLinkedOutput outputPath (Just probeMarker)
                     _                -> pure False
 
-        probeCommandExitCode compilerSpec' args =
-            catchIOError
-                (do
-                    (exitCode, _, _) <- readCompilerProcessWithExitCode compilerSpec' args
-                    pure $ Just exitCode
-                )
-                (const $ pure Nothing)
+        probeCommandExitCode compilerSpec' args postExitDrainSatisfied =
+            Just . (\(exitCode, _, _) -> exitCode)
+                <$> wrapCompilerProbeIOError compilerSpec' args
+                    ( readCompilerProcessWithExitCodeProbeUntil
+                        (\_ -> postExitDrainSatisfied)
+                        suppressWarnsOutput
+                        compilerSpec'
+                        args
+                    )
 
         withProbeFile prefix action = do
             tmpDir <- getTemporaryDirectory
@@ -562,20 +4042,6 @@ ensureX86_64ElfCompiler compilerSpec = do
                 ( ignoreIOException (hClose handle)
                     *> ignoreIOException (removeFile path)
                 )
-
-        makeProbeMarker asmPath objPath =
-            "htcc-probe-marker:" <> takeFileName asmPath <> ":" <> takeFileName objPath
-
-        x86_64ElfProbeAsm probeMarker =
-            unlines [".intel_syntax noprefix"]
-                <> markerSectionAsm "htcc_probe_marker" probeMarker
-                <> unlines
-                    [ ".global main"
-                    , "main:"
-                    , "    lea rdx, [rip + htcc_probe_marker]"
-                    , "    xor eax, eax"
-                    , "    ret"
-                    ]
 
         nonEmptyTrimmed outputText =
             case trim outputText of
@@ -643,13 +4109,17 @@ asmAssembleArgs objPath asmPath =
     , asmPath
     ]
 
-asmLinkArgs :: FilePath -> FilePath -> [String]
-asmLinkArgs outputPath objPath =
+asmLinkArgs :: FilePath -> [String] -> [String]
+asmLinkArgs outputPath objPaths =
     [ "-no-pie"
     , "-o"
     , outputPath
-    , objPath
     ]
+        <> objPaths
+
+asmRunnableLinkArgs :: FilePath -> FilePath -> FilePath -> [String]
+asmRunnableLinkArgs outputPath objPath markerObjPath =
+    asmLinkArgs outputPath [objPath, markerObjPath]
 
 normalizeComparablePath :: FilePath -> IO FilePath
 normalizeComparablePath path = do
@@ -679,14 +4149,21 @@ sameFileAs lhs rhs = do
             rhsIdentity <- fileIdentity rhs
             pure $ maybe False id $ (==) <$> lhsIdentity <*> rhsIdentity
 
+existingInputAliasesPath :: FilePath -> FilePath -> IO Bool
+existingInputAliasesPath outputPath inputPath = do
+    inputExists <- doesFileExist inputPath
+    if inputExists
+        then sameFileAs outputPath inputPath
+        else pure False
+
 runAsmOutputAliasesInput :: Opts -> IO Bool
 runAsmOutputAliasesInput opts = do
-    anyM (sameFileAs $ asmOutputPath opts) $ optInput opts
+    anyM (existingInputAliasesPath $ asmOutputPath opts) $ optInput opts
 
 plainOutputAliasesInput :: Opts -> IO Bool
 plainOutputAliasesInput opts = maybe
     (pure False)
-    (\path -> anyM (sameFileAs path) $ optInput opts)
+    (\path -> anyM (existingInputAliasesPath path) $ optInput opts)
     (optOutput opts)
 
 anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
@@ -702,8 +4179,63 @@ executableFileMode = foldr1 unionFileModes
     , otherExecuteMode
     ]
 
+defaultVisualizeResolution :: (Double, Double)
+defaultVisualizeResolution = (640, 480)
+
+visualizeOutputPath :: Opts -> FilePath
+visualizeOutputPath = fromMaybe "./out.svg" . optOutput
+
+parseImageResolution :: String -> Maybe (Double, Double)
+parseImageResolution inputValue = case break (== 'x') inputValue of
+    (width, 'x' : height) -> case (readMaybe width, readMaybe height) of
+        (Just parsedWidth, Just parsedHeight)
+            | isPositiveFiniteResolution parsedWidth && isPositiveFiniteResolution parsedHeight ->
+                Just (parsedWidth, parsedHeight)
+        _ ->
+            Nothing
+    _                     -> Nothing
+
+isPositiveFiniteResolution :: Double -> Bool
+isPositiveFiniteResolution value =
+    value > 0 && not (isInfinite value || isNaN value)
+
+visualizeSizeSpec :: Opts -> IO (SizeSpec V2 Double)
+visualizeSizeSpec opts = case optImgResolution opts of
+    Just resolutionValue -> case parseImageResolution resolutionValue of
+        Just (width, height) ->
+            pure $ mkSizeSpec2D (Just width) (Just height)
+        Nothing -> do
+            unless (optSuppressWarns opts) $
+                hPutStr stderr "warning: the specified resolution is invalid, so using default resolution.\n"
+            let (width, height) = defaultVisualizeResolution
+            pure $ mkSizeSpec2D (Just width) (Just height)
+    Nothing -> do
+        let (width, height) = defaultVisualizeResolution
+        pure $ mkSizeSpec2D (Just width) (Just height)
+
+emitWarningsIfEnabled :: Foldable f => Opts -> f (M.ParseErrorBundle T.Text Void) -> IO ()
+emitWarningsIfEnabled opts warnings =
+    unless (optSuppressWarns opts) $
+        emitWarnings warnings
+
 validateOpts :: Opts -> IO ()
 validateOpts opts
+    | optVisualizeAst opts && optIsRunAsm opts =
+        hPutStr stderr "--visualize-ast cannot be combined with -r\n" *> exitFailure
+    | optVisualizeAst opts && length (optInput opts) /= 1 =
+        hPutStr stderr "--visualize-ast expects exactly one input file\n" *> exitFailure
+    | optVisualizeAst opts = do
+        resolvedVisualizeOutputPath <- resolveReplacementOutputPath $ visualizeOutputPath opts
+        either
+            (\msg -> hPutStr stderr (msg <> "\n") *> exitFailure)
+            pure
+            (validateVisualizationOutputPath resolvedVisualizeOutputPath)
+        outputAliasesInput <- anyM (existingInputAliasesPath $ visualizeOutputPath opts) $ optInput opts
+        when outputAliasesInput $
+            hPutStr stderr ("--visualize-ast output path must not overwrite an input file: " <> visualizeOutputPath opts <> "\n")
+                *> exitFailure
+    | isJust (optImgResolution opts) =
+        hPutStr stderr "--img-resolution requires --visualize-ast\n" *> exitFailure
     | length (optInput opts) > 1 && optIsRunAsm opts =
         hPutStr stderr "multiple input files are not supported with -r\n" *> exitFailure
     | optIsRunAsm opts = do
@@ -724,14 +4256,32 @@ emitWarnings :: Foldable f => f (M.ParseErrorBundle T.Text Void) -> IO ()
 emitWarnings =
     mapM_ (hPutStr stderr . M.errorBundlePretty)
 
+collectedWarnings :: Foldable f => f ParsedInputWithWarnings -> Warnings
+collectedWarnings =
+    foldMap fst
+
+collectedWarningsInInputOrder :: [ParsedInputWithWarnings] -> Warnings
+collectedWarningsInInputOrder =
+    collectedWarnings . reverse
+
 implicitFunctionWarningName :: M.ParseErrorBundle T.Text Void -> Maybe T.Text
-implicitFunctionWarningName M.ParseErrorBundle { M.bundleErrors = M.FancyError _ fancyErrors :| [] } = do
-    msg <- case Set.toList fancyErrors of
-        [M.ErrorFail errMsg] -> Just $ T.pack errMsg
-        _                    -> Nothing
+implicitFunctionWarningName M.ParseErrorBundle { M.bundleErrors = bundledError :| [] } = do
+    msg <- case bundledError of
+        M.FancyError _ fancyErrors -> case Set.toList fancyErrors of
+            [M.ErrorFail errMsg] ->
+                Just $ T.pack errMsg
+            _ ->
+                Nothing
+        _ ->
+            Nothing
     T.stripPrefix (T.pack "warning: the function '") msg
         >>= T.stripSuffix (T.pack "' is not declared.")
 implicitFunctionWarningName _ = Nothing
+
+originatingInputDeclaresFunction :: ParsedInput -> T.Text -> Bool
+originatingInputDeclaresFunction (_, _, _, funcs) name =
+    maybe False (not . PF.fnImplicit) $
+        Map.lookup name funcs
 
 implicitFunctionResolvedAfterMerge :: ParsedInput -> T.Text -> Bool
 implicitFunctionResolvedAfterMerge (_, _, _, funcs) name =
@@ -740,10 +4290,14 @@ implicitFunctionResolvedAfterMerge (_, _, _, funcs) name =
         (\func -> not (CT.isSCStatic $ PF.fntype func) && not (PF.fnImplicit func))
         $ Map.lookup name funcs
 
-shouldEmitMergedWarning :: ParsedInput -> M.ParseErrorBundle T.Text Void -> Bool
-shouldEmitMergedWarning parsedInput warning =
-    maybe True
-        (not . implicitFunctionResolvedAfterMerge parsedInput)
+shouldEmitMergedWarning :: ParsedInput -> ParsedInput -> M.ParseErrorBundle T.Text Void -> Bool
+shouldEmitMergedWarning originatingInput mergedInput warning =
+    maybe
+        True
+        ( \name ->
+            originatingInputDeclaresFunction originatingInput name
+                || not (implicitFunctionResolvedAfterMerge mergedInput name)
+        )
         (implicitFunctionWarningName warning)
 
 literalLabelPrefix :: T.Text
@@ -1123,13 +4677,39 @@ implicitFunctionCallsInATree (ATNode kind _ lhs rhs) =
         <> implicitFunctionCallsInATree rhs
 
 mergeOutputInputs :: [ParsedInput] -> Either String ParsedInput
-mergeOutputInputs parsedInputs =
-    foldM mergeInput ([], Map.empty, [], Map.empty, Map.empty, Map.empty) (zip [0 :: Int ..] parsedInputs) >>= finalize
+mergeOutputInputs =
+    mergePreparedInputs prepareAsmInput
+
+mergeVisualizableInputs :: [ParsedInput] -> Either String ParsedInput
+mergeVisualizableInputs =
+    mergePreparedInputs prepareVisualizableInput
+
+mergePreparedInputs
+    :: (PF.Functions Integer -> ASTs Integer -> GlobalVars Integer -> Either String (ASTs Integer, GlobalVars Integer))
+    -> [ParsedInput]
+    -> Either String ParsedInput
+mergePreparedInputs prepareMergedInput =
+    mergeParsedInputs finalize
     where
         finalize (asts, gvars, lits, funcs, _, _) = do
-            (preparedAsts, preparedGVars) <- prepareAsmInput (fmap fst funcs) asts gvars
+            (preparedAsts, preparedGVars) <- prepareMergedInput (fmap fst funcs) asts gvars
             pure (preparedAsts, preparedGVars, lits, fmap fst funcs)
 
+mergeParsedInputs
+    :: (( ASTs Integer
+        , GlobalVars Integer
+        , Literals Integer
+        , Map.Map T.Text (PF.Function Integer, Bool)
+        , Map.Map T.Text TaggedExternalSymbol
+        , StaticSymbols
+        )
+        -> Either String ParsedInput
+       )
+    -> [ParsedInput]
+    -> Either String ParsedInput
+mergeParsedInputs finalize parsedInputs =
+    foldM mergeInput ([], Map.empty, [], Map.empty, Map.empty, Map.empty) (zip [0 :: Int ..] parsedInputs) >>= finalize
+    where
         mergeInput (astsAcc, gvarsAcc, litsAcc, funcsAcc, symbolsAcc, staticSymbolsAcc) (inputIndex, (asts, gvars, lits, funcs)) = do
             let parsedInput = (asts, gvars, lits, funcs)
                 actualDefinitions = definedFunctions parsedInput
@@ -1308,44 +4888,112 @@ mergeOutputInputs parsedInputs =
 runAsm :: Maybe Handle -> Opts -> SI.Asm SI.AsmCodeCtx Integer a -> IO a
 runAsm outputHandle opts asm
     | optIsRunAsm opts = do
-        withReplacementOutputPath PreserveReplacementOutputModeKeepingExecutableBits (asmOutputPath opts) $ \tmpOutputPath -> do
-            compilerSpec <- asmCompiler
-            tmpDir <- getTemporaryDirectory
-            (asmPath, tmpHandle) <- openTempFile tmpDir "htcc-.s"
-            finally
-                ( do
-                    (objPath, objHandle) <- openTempFile tmpDir "htcc-.o"
-                    let cleanupObj =
-                            ignoreIOException (hClose objHandle)
-                                *> ignoreIOException (removeFile objPath)
-                    finally
-                        ( do
-                            setFileMode objPath temporaryWritableMode
-                            hClose objHandle
-                            let assembleArgs = asmAssembleArgs objPath asmPath
-                                linkArgs = asmLinkArgs tmpOutputPath objPath
-                            result <- SI.runAsmWithHandle tmpHandle asm
-                            hClose tmpHandle
-                            when (optIsVerbose opts) $
-                                hPutStr stderr $ showCompilerCommandForUser compilerSpec assembleArgs <> "\n"
-                            callCompilerProcess compilerSpec assembleArgs
-                            when (optIsVerbose opts) $
-                                hPutStr stderr $ showCompilerCommandForUser compilerSpec linkArgs <> "\n"
-                            callCompilerProcess compilerSpec linkArgs
-                            shouldValidateOutput <- shouldValidateRunnableLinkedOutput tmpOutputPath
-                            when shouldValidateOutput $ do
-                                linkedOutputOk <- validateRunnableLinkedOutput tmpOutputPath Nothing
-                                when (not linkedOutputOk) $
-                                    ioError . userError $
-                                        "HTCC_ASSEMBLER produced a non-runnable final output for -r: "
-                                            <> asmOutputPath opts
-                            pure result
-                        )
-                        cleanupObj
-                )
-                ( ignoreIOException (hClose tmpHandle)
-                    *> ignoreIOException (removeFile asmPath)
-                )
+        resolvedOutputPath <- resolveReplacementOutputPath $ asmOutputPath opts
+        shouldValidateOutput <- shouldValidateRunnableLinkedOutput resolvedOutputPath
+        snd <$>
+            withReplacementOutputPathAndResolvedPath PreserveReplacementOutputModeKeepingExecutableBits (asmOutputPath opts) (\tmpOutputPath -> do
+                compilerSpec <- asmCompiler $ optSuppressWarns opts
+                tmpDir <- getTemporaryDirectory
+                (asmPath, tmpHandle) <- openTempFile tmpDir "htcc-.s"
+                finally
+                    ( do
+                        (objPath, objHandle) <- openTempFile tmpDir "htcc-.o"
+                        let cleanupObj =
+                                ignoreIOException (hClose objHandle)
+                                    *> ignoreIOException (removeFile objPath)
+                        finally
+                            ( do
+                                (markerAsmPath, markerAsmHandle) <- openTempFile tmpDir "htcc-marker-.s"
+                                let cleanupMarkerAsm =
+                                        ignoreIOException (hClose markerAsmHandle)
+                                            *> ignoreIOException (removeFile markerAsmPath)
+                                finally
+                                    ( do
+                                        (markerObjPath, markerObjHandle) <- openTempFile tmpDir "htcc-marker-.o"
+                                        let cleanupMarkerObj =
+                                                ignoreIOException (hClose markerObjHandle)
+                                                    *> ignoreIOException (removeFile markerObjPath)
+                                        finally
+                                            ( do
+                                                let runnableOutputMarker =
+                                                        makeRunnableLinkedOutputMarker
+                                                            asmPath
+                                                            objPath
+                                                            markerObjPath
+                                                hPutStr
+                                                    markerAsmHandle
+                                                    (x86_64ElfRunnableLinkedOutputMarkerAsm runnableOutputMarker)
+                                                hClose markerAsmHandle
+                                                setFileMode markerObjPath temporaryWritableMode
+                                                hClose markerObjHandle
+                                                let markerAssembleArgs = asmAssembleArgs markerObjPath markerAsmPath
+                                                when (optIsVerbose opts) $
+                                                    hPutStr stderr $
+                                                        showCompilerCommandForUser compilerSpec markerAssembleArgs
+                                                            <> "\n"
+                                                markerAssemblePostExitDrainSatisfied <-
+                                                    stabilizeCompilerObjectOutputAfterExit
+                                                        markerObjPath
+                                                callCompilerProcessUntil
+                                                    markerAssemblePostExitDrainSatisfied
+                                                    (optSuppressWarns opts)
+                                                    compilerSpec
+                                                    markerAssembleArgs
+                                                setFileMode objPath temporaryWritableMode
+                                                hClose objHandle
+                                                let assembleArgs = asmAssembleArgs objPath asmPath
+                                                    linkArgs =
+                                                        asmRunnableLinkArgs tmpOutputPath objPath markerObjPath
+                                                result' <- SI.runAsmWithHandle tmpHandle asm
+                                                hClose tmpHandle
+                                                when (optIsVerbose opts) $
+                                                    hPutStr stderr $
+                                                        showCompilerCommandForUser compilerSpec assembleArgs <> "\n"
+                                                assemblePostExitDrainSatisfied <-
+                                                    stabilizeCompilerObjectOutputAfterExit
+                                                        objPath
+                                                callCompilerProcessUntil
+                                                    assemblePostExitDrainSatisfied
+                                                    (optSuppressWarns opts)
+                                                    compilerSpec
+                                                    assembleArgs
+                                                linkPostExitDrainSatisfied <-
+                                                    if shouldValidateOutput
+                                                        then
+                                                            stabilizePostExitPredicate $
+                                                                validateRunnableLinkedOutput
+                                                                    tmpOutputPath
+                                                                    (Just runnableOutputMarker)
+                                                        else pure waitForCompilerProcessGroupQuiescenceAfterExit
+                                                when (optIsVerbose opts) $
+                                                    hPutStr stderr $
+                                                        showCompilerCommandForUser compilerSpec linkArgs <> "\n"
+                                                callCompilerProcessUntil
+                                                    linkPostExitDrainSatisfied
+                                                    (optSuppressWarns opts)
+                                                    compilerSpec
+                                                    linkArgs
+                                                when shouldValidateOutput $ do
+                                                    linkedOutputOk <-
+                                                        validateRunnableLinkedOutput
+                                                            tmpOutputPath
+                                                            (Just runnableOutputMarker)
+                                                    when (not linkedOutputOk) $
+                                                        ioError . userError $
+                                                            "HTCC_ASSEMBLER produced a non-runnable final output for -r: "
+                                                                <> asmOutputPath opts
+                                                pure result'
+                                            )
+                                            cleanupMarkerObj
+                                    )
+                                    cleanupMarkerAsm
+                            )
+                            cleanupObj
+                    )
+                    ( ignoreIOException (hClose tmpHandle)
+                        *> ignoreIOException (removeFile asmPath)
+                    )
+            )
     | otherwise = maybe
         (SI.runAsm asm)
         (`SI.runAsmWithHandle` asm)
@@ -1357,6 +5005,8 @@ main = do
     validateOpts opts
     let allowSameInputExternalCollisions =
             not (optIsRunAsm opts) && length (optInput opts) > 1
+        emitWarnings' warningsToEmit =
+            emitWarningsIfEnabled opts warningsToEmit
         parserRunner =
             if allowSameInputExternalCollisions
                 then PT.runParserAllowSameInputExternalCollisions
@@ -1376,45 +5026,59 @@ main = do
             readInput fname >>= uncurry parseInputRaw
         readParsedInput fname = do
             (warns, parsedInput) <- readParsedInputRaw fname
-            emitWarnings warns
-            mergeParsedInputs [parsedInput]
-        readMergedInputRaw warnings parsedInputs [] =
-            pure (warnings, reverse parsedInputs)
-        readMergedInputRaw warnings parsedInputs (fname:fnames) =
+            case mergeParsedInputsEither [parsedInput] of
+                Left msg -> do
+                    emitWarnings' warns
+                    hPutStr stderr (msg <> "\n")
+                    exitFailure
+                Right mergedInput -> do
+                    emitWarnings' warns
+                    pure mergedInput
+        readVisualizableInput fname = do
+            (warns, parsedInput) <- readParsedInputRaw fname
+            case mergeVisualizableInputsEither [parsedInput] of
+                Left msg -> do
+                    emitWarnings' warns
+                    hPutStr stderr (msg <> "\n")
+                    exitFailure
+                Right mergedInput -> do
+                    emitWarnings' warns
+                    pure mergedInput
+        readMergedInputRaw parsedInputs [] =
+            pure $ reverse parsedInputs
+        readMergedInputRaw parsedInputs (fname:fnames) =
             catchIOError
                 ( do
                     (inputName, txt) <- readInput fname
                     case parseInputRawEither inputName txt of
                         Left parseErr -> do
-                            emitWarnings warnings
+                            emitWarnings' $ collectedWarningsInInputOrder parsedInputs
                             hPutStr stderr (M.errorBundlePretty parseErr)
                             exitFailure
                         Right (warns, parsedInput) ->
                             readMergedInputRaw
-                                (warnings <> toList warns)
-                                (parsedInput : parsedInputs)
+                                ((warns, parsedInput) : parsedInputs)
                                 fnames
                 )
-                (\ioErr -> emitWarnings warnings *> ioError ioErr)
+                (\ioErr -> emitWarnings' (collectedWarningsInInputOrder parsedInputs) *> ioError ioErr)
         mergeParsedInputsEither parsedInputs =
             mergeOutputInputs $ shiftLiteralLabelsInInputs parsedInputs
-        mergeParsedInputs parsedInputs =
-            either
-                (\msg -> hPutStr stderr (msg <> "\n") *> exitFailure)
-                pure
-                (mergeParsedInputsEither parsedInputs)
+        mergeVisualizableInputsEither parsedInputs =
+            mergeVisualizableInputs $ shiftLiteralLabelsInInputs parsedInputs
         readMergedInput = do
-            (warnings, parsedInputs) <- readMergedInputRaw [] [] (optInput opts)
+            parsedInputsWithWarnings <- readMergedInputRaw [] (optInput opts)
+            let parsedInputs = map snd parsedInputsWithWarnings
             case mergeParsedInputsEither parsedInputs of
                 Left msg -> do
-                    emitWarnings warnings
+                    emitWarnings' $ collectedWarnings parsedInputsWithWarnings
                     hPutStr stderr (msg <> "\n")
                     exitFailure
                 Right parsedInput -> do
-                    emitWarnings
+                    emitWarnings'
                         [ warning
-                        | warning <- warnings
-                        , shouldEmitMergedWarning parsedInput warning
+                        | (warnings, originatingInput) <- parsedInputsWithWarnings
+                        , warning <- foldMap pure warnings
+                        , shouldEmitMergedWarning originatingInput parsedInput warning
                         ]
                     pure parsedInput
         runParsed outputHandle (asts, gvars, lits, _) =
@@ -1425,7 +5089,15 @@ main = do
                 _ <- evaluate $ T.foldl' (\n _ -> succ n) (0 :: Int) txt'
                 pure txt'
             pure (fname, txt)
-    if optIsRunAsm opts
+        runVisualize fname = do
+            (asts, _, _, _) <- readVisualizableInput fname
+            sizeSpec <- visualizeSizeSpec opts
+            writeVisualization asts sizeSpec (visualizeOutputPath opts)
+    if optVisualizeAst opts
+        then case optInput opts of
+            [fname] -> runVisualize fname
+            _       -> hPutStr stderr "internal compiler error: invalid visualize inputs\n" *> exitFailure
+        else if optIsRunAsm opts
         then forM_ (optInput opts) $ \fname ->
             readParsedInput fname >>= runParsed Nothing
         else maybe

@@ -18,20 +18,21 @@ module Htcc.Utils.Print (
     warnCharDoc, locTxtDoc, locCharDoc,
 ) where
 
-import qualified Data.Text                    as T
-import qualified Data.Text.IO                 as T
-import           Prelude                      hiding (toInteger)
-import           System.Exit                  (exitFailure)
-import           System.IO                    (stderr)
-import           Text.PrettyPrint.ANSI.Leijen (Doc, bold, char, hPutDoc,
-                                               linebreak, magenta, putDoc, red,
-                                               text)
+import qualified Data.Text                     as T
+import qualified Data.Text.IO                  as T
+import           Prelude                       hiding (toInteger)
+import qualified Prettyprinter                 as PP
+import           Prettyprinter.Render.Terminal (AnsiStyle, Color (Magenta, Red),
+                                                bold, color, hPutDoc, putDoc)
+import           System.Exit                   (exitFailure)
+import           System.IO                     (stderr)
+
+type Doc = PP.Doc AnsiStyle
 
 {-# INLINE putDocLn #-}
--- | Execute `Text.PrettyPrint.ANSI.Leijen.putDoc` by applying `Text.PrettyPrint.ANSI.Leijen.linebreak`
--- to `Text.PrettyPrint.ANSI.Leijen.<>` at the end of given `Text.PrettyPrint.ANSI.Leijen.Doc`
+-- | Execute `putDoc` by appending a trailing line break to the given `Doc`.
 putDocLn :: Doc -> IO ()
-putDocLn = putDoc . flip (<>) linebreak
+putDocLn = putDoc . flip (<>) PP.hardline
 
 {-# INLINE putDocErr #-}
 -- | The shortcut of @hPutDoc stderr@
@@ -39,46 +40,41 @@ putDocErr :: Doc -> IO ()
 putDocErr = hPutDoc stderr
 
 {-# INLINE putDocLnErr #-}
--- | Execute `putDocErr` by applying `Text.PrettyPrint.ANSI.Leijen.linebreak`
--- to `Text.PrettyPrint.ANSI.Leijen.<>` at the end of given `Text.PrettyPrint.ANSI.Leijen.Doc`
+-- | Execute `putDocErr` by appending a trailing line break to the given `Doc`.
 putDocLnErr :: Doc -> IO ()
-putDocLnErr = putDocErr . flip (<>) linebreak
+putDocLnErr = putDocErr . flip (<>) PP.hardline
 
 {-# INLINE errTxtDoc #-}
--- | The `Text.PrettyPrint.ANSI.Leijen.Doc` used to output an error message (`String`),
--- it is shortcut of @red . text@
+-- | Doc used to output an error message (`String`).
 errTxtDoc :: String -> Doc
-errTxtDoc = red . text
+errTxtDoc = PP.annotate (color Red) . PP.pretty
 
 {-# INLINE errCharDoc #-}
--- | The `Text.PrettyPrint.ANSI.Leijen.Doc` used to output an error message (`Char`),
--- it is shortcut of @red. char@
+-- | Doc used to output an error message (`Char`).
 errCharDoc :: Char -> Doc
-errCharDoc = red . char
+errCharDoc = PP.annotate (color Red) . PP.pretty
 
 {-# INLINE warnTxtDoc #-}
--- | The `Text.PrettyPrint.ANSI.Leijen.Doc` used to output an warning message (`String`),
--- it is shortcut of @magenta . text@
+-- | Doc used to output a warning message (`String`).
 warnTxtDoc :: String -> Doc
-warnTxtDoc = magenta . text
+warnTxtDoc = PP.annotate (color Magenta) . PP.pretty
 
 {-# INLINE warnCharDoc #-}
--- | The `Text.PrettyPrint.ANSI.Leijen.Doc` used to output an warning message (`Char`),
--- it is shortcut of @magenta . char@
+-- | Doc used to output a warning message (`Char`).
 warnCharDoc :: Char -> Doc
-warnCharDoc = magenta . char
+warnCharDoc = PP.annotate (color Magenta) . PP.pretty
 
 {-# INLINE locTxtDoc #-}
 -- | Doc used to output a message (`String`) about the location, such as the file name and its location,
--- it is shortcut of @bold . text@
+-- it is shortcut of @annotate bold . pretty@
 locTxtDoc :: String -> Doc
-locTxtDoc = bold . text
+locTxtDoc = PP.annotate bold . PP.pretty
 
 {-# INLINE locCharDoc #-}
 -- | Doc used to output a message (`Char`) about the location, such as the file name and its location,
--- it is shortcut of @bold . char@
+-- it is shortcut of @annotate bold . pretty@
 locCharDoc :: Char -> Doc
-locCharDoc = bold . char
+locCharDoc = PP.annotate bold . PP.pretty
 
 -- | Standard error output shortcut (with new line).
 putStrLnErr :: T.Text -> IO ()

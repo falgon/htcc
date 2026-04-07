@@ -2,8 +2,10 @@ module Htcc.Output (
     ReplacementOutputMode (..),
     creationMaskedOutputMode,
     replaceExistingOutputFromPathWith,
+    resolveReplacementOutputPath,
     stagedOutputMode,
     temporaryWritableMode,
+    withReplacementOutputPathAndResolvedPath,
     withReplacementOutputPath,
 ) where
 
@@ -300,8 +302,12 @@ withFreshOutputPath modeStrategy resolvedOutputPath action = do
         )
         cleanup
 
-withReplacementOutputPath :: ReplacementOutputMode -> FilePath -> (FilePath -> IO a) -> IO a
-withReplacementOutputPath modeStrategy outputPath action = do
+withReplacementOutputPathAndResolvedPath
+    :: ReplacementOutputMode
+    -> FilePath
+    -> (FilePath -> IO a)
+    -> IO (FilePath, a)
+withReplacementOutputPathAndResolvedPath modeStrategy outputPath action = do
     resolvedOutputPath <- resolveReplacementOutputPath outputPath
     shouldReplace <- shouldReplaceOutputPath resolvedOutputPath
     if shouldReplace
@@ -309,13 +315,17 @@ withReplacementOutputPath modeStrategy outputPath action = do
             existingMode <- existingOutputMode resolvedOutputPath
             case existingMode of
                 Nothing ->
-                    withFreshOutputPath modeStrategy resolvedOutputPath action
+                    do
+                        result <- withFreshOutputPath modeStrategy resolvedOutputPath action
+                        pure (resolvedOutputPath, result)
                 Just baseMode -> do
                     let outputDir = takeDirectory resolvedOutputPath
                         outputTemplate = takeFileName resolvedOutputPath <> ".htcc-"
                         fallbackToDirect ioErr
                             | isPermissionError ioErr =
-                                withDirectReplacementOutputPath modeStrategy resolvedOutputPath baseMode action
+                                do
+                                    result <- withDirectReplacementOutputPath modeStrategy resolvedOutputPath baseMode action
+                                    pure (resolvedOutputPath, result)
                             | otherwise =
                                 ioError ioErr
                     catchIOError
@@ -330,11 +340,17 @@ withReplacementOutputPath modeStrategy outputPath action = do
                                     setFileMode tmpOutputPath $
                                         updatedOutputMode modeStrategy baseMode currentMode
                                     renameFile tmpOutputPath resolvedOutputPath
-                                    pure result
+                                    pure (resolvedOutputPath, result)
                                 )
                                 ( ignoreIOException (hClose tmpOutputHandle)
                                     *> ignoreIOException (removeFile tmpOutputPath)
                                 )
                         )
                         fallbackToDirect
-        else action resolvedOutputPath
+        else do
+            result <- action resolvedOutputPath
+            pure (resolvedOutputPath, result)
+
+withReplacementOutputPath :: ReplacementOutputMode -> FilePath -> (FilePath -> IO a) -> IO a
+withReplacementOutputPath modeStrategy outputPath action =
+    snd <$> withReplacementOutputPathAndResolvedPath modeStrategy outputPath action

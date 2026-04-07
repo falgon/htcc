@@ -4,14 +4,76 @@ module Tests.SubProcTests.AsmOutput (
     externalBoolParameterLowByteNormalizationTest,
     externalIntegralReturnNormalizationTest,
     outputFileTest,
+    outputFileLegacyLongAliasTest,
+    visualizeAstLegacyFlagsTest,
+    visualizeAstPreservesParsedForSectionsTest,
+    visualizeAstAcceptsAsmNormalizationFailureTest,
+    visualizeAstRejectsNonFiniteResolutionTest,
+    visualizeAstRejectsNonPositiveResolutionTest,
+    visualizeAstRejectsDeclarationOnlyInputTest,
+    visualizeAstRejectsNonSvgOutputTest,
+    visualizeAstAcceptsSymlinkAliasToSvgTargetTest,
+    visualizeAstRejectsSymlinkedNonSvgOutputTest,
+    imgResolutionRequiresVisualizeAstTest,
+    visualizeAstDefaultOutputSamePathTest,
+    visualizeAstDefaultOutputMissingInputTest,
+    visualizeAstSingleInputImplicitFunctionDefinitionWarningTest,
+    visualizeAstSingleInputPrototypeRetypeTest,
+    visualizeAstUsesMergedTentativeArrayTypeTest,
+    visualizeAstWriteFailurePreservesExistingOutputTest,
+    suppressWarnsCanonicalFlagTest,
+    suppressWarnsLegacyFlagTest,
+    suppressWarnsRunAsmTest,
+    suppressWarnsRunAsmSuppressesStdoutWarningsTest,
+    suppressWarnsRunAsmPreservesBinaryOutputTest,
+    suppressWarnsRunAsmPreservesUnterminatedStderrTest,
+    suppressWarnsRunAsmPreservesStdoutStderrInterleavingTest,
+    suppressWarnsRunAsmPreservesSameReadStdoutInterleavingTest,
+    suppressWarnsRunAsmPreservesSameReadStderrChunksTest,
+    suppressWarnsRunAsmScopesRetainedIndicesByStreamTest,
+    suppressWarnsRunAsmDropsSplitWarningWithInterleavedStdoutTest,
+    suppressWarnsRunAsmDropsSplitWarningPrefixTest,
+    suppressWarnsRunAsmDropsCrossStreamWarningPreambleTest,
+    suppressWarnsRunAsmPreservesStdoutPrefixBeforeStderrTest,
+    suppressWarnsRunAsmPreservesStderrPrefixBeforeStdoutTest,
+    suppressWarnsRunAsmDropsWarningPreambleTest,
+    suppressWarnsRunAsmDropsAnsiWarningPreambleTest,
+    suppressWarnsRunAsmDropsLeadingNoteTest,
+    suppressWarnsRunAsmDropsDriverContextTest,
+    suppressWarnsRunAsmDropsClangSnippetTest,
+    suppressWarnsRunAsmDropsMultiLineClangSnippetTest,
+    suppressWarnsRunAsmDropsSnippetOnlyContextTest,
+    suppressWarnsRunAsmDropsCrLfWarningBlockTest,
+    suppressWarnsRunAsmPreservesStandaloneLeadingNoteTest,
+    suppressWarnsRunAsmPreservesIndentedPostWarningStderrTest,
+    suppressWarnsRunAsmPreservesPunctuatedPostWarningStderrTest,
+    suppressWarnsRunAsmPreservesDirectivePostWarningStderrTest,
+    suppressWarnsRunAsmPreservesStandalonePreSummaryNoteTest,
+    suppressWarnsRunAsmPreservesStandalonePostWarningNoteTest,
+    suppressWarnsRunAsmPreservesStandalonePostWarningNoteWithoutSummaryTest,
+    suppressWarnsRunAsmPreservesErrorSnippetContainingWarningTokenTest,
+    suppressWarnsRunAsmPreservesWarningLabelErrorSnippetTest,
+    suppressWarnsRunAsmPreservesFailingDiagnosticsTest,
+    suppressWarnsRunAsmPreservesErrorPreambleAfterWarningTest,
+    suppressWarnsRunAsmDoesNotHangOnInheritedPipeHandlesTest,
+    suppressWarnsRunAsmStreamsRetainedStdoutPromptTest,
+    suppressWarnsRunAsmStreamsRetainedStdoutPromptWithoutNewlineTest,
+    suppressWarnsRunAsmStreamsRetainedStdoutAcrossPendingStderrTest,
+    suppressWarnsRunAsmSuppressesProbeCrossStreamWarningPreambleTest,
+    suppressWarnsRunAsmSuppressesProbePartialCrossStreamWarningPreambleTest,
+    suppressWarnsRunAsmProbeClosesStdinTest,
+    suppressWarnsRunAsmPreservesStdinForRealInvocationsTest,
     outputFileSingleInputStaticTest,
     outputFileSingleInputImplicitFunctionTest,
     outputFileSingleInputImplicitFunctionConflictTest,
     outputFileSingleInputStaticImplicitFunctionConflictTest,
+    outputFileSingleInputImplicitFunctionDefinitionWarningTest,
+    outputFileSingleInputImplicitFunctionPrototypeWarningTest,
     outputFileSingleInputPrototypeRetypeTest,
     stdoutSingleInputImplicitFunctionConflictTest,
     stdoutMultiInputStaticFunctionTest,
     stdoutMultiInputImplicitFunctionDefinitionWarningTest,
+    stdoutMultiInputSameInputImplicitFunctionDefinitionWarningTest,
     stdoutMultiInputImplicitFunctionUnresolvedWarningTest,
     stdoutMultiInputParseFailurePreservesWarningsTest,
     stdoutMultiInputPrototypeOnlyArityRetypeTest,
@@ -33,6 +95,8 @@ module Tests.SubProcTests.AsmOutput (
     outputFileMultiInputOldStyleDeclarationTest,
     outputFileMultiInputOldStylePromotionConflictTest,
     outputFileMultiInputVoidPrototypeConflictTest,
+    outputFileMultiInputImplicitFunctionDefinitionWarningTest,
+    outputFileMultiInputImplicitFunctionPrototypeWarningTest,
     outputFileMultiInputImplicitFunctionDefinitionTest,
     outputFileMultiInputDeferredIncompletePointeeUseTest,
     outputFileMultiInputDeferredIncompletePointerAddSubAssignRejectTest,
@@ -53,6 +117,7 @@ module Tests.SubProcTests.AsmOutput (
     outputFileMultiInputObjectPointerInitializerRetypeTest,
     outputFileMultiInputPointerPointeeArrayConflictTest,
     outputFileMultiInputAggregateFunctionDesignatorInitializerTest,
+    outputFileMultiInputSameInputImplicitFunctionDefinitionWarningTest,
     outputFileMultiInputSameInputImplicitFunctionConflictTest,
     outputFileMultiInputSameInputFunctionDeclarationConflictTest,
     outputFileMultiInputSameInputStaticImplicitFunctionConflictTest,
@@ -76,6 +141,7 @@ module Tests.SubProcTests.AsmOutput (
     outputFileFollowsSymlinkTargetTest,
     outputFileSpecialPathDevNullTest,
     outputFileSamePathTest,
+    outputFileMissingInputMatchingOutputPathTest,
     outputFileHardLinkAliasTest,
     outputFileParseFailurePreservesExistingOutputTest,
     outputFileReadFailurePreservesExistingOutputTest,
@@ -88,8 +154,12 @@ module Tests.SubProcTests.AsmOutput (
     outputFileWriteFailurePreservesExistingOutputTest,
     outputFileFreshOutputRestrictiveUmaskTest,
     runAsmTest,
+    runAsmDoesNotInjectValidationMarkerIntoFinalAsmTest,
+    runAsmAcceptsUserDefinedValidationMarkerSymbolTest,
+    runAsmAcceptsGcSectionsLinkerTest,
     runAsmSingleInputImplicitFunctionConflictTest,
     runAsmSpecialPathDevNullTest,
+    runAsmSpecialPathDevNullSkipsPostLinkValidationWaitTest,
     runAsmPreservesExecutableBitsTest,
     runAsmPreservesExistingExecuteMaskTest,
     runAsmRestoresOwnerExecuteBitTest,
@@ -103,9 +173,23 @@ module Tests.SubProcTests.AsmOutput (
     runAsmWrappedAssemblerFirstWordDriverTest,
     runAsmWrappedAssemblerProbeFallbackTest,
     runAsmWrappedAssemblerHostMetadataFallbackTest,
+    runAsmWrappedAssemblerDelayedChildHostMetadataTest,
+    runAsmWrappedAssemblerDelayedChildFinalOutputTest,
+    runAsmDoesNotWaitOnBackgroundProcessGroupHelpersTest,
+    runAsmProbeDoesNotHangOnInheritedPipeHandlesTest,
+    runAsmProbeDoesNotHangOnEarlyClosedStdoutTest,
+    runAsmTildeExpandedAssemblerPathTest,
     runAsmLeadingEnvAssignmentTest,
+    runAsmLeadingEnvAssignmentExpandsTildePathTest,
+    runAsmExpandedAssignmentWordFailsTest,
+    runAsmQuotedAssignmentLikeExecutableTest,
+    runAsmEscapedAssignmentLikeExecutableTest,
     runAsmLeadingEnvAssignmentWithoutEnvPathTest,
     runAsmLeadingEnvAssignmentPreservesPathOverrideTest,
+    runAsmLeadingEnvAssignmentPreservesLiteralPercentAndBangTest,
+    runAsmLeadingEnvAssignmentPreservesSinglePassPosixExpansionTest,
+    runAsmLeadingEnvAssignmentPreservesInheritedPwdTest,
+    runAsmLeadingEnvAssignmentPreservesEscapedPosixLiteralTest,
     runAsmEnvPathOverrideEmptyEntryTest,
     runAsmEnvPathOverrideNoLocalFallbackTest,
     runAsmQuotedBackslashArgTest,
@@ -121,18 +205,25 @@ module Tests.SubProcTests.AsmOutput (
     runAsmReadOnlyParentHardLinkAliasPreservesExistingOutputTest,
     runAsmReadOnlyParentLinkFailurePreservesExistingOutputTest,
     runAsmFailurePreservesInputOutputAliasTest,
+    runAsmMissingInputMatchingOutputPathTest,
     runAsmFailurePreservesHardLinkInputOutputAliasTest,
     runAsmMalformedAssemblerPreservesExistingOutputTest,
     runAsmMalformedAssemblerTest,
     runAsmAcceptsFreeBsdElfTargetDriverTest,
     runAsmRejectsMissingAssemblerDriverTest,
+    runAsmRejectsNonExecutableAssemblerDriverTest,
     runAsmRejectsAssemblerWithoutLinkDriverTest,
+    runAsmRejectsSingleObjectOnlyLinkDriverTest,
     runAsmRejectsScriptLinkProbeDriverTest,
     runAsmRejectsSharedLinkProbeDriverTest,
+    runAsmRejectsForeignAbiLinkProbeDriverTest,
     runAsmRejectsBlobLinkProbeDriverTest,
     runAsmRejectsSymlinkLinkProbeDriverTest,
-    runAsmAcceptsMarkerStrippedFinalOutputTest,
+    runAsmRejectsSymlinkSpecialLinkProbeDriverTest,
+    runAsmRejectsNonExecutableLinkProbeDriverTest,
+    runAsmRejectsMarkerlessFinalOutputTest,
     runAsmRejectsBogusFinalLinkOutputTest,
+    runAsmRejectsNamedPipeFinalLinkOutputTest,
     runAsmRejectsExecutableObjectProbeDriverTest,
     runAsmRejectsSymlinkObjectProbeDriverTest,
     runAsmRejectsTouchingLinkDriverTest,
@@ -142,23 +233,36 @@ module Tests.SubProcTests.AsmOutput (
     runAsmFreshOutputRestrictiveUmaskTest
 ) where
 
-import           Control.Exception  (finally)
-import           Control.Monad      (when)
-import qualified Data.Text          as T
-import qualified Data.Text.IO       as T
-import           System.Directory   (createDirectoryIfMissing, doesFileExist,
-                                     findExecutable, listDirectory)
-import           System.FilePath    ((</>))
-import           System.Posix.Files (fileMode, getFileStatus,
-                                     getSymbolicLinkStatus, groupExecuteMode,
-                                     groupReadMode, groupWriteMode,
-                                     intersectFileModes, isSymbolicLink,
-                                     otherExecuteMode, otherReadMode,
-                                     otherWriteMode, ownerExecuteMode,
-                                     ownerReadMode, ownerWriteMode, setFileMode,
-                                     setGroupIDMode, setUserIDMode,
-                                     unionFileModes)
-import           System.Posix.Types (FileMode)
+import           Control.Exception     (finally)
+import           Control.Monad         (when)
+import qualified Data.ByteString       as B
+import qualified Data.ByteString.Char8 as BC
+import qualified Data.Text             as T
+import qualified Data.Text.IO          as T
+import           Data.Word             (Word8)
+import           Numeric               (showHex)
+import           System.Directory      (createDirectoryIfMissing, doesFileExist,
+                                        findExecutable, getCurrentDirectory,
+                                        listDirectory, removeFile)
+import           System.Exit           (ExitCode (ExitSuccess))
+import           System.FilePath       ((</>))
+import           System.Info           (os)
+import           System.IO             (hClose, openTempFile)
+import           System.IO.Error       (catchIOError)
+import           System.Posix.Files    (fileMode, getFileStatus,
+                                        getSymbolicLinkStatus, groupExecuteMode,
+                                        groupReadMode, groupWriteMode,
+                                        intersectFileModes, isSymbolicLink,
+                                        otherExecuteMode, otherReadMode,
+                                        otherWriteMode, ownerExecuteMode,
+                                        ownerReadMode, ownerWriteMode,
+                                        setFileMode, setGroupIDMode,
+                                        setUserIDMode, unionFileModes)
+import           System.Posix.Types    (FileMode)
+import           System.Process        (CreateProcess (std_err, std_out),
+                                        StdStream (CreatePipe), proc,
+                                        waitForProcess, withCreateProcess)
+import           System.Timeout        (timeout)
 import           Tests.Utils
 
 source :: T.Text
@@ -178,8 +282,197 @@ writeFailureSource = T.unlines $
            , "}"
            ]
 
+containsTextsInOrder :: [T.Text] -> T.Text -> Bool
+containsTextsInOrder needles =
+    go needles
+    where
+        go [] _ = True
+        go (needle:rest) haystack =
+            case T.breakOn needle haystack of
+                (_, suffix)
+                    | T.null suffix -> False
+                    | otherwise ->
+                        go rest (T.drop (T.length needle) suffix)
+
 outputFileMsg :: T.Text
 outputFileMsg = "CLI -o writes complete asm to the requested file"
+
+outputFileLegacyLongAliasMsg :: T.Text
+outputFileLegacyLongAliasMsg = "CLI --out remains accepted as a legacy alias for --output"
+
+visualizeAstLegacyFlagsMsg :: T.Text
+visualizeAstLegacyFlagsMsg = "CLI --visualize-ast with --img-resolution still renders SVG output"
+
+visualizeAstPreservesParsedForSectionsMsg :: T.Text
+visualizeAstPreservesParsedForSectionsMsg = "CLI --visualize-ast renders the parsed AST for omitted for-loop sections"
+
+visualizeAstAcceptsAsmNormalizationFailureMsg :: T.Text
+visualizeAstAcceptsAsmNormalizationFailureMsg = "CLI --visualize-ast still renders parseable inputs even when asm normalization would fail"
+
+visualizeAstRejectsNonFiniteResolutionMsg :: T.Text
+visualizeAstRejectsNonFiniteResolutionMsg = "CLI --visualize-ast rejects non-finite --img-resolution values and falls back to the default size"
+
+visualizeAstRejectsNonPositiveResolutionMsg :: T.Text
+visualizeAstRejectsNonPositiveResolutionMsg = "CLI --visualize-ast rejects non-positive --img-resolution values and falls back to the default size"
+
+visualizeAstRejectsDeclarationOnlyInputMsg :: T.Text
+visualizeAstRejectsDeclarationOnlyInputMsg = "CLI --visualize-ast rejects declaration-only inputs that produce no renderable AST"
+
+visualizeAstRejectsNonSvgOutputMsg :: T.Text
+visualizeAstRejectsNonSvgOutputMsg = "CLI --visualize-ast rejects non-SVG output paths before rendering"
+
+visualizeAstAcceptsSymlinkAliasToSvgTargetMsg :: T.Text
+visualizeAstAcceptsSymlinkAliasToSvgTargetMsg = "CLI --visualize-ast accepts symlink aliases that resolve to SVG targets"
+
+visualizeAstRejectsSymlinkedNonSvgOutputMsg :: T.Text
+visualizeAstRejectsSymlinkedNonSvgOutputMsg = "CLI --visualize-ast rejects symlinked outputs whose resolved target is not SVG"
+
+imgResolutionRequiresVisualizeAstMsg :: T.Text
+imgResolutionRequiresVisualizeAstMsg = "CLI rejects --img-resolution unless --visualize-ast is also enabled"
+
+visualizeAstDefaultOutputSamePathMsg :: T.Text
+visualizeAstDefaultOutputSamePathMsg = "CLI --visualize-ast rejects the default out.svg path when it aliases the input"
+
+visualizeAstDefaultOutputMissingInputMsg :: T.Text
+visualizeAstDefaultOutputMissingInputMsg = "CLI --visualize-ast reports missing out.svg inputs instead of misclassifying them as output collisions"
+
+visualizeAstSingleInputImplicitFunctionDefinitionWarningMsg :: T.Text
+visualizeAstSingleInputImplicitFunctionDefinitionWarningMsg = "CLI --visualize-ast keeps same-file implicit-function warnings even when a later definition resolves the call"
+
+visualizeAstSingleInputPrototypeRetypeMsg :: T.Text
+visualizeAstSingleInputPrototypeRetypeMsg = "CLI --visualize-ast revalidates same-file direct calls after later prototype refinements"
+
+visualizeAstUsesMergedTentativeArrayTypeMsg :: T.Text
+visualizeAstUsesMergedTentativeArrayTypeMsg = "CLI --visualize-ast renders merge-refined tentative array types instead of stale parsed nodes"
+
+visualizeAstWriteFailurePreservesExistingOutputMsg :: T.Text
+visualizeAstWriteFailurePreservesExistingOutputMsg = "CLI --visualize-ast preserves existing outputs when SVG rendering fails after opening the replacement file"
+
+suppressWarnsCanonicalFlagMsg :: T.Text
+suppressWarnsCanonicalFlagMsg = "CLI --suppress-warns suppresses parser warnings with the canonical spelling"
+
+suppressWarnsLegacyFlagMsg :: T.Text
+suppressWarnsLegacyFlagMsg = "CLI --supress-warns still suppresses parser warnings"
+
+suppressWarnsRunAsmMsg :: T.Text
+suppressWarnsRunAsmMsg = "CLI --suppress-warns suppresses HTCC_ASSEMBLER warnings in -r mode"
+
+suppressWarnsRunAsmSuppressesStdoutWarningsMsg :: T.Text
+suppressWarnsRunAsmSuppressesStdoutWarningsMsg = "CLI --suppress-warns suppresses HTCC_ASSEMBLER warnings emitted on stdout in -r mode"
+
+suppressWarnsRunAsmPreservesBinaryOutputMsg :: T.Text
+suppressWarnsRunAsmPreservesBinaryOutputMsg = "CLI --suppress-warns preserves non-UTF-8 HTCC_ASSEMBLER output in -r mode"
+
+suppressWarnsRunAsmPreservesUnterminatedStderrMsg :: T.Text
+suppressWarnsRunAsmPreservesUnterminatedStderrMsg = "CLI --suppress-warns preserves unterminated HTCC_ASSEMBLER stderr when no warning matches in -r mode"
+
+suppressWarnsRunAsmPreservesStdoutStderrInterleavingMsg :: T.Text
+suppressWarnsRunAsmPreservesStdoutStderrInterleavingMsg = "CLI --suppress-warns preserves HTCC_ASSEMBLER stdout/stderr interleaving when no warnings are removed in -r mode"
+
+suppressWarnsRunAsmPreservesSameReadStdoutInterleavingMsg :: T.Text
+suppressWarnsRunAsmPreservesSameReadStdoutInterleavingMsg = "CLI --suppress-warns preserves stderr between same-read stdout lines in -r mode"
+
+suppressWarnsRunAsmPreservesSameReadStderrChunksMsg :: T.Text
+suppressWarnsRunAsmPreservesSameReadStderrChunksMsg = "CLI --suppress-warns preserves same-read stderr lines before later stdout in -r mode"
+
+suppressWarnsRunAsmScopesRetainedIndicesByStreamMsg :: T.Text
+suppressWarnsRunAsmScopesRetainedIndicesByStreamMsg = "CLI --suppress-warns keeps retained chunk indices scoped by stream in -r mode"
+
+suppressWarnsRunAsmDropsSplitWarningWithInterleavedStdoutMsg :: T.Text
+suppressWarnsRunAsmDropsSplitWarningWithInterleavedStdoutMsg = "CLI --suppress-warns drops HTCC_ASSEMBLER warnings even when stderr warning lines are split around interleaved stdout in -r mode"
+
+suppressWarnsRunAsmDropsSplitWarningPrefixMsg :: T.Text
+suppressWarnsRunAsmDropsSplitWarningPrefixMsg = "CLI --suppress-warns drops HTCC_ASSEMBLER warnings even when the diagnostic prefix reaches warning: only after a later pipe read in -r mode"
+
+suppressWarnsRunAsmDropsCrossStreamWarningPreambleMsg :: T.Text
+suppressWarnsRunAsmDropsCrossStreamWarningPreambleMsg = "CLI --suppress-warns drops HTCC_ASSEMBLER warning preambles even when the preamble is on stdout and the warning is on stderr in -r mode"
+
+suppressWarnsRunAsmPreservesStdoutPrefixBeforeStderrMsg :: T.Text
+suppressWarnsRunAsmPreservesStdoutPrefixBeforeStderrMsg = "CLI --suppress-warns preserves non-newline stdout bytes before later stderr in -r mode"
+
+suppressWarnsRunAsmPreservesStderrPrefixBeforeStdoutMsg :: T.Text
+suppressWarnsRunAsmPreservesStderrPrefixBeforeStdoutMsg = "CLI --suppress-warns preserves non-newline stderr bytes before later stdout in -r mode"
+
+suppressWarnsRunAsmDropsWarningPreambleMsg :: T.Text
+suppressWarnsRunAsmDropsWarningPreambleMsg = "CLI --suppress-warns drops HTCC_ASSEMBLER include-stack warning preambles in -r mode"
+
+suppressWarnsRunAsmDropsAnsiWarningPreambleMsg :: T.Text
+suppressWarnsRunAsmDropsAnsiWarningPreambleMsg = "CLI --suppress-warns drops ANSI-colored HTCC_ASSEMBLER warning preambles in -r mode"
+
+suppressWarnsRunAsmDropsLeadingNoteMsg :: T.Text
+suppressWarnsRunAsmDropsLeadingNoteMsg = "CLI --suppress-warns drops leading HTCC_ASSEMBLER note lines that precede warnings in -r mode"
+
+suppressWarnsRunAsmDropsDriverContextMsg :: T.Text
+suppressWarnsRunAsmDropsDriverContextMsg = "CLI --suppress-warns drops GCC/as warning context lines in -r mode"
+
+suppressWarnsRunAsmDropsClangSnippetMsg :: T.Text
+suppressWarnsRunAsmDropsClangSnippetMsg = "CLI --suppress-warns drops clang-style warning snippets in -r mode"
+
+suppressWarnsRunAsmDropsMultiLineClangSnippetMsg :: T.Text
+suppressWarnsRunAsmDropsMultiLineClangSnippetMsg = "CLI --suppress-warns drops multi-line clang-style warning snippets in -r mode"
+
+suppressWarnsRunAsmDropsSnippetOnlyContextMsg :: T.Text
+suppressWarnsRunAsmDropsSnippetOnlyContextMsg = "CLI --suppress-warns preserves snippet-like HTCC_ASSEMBLER stderr when no annotation follows in -r mode"
+
+suppressWarnsRunAsmDropsCrLfWarningBlockMsg :: T.Text
+suppressWarnsRunAsmDropsCrLfWarningBlockMsg = "CLI --suppress-warns drops CRLF-terminated HTCC_ASSEMBLER warning blocks in -r mode"
+
+suppressWarnsRunAsmPreservesStandaloneLeadingNoteMsg :: T.Text
+suppressWarnsRunAsmPreservesStandaloneLeadingNoteMsg = "CLI --suppress-warns preserves standalone HTCC_ASSEMBLER notes that precede later warnings in -r mode"
+
+suppressWarnsRunAsmPreservesIndentedPostWarningStderrMsg :: T.Text
+suppressWarnsRunAsmPreservesIndentedPostWarningStderrMsg = "CLI --suppress-warns preserves unrelated indented stderr after HTCC_ASSEMBLER warnings in -r mode"
+
+suppressWarnsRunAsmPreservesPunctuatedPostWarningStderrMsg :: T.Text
+suppressWarnsRunAsmPreservesPunctuatedPostWarningStderrMsg = "CLI --suppress-warns preserves unrelated stderr containing punctuation or brace terminators after HTCC_ASSEMBLER warnings in -r mode"
+
+suppressWarnsRunAsmPreservesDirectivePostWarningStderrMsg :: T.Text
+suppressWarnsRunAsmPreservesDirectivePostWarningStderrMsg = "CLI --suppress-warns preserves directive-like stderr after HTCC_ASSEMBLER warnings in -r mode"
+
+suppressWarnsRunAsmPreservesStandalonePreSummaryNoteMsg :: T.Text
+suppressWarnsRunAsmPreservesStandalonePreSummaryNoteMsg = "CLI --suppress-warns preserves standalone HTCC_ASSEMBLER notes that appear before a later warning summary in -r mode"
+
+suppressWarnsRunAsmPreservesStandalonePostWarningNoteMsg :: T.Text
+suppressWarnsRunAsmPreservesStandalonePostWarningNoteMsg = "CLI --suppress-warns preserves standalone post-warning notes in -r mode"
+
+suppressWarnsRunAsmPreservesStandalonePostWarningNoteWithoutSummaryMsg :: T.Text
+suppressWarnsRunAsmPreservesStandalonePostWarningNoteWithoutSummaryMsg = "CLI --suppress-warns preserves standalone post-warning notes after GCC-style warnings without a trailing summary in -r mode"
+
+suppressWarnsRunAsmPreservesErrorSnippetContainingWarningTokenMsg :: T.Text
+suppressWarnsRunAsmPreservesErrorSnippetContainingWarningTokenMsg = "CLI --suppress-warns keeps real error snippets even when source lines contain the token warning:"
+
+suppressWarnsRunAsmPreservesWarningLabelErrorSnippetMsg :: T.Text
+suppressWarnsRunAsmPreservesWarningLabelErrorSnippetMsg = "CLI --suppress-warns keeps real error snippets even when source lines begin with warning:"
+
+suppressWarnsRunAsmPreservesFailingDiagnosticsMsg :: T.Text
+suppressWarnsRunAsmPreservesFailingDiagnosticsMsg = "CLI --suppress-warns preserves HTCC_ASSEMBLER diagnostics when -r fails"
+
+suppressWarnsRunAsmPreservesErrorPreambleAfterWarningMsg :: T.Text
+suppressWarnsRunAsmPreservesErrorPreambleAfterWarningMsg = "CLI --suppress-warns preserves error preambles that follow suppressed HTCC_ASSEMBLER warnings in -r mode"
+
+suppressWarnsRunAsmDoesNotHangOnInheritedPipeHandlesMsg :: T.Text
+suppressWarnsRunAsmDoesNotHangOnInheritedPipeHandlesMsg = "CLI --suppress-warns -r returns even when an HTCC_ASSEMBLER wrapper leaves inherited pipe handles open after exit"
+
+suppressWarnsRunAsmStreamsRetainedStdoutPromptMsg :: T.Text
+suppressWarnsRunAsmStreamsRetainedStdoutPromptMsg = "CLI --suppress-warns streams retained HTCC_ASSEMBLER stdout before the wrapped assembler exits in -r mode"
+
+suppressWarnsRunAsmStreamsRetainedStdoutPromptWithoutNewlineMsg :: T.Text
+suppressWarnsRunAsmStreamsRetainedStdoutPromptWithoutNewlineMsg = "CLI --suppress-warns streams retained HTCC_ASSEMBLER stdout without a trailing newline before the wrapped assembler exits in -r mode"
+
+suppressWarnsRunAsmStreamsRetainedStdoutAcrossPendingStderrMsg :: T.Text
+suppressWarnsRunAsmStreamsRetainedStdoutAcrossPendingStderrMsg = "CLI --suppress-warns streams retained HTCC_ASSEMBLER stdout even while earlier unterminated stderr remains pending in -r mode"
+
+suppressWarnsRunAsmSuppressesProbeCrossStreamWarningPreambleMsg :: T.Text
+suppressWarnsRunAsmSuppressesProbeCrossStreamWarningPreambleMsg = "CLI --suppress-warns keeps HTCC_ASSEMBLER target probes working when warning preambles are split across stdout and stderr"
+
+suppressWarnsRunAsmSuppressesProbePartialCrossStreamWarningPreambleMsg :: T.Text
+suppressWarnsRunAsmSuppressesProbePartialCrossStreamWarningPreambleMsg = "CLI --suppress-warns keeps HTCC_ASSEMBLER target probes working when an earlier partial warning preamble completes on another stream only at EOF"
+
+suppressWarnsRunAsmProbeClosesStdinMsg :: T.Text
+suppressWarnsRunAsmProbeClosesStdinMsg = "CLI --suppress-warns closes stdin for HTCC_ASSEMBLER metadata probes in -r mode"
+
+suppressWarnsRunAsmPreservesStdinForRealInvocationsMsg :: T.Text
+suppressWarnsRunAsmPreservesStdinForRealInvocationsMsg = "CLI --suppress-warns preserves stdin for real HTCC_ASSEMBLER invocations in -r mode"
 
 outputFileSingleInputStaticMsg :: T.Text
 outputFileSingleInputStaticMsg = "CLI -o preserves internal-linkage symbols for single-input outputs"
@@ -193,6 +486,12 @@ outputFileSingleInputImplicitFunctionConflictMsg = "CLI -o rejects single-input 
 outputFileSingleInputStaticImplicitFunctionConflictMsg :: T.Text
 outputFileSingleInputStaticImplicitFunctionConflictMsg = "CLI -o rejects single-input implicit-function/static-global collisions on the standalone code path"
 
+outputFileSingleInputImplicitFunctionDefinitionWarningMsg :: T.Text
+outputFileSingleInputImplicitFunctionDefinitionWarningMsg = "CLI -o keeps same-file implicit-function warnings even when a later definition resolves the call"
+
+outputFileSingleInputImplicitFunctionPrototypeWarningMsg :: T.Text
+outputFileSingleInputImplicitFunctionPrototypeWarningMsg = "CLI -o keeps same-file implicit-function warnings when only a later prototype appears"
+
 outputFileSingleInputPrototypeRetypeMsg :: T.Text
 outputFileSingleInputPrototypeRetypeMsg = "CLI -o revalidates same-file direct calls after later prototype refinements"
 
@@ -203,7 +502,10 @@ stdoutMultiInputStaticFunctionMsg :: T.Text
 stdoutMultiInputStaticFunctionMsg = "CLI stdout namespaces internal-linkage functions across multiple inputs"
 
 stdoutMultiInputImplicitFunctionDefinitionWarningMsg :: T.Text
-stdoutMultiInputImplicitFunctionDefinitionWarningMsg = "CLI stdout suppresses pre-merge implicit-function warnings once another input provides the declaration"
+stdoutMultiInputImplicitFunctionDefinitionWarningMsg = "CLI stdout suppresses cross-input implicit-function warnings once another input defines the function"
+
+stdoutMultiInputSameInputImplicitFunctionDefinitionWarningMsg :: T.Text
+stdoutMultiInputSameInputImplicitFunctionDefinitionWarningMsg = "CLI stdout keeps same-input implicit-function warnings even when another input enables multi-input merging"
 
 stdoutMultiInputImplicitFunctionUnresolvedWarningMsg :: T.Text
 stdoutMultiInputImplicitFunctionUnresolvedWarningMsg = "CLI stdout keeps implicit-function warnings when other inputs do not provide a real declaration"
@@ -268,6 +570,12 @@ outputFileMultiInputOldStylePromotionConflictMsg = "CLI -o rejects old-style dec
 outputFileMultiInputVoidPrototypeConflictMsg :: T.Text
 outputFileMultiInputVoidPrototypeConflictMsg = "CLI -o rejects void prototypes that conflict with later parameterized declarations"
 
+outputFileMultiInputImplicitFunctionDefinitionWarningMsg :: T.Text
+outputFileMultiInputImplicitFunctionDefinitionWarningMsg = "CLI -o suppresses cross-input implicit-function warnings once another input defines the function"
+
+outputFileMultiInputImplicitFunctionPrototypeWarningMsg :: T.Text
+outputFileMultiInputImplicitFunctionPrototypeWarningMsg = "CLI -o suppresses cross-input implicit-function warnings once another input declares the function"
+
 outputFileMultiInputImplicitFunctionDefinitionMsg :: T.Text
 outputFileMultiInputImplicitFunctionDefinitionMsg = "CLI -o accepts implicit function calls when another input provides the function definition"
 
@@ -327,6 +635,9 @@ outputFileMultiInputPointerPointeeArrayConflictMsg = "CLI -o rejects extern poin
 
 outputFileMultiInputAggregateFunctionDesignatorInitializerMsg :: T.Text
 outputFileMultiInputAggregateFunctionDesignatorInitializerMsg = "CLI -o accepts aggregate function-pointer initializers during merged global revalidation"
+
+outputFileMultiInputSameInputImplicitFunctionDefinitionWarningMsg :: T.Text
+outputFileMultiInputSameInputImplicitFunctionDefinitionWarningMsg = "CLI -o keeps same-input implicit-function warnings even when another input enables multi-input merging"
 
 outputFileMultiInputSameInputImplicitFunctionConflictMsg :: T.Text
 outputFileMultiInputSameInputImplicitFunctionConflictMsg = "CLI -o rejects same-input implicit-function/global collisions even when another input is present"
@@ -397,6 +708,9 @@ outputFileSpecialPathDevNullMsg = "CLI -o writes directly to special output path
 outputFileSamePathMsg :: T.Text
 outputFileSamePathMsg = "CLI -o rejects same-path input/output aliases before overwriting source files"
 
+outputFileMissingInputMatchingOutputPathMsg :: T.Text
+outputFileMissingInputMatchingOutputPathMsg = "CLI -o reports missing same-path inputs instead of misclassifying them as output collisions"
+
 outputFileHardLinkAliasMsg :: T.Text
 outputFileHardLinkAliasMsg = "CLI -o rejects hard-linked input/output aliases before overwriting source files"
 
@@ -439,6 +753,9 @@ runAsmSingleInputImplicitFunctionConflictMsg = "CLI -r rejects single-input impl
 runAsmSpecialPathDevNullMsg :: T.Text
 runAsmSpecialPathDevNullMsg = "CLI -r links directly to special output paths such as /dev/null"
 
+runAsmSpecialPathDevNullSkipsPostLinkValidationWaitMsg :: T.Text
+runAsmSpecialPathDevNullSkipsPostLinkValidationWaitMsg = "CLI -r still waits for delayed HTCC_ASSEMBLER linker children on special outputs such as /dev/null"
+
 runAsmPreservesExecutableBitsMsg :: T.Text
 runAsmPreservesExecutableBitsMsg = "CLI -r preserves execute bits when replacing a non-executable output"
 
@@ -478,14 +795,56 @@ runAsmWrappedAssemblerProbeFallbackMsg = "CLI -r accepts wrapper commands whose 
 runAsmWrappedAssemblerHostMetadataFallbackMsg :: T.Text
 runAsmWrappedAssemblerHostMetadataFallbackMsg = "CLI -r accepts wrapped drivers whose metadata probes report the host target while assemble/link forwarding stays x86_64-ELF"
 
+runAsmWrappedAssemblerDelayedChildHostMetadataMsg :: T.Text
+runAsmWrappedAssemblerDelayedChildHostMetadataMsg = "CLI -r preserves delayed HTCC_ASSEMBLER probe metadata emitted by a wrapper child after the wrapper exits"
+
+runAsmWrappedAssemblerDelayedChildFinalOutputMsg :: T.Text
+runAsmWrappedAssemblerDelayedChildFinalOutputMsg = "CLI -r waits for delayed HTCC_ASSEMBLER wrapper children before validating the final output"
+
+runAsmDoesNotWaitOnBackgroundProcessGroupHelpersMsg :: T.Text
+runAsmDoesNotWaitOnBackgroundProcessGroupHelpersMsg = "CLI -r does not wait for unrelated HTCC_ASSEMBLER background helpers that stay in the wrapper process group"
+
+runAsmProbeDoesNotHangOnInheritedPipeHandlesMsg :: T.Text
+runAsmProbeDoesNotHangOnInheritedPipeHandlesMsg = "CLI -r returns even when HTCC_ASSEMBLER probe wrappers leave inherited pipe handles open after exit"
+
+runAsmProbeDoesNotHangOnEarlyClosedStdoutMsg :: T.Text
+runAsmProbeDoesNotHangOnEarlyClosedStdoutMsg = "CLI -r keeps HTCC_ASSEMBLER probes draining stderr after wrappers close stdout early"
+
+runAsmTildeExpandedAssemblerPathMsg :: T.Text
+runAsmTildeExpandedAssemblerPathMsg = "CLI -r expands leading ~ in HTCC_ASSEMBLER executable words on POSIX hosts"
+
 runAsmLeadingEnvAssignmentMsg :: T.Text
 runAsmLeadingEnvAssignmentMsg = "CLI -r applies leading PATH env assignments in HTCC_ASSEMBLER before resolving the driver"
+
+runAsmLeadingEnvAssignmentExpandsTildePathMsg :: T.Text
+runAsmLeadingEnvAssignmentExpandsTildePathMsg = "CLI -r expands leading ~ inside HTCC_ASSEMBLER PATH overrides on POSIX hosts"
+
+runAsmExpandedAssignmentWordFailsMsg :: T.Text
+runAsmExpandedAssignmentWordFailsMsg = "CLI -r does not reinterpret assignment-like fields produced by HTCC_ASSEMBLER expansion as env overrides"
+
+runAsmQuotedAssignmentLikeExecutableMsg :: T.Text
+runAsmQuotedAssignmentLikeExecutableMsg = "CLI -r treats quoted assignment-looking HTCC_ASSEMBLER executables as literal argv[0] values"
+
+runAsmEscapedAssignmentLikeExecutableMsg :: T.Text
+runAsmEscapedAssignmentLikeExecutableMsg = "CLI -r treats escaped assignment-looking HTCC_ASSEMBLER executables as literal argv[0] values"
 
 runAsmLeadingEnvAssignmentWithoutEnvPathMsg :: T.Text
 runAsmLeadingEnvAssignmentWithoutEnvPathMsg = "CLI -r executes PATH-assigned HTCC_ASSEMBLER drivers without depending on env in the parent PATH"
 
 runAsmLeadingEnvAssignmentPreservesPathOverrideMsg :: T.Text
 runAsmLeadingEnvAssignmentPreservesPathOverrideMsg = "CLI -r preserves leading PATH env assignments in HTCC_ASSEMBLER exactly during invocation"
+
+runAsmLeadingEnvAssignmentPreservesLiteralPercentAndBangMsg :: T.Text
+runAsmLeadingEnvAssignmentPreservesLiteralPercentAndBangMsg = "CLI -r keeps literal %...% and !...! env override values unchanged on POSIX hosts"
+
+runAsmLeadingEnvAssignmentPreservesSinglePassPosixExpansionMsg :: T.Text
+runAsmLeadingEnvAssignmentPreservesSinglePassPosixExpansionMsg = "CLI -r performs only a single round of POSIX env expansion for HTCC_ASSEMBLER overrides"
+
+runAsmLeadingEnvAssignmentPreservesInheritedPwdMsg :: T.Text
+runAsmLeadingEnvAssignmentPreservesInheritedPwdMsg = "CLI -r preserves caller-provided PWD during HTCC_ASSEMBLER expansion and invocation"
+
+runAsmLeadingEnvAssignmentPreservesEscapedPosixLiteralMsg :: T.Text
+runAsmLeadingEnvAssignmentPreservesEscapedPosixLiteralMsg = "CLI -r keeps escaped POSIX variable references literal in HTCC_ASSEMBLER env overrides"
 
 runAsmEnvPathOverrideEmptyEntryMsg :: T.Text
 runAsmEnvPathOverrideEmptyEntryMsg = "CLI -r keeps empty PATH entries in HTCC_ASSEMBLER overrides when resolving bare drivers"
@@ -532,6 +891,9 @@ runAsmReadOnlyParentLinkFailurePreservesExistingOutputMsg = "CLI -r preserves ex
 runAsmFailurePreservesInputOutputAliasMsg :: T.Text
 runAsmFailurePreservesInputOutputAliasMsg = "CLI -r rejects input/output aliasing before invoking the assembler and preserves input files"
 
+runAsmMissingInputMatchingOutputPathMsg :: T.Text
+runAsmMissingInputMatchingOutputPathMsg = "CLI -r reports missing same-path inputs instead of misclassifying them as output collisions"
+
 runAsmFailurePreservesHardLinkInputOutputAliasMsg :: T.Text
 runAsmFailurePreservesHardLinkInputOutputAliasMsg = "CLI -r rejects hard-linked input/output aliases before invoking the assembler"
 
@@ -547,8 +909,14 @@ runAsmAcceptsFreeBsdElfTargetDriverMsg = "CLI -r accepts x86_64 FreeBSD targets 
 runAsmRejectsMissingAssemblerDriverMsg :: T.Text
 runAsmRejectsMissingAssemblerDriverMsg = "CLI -r reports a user-facing error when HTCC_ASSEMBLER names a missing command"
 
+runAsmRejectsNonExecutableAssemblerDriverMsg :: T.Text
+runAsmRejectsNonExecutableAssemblerDriverMsg = "CLI -r reports a user-facing error when HTCC_ASSEMBLER names a non-executable command"
+
 runAsmRejectsAssemblerWithoutLinkDriverMsg :: T.Text
 runAsmRejectsAssemblerWithoutLinkDriverMsg = "CLI -r rejects HTCC_ASSEMBLER commands that can assemble but cannot link"
+
+runAsmRejectsSingleObjectOnlyLinkDriverMsg :: T.Text
+runAsmRejectsSingleObjectOnlyLinkDriverMsg = "CLI -r rejects HTCC_ASSEMBLER commands whose link support only works for single-object inputs"
 
 runAsmRejectsScriptLinkProbeDriverMsg :: T.Text
 runAsmRejectsScriptLinkProbeDriverMsg = "CLI -r rejects HTCC_ASSEMBLER commands whose link probe only emits executable scripts"
@@ -556,17 +924,38 @@ runAsmRejectsScriptLinkProbeDriverMsg = "CLI -r rejects HTCC_ASSEMBLER commands 
 runAsmRejectsSharedLinkProbeDriverMsg :: T.Text
 runAsmRejectsSharedLinkProbeDriverMsg = "CLI -r rejects HTCC_ASSEMBLER commands whose link probe emits ET_DYN shared-library outputs"
 
+runAsmRejectsForeignAbiLinkProbeDriverMsg :: T.Text
+runAsmRejectsForeignAbiLinkProbeDriverMsg = "CLI -r accepts HTCC_ASSEMBLER commands whose x86_64-ELF link probe emits a foreign ELF ABI"
+
 runAsmRejectsBlobLinkProbeDriverMsg :: T.Text
 runAsmRejectsBlobLinkProbeDriverMsg = "CLI -r rejects HTCC_ASSEMBLER commands whose link probe copies an unrelated x86_64 ELF blob"
 
 runAsmRejectsSymlinkLinkProbeDriverMsg :: T.Text
 runAsmRejectsSymlinkLinkProbeDriverMsg = "CLI -r rejects HTCC_ASSEMBLER commands whose link probe leaves the requested output as a symlink"
 
-runAsmAcceptsMarkerStrippedFinalOutputMsg :: T.Text
-runAsmAcceptsMarkerStrippedFinalOutputMsg = "CLI -r accepts valid final x86_64-ELF outputs even when wrapped drivers strip htcc's unreferenced marker"
+runAsmRejectsSymlinkSpecialLinkProbeDriverMsg :: T.Text
+runAsmRejectsSymlinkSpecialLinkProbeDriverMsg = "CLI -r rejects HTCC_ASSEMBLER commands whose link probe leaves the requested output as a symlink to a non-regular special file"
+
+runAsmRejectsNonExecutableLinkProbeDriverMsg :: T.Text
+runAsmRejectsNonExecutableLinkProbeDriverMsg = "CLI -r rejects HTCC_ASSEMBLER commands whose link probe emits a structurally valid ELF without execute bits"
+
+runAsmDoesNotInjectValidationMarkerIntoFinalAsmMsg :: T.Text
+runAsmDoesNotInjectValidationMarkerIntoFinalAsmMsg = "CLI -r keeps validation markers out of the final assembly it passes to HTCC_ASSEMBLER"
+
+runAsmAcceptsUserDefinedValidationMarkerSymbolMsg :: T.Text
+runAsmAcceptsUserDefinedValidationMarkerSymbolMsg = "CLI -r accepts user globals named htcc_runnable_output_marker"
+
+runAsmAcceptsGcSectionsLinkerMsg :: T.Text
+runAsmAcceptsGcSectionsLinkerMsg = "CLI -r keeps the validation marker reachable when HTCC_ASSEMBLER enables linker section garbage collection"
+
+runAsmRejectsMarkerlessFinalOutputMsg :: T.Text
+runAsmRejectsMarkerlessFinalOutputMsg = "CLI -r rejects structurally valid final outputs that do not carry the authenticated link marker"
 
 runAsmRejectsBogusFinalLinkOutputMsg :: T.Text
 runAsmRejectsBogusFinalLinkOutputMsg = "CLI -r revalidates the final linked output even when the HTCC_ASSEMBLER probe succeeded"
+
+runAsmRejectsNamedPipeFinalLinkOutputMsg :: T.Text
+runAsmRejectsNamedPipeFinalLinkOutputMsg = "CLI -r rejects HTCC_ASSEMBLER commands that replace the staged final output with a FIFO"
 
 runAsmRejectsExecutableObjectProbeDriverMsg :: T.Text
 runAsmRejectsExecutableObjectProbeDriverMsg = "CLI -r rejects HTCC_ASSEMBLER commands whose assembly probe emits non-relocatable x86_64 ELF files"
@@ -604,6 +993,144 @@ fakeProbeWrapperPath = "tmp-probe-wrapper.sh"
 fakeHostMetadataWrapperPath :: FilePath
 fakeHostMetadataWrapperPath = "tmp-host-metadata-wrapper.sh"
 
+fakeWarningWrapperPath :: FilePath
+fakeWarningWrapperPath = "tmp-warning-wrapper.sh"
+
+fakeStdoutWarningWrapperPath :: FilePath
+fakeStdoutWarningWrapperPath = "tmp-stdout-warning-wrapper.sh"
+
+fakeBinaryWarningWrapperPath :: FilePath
+fakeBinaryWarningWrapperPath = "tmp-binary-warning-wrapper.sh"
+
+fakeUnterminatedStderrWrapperPath :: FilePath
+fakeUnterminatedStderrWrapperPath = "tmp-unterminated-stderr-wrapper.sh"
+
+fakeInterleavedOutputWrapperPath :: FilePath
+fakeInterleavedOutputWrapperPath = "tmp-interleaved-output-wrapper.sh"
+
+fakeSameReadStdoutInterleavingWrapperPath :: FilePath
+fakeSameReadStdoutInterleavingWrapperPath = "tmp-same-read-stdout-interleaving-wrapper.sh"
+
+fakeSameReadStderrChunksWrapperPath :: FilePath
+fakeSameReadStderrChunksWrapperPath = "tmp-same-read-stderr-chunks-wrapper.sh"
+
+fakeStreamScopedWarningWrapperPath :: FilePath
+fakeStreamScopedWarningWrapperPath = "tmp-stream-scoped-warning-wrapper.sh"
+
+fakeSplitWarningInterleavedStdoutWrapperPath :: FilePath
+fakeSplitWarningInterleavedStdoutWrapperPath = "tmp-split-warning-interleaved-stdout-wrapper.sh"
+
+fakeSplitWarningPrefixWrapperPath :: FilePath
+fakeSplitWarningPrefixWrapperPath = "tmp-split-warning-prefix-wrapper.sh"
+
+fakeCrossStreamWarningPreambleWrapperPath :: FilePath
+fakeCrossStreamWarningPreambleWrapperPath = "tmp-cross-stream-warning-preamble-wrapper.sh"
+
+fakeStdoutPrefixBeforeStderrWrapperPath :: FilePath
+fakeStdoutPrefixBeforeStderrWrapperPath = "tmp-stdout-prefix-before-stderr-wrapper.sh"
+
+fakeStderrPrefixBeforeStdoutWrapperPath :: FilePath
+fakeStderrPrefixBeforeStdoutWrapperPath = "tmp-stderr-prefix-before-stdout-wrapper.sh"
+
+fakeWarningPreambleWrapperPath :: FilePath
+fakeWarningPreambleWrapperPath = "tmp-warning-preamble-wrapper.sh"
+
+fakeAnsiWarningPreambleWrapperPath :: FilePath
+fakeAnsiWarningPreambleWrapperPath = "tmp-ansi-warning-preamble-wrapper.sh"
+
+fakeWarningLeadingNoteWrapperPath :: FilePath
+fakeWarningLeadingNoteWrapperPath = "tmp-warning-leading-note-wrapper.sh"
+
+fakeWarningContextWrapperPath :: FilePath
+fakeWarningContextWrapperPath = "tmp-warning-context-wrapper.sh"
+
+fakeWarningSnippetWrapperPath :: FilePath
+fakeWarningSnippetWrapperPath = "tmp-warning-snippet-wrapper.sh"
+
+fakeMultiLineWarningSnippetWrapperPath :: FilePath
+fakeMultiLineWarningSnippetWrapperPath = "tmp-multiline-warning-snippet-wrapper.sh"
+
+fakeSnippetOnlyWarningWrapperPath :: FilePath
+fakeSnippetOnlyWarningWrapperPath = "tmp-warning-snippet-only-wrapper.sh"
+
+fakeCrLfWarningWrapperPath :: FilePath
+fakeCrLfWarningWrapperPath = "tmp-crlf-warning-wrapper.sh"
+
+fakeStandaloneLeadingNoteWrapperPath :: FilePath
+fakeStandaloneLeadingNoteWrapperPath = "tmp-standalone-leading-note-wrapper.sh"
+
+fakeIndentedPostWarningStderrWrapperPath :: FilePath
+fakeIndentedPostWarningStderrWrapperPath = "tmp-indented-post-warning-wrapper.sh"
+
+fakePunctuatedPostWarningStderrWrapperPath :: FilePath
+fakePunctuatedPostWarningStderrWrapperPath = "tmp-punctuated-post-warning-wrapper.sh"
+
+fakeDirectivePostWarningStderrWrapperPath :: FilePath
+fakeDirectivePostWarningStderrWrapperPath = "tmp-directive-post-warning-wrapper.sh"
+
+fakeStandalonePreSummaryNoteWrapperPath :: FilePath
+fakeStandalonePreSummaryNoteWrapperPath = "tmp-standalone-pre-summary-note-wrapper.sh"
+
+fakePostWarningNoteWrapperPath :: FilePath
+fakePostWarningNoteWrapperPath = "tmp-post-warning-note-wrapper.sh"
+
+fakePostWarningNoteWithoutSummaryWrapperPath :: FilePath
+fakePostWarningNoteWithoutSummaryWrapperPath = "tmp-post-warning-note-without-summary-wrapper.sh"
+
+fakeFailingWarningWrapperPath :: FilePath
+fakeFailingWarningWrapperPath = "tmp-failing-warning-wrapper.sh"
+
+fakeErrorPreambleAfterWarningWrapperPath :: FilePath
+fakeErrorPreambleAfterWarningWrapperPath = "tmp-error-preamble-after-warning-wrapper.sh"
+
+fakeErrorSnippetWarningTokenWrapperPath :: FilePath
+fakeErrorSnippetWarningTokenWrapperPath = "tmp-error-snippet-warning-token-wrapper.sh"
+
+fakeWarningLabelErrorSnippetWrapperPath :: FilePath
+fakeWarningLabelErrorSnippetWrapperPath = "tmp-warning-label-error-snippet-wrapper.sh"
+
+fakeInheritedPipeHandlesWrapperPath :: FilePath
+fakeInheritedPipeHandlesWrapperPath = "tmp-inherited-pipe-handles-wrapper.sh"
+
+fakeProbeInheritedPipeHandlesWrapperPath :: FilePath
+fakeProbeInheritedPipeHandlesWrapperPath = "tmp-probe-inherited-pipe-handles-wrapper.sh"
+
+fakeEarlyClosedStdoutProbeWrapperPath :: FilePath
+fakeEarlyClosedStdoutProbeWrapperPath = "tmp-early-closed-stdout-probe-wrapper.sh"
+
+fakeDelayedChildHostMetadataWrapperPath :: FilePath
+fakeDelayedChildHostMetadataWrapperPath = "tmp-delayed-child-host-metadata-wrapper.sh"
+
+fakeDelayedChildFinalOutputWrapperPath :: FilePath
+fakeDelayedChildFinalOutputWrapperPath = "tmp-delayed-child-final-output-wrapper.sh"
+
+fakeBackgroundProcessGroupHelperWrapperPath :: FilePath
+fakeBackgroundProcessGroupHelperWrapperPath = "tmp-background-process-group-helper-wrapper.sh"
+
+fakeDelayedChildFinalLinkOnlyWrapperPath :: FilePath
+fakeDelayedChildFinalLinkOnlyWrapperPath = "tmp-delayed-child-final-link-only-wrapper.sh"
+
+fakeStreamingPromptWrapperPath :: FilePath
+fakeStreamingPromptWrapperPath = "tmp-streaming-prompt-wrapper.sh"
+
+fakeStreamingPromptWithoutNewlineWrapperPath :: FilePath
+fakeStreamingPromptWithoutNewlineWrapperPath = "tmp-streaming-prompt-without-newline-wrapper.sh"
+
+fakeCrossStreamStreamingRetainedLineWrapperPath :: FilePath
+fakeCrossStreamStreamingRetainedLineWrapperPath = "tmp-cross-stream-streaming-retained-line-wrapper.sh"
+
+fakeProbeCrossStreamWarningPreambleWrapperPath :: FilePath
+fakeProbeCrossStreamWarningPreambleWrapperPath = "tmp-probe-cross-stream-warning-preamble-wrapper.sh"
+
+fakeProbePartialCrossStreamWarningPreambleWrapperPath :: FilePath
+fakeProbePartialCrossStreamWarningPreambleWrapperPath = "tmp-probe-partial-cross-stream-warning-preamble-wrapper.sh"
+
+fakeProbeReadsStdinWrapperPath :: FilePath
+fakeProbeReadsStdinWrapperPath = "tmp-probe-reads-stdin-wrapper.sh"
+
+fakeRealInvocationReadsStdinWrapperPath :: FilePath
+fakeRealInvocationReadsStdinWrapperPath = "tmp-real-invocation-reads-stdin-wrapper.sh"
+
 fakeAssemblerQuotedPath :: FilePath
 fakeAssemblerQuotedPath = "tmp assembler.sh"
 
@@ -621,6 +1148,24 @@ fakeProbeWrapperLogPath = "tmp-probe-wrapper.log"
 
 fakeHostMetadataWrapperLogPath :: FilePath
 fakeHostMetadataWrapperLogPath = "tmp-host-metadata-wrapper.log"
+
+fakeDelayedChildHostMetadataWrapperLogPath :: FilePath
+fakeDelayedChildHostMetadataWrapperLogPath = "tmp-delayed-child-host-metadata-wrapper.log"
+
+fakeProbeInheritedPipeHandlesWrapperLogPath :: FilePath
+fakeProbeInheritedPipeHandlesWrapperLogPath = "tmp-probe-inherited-pipe-handles-wrapper.log"
+
+fakeBackgroundProcessGroupHelperPidPath :: FilePath
+fakeBackgroundProcessGroupHelperPidPath = "tmp-background-process-group-helper-wrapper.pids"
+
+fakeEarlyClosedStdoutProbeWrapperLogPath :: FilePath
+fakeEarlyClosedStdoutProbeWrapperLogPath = "tmp-early-closed-stdout-probe-wrapper.log"
+
+fakeProbeReadsStdinWrapperLogPath :: FilePath
+fakeProbeReadsStdinWrapperLogPath = "tmp-probe-reads-stdin-wrapper.log"
+
+fakeRealInvocationReadsStdinWrapperLogPath :: FilePath
+fakeRealInvocationReadsStdinWrapperLogPath = "tmp-real-invocation-reads-stdin-wrapper.log"
 
 fakeAssemblerAsmPath :: FilePath
 fakeAssemblerAsmPath = "tmp-assembler.s"
@@ -679,11 +1224,20 @@ fakeFreeBsdDriverAsmPath = "tmp-freebsd-driver.s"
 fakeMissingAssemblerDriverPath :: FilePath
 fakeMissingAssemblerDriverPath = "tmp-missing-assembler-driver"
 
+fakeNonExecutableAssemblerDriverPath :: FilePath
+fakeNonExecutableAssemblerDriverPath = "tmp-non-executable-assembler-driver.sh"
+
 fakeAssembleOnlyDriverPath :: FilePath
 fakeAssembleOnlyDriverPath = "tmp-assemble-only-driver.sh"
 
 fakeAssembleOnlyDriverLogPath :: FilePath
 fakeAssembleOnlyDriverLogPath = "tmp-assemble-only-driver.log"
+
+fakeSingleObjectOnlyLinkDriverPath :: FilePath
+fakeSingleObjectOnlyLinkDriverPath = "tmp-single-object-only-link-driver.sh"
+
+fakeSingleObjectOnlyLinkDriverLogPath :: FilePath
+fakeSingleObjectOnlyLinkDriverLogPath = "tmp-single-object-only-link-driver.log"
 
 fakeInPlaceLinkDriverPath :: FilePath
 fakeInPlaceLinkDriverPath = "tmp-in-place-link-driver.sh"
@@ -715,6 +1269,12 @@ fakeSharedLinkProbeDriverPath = "tmp-shared-link-probe-driver.sh"
 fakeSharedLinkProbeDriverLogPath :: FilePath
 fakeSharedLinkProbeDriverLogPath = "tmp-shared-link-probe-driver.log"
 
+fakeForeignAbiLinkProbeDriverPath :: FilePath
+fakeForeignAbiLinkProbeDriverPath = "tmp-foreign-abi-link-probe-driver.sh"
+
+fakeForeignAbiLinkProbeDriverLogPath :: FilePath
+fakeForeignAbiLinkProbeDriverLogPath = "tmp-foreign-abi-link-probe-driver.log"
+
 fakeBlobLinkProbeDriverPath :: FilePath
 fakeBlobLinkProbeDriverPath = "tmp-blob-link-probe-driver.sh"
 
@@ -730,6 +1290,24 @@ fakeSymlinkLinkProbeDriverLogPath = "tmp-symlink-link-probe-driver.log"
 fakeSymlinkLinkProbeTargetPath :: FilePath
 fakeSymlinkLinkProbeTargetPath = "tmp-symlink-link-probe-target.bin"
 
+fakeSymlinkSpecialLinkProbeDriverPath :: FilePath
+fakeSymlinkSpecialLinkProbeDriverPath = "tmp-symlink-special-link-probe-driver.sh"
+
+fakeSymlinkSpecialLinkProbeDriverLogPath :: FilePath
+fakeSymlinkSpecialLinkProbeDriverLogPath = "tmp-symlink-special-link-probe-driver.log"
+
+fakeNonExecutableLinkProbeDriverPath :: FilePath
+fakeNonExecutableLinkProbeDriverPath = "tmp-non-executable-link-probe-driver.sh"
+
+fakeNonExecutableLinkProbeDriverLogPath :: FilePath
+fakeNonExecutableLinkProbeDriverLogPath = "tmp-non-executable-link-probe-driver.log"
+
+fakeNonExecutableLinkProbeObjectPath :: FilePath
+fakeNonExecutableLinkProbeObjectPath = "tmp-non-executable-link-probe.o"
+
+fakeNonExecutableLinkProbeOutputPath :: FilePath
+fakeNonExecutableLinkProbeOutputPath = "tmp-non-executable-link-probe.out"
+
 fakeBogusFinalLinkDriverPath :: FilePath
 fakeBogusFinalLinkDriverPath = "tmp-bogus-final-link-driver.sh"
 
@@ -744,6 +1322,18 @@ fakeMarkerStrippingFinalLinkDriverPath = "tmp-marker-stripping-final-link-driver
 
 fakeMarkerStrippingFinalLinkDriverLogPath :: FilePath
 fakeMarkerStrippingFinalLinkDriverLogPath = "tmp-marker-stripping-final-link-driver.log"
+
+fakeGcSectionsLinkDriverPath :: FilePath
+fakeGcSectionsLinkDriverPath = "tmp-gc-sections-link-driver.sh"
+
+fakeGcSectionsLinkDriverLogPath :: FilePath
+fakeGcSectionsLinkDriverLogPath = "tmp-gc-sections-link-driver.log"
+
+fakeNamedPipeFinalLinkDriverPath :: FilePath
+fakeNamedPipeFinalLinkDriverPath = "tmp-named-pipe-final-link-driver.sh"
+
+fakeNamedPipeFinalLinkDriverLogPath :: FilePath
+fakeNamedPipeFinalLinkDriverLogPath = "tmp-named-pipe-final-link-driver.log"
 
 fakeExecutableObjectProbeDriverPath :: FilePath
 fakeExecutableObjectProbeDriverPath = "tmp-executable-object-probe-driver.sh"
@@ -787,6 +1377,12 @@ fakePathAssemblerLogPath = "tmp-path-assembler.log"
 fakePathWrapperLogPath :: FilePath
 fakePathWrapperLogPath = "tmp-path-wrapper.log"
 
+fakeEnvLoggingWrapperPath :: FilePath
+fakeEnvLoggingWrapperPath = "tmp-env-logging-wrapper.sh"
+
+fakeEnvLoggingWrapperLogPath :: FilePath
+fakeEnvLoggingWrapperLogPath = "tmp-env-logging-wrapper.log"
+
 fakeLocalAssemblerLogPath :: FilePath
 fakeLocalAssemblerLogPath = "tmp-local-assembler.log"
 
@@ -829,12 +1425,66 @@ permissionFileModeMask = foldr1 unionFileModes
 permissionBits :: FileMode -> FileMode
 permissionBits = intersectFileModes permissionFileModeMask
 
+runnableElfHex :: T.Text
+runnableElfHex =
+    "7f454c4602010100000000000000000002003e000100000078004000000000004000000000000000000000000000000000000000400038000100000000000000010000000500000000000000000000000000400000000000000040000000000079000000000000007900000000000000001000000000000090"
+
+foreignElfOsAbiForHost :: Word8
+foreignElfOsAbiForHost
+    | os == "freebsd" = 3
+    | otherwise = 9
+
+setElfOsAbiForProbe :: Word8 -> B.ByteString -> B.ByteString
+setElfOsAbiForProbe osAbi bytes =
+    B.take 7 bytes <> B.singleton osAbi <> B.drop 8 bytes
+
+byteStringToHex :: B.ByteString -> T.Text
+byteStringToHex =
+    T.pack . concatMap renderByte . B.unpack
+    where
+        renderByte byte =
+            case showHex byte "" of
+                [singleDigit] ->
+                    ['0', singleDigit]
+                hexDigits ->
+                    hexDigits
+
+foreignAbiRunnableElfHex :: T.Text
+foreignAbiRunnableElfHex =
+    byteStringToHex $
+        setElfOsAbiForProbe foreignElfOsAbiForHost $
+            linkedElfHeaderWithInterpreterForProbeBytes
+                2
+                (map (fromIntegral . fromEnum) "/lib64/ld-linux-x86-64.so.2" <> [0])
+
+runnableElfWriter :: [T.Text]
+runnableElfWriter =
+    [ "write_runnable_elf() {"
+    , "  perl -e 'print pack(\"H*\", $ARGV[0])' '" <> runnableElfHex <> "' > \"$1\""
+    , "  chmod +x \"$1\""
+    , "}"
+    ]
+
+foreignAbiRunnableElfWriter :: [T.Text]
+foreignAbiRunnableElfWriter =
+    [ "write_foreign_abi_runnable_elf() {"
+    , "  perl -e 'print pack(\"H*\", $ARGV[0])' '" <> foreignAbiRunnableElfHex <> "' > \"$1\""
+    , "  chmod +x \"$1\""
+    , "}"
+    ]
+
 probeLinkedOutputWriter :: [T.Text]
 probeLinkedOutputWriter =
     [ "      test -n \"$input\""
-    , "      printf '\\177ELF\\002\\001\\001\\000\\000\\000\\000\\000\\000\\000\\000\\000\\002\\000\\076\\000\\001\\000\\000\\000' > \"$out\""
+    , "      write_runnable_elf \"$out\""
     , "      cat \"$input\" >> \"$out\""
-    , "      chmod +x \"$out\""
+    ]
+
+foreignAbiProbeLinkedOutputWriter :: [T.Text]
+foreignAbiProbeLinkedOutputWriter =
+    [ "      test -n \"$input\""
+    , "      write_foreign_abi_runnable_elf \"$out\""
+    , "      cat \"$input\" >> \"$out\""
     ]
 
 writeFakeAssembler :: FilePath -> IO ()
@@ -856,7 +1506,9 @@ writeLoggingDriver driverPath logPath = do
     T.writeFile driverPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "for arg in \"$@\"; do"
+        ]
+            <> runnableElfWriter
+            <> [ "for arg in \"$@\"; do"
         , "  case \"$arg\" in"
         , "    -dumpmachine|-print-target-triple)"
         , "      printf '%s\\n' 'x86_64-linux-gnu'"
@@ -901,8 +1553,9 @@ writeLoggingDriver driverPath logPath = do
             <> probeLinkedOutputWriter
             <> [ "      ;;"
                , "    *)"
-        , "      printf '%s\\n' '#!/bin/sh' 'exit 0' > \"$out\""
-        , "      chmod +x \"$out\""
+        , "      test -n \"$input\""
+        , "      write_runnable_elf \"$out\""
+        , "      cat \"$input\" >> \"$out\""
         , "      ;;"
         , "  esac"
         , "fi"
@@ -914,7 +1567,9 @@ writeSpecialOutputDriver driverPath = do
     T.writeFile driverPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "for arg in \"$@\"; do"
+        ]
+            <> runnableElfWriter
+            <> [ "for arg in \"$@\"; do"
         , "  case \"$arg\" in"
         , "    -dumpmachine|-print-target-triple)"
         , "      printf '%s\\n' 'x86_64-linux-gnu'"
@@ -1011,6 +1666,912 @@ writeHostMetadataWrapper wrapperPath logPath wrappedPath = do
         ]
     execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
 
+writeDelayedChildHostMetadataWrapper :: FilePath -> FilePath -> FilePath -> IO ()
+writeDelayedChildHostMetadataWrapper wrapperPath logPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' \"$*\" >> " <> T.pack logPath
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple)"
+        , "      perl -e 'if (fork() == 0) { print qq(x86_64-); select undef, undef, undef, 0.6; print qq(linux-gnu\\n); exit 0 } exit 0'"
+        , "      exit 0"
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeDelayedChildFinalOutputWrapper :: FilePath -> FilePath -> IO ()
+writeDelayedChildFinalOutputWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "mode=link"
+        , "out=''"
+        , "input=''"
+        , "inputs=''"
+        , "expect_lang=false"
+        , "expect_out=false"
+        , "for arg in \"$@\"; do"
+        , "  if $expect_lang; then"
+        , "    mode=assemble"
+        , "    expect_lang=false"
+        , "    continue"
+        , "  fi"
+        , "  if $expect_out; then"
+        , "    out=\"$arg\""
+        , "    expect_out=false"
+        , "    continue"
+        , "  fi"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "    -x)"
+        , "      expect_lang=true"
+        , "      ;;"
+        , "    -c)"
+        , "      ;;"
+        , "    -o)"
+        , "      expect_out=true"
+        , "      ;;"
+        , "    -*)"
+        , "      ;;"
+        , "    *)"
+        , "      input=\"$arg\""
+        , "      inputs=\"$inputs $arg\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "test -n \"$out\""
+        , "if [ \"$mode\" = 'assemble' ]; then"
+        , "  test -n \"$input\""
+        , "  ("
+        , "    printf '\\177ELF\\002\\001\\001\\000\\000\\000\\000\\000\\000\\000\\000\\000\\001\\000\\076\\000\\001\\000\\000\\000' > \"$out\""
+        , "    perl -e 'select undef, undef, undef, 0.6'"
+        , "    cat \"$input\" >> \"$out\""
+        , "  ) &"
+        , "  exit 0"
+        , "fi"
+        , "for input_path in $inputs; do"
+        , "  if [ \"$(wc -c < \"$input_path\")\" -le 20 ]; then"
+        , "    exit 98"
+        , "  fi"
+        , "done"
+        , "( perl -e 'select undef, undef, undef, 0.6'; exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\" ) &"
+        , "exit 0"
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeBackgroundProcessGroupHelperWrapper :: FilePath -> FilePath -> FilePath -> IO ()
+writeBackgroundProcessGroupHelperWrapper wrapperPath pidPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "spawn_helper=false"
+        , "expect_lang=false"
+        , "for arg in \"$@\"; do"
+        , "  if $expect_lang; then"
+        , "    expect_lang=false"
+        , "    case \"$arg\" in"
+        , "      assembler)"
+        , "        spawn_helper=true"
+        , "        ;;"
+        , "    esac"
+        , "    continue"
+        , "  fi"
+        , "  case \"$arg\" in"
+        , "    *htcc-probe-*)"
+        , "      spawn_helper=true"
+        , "      ;;"
+        , "    -x)"
+        , "      expect_lang=true"
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "if $spawn_helper; then"
+        , "  sh -c 'sleep 8' &"
+        , "  printf '%s\\n' \"$!\" >> " <> T.pack pidPath
+        , "fi"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeDelayedChildFinalLinkOnlyWrapper :: FilePath -> FilePath -> IO ()
+writeDelayedChildFinalLinkOnlyWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*|-x)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "( perl -e 'select undef, undef, undef, 2.0'; exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\" ) &"
+        , "exit 0"
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeProbeReadsStdinWrapper :: FilePath -> FilePath -> FilePath -> IO ()
+writeProbeReadsStdinWrapper wrapperPath logPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' \"$*\" >> " <> T.pack logPath
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple)"
+        , "      cat >/dev/null"
+        , "      printf '%s\\n' 'x86_64-linux-gnu'"
+        , "      exit 0"
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeRealInvocationReadsStdinWrapper :: FilePath -> FilePath -> FilePath -> IO ()
+writeRealInvocationReadsStdinWrapper wrapperPath logPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' \"args:$*\" >> " <> T.pack logPath
+        , "prev=''"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "  if [ \"$prev\" = '-x' ] && [ \"$arg\" = 'assembler' ]; then"
+        , "    if IFS= read -r token; then"
+        , "      printf '%s\\n' \"stdin:$token\" >> " <> T.pack logPath
+        , "    else"
+        , "      printf '%s\\n' 'stdin:<eof>' >> " <> T.pack logPath
+        , "    fi"
+        , "    break"
+        , "  fi"
+        , "  prev=$arg"
+        , "done"
+        , "exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeWarningDriverWrapper :: FilePath -> FilePath -> IO ()
+writeWarningDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        , "printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeStdoutWarningDriverWrapper :: FilePath -> FilePath -> IO ()
+writeStdoutWarningDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning'"
+        , "printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note'"
+        , "printf '%s\\n' '1 warning generated.'"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeBinaryWarningDriverWrapper :: FilePath -> FilePath -> IO ()
+writeBinaryWarningDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "printf '\\377\\n' >&2"
+        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        , "printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "printf '\\376'"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeUnterminatedStderrDriverWrapper :: FilePath -> FilePath -> IO ()
+writeUnterminatedStderrDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s' 'XYZ' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeInterleavedOutputDriverWrapper :: FilePath -> FilePath -> IO ()
+writeInterleavedOutputDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "perl -e 'syswrite STDOUT, qq(stdout: wrapper start\\n); syswrite STDERR, qq(stderr: wrapper note\\n); syswrite STDOUT, qq(stdout: wrapper end\\n);'"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeSameReadStdoutInterleavingDriverWrapper :: FilePath -> FilePath -> IO ()
+writeSameReadStdoutInterleavingDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "perl -e 'syswrite STDOUT, qq(stdout: first\\n); syswrite STDERR, qq(stderr: middle\\n); syswrite STDOUT, qq(stdout: second\\n);'"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeSameReadStderrChunksDriverWrapper :: FilePath -> FilePath -> IO ()
+writeSameReadStderrChunksDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "perl -e 'syswrite STDERR, qq(stderr: first\\nstderr: second\\n); select undef, undef, undef, 0.1; syswrite STDOUT, qq(stdout: after\\n);'"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeStreamScopedWarningDriverWrapper :: FilePath -> FilePath -> IO ()
+writeStreamScopedWarningDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "printf '%s\\n' 'stdout: retained first'"
+        , "perl -e 'select undef, undef, undef, 0.1'"
+        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        , "perl -e 'select undef, undef, undef, 0.1'"
+        , "printf '%s\\n' 'stdout: retained second'"
+        , "perl -e 'select undef, undef, undef, 0.1'"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeSplitWarningInterleavedStdoutDriverWrapper :: FilePath -> FilePath -> IO ()
+writeSplitWarningInterleavedStdoutDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "printf '%s' 'warn' >&2"
+        , "perl -e 'select undef, undef, undef, 0.1'"
+        , "printf '%s\\n' 'stdout: wrapper progress'"
+        , "perl -e 'select undef, undef, undef, 0.1'"
+        , "printf '%s\\n' 'ing: fake HTCC_ASSEMBLER warning' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeSplitWarningPrefixDriverWrapper :: FilePath -> FilePath -> IO ()
+writeSplitWarningPrefixDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "printf '%s' '{standard input}:1:1: warn' >&2"
+        , "perl -e 'select undef, undef, undef, 0.1'"
+        , "printf '%s\\n' 'stdout: wrapper progress'"
+        , "perl -e 'select undef, undef, undef, 0.1'"
+        , "printf '%s\\n' 'ing: fake HTCC_ASSEMBLER warning' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeCrossStreamWarningPreambleDriverWrapper :: FilePath -> FilePath -> IO ()
+writeCrossStreamWarningPreambleDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "printf '%s\\n' 'In file included from fake-header.h:1:'"
+        , "printf '%s\\n' '                 from fake-source.c:2:'"
+        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        , "printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeStdoutPrefixBeforeStderrDriverWrapper :: FilePath -> FilePath -> IO ()
+writeStdoutPrefixBeforeStderrDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "printf '%s' 'stdout: prefix'"
+        , "printf '%s\\n' 'stderr: note' >&2"
+        , "perl -e 'select undef, undef, undef, 0.1'"
+        , "printf '%s\\n' 'stdout: suffix'"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeStderrPrefixBeforeStdoutDriverWrapper :: FilePath -> FilePath -> IO ()
+writeStderrPrefixBeforeStdoutDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "printf '%s' 'stderr: prefix' >&2"
+        , "perl -e 'select undef, undef, undef, 0.1'"
+        , "printf '%s\\n' 'stdout: note'"
+        , "perl -e 'select undef, undef, undef, 0.1'"
+        , "printf '%s\\n' 'stderr: suffix' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeWarningPreambleDriverWrapper :: FilePath -> FilePath -> IO ()
+writeWarningPreambleDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' 'In file included from fake-header.h:1:' >&2"
+        , "printf '%s\\n' '                 from fake-source.c:2:' >&2"
+        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        , "printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeAnsiWarningPreambleDriverWrapper :: FilePath -> FilePath -> IO ()
+writeAnsiWarningPreambleDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '\\033[1;36mIn file included from fake-header.h:1:\\033[0m\\n' >&2"
+        , "printf '\\033[1;36m                 from fake-source.c:2:\\033[0m\\n' >&2"
+        , "printf '\\033[1;33mwarning: fake HTCC_ASSEMBLER warning\\033[0m\\n' >&2"
+        , "printf '\\033[1;35m{standard input}:1:1: note: fake HTCC_ASSEMBLER note\\033[0m\\n' >&2"
+        , "printf '\\033[1;33m1 warning generated.\\033[0m\\n' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeWarningLeadingNoteDriverWrapper :: FilePath -> FilePath -> IO ()
+writeWarningLeadingNoteDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' \"fake-macro.h:1:1: note: expanded from macro 'FAKE_MACRO'\" >&2"
+        , "printf '%s\\n' '.globl main' >&2"
+        , "printf '%s\\n' '^~~~~~~~~~~' >&2"
+        , "printf '%s\\n' '{standard input}:1:1: warning: fake HTCC_ASSEMBLER warning [-Wasm-operand-widths]' >&2"
+        , "printf '%s\\n' '.globl main' >&2"
+        , "printf '%s\\n' '^~~~~~~~~~~' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeWarningContextDriverWrapper :: FilePath -> FilePath -> IO ()
+writeWarningContextDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' \"fake-source.c: In function 'main':\" >&2"
+        , "printf '%s\\n' '{standard input}: Assembler messages:' >&2"
+        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        , "printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeWarningSnippetDriverWrapper :: FilePath -> FilePath -> IO ()
+writeWarningSnippetDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' '{standard input}:1:1: warning: fake HTCC_ASSEMBLER warning [-Wasm-operand-widths]' >&2"
+        , "printf '%s\\n' '.globl main' >&2"
+        , "printf '%s\\n' '^~~~~~~~~~~' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeMultiLineWarningSnippetDriverWrapper :: FilePath -> FilePath -> IO ()
+writeMultiLineWarningSnippetDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' '{standard input}:1:1: warning: fake HTCC_ASSEMBLER warning [-Wasm-operand-widths]' >&2"
+        , "printf '%s\\n' 'movl $0, %eax' >&2"
+        , "printf '%s\\n' 'retq' >&2"
+        , "printf '%s\\n' '^~~~~~~~~~~' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeSnippetOnlyWarningDriverWrapper :: FilePath -> FilePath -> IO ()
+writeSnippetOnlyWarningDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        , "printf '%s\\n' 'int x;' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeCrLfWarningDriverWrapper :: FilePath -> FilePath -> IO ()
+writeCrLfWarningDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\r\\n' \"fake-source.c: In function 'main':\" >&2"
+        , "printf '%s\\r\\n' '{standard input}: Assembler messages:' >&2"
+        , "printf '%s\\r\\n' '{standard input}:1:1: warning: fake HTCC_ASSEMBLER warning [-Wasm-operand-widths]' >&2"
+        , "printf '%s\\r\\n' '.globl main' >&2"
+        , "printf '%s\\r\\n' '^~~~~~~~~~~' >&2"
+        , "printf '%s\\r\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
+        , "printf '%s\\r\\n' '1 warning generated.' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeStandaloneLeadingNoteDriverWrapper :: FilePath -> FilePath -> IO ()
+writeStandaloneLeadingNoteDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' 'note: using fallback linker' >&2"
+        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        , "printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeIndentedPostWarningStderrDriverWrapper :: FilePath -> FilePath -> IO ()
+writeIndentedPostWarningStderrDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        , "printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
+        , "printf '%s\\n' '    cache hit: using wrapped assembler output' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writePunctuatedPostWarningStderrDriverWrapper :: FilePath -> FilePath -> IO ()
+writePunctuatedPostWarningStderrDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        , "printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
+        , "printf '%s\\n' '(cached result)' >&2"
+        , "printf '%s\\n' 'status; retrying' >&2"
+        , "printf '%s\\n' 'cache=hit;' >&2"
+        , "printf '%s\\n' 'wrapper block {' >&2"
+        , "printf '%s\\n' 'wrapper block }' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeDirectivePostWarningStderrDriverWrapper :: FilePath -> FilePath -> IO ()
+writeDirectivePostWarningStderrDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        , "printf '%s\\n' '.section keep' >&2"
+        , "printf '%s\\n' '# generated by fake HTCC_ASSEMBLER wrapper' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeStandalonePreSummaryNoteDriverWrapper :: FilePath -> FilePath -> IO ()
+writeStandalonePreSummaryNoteDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        , "printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
+        , "printf '%s\\n' 'note: using fallback linker' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writePostWarningNoteDriverWrapper :: FilePath -> FilePath -> IO ()
+writePostWarningNoteDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        , "printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "printf '%s' 'note: using fallback linker' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writePostWarningNoteWithoutSummaryDriverWrapper :: FilePath -> FilePath -> IO ()
+writePostWarningNoteWithoutSummaryDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' '{standard input}:1:1: warning: fake HTCC_ASSEMBLER warning [-Wasm-operand-widths]' >&2"
+        , "printf '%s' 'note: using fallback linker' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeFailingWarningDriverWrapper :: FilePath -> FilePath -> IO ()
+writeFailingWarningDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "printf '%s\\n' 'In file included from fake-header.h:1:' >&2"
+        , "printf '%s\\n' '                 from fake-source.c:2:' >&2"
+        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        , "printf '%s\\n' 'note: fake HTCC_ASSEMBLER note' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "printf '%s\\n' 'error: fake HTCC_ASSEMBLER failure' >&2"
+        , "exit 1"
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeErrorPreambleAfterWarningDriverWrapper :: FilePath -> FilePath -> IO ()
+writeErrorPreambleAfterWarningDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        , "printf '%s\\n' \"fake-source.c: In function 'main':\" >&2"
+        , "printf '%s\\n' '{standard input}: Assembler messages:' >&2"
+        , "printf '%s\\n' 'error: fake HTCC_ASSEMBLER failure' >&2"
+        , "exit 1"
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeErrorSnippetContainingWarningTokenDriverWrapper :: FilePath -> FilePath -> IO ()
+writeErrorSnippetContainingWarningTokenDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "printf '%s\\n' '{standard input}:1:1: error: fake HTCC_ASSEMBLER failure' >&2"
+        , "printf '%s\\n' 'printf(\"warning:\");' >&2"
+        , "printf '%s\\n' '^~~~~~~~~~~~~~~~~~~' >&2"
+        , "exit 1"
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeWarningLabelErrorSnippetDriverWrapper :: FilePath -> FilePath -> IO ()
+writeWarningLabelErrorSnippetDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "printf '%s\\n' '{standard input}:1:1: error: fake HTCC_ASSEMBLER failure' >&2"
+        , "printf '%s\\n' 'warning: return 1;' >&2"
+        , "printf '%s\\n' '^~~~~~~~~~~~~~~~~' >&2"
+        , "exit 1"
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeInheritedPipeHandlesDriverWrapper :: FilePath -> FilePath -> IO ()
+writeInheritedPipeHandlesDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "sh -c 'sleep 2' &"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeProbeInheritedPipeHandlesDriverWrapper :: FilePath -> FilePath -> FilePath -> IO ()
+writeProbeInheritedPipeHandlesDriverWrapper wrapperPath logPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' \"$*\" >> " <> T.pack logPath
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      perl -e 'select undef, undef, undef, 0.5' &"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeEarlyClosedStdoutProbeDriverWrapper :: FilePath -> FilePath -> FilePath -> IO ()
+writeEarlyClosedStdoutProbeDriverWrapper wrapperPath logPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' \"$*\" >> " <> T.pack logPath
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple)"
+        , "      printf '%s\\n' 'x86_64-linux-gnu'"
+        , "      exec 1>&-"
+        , "      perl -e 'print STDERR qq(probe-stderr-flood\\n) x 8192'"
+        , "      exit 0"
+        , "      ;;"
+        , "    *htcc-probe-*)"
+        , "      exec 1>&-"
+        , "      perl -e 'print STDERR qq(probe-stderr-flood\\n) x 8192'"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeStreamingPromptDriverWrapper :: FilePath -> FilePath -> IO ()
+writeStreamingPromptDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "assemble_invocation=false"
+        , "expect_lang=false"
+        , "for arg in \"$@\"; do"
+        , "  if $expect_lang; then"
+        , "    expect_lang=false"
+        , "    case \"$arg\" in"
+        , "      assembler)"
+        , "        assemble_invocation=true"
+        , "        ;;"
+        , "    esac"
+        , "    continue"
+        , "  fi"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "    -x)"
+        , "      expect_lang=true"
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "if ! $assemble_invocation; then"
+        , "  exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "fi"
+        , "printf '%s\\n' 'stdout: wrapper prompt'"
+        , "perl -e 'select undef, undef, undef, 1.0'"
+        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeStreamingPromptWithoutNewlineDriverWrapper :: FilePath -> FilePath -> IO ()
+writeStreamingPromptWithoutNewlineDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "assemble_invocation=false"
+        , "expect_lang=false"
+        , "for arg in \"$@\"; do"
+        , "  if $expect_lang; then"
+        , "    expect_lang=false"
+        , "    case \"$arg\" in"
+        , "      assembler)"
+        , "        assemble_invocation=true"
+        , "        ;;"
+        , "    esac"
+        , "    continue"
+        , "  fi"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "    -x)"
+        , "      expect_lang=true"
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "if ! $assemble_invocation; then"
+        , "  exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "fi"
+        , "perl -e '$| = 1; print qq(stdout: wrapper prompt)'"
+        , "perl -e 'select undef, undef, undef, 1.0'"
+        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        , "printf '%s\\n' '1 warning generated.' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeCrossStreamStreamingRetainedLineDriverWrapper :: FilePath -> FilePath -> IO ()
+writeCrossStreamStreamingRetainedLineDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "printf '%s' 'stderr: wrapper prompt' >&2"
+        , "perl -e 'select undef, undef, undef, 0.2'"
+        , "printf '%s\\n' 'stdout: retained line'"
+        , "perl -e 'select undef, undef, undef, 1.0'"
+        , "printf '%s\\n' '' >&2"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeProbeCrossStreamWarningPreambleDriverWrapper :: FilePath -> FilePath -> IO ()
+writeProbeCrossStreamWarningPreambleDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "probe_invocation=false"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      probe_invocation=true"
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "if $probe_invocation; then"
+        , "  printf '%s\\n' 'In file included from fake-header.h:1:'"
+        , "  printf '%s\\n' '                 from fake-source.c:2:'"
+        , "  printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        , "  printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
+        , "  printf '%s\\n' '1 warning generated.' >&2"
+        , "fi"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
+writeProbePartialCrossStreamWarningPreambleDriverWrapper :: FilePath -> FilePath -> IO ()
+writeProbePartialCrossStreamWarningPreambleDriverWrapper wrapperPath wrappedPath = do
+    T.writeFile wrapperPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "probe_invocation=false"
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
+        , "      probe_invocation=true"
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "if $probe_invocation; then"
+        , "  printf '%s' 'In file included from fake-header.h:1:' >&2"
+        , "  printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning'"
+        , "  printf '%s\\n' '1 warning generated.'"
+        , "fi"
+        , "exec ./" <> T.pack wrappedPath <> " \"$@\""
+        ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+
 writePathLoggingWrapper :: FilePath -> FilePath -> FilePath -> IO ()
 writePathLoggingWrapper wrapperPath logPath helperName = do
     T.writeFile wrapperPath $ T.unlines
@@ -1021,8 +2582,185 @@ writePathLoggingWrapper wrapperPath logPath helperName = do
         ]
     execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
 
+writeEnvLoggingForwardingWrapper :: FilePath -> FilePath -> [String] -> IO ()
+writeEnvLoggingForwardingWrapper wrapperPath logPath envNames = do
+    T.writeFile wrapperPath $ T.unlines $
+        [ "#!/bin/sh"
+        , "set -eu"
+        ]
+            <> concatMap renderEnvLogger envNames
+            <> [ "wrapped=$1"
+               , "shift"
+               , "exec ./\"$wrapped\" \"$@\""
+               ]
+    execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
+    where
+        renderEnvLogger envName =
+            [ "printf '%s=' " <> shellQuote (T.pack envName) <> " >> " <> T.pack logPath
+            , "printf '%s\\n' \"$" <> T.pack envName <> "\" >> " <> T.pack logPath
+            ]
+
 shellQuote :: T.Text -> T.Text
 shellQuote word = "'" <> T.replace "'" "'\"'\"'" word <> "'"
+
+cleanupBackgroundProcessGroupHelperPids :: FilePath -> IO ()
+cleanupBackgroundProcessGroupHelperPids pidPath = do
+    pidFileExists <- doesFileExist pidPath
+    when pidFileExists $ do
+        helperPids <- filter (not . T.null) . map T.strip . T.lines <$> T.readFile pidPath
+        mapM_
+            (\helperPid -> do
+                _ <- exec $ "kill " <> helperPid <> " > /dev/null 2>&1 || true"
+                pure ()
+            )
+            helperPids
+
+hostCanExecuteGeneratedElf :: Bool
+hostCanExecuteGeneratedElf =
+    os /= "mingw32" && os /= "darwin"
+
+linkedElfHeaderForProbe :: Int -> B.ByteString
+linkedElfHeaderForProbe elfType =
+    linkedElfHeaderWithInterpreterForProbeBytes elfType []
+
+linkedElfHeaderWithInterpreterForProbeBytes :: Int -> [Word8] -> B.ByteString
+linkedElfHeaderWithInterpreterForProbeBytes elfType interpreterBytes =
+    linkedElfHeaderWithInterpreterAndDynamicEntriesForProbe
+        elfType
+        interpreterBytes
+        (defaultDynamicEntriesForProbe elfType interpreterBytes)
+
+linkedElfHeaderWithInterpreterAndDynamicEntriesForProbe :: Int -> [Word8] -> [(Int, Int)] -> B.ByteString
+linkedElfHeaderWithInterpreterAndDynamicEntriesForProbe elfType interpreterBytes dynamicEntries =
+    B.pack $
+        [ 0x7f, 0x45, 0x4c, 0x46
+        , 0x02, 0x01, 0x01, 0x00
+        , 0x00, 0x00, 0x00, 0x00
+        , 0x00, 0x00, 0x00, 0x00
+        ]
+            <> word16leForProbe elfType
+            <> word16leForProbe 0x3e
+            <> word32leForProbe 0x1
+            <> word64leForProbe (0x400000 + fromIntegral codeOffset)
+            <> word64leForProbe 0x40
+            <> word64leForProbe 0x0
+            <> word32leForProbe 0x0
+            <> word16leForProbe 0x40
+            <> word16leForProbe 0x38
+            <> word16leForProbe programHeaderCount
+            <> word16leForProbe 0x0
+            <> word16leForProbe 0x0
+            <> word16leForProbe 0x0
+            <> word32leForProbe 0x1
+            <> word32leForProbe 0x5
+            <> word64leForProbe 0x0
+            <> word64leForProbe 0x400000
+            <> word64leForProbe 0x400000
+            <> word64leForProbe totalFileSize
+            <> word64leForProbe totalFileSize
+            <> word64leForProbe 0x1000
+            <> interpreterProgramHeader
+            <> dynamicProgramHeader
+            <> [0x90]
+            <> interpreterBytes
+            <> dynamicBytes
+    where
+        hasInterpreter = not (null interpreterBytes)
+        dynamicBytes =
+            concatMap
+                (\(tag, value) -> word64leForProbe (fromIntegral tag) <> word64leForProbe (fromIntegral value))
+                dynamicEntries
+        hasDynamic = not (null dynamicBytes)
+        programHeaderCount
+            | hasInterpreter && hasDynamic = 3
+            | hasInterpreter || hasDynamic = 2
+            | otherwise = 1
+        codeOffset = 0x40 + programHeaderCount * 0x38
+        interpreterOffset = codeOffset + 1
+        dynamicOffset = interpreterOffset + length interpreterBytes
+        totalFileSize = fromIntegral $ dynamicOffset + length dynamicBytes
+        interpreterProgramHeader
+            | hasInterpreter =
+                word32leForProbe 0x3
+                    <> word32leForProbe 0x0
+                    <> word64leForProbe (fromIntegral interpreterOffset)
+                    <> word64leForProbe 0x0
+                    <> word64leForProbe 0x0
+                    <> word64leForProbe (fromIntegral $ length interpreterBytes)
+                    <> word64leForProbe (fromIntegral $ length interpreterBytes)
+                    <> word64leForProbe 0x1
+            | otherwise =
+                []
+        dynamicProgramHeader
+            | hasDynamic =
+                word32leForProbe 0x2
+                    <> word32leForProbe 0x0
+                    <> word64leForProbe (fromIntegral dynamicOffset)
+                    <> word64leForProbe (0x400000 + fromIntegral dynamicOffset)
+                    <> word64leForProbe 0x0
+                    <> word64leForProbe (fromIntegral $ length dynamicBytes)
+                    <> word64leForProbe (fromIntegral $ length dynamicBytes)
+                    <> word64leForProbe 0x8
+            | otherwise =
+                []
+
+defaultDynamicEntriesForProbe :: Int -> [Word8] -> [(Int, Int)]
+defaultDynamicEntriesForProbe elfType interpreterBytes
+    | elfType == 3 && null interpreterBytes =
+        [ (elfDynamicTagFlags1ForProbe, elfDynamicFlag1PieForProbe)
+        , (elfDynamicTagNullForProbe, 0)
+        ]
+    | otherwise =
+        []
+
+asciiBytesForProbe :: String -> B.ByteString
+asciiBytesForProbe =
+    B.pack . map (fromIntegral . fromEnum)
+
+elfDynamicTagNullForProbe :: Int
+elfDynamicTagNullForProbe = 0
+
+elfDynamicTagFlags1ForProbe :: Int
+elfDynamicTagFlags1ForProbe = 0x6ffffffb
+
+elfDynamicFlag1PieForProbe :: Int
+elfDynamicFlag1PieForProbe = 0x08000000
+
+word16leForProbe :: Int -> [Word8]
+word16leForProbe value =
+    [ fromIntegral value
+    , fromIntegral $ value `div` 0x100
+    ]
+
+word32leForProbe :: Int -> [Word8]
+word32leForProbe value =
+    [ fromIntegral value
+    , fromIntegral $ value `div` 0x100
+    , fromIntegral $ value `div` 0x10000
+    , fromIntegral $ value `div` 0x1000000
+    ]
+
+word64leForProbe :: Integer -> [Word8]
+word64leForProbe value =
+    map
+        (fromIntegral . (`mod` 0x100))
+        [ value
+        , value `div` 0x100
+        , value `div` 0x10000
+        , value `div` 0x1000000
+        , value `div` 0x100000000
+        , value `div` 0x10000000000
+        , value `div` 0x1000000000000
+        , value `div` 0x100000000000000
+        ]
+
+createFreshTempDir :: String -> IO FilePath
+createFreshTempDir prefix = do
+    (path, handle) <- openTempFile "." prefix
+    hClose handle
+    removeFile path
+    createDirectoryIfMissing False path
+    pure path
 
 writeExecutableProxy :: FilePath -> FilePath -> IO ()
 writeExecutableProxy proxyPath targetPath = do
@@ -1041,7 +2779,9 @@ writeFakeAssemblerWithTarget targetTriple logPath asmPath assemblerPath = do
     T.writeFile assemblerPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "copy_file() {"
+        ]
+            <> runnableElfWriter
+            <> [ "copy_file() {"
         , "  src=$1"
         , "  dst=$2"
         , "  while IFS= read -r line || [ -n \"$line\" ]; do"
@@ -1108,7 +2848,7 @@ writeFakeAssemblerWithTarget targetTriple logPath asmPath assemblerPath = do
                , "    *) exit 98 ;;"
                , "  esac"
                , "  case \"$input_contents\" in"
-               , "    *\"main:\"*) : ;;"
+               , "    *\"main:\"*|*\".L.htcc_runnable_output_marker_ctor:\"*) : ;;"
                , "    *) exit 98 ;;"
                , "  esac"
                , "  while [ \"$1\" != '-x' ]; do"
@@ -1125,11 +2865,12 @@ writeFakeAssemblerWithTarget targetTriple logPath asmPath assemblerPath = do
             <> probeLinkedOutputWriter
             <> [ "      ;;"
                , "    *)"
-               , "      printf '%s\\n' '#!/bin/sh' 'exit 0' > \"$out\""
-               , "      /bin/chmod +x \"$out\""
-               , "      ;;"
-               , "  esac"
-               , "fi"
+        , "      test -n \"$input\""
+        , "      write_runnable_elf \"$out\""
+        , "      cat \"$input\" >> \"$out\""
+        , "      ;;"
+        , "  esac"
+        , "fi"
                ]
     execErrFin $ "chmod +x '" <> T.pack assemblerPath <> "'"
     where
@@ -1216,6 +2957,69 @@ writeAssembleOnlyDriver driverPath logPath = do
         , "  exit 97"
         , "fi"
         ]
+    execErrFin $ "chmod +x '" <> T.pack driverPath <> "'"
+
+writeSingleObjectOnlyLinkDriver :: FilePath -> FilePath -> IO ()
+writeSingleObjectOnlyLinkDriver driverPath logPath = do
+    T.writeFile driverPath $ T.unlines $
+        [ "#!/bin/sh"
+        , "set -eu"
+        ]
+            <> runnableElfWriter
+            <> [ "printf '%s\\n' \"$*\" >> " <> T.pack logPath
+               , "for arg in \"$@\"; do"
+               , "  case \"$arg\" in"
+               , "    -dumpmachine|-print-target-triple)"
+               , "      printf '%s\\n' 'x86_64-linux-gnu'"
+               , "      exit 0"
+               , "      ;;"
+               , "  esac"
+               , "done"
+               , "assemble=false"
+               , "out=''"
+               , "input=''"
+               , "input_count=0"
+               , "expect_lang=false"
+               , "expect_out=false"
+               , "for arg in \"$@\"; do"
+               , "  if $expect_lang; then"
+               , "    expect_lang=false"
+               , "    continue"
+               , "  fi"
+               , "  if $expect_out; then"
+               , "    out=\"$arg\""
+               , "    expect_out=false"
+               , "    continue"
+               , "  fi"
+               , "  case \"$arg\" in"
+               , "    -x)"
+               , "      assemble=true"
+               , "      expect_lang=true"
+               , "      ;;"
+               , "    -o)"
+               , "      expect_out=true"
+               , "      ;;"
+               , "    -*)"
+               , "      ;;"
+               , "    *)"
+               , "      input=\"$arg\""
+               , "      input_count=$((input_count + 1))"
+               , "      ;;"
+               , "  esac"
+               , "done"
+               , "test -n \"$out\""
+               , "test -n \"$input\""
+               , "if $assemble; then"
+               , "  printf '\\177ELF\\002\\001\\001\\000\\000\\000\\000\\000\\000\\000\\000\\000\\001\\000\\076\\000\\001\\000\\000\\000' > \"$out\""
+               , "  cat \"$input\" >> \"$out\""
+               , "else"
+               , "  if [ \"$input_count\" -gt 1 ]; then"
+               , "    exit 97"
+               , "  fi"
+               , "  write_runnable_elf \"$out\""
+               , "  cat \"$input\" >> \"$out\""
+               , "fi"
+               ]
     execErrFin $ "chmod +x '" <> T.pack driverPath <> "'"
 
 writeInPlaceLinkDriver :: FilePath -> FilePath -> IO ()
@@ -1464,6 +3268,71 @@ writeSharedLinkProbeDriver driverPath logPath = do
         ]
     execErrFin $ "chmod +x '" <> T.pack driverPath <> "'"
 
+writeForeignAbiLinkProbeDriver :: FilePath -> FilePath -> IO ()
+writeForeignAbiLinkProbeDriver driverPath logPath = do
+    T.writeFile driverPath $ T.unlines $
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' \"$*\" >> " <> T.pack logPath
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple)"
+        , "      printf '%s\\n' 'x86_64-linux-gnu'"
+        , "      exit 0"
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "assemble=false"
+        , "out=''"
+        , "input=''"
+        , "expect_lang=false"
+        , "expect_out=false"
+        , "for arg in \"$@\"; do"
+        , "  if $expect_lang; then"
+        , "    expect_lang=false"
+        , "    continue"
+        , "  fi"
+        , "  if $expect_out; then"
+        , "    out=\"$arg\""
+        , "    expect_out=false"
+        , "    continue"
+        , "  fi"
+        , "  case \"$arg\" in"
+        , "    -x)"
+        , "      assemble=true"
+        , "      expect_lang=true"
+        , "      ;;"
+        , "    -o)"
+        , "      expect_out=true"
+        , "      ;;"
+        , "    -*)"
+        , "      ;;"
+        , "    *)"
+        , "      input=\"$arg\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        ]
+            <> foreignAbiRunnableElfWriter
+            <> [ "test -n \"$out\""
+               , "if $assemble; then"
+               , "  test -n \"$input\""
+               , "  printf '\\177ELF\\002\\001\\001\\000\\000\\000\\000\\000\\000\\000\\000\\000\\001\\000\\076\\000\\001\\000\\000\\000' > \"$out\""
+               , "  cat \"$input\" >> \"$out\""
+               , "else"
+               , "  case \"$out\" in"
+               , "    *htcc-probe-*)"
+               ]
+            <> map ("  " <>) foreignAbiProbeLinkedOutputWriter
+            <> [ "      ;;"
+               , "    *)"
+               , "      write_foreign_abi_runnable_elf \"$out\""
+               , "      ;;"
+               , "  esac"
+               , "fi"
+               ]
+    execErrFin $ "chmod +x '" <> T.pack driverPath <> "'"
+
 writeBlobLinkProbeDriver :: FilePath -> FilePath -> IO ()
 writeBlobLinkProbeDriver driverPath logPath = do
     T.writeFile driverPath $ T.unlines
@@ -1576,10 +3445,12 @@ writeTouchingLinkDriver driverPath logPath = do
 
 writeSymlinkLinkProbeDriver :: FilePath -> FilePath -> FilePath -> IO ()
 writeSymlinkLinkProbeDriver driverPath logPath targetPath = do
-    T.writeFile driverPath $ T.unlines
+    T.writeFile driverPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "printf '%s\\n' \"$*\" >> " <> T.pack logPath
+        ]
+            <> runnableElfWriter
+            <> [ "printf '%s\\n' \"$*\" >> " <> T.pack logPath
         , "for arg in \"$@\"; do"
         , "  case \"$arg\" in"
         , "    -dumpmachine|-print-target-triple)"
@@ -1627,10 +3498,93 @@ writeSymlinkLinkProbeDriver driverPath logPath targetPath = do
         , "  test -n \"$input\""
         , "  target=\"$(pwd)/" <> T.pack targetPath <> "\""
         , "  rm -f \"$target\" \"$out\""
-        , "  printf '\\177ELF\\002\\001\\001\\000\\000\\000\\000\\000\\000\\000\\000\\000\\002\\000\\076\\000\\001\\000\\000\\000' > \"$target\""
-        , "  chmod 000 \"$target\""
+        , "  write_runnable_elf \"$target\""
+        , "  cat \"$input\" >> \"$target\""
         , "  ln -sf \"$target\" \"$out\""
-        , "fi"
+               , "fi"
+               ]
+    execErrFin $ "chmod +x '" <> T.pack driverPath <> "'"
+
+writeSymlinkSpecialLinkProbeDriver :: FilePath -> FilePath -> IO ()
+writeSymlinkSpecialLinkProbeDriver driverPath logPath = do
+    T.writeFile driverPath $ T.unlines $
+        [ "#!/bin/sh"
+        , "set -eu"
+        ]
+            <> runnableElfWriter
+            <> [ "printf '%s\\n' \"$*\" >> " <> T.pack logPath
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple)"
+        , "      printf '%s\\n' 'x86_64-linux-gnu'"
+        , "      exit 0"
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "assemble=false"
+        , "out=''"
+        , "input=''"
+        , "expect_lang=false"
+        , "expect_out=false"
+        , "for arg in \"$@\"; do"
+        , "  if $expect_lang; then"
+        , "    expect_lang=false"
+        , "    continue"
+        , "  fi"
+        , "  if $expect_out; then"
+        , "    out=\"$arg\""
+        , "    expect_out=false"
+        , "    continue"
+        , "  fi"
+        , "  case \"$arg\" in"
+        , "    -x)"
+        , "      assemble=true"
+        , "      expect_lang=true"
+        , "      ;;"
+        , "    -o)"
+        , "      expect_out=true"
+        , "      ;;"
+        , "    -*)"
+        , "      ;;"
+        , "    *)"
+        , "      input=\"$arg\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "test -n \"$out\""
+        , "if $assemble; then"
+        ]
+            <> probeLinkedOutputWriter
+            <> [ "else"
+               , "  ln -sfn /dev/null \"$out\""
+               , "fi"
+               ]
+    execErrFin $ "chmod +x '" <> T.pack driverPath <> "'"
+
+writeNonExecutableLinkProbeDriver :: FilePath -> FilePath -> FilePath -> FilePath -> IO ()
+writeNonExecutableLinkProbeDriver driverPath logPath relocatableObjectPath cannedExecutablePath = do
+    T.writeFile driverPath $ T.unlines
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' \"$*\" >> " <> T.pack logPath
+        , "case \"$1\" in"
+        , "  -dumpmachine|-print-target-triple)"
+        , "    printf '%s\\n' 'x86_64-linux-gnu'"
+        , "    exit 0"
+        , "    ;;"
+        , "esac"
+        , "case \"$1\" in"
+        , "  -x)"
+        , "    cat " <> shellQuote (T.pack relocatableObjectPath) <> " > \"$5\""
+        , "    ;;"
+        , "  -no-pie)"
+        , "    cat " <> shellQuote (T.pack cannedExecutablePath) <> " > \"$3\""
+        , "    chmod 0644 \"$3\""
+        , "    ;;"
+        , "  *)"
+        , "    exit 1"
+        , "    ;;"
+        , "esac"
         ]
     execErrFin $ "chmod +x '" <> T.pack driverPath <> "'"
 
@@ -1761,8 +3715,141 @@ writeMarkerStrippingFinalLinkDriver driverPath logPath = do
             <> [ "      ;;"
                , "    *)"
                , "      test -n \"$input\""
-               , "      printf '\\177ELF\\002\\001\\001\\000\\000\\000\\000\\000\\000\\000\\000\\000\\002\\000\\076\\000\\001\\000\\000\\000' > \"$out\""
-               , "      chmod +x \"$out\""
+               , "      write_runnable_elf \"$out\""
+               , "      cat \"$input\" >> \"$out\""
+               , "      ;;"
+               , "  esac"
+               , "fi"
+               ]
+    execErrFin $ "chmod +x '" <> T.pack driverPath <> "'"
+
+writeGcSectionsLinkDriver :: FilePath -> FilePath -> IO ()
+writeGcSectionsLinkDriver driverPath logPath = do
+    T.writeFile driverPath $ T.unlines $
+        [ "#!/bin/sh"
+        , "set -eu"
+        ]
+            <> runnableElfWriter
+            <> [ "printf '%s\\n' \"$*\" >> " <> T.pack logPath
+               , "for arg in \"$@\"; do"
+               , "  case \"$arg\" in"
+               , "    -dumpmachine|-print-target-triple)"
+               , "      printf '%s\\n' 'x86_64-linux-gnu'"
+               , "      exit 0"
+               , "      ;;"
+               , "  esac"
+               , "done"
+               , "mode=link"
+               , "out=''"
+               , "input=''"
+               , "expect_lang=false"
+               , "expect_out=false"
+               , "for arg in \"$@\"; do"
+               , "  if $expect_lang; then"
+               , "    expect_lang=false"
+               , "    continue"
+               , "  fi"
+               , "  if $expect_out; then"
+               , "    out=\"$arg\""
+               , "    expect_out=false"
+               , "    continue"
+               , "  fi"
+               , "  case \"$arg\" in"
+               , "    -x)"
+               , "      mode=assemble"
+               , "      expect_lang=true"
+               , "      ;;"
+               , "    -o)"
+               , "      expect_out=true"
+               , "      ;;"
+               , "    -*)"
+               , "      ;;"
+               , "    *)"
+               , "      input=\"$arg\""
+               , "      ;;"
+               , "  esac"
+               , "done"
+               , "test -n \"$out\""
+               , "if [ \"$mode\" = 'assemble' ]; then"
+               , "  test -n \"$input\""
+               , "  printf '\\177ELF\\002\\001\\001\\000\\000\\000\\000\\000\\000\\000\\000\\000\\001\\000\\076\\000\\001\\000\\000\\000' > \"$out\""
+               , "  cat \"$input\" >> \"$out\""
+               , "else"
+               , "  case \"$out\" in"
+               , "    *htcc-probe-*)"
+               ]
+            <> probeLinkedOutputWriter
+            <> [ "      ;;"
+               , "    *)"
+               , "      test -n \"$input\""
+               , "      write_runnable_elf \"$out\""
+               , "      if LC_ALL=C grep -Fq '.section .init_array,\"aw\",@init_array' \"$input\"; then"
+               , "        cat \"$input\" >> \"$out\""
+               , "      fi"
+               , "      ;;"
+               , "  esac"
+               , "fi"
+               ]
+    execErrFin $ "chmod +x '" <> T.pack driverPath <> "'"
+
+writeNamedPipeFinalLinkDriver :: FilePath -> FilePath -> IO ()
+writeNamedPipeFinalLinkDriver driverPath logPath = do
+    T.writeFile driverPath $ T.unlines $
+        [ "#!/bin/sh"
+        , "set -eu"
+        , "printf '%s\\n' \"$*\" >> " <> T.pack logPath
+        , "for arg in \"$@\"; do"
+        , "  case \"$arg\" in"
+        , "    -dumpmachine|-print-target-triple)"
+        , "      printf '%s\\n' 'x86_64-linux-gnu'"
+        , "      exit 0"
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "mode=link"
+        , "out=''"
+        , "input=''"
+        , "expect_lang=false"
+        , "expect_out=false"
+        , "for arg in \"$@\"; do"
+        , "  if $expect_lang; then"
+        , "    expect_lang=false"
+        , "    continue"
+        , "  fi"
+        , "  if $expect_out; then"
+        , "    out=\"$arg\""
+        , "    expect_out=false"
+        , "    continue"
+        , "  fi"
+        , "  case \"$arg\" in"
+        , "    -x)"
+        , "      mode=assemble"
+        , "      expect_lang=true"
+        , "      ;;"
+        , "    -o)"
+        , "      expect_out=true"
+        , "      ;;"
+        , "    -*)"
+        , "      ;;"
+        , "    *)"
+        , "      input=\"$arg\""
+        , "      ;;"
+        , "  esac"
+        , "done"
+        , "test -n \"$out\""
+        , "if [ \"$mode\" = 'assemble' ]; then"
+        , "  test -n \"$input\""
+        , "  printf '\\177ELF\\002\\001\\001\\000\\000\\000\\000\\000\\000\\000\\000\\000\\001\\000\\076\\000\\001\\000\\000\\000' > \"$out\""
+        , "  cat \"$input\" >> \"$out\""
+        , "else"
+        , "  case \"$out\" in"
+        , "    *htcc-probe-*)"
+        ]
+            <> probeLinkedOutputWriter
+            <> [ "      ;;"
+               , "    *)"
+               , "      rm -f \"$out\""
+               , "      mkfifo \"$out\""
                , "      ;;"
                , "  esac"
                , "fi"
@@ -2053,6 +4140,2458 @@ outputFileTest = flip finally (clean ["tmp.out", "tmp.s"]) $ do
             ]
     return $ mkResult outputFileMsg ok details
 
+outputFileLegacyLongAliasTest :: IO (Either T.Text T.Text, String)
+outputFileLegacyLongAliasTest = flip finally (clean ["tmp.out", "tmp.s"]) $ do
+    htccCmd <- htccCommand
+    execErrFin $ mconcat
+        [ "echo '"
+        , source
+        , "' | "
+        , htccCmd
+        , " --out tmp.s /dev/stdin > tmp.out"
+        ]
+    stdoutLeak <- T.readFile "tmp.out"
+    asm <- T.readFile "tmp.s"
+    let hasRequiredLabels =
+            all (`T.isInfixOf` asm)
+                [ ".L.return.main:"
+                , ".L.label.main.done:"
+                , ".L.case.main."
+                ]
+        ok = T.null stdoutLeak && hasRequiredLabels
+        details = T.unlines
+            [ "stdout:"
+            , stdoutLeak
+            , "hasRequiredLabels: " <> T.pack (show hasRequiredLabels)
+            ]
+    return $ mkResult outputFileLegacyLongAliasMsg ok details
+
+visualizeAstLegacyFlagsTest :: IO (Either T.Text T.Text, String)
+visualizeAstLegacyFlagsTest = flip finally (clean ["tmp.err", "tmp.out", "tmp.svg"]) $ do
+    htccCmd <- htccCommand
+    execErrFin $ mconcat
+        [ "echo 'int main() { return 0; }' | "
+        , htccCmd
+        , " --visualize-ast --img-resolution 320x240 --out tmp.svg /dev/stdin > tmp.out 2> tmp.err"
+        ]
+    stdoutLeak <- T.readFile "tmp.out"
+    stderrLeak <- T.readFile "tmp.err"
+    svgExists <- doesFileExist "tmp.svg"
+    svg <- if svgExists then T.readFile "tmp.svg" else pure T.empty
+    let hasSvgHeader = "<svg" `T.isInfixOf` svg
+        ok = T.null stdoutLeak && T.null stderrLeak && svgExists && hasSvgHeader
+        details = T.unlines
+            [ "stdout:"
+            , stdoutLeak
+            , "stderr:"
+            , stderrLeak
+            , "svgExists: " <> T.pack (show svgExists)
+            , "hasSvgHeader: " <> T.pack (show hasSvgHeader)
+            ]
+    return $ mkResult visualizeAstLegacyFlagsMsg ok details
+
+visualizeAstPreservesParsedForSectionsTest :: IO (Either T.Text T.Text, String)
+visualizeAstPreservesParsedForSectionsTest = flip finally (clean ["tmp.err", "tmp.out", "tmp.svg"]) $ do
+    htccCmd <- htccCommand
+    execErrFin $ mconcat
+        [ "echo 'int main(){for(;;) return 1;}' | "
+        , htccCmd
+        , " --visualize-ast --out tmp.svg /dev/stdin > tmp.out 2> tmp.err"
+        ]
+    stdoutLeak <- T.readFile "tmp.out"
+    stderrLeak <- T.readFile "tmp.err"
+    svgExists <- doesFileExist "tmp.svg"
+    svg <- if svgExists then T.readFile "tmp.svg" else pure T.empty
+    let emptySectionsPreserved = T.count "Null" svg == 3
+        hasLoop = "for" `T.isInfixOf` svg
+        hasReturn = "return" `T.isInfixOf` svg
+        hasLiteral = "1 (" `T.isInfixOf` svg
+        ok =
+            T.null stdoutLeak
+                && T.null stderrLeak
+                && svgExists
+                && emptySectionsPreserved
+                && hasLoop
+                && hasReturn
+                && hasLiteral
+        details = T.unlines
+            [ "stdout:"
+            , stdoutLeak
+            , "stderr:"
+            , stderrLeak
+            , "svgExists: " <> T.pack (show svgExists)
+            , "emptySectionsPreserved: " <> T.pack (show emptySectionsPreserved)
+            , "hasLoop: " <> T.pack (show hasLoop)
+            , "hasReturn: " <> T.pack (show hasReturn)
+            , "hasLiteral: " <> T.pack (show hasLiteral)
+            ]
+    return $ mkResult visualizeAstPreservesParsedForSectionsMsg ok details
+
+visualizeAstAcceptsAsmNormalizationFailureTest :: IO (Either T.Text T.Text, String)
+visualizeAstAcceptsAsmNormalizationFailureTest =
+    flip finally (clean ["tmp.err", "tmp.out", "tmp.svg", "tmp-visualize-incomplete-inc.c"]) $ do
+        htccCmd <- htccCommand
+        let inputPath = "tmp-visualize-incomplete-inc.c"
+        T.writeFile inputPath $
+            T.unlines
+                [ "int (*f(void))[];"
+                , "int main(void) { int (*p)[] = f(); ++p; return 0; }"
+                ]
+        result <- exec $ mconcat
+            [ htccCmd
+            , " --visualize-ast --out tmp.svg "
+            , T.pack inputPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        svgExists <- doesFileExist "tmp.svg"
+        svg <- if svgExists then T.readFile "tmp.svg" else pure ""
+        let succeeded = exitCode (const False) True result
+            hasSvg = "<svg" `T.isInfixOf` svg
+            hasReturn = "return" `T.isInfixOf` svg
+            hasMain = "main" `T.isInfixOf` svg
+            ok =
+                succeeded
+                    && T.null stdoutLeak
+                    && T.null stderrOut
+                    && svgExists
+                    && hasSvg
+                    && hasReturn
+                    && hasMain
+            details = T.unlines
+                [ "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "svgExists: " <> T.pack (show svgExists)
+                , "hasSvg: " <> T.pack (show hasSvg)
+                , "hasReturn: " <> T.pack (show hasReturn)
+                , "hasMain: " <> T.pack (show hasMain)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult visualizeAstAcceptsAsmNormalizationFailureMsg ok details
+
+visualizeAstRejectsNonFiniteResolutionTest :: IO (Either T.Text T.Text, String)
+visualizeAstRejectsNonFiniteResolutionTest = flip finally (clean ["tmp.err", "tmp.out", "tmp.svg"]) $ do
+    htccCmd <- htccCommand
+    execErrFin $ mconcat
+        [ "echo 'int main() { return 0; }' | "
+        , htccCmd
+        , " --visualize-ast --img-resolution 1e309x1e309 --out tmp.svg /dev/stdin > tmp.out 2> tmp.err"
+        ]
+    stdoutLeak <- T.readFile "tmp.out"
+    stderrOut <- T.readFile "tmp.err"
+    svgExists <- doesFileExist "tmp.svg"
+    svg <- if svgExists then T.readFile "tmp.svg" else pure T.empty
+    let warnedAboutInvalidResolution =
+            "warning: the specified resolution is invalid, so using default resolution." `T.isInfixOf` stderrOut
+        hasSvgHeader = "<svg" `T.isInfixOf` svg
+        hasFiniteDimensions =
+            not ("Infinity" `T.isInfixOf` svg || "NaN" `T.isInfixOf` svg)
+        ok =
+            T.null stdoutLeak
+                && warnedAboutInvalidResolution
+                && svgExists
+                && hasSvgHeader
+                && hasFiniteDimensions
+        details = T.unlines
+            [ "stdout:"
+            , stdoutLeak
+            , "stderr:"
+            , stderrOut
+            , "svgExists: " <> T.pack (show svgExists)
+            , "hasSvgHeader: " <> T.pack (show hasSvgHeader)
+            , "hasFiniteDimensions: " <> T.pack (show hasFiniteDimensions)
+            ]
+    return $ mkResult visualizeAstRejectsNonFiniteResolutionMsg ok details
+
+visualizeAstRejectsNonPositiveResolutionTest :: IO (Either T.Text T.Text, String)
+visualizeAstRejectsNonPositiveResolutionTest = flip finally (clean ["tmp.err", "tmp.out", "tmp.svg"]) $ do
+    htccCmd <- htccCommand
+    execErrFin $ mconcat
+        [ "echo 'int main() { return 0; }' | "
+        , htccCmd
+        , " --visualize-ast --img-resolution 0x0 --out tmp.svg /dev/stdin > tmp.out 2> tmp.err"
+        ]
+    stdoutLeak <- T.readFile "tmp.out"
+    stderrOut <- T.readFile "tmp.err"
+    svgExists <- doesFileExist "tmp.svg"
+    svg <- if svgExists then T.readFile "tmp.svg" else pure T.empty
+    let warnedAboutInvalidResolution =
+            "warning: the specified resolution is invalid, so using default resolution." `T.isInfixOf` stderrOut
+        hasSvgHeader = "<svg" `T.isInfixOf` svg
+        usedDefaultResolution =
+            "width=\"640.0000\"" `T.isInfixOf` svg
+                && "height=\"480.0000\"" `T.isInfixOf` svg
+        ok =
+            T.null stdoutLeak
+                && warnedAboutInvalidResolution
+                && svgExists
+                && hasSvgHeader
+                && usedDefaultResolution
+        details = T.unlines
+            [ "stdout:"
+            , stdoutLeak
+            , "stderr:"
+            , stderrOut
+            , "svgExists: " <> T.pack (show svgExists)
+            , "hasSvgHeader: " <> T.pack (show hasSvgHeader)
+            , "usedDefaultResolution: " <> T.pack (show usedDefaultResolution)
+            ]
+    return $ mkResult visualizeAstRejectsNonPositiveResolutionMsg ok details
+
+visualizeAstRejectsDeclarationOnlyInputTest :: IO (Either T.Text T.Text, String)
+visualizeAstRejectsDeclarationOnlyInputTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp-empty.c", "tmp-empty.svg"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp-empty.svg"
+            inputPath = "tmp-empty.c"
+            expectedError = "There is nothing to describe"
+        clean [target, inputPath, "tmp.out", "tmp.err"]
+        T.writeFile target "stale output"
+        T.writeFile inputPath "int g;"
+        result <- exec $ mconcat
+            [ htccCmd
+            , " --visualize-ast --out "
+            , T.pack target
+            , " "
+            , T.pack inputPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist target
+        targetContents <- if targetExists then T.readFile target else pure ""
+        let failed = exitCode (const True) False result
+            hasExpectedError = expectedError `T.isInfixOf` stderrOut
+            ok =
+                failed
+                    && T.null stdoutLeak
+                    && targetExists
+                    && targetContents == "stale output"
+                    && hasExpectedError
+            details = T.unlines
+                [ "target: " <> T.pack target
+                , "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "targetExists: " <> T.pack (show targetExists)
+                , "targetUnchanged: " <> T.pack (show (targetContents == "stale output"))
+                , "hasExpectedError: " <> T.pack (show hasExpectedError)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult visualizeAstRejectsDeclarationOnlyInputMsg ok details
+
+visualizeAstRejectsNonSvgOutputTest :: IO (Either T.Text T.Text, String)
+visualizeAstRejectsNonSvgOutputTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp-invalid-output.c", "tmp-invalid-output.png"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp-invalid-output.png"
+            inputPath = "tmp-invalid-output.c"
+            expectedError = "AST visualization output path must use the .svg extension"
+        clean [target, inputPath, "tmp.out", "tmp.err"]
+        T.writeFile target "stale output"
+        T.writeFile inputPath "int main(void) { return 0; }"
+        result <- exec $ mconcat
+            [ htccCmd
+            , " --visualize-ast --out "
+            , T.pack target
+            , " "
+            , T.pack inputPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist target
+        targetContents <- if targetExists then T.readFile target else pure ""
+        let failed = exitCode (const True) False result
+            hasExpectedError = expectedError `T.isInfixOf` stderrOut
+            ok =
+                failed
+                    && T.null stdoutLeak
+                    && targetExists
+                    && targetContents == "stale output"
+                    && hasExpectedError
+            details = T.unlines
+                [ "target: " <> T.pack target
+                , "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "targetExists: " <> T.pack (show targetExists)
+                , "targetUnchanged: " <> T.pack (show (targetContents == "stale output"))
+                , "hasExpectedError: " <> T.pack (show hasExpectedError)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult visualizeAstRejectsNonSvgOutputMsg ok details
+
+visualizeAstAcceptsSymlinkAliasToSvgTargetTest :: IO (Either T.Text T.Text, String)
+visualizeAstAcceptsSymlinkAliasToSvgTargetTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp-visualize-output.c", "tmp-visualize-output-current", "tmp-visualize-output-target.svg"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp-visualize-output-target.svg"
+            alias = "tmp-visualize-output-current"
+            inputPath = "tmp-visualize-output.c"
+        clean [target, alias, inputPath, "tmp.out", "tmp.err"]
+        T.writeFile target "stale output"
+        execErrFin $ "ln -s '" <> T.pack target <> "' '" <> T.pack alias <> "'"
+        T.writeFile inputPath "int main(void) { return 0; }"
+        result <- exec $ mconcat
+            [ htccCmd
+            , " --visualize-ast --out "
+            , T.pack alias
+            , " "
+            , T.pack inputPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetContents <- T.readFile target
+        linkStatus <- getSymbolicLinkStatus alias
+        let succeeded = exitCode (const False) True result
+            linkStillSymlink = isSymbolicLink linkStatus
+            targetUpdated = "<svg" `T.isInfixOf` targetContents && targetContents /= "stale output"
+            ok =
+                succeeded
+                    && T.null stdoutLeak
+                    && T.null stderrOut
+                    && linkStillSymlink
+                    && targetUpdated
+            details = T.unlines
+                [ "target: " <> T.pack target
+                , "alias: " <> T.pack alias
+                , "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "linkStillSymlink: " <> T.pack (show linkStillSymlink)
+                , "targetUpdated: " <> T.pack (show targetUpdated)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult visualizeAstAcceptsSymlinkAliasToSvgTargetMsg ok details
+
+visualizeAstRejectsSymlinkedNonSvgOutputTest :: IO (Either T.Text T.Text, String)
+visualizeAstRejectsSymlinkedNonSvgOutputTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp-invalid-output.c", "tmp-invalid-output-link.svg", "tmp-invalid-output-target.txt"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp-invalid-output-target.txt"
+            alias = "tmp-invalid-output-link.svg"
+            inputPath = "tmp-invalid-output.c"
+            expectedError = "AST visualization output path must use the .svg extension"
+        clean [target, alias, inputPath, "tmp.out", "tmp.err"]
+        T.writeFile target "stale output"
+        execErrFin $ "ln -s '" <> T.pack target <> "' '" <> T.pack alias <> "'"
+        T.writeFile inputPath "int main(void) { return 0; }"
+        result <- exec $ mconcat
+            [ htccCmd
+            , " --visualize-ast --out "
+            , T.pack alias
+            , " "
+            , T.pack inputPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist target
+        targetContents <- if targetExists then T.readFile target else pure ""
+        let failed = exitCode (const True) False result
+            hasExpectedError = expectedError `T.isInfixOf` stderrOut
+            ok =
+                failed
+                    && T.null stdoutLeak
+                    && targetExists
+                    && targetContents == "stale output"
+                    && hasExpectedError
+            details = T.unlines
+                [ "target: " <> T.pack target
+                , "alias: " <> T.pack alias
+                , "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "targetExists: " <> T.pack (show targetExists)
+                , "targetUnchanged: " <> T.pack (show (targetContents == "stale output"))
+                , "hasExpectedError: " <> T.pack (show hasExpectedError)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult visualizeAstRejectsSymlinkedNonSvgOutputMsg ok details
+
+imgResolutionRequiresVisualizeAstTest :: IO (Either T.Text T.Text, String)
+imgResolutionRequiresVisualizeAstTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp-resolution.c", "tmp-resolution.s"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp-resolution.s"
+            inputPath = "tmp-resolution.c"
+            expectedError = "--img-resolution requires --visualize-ast"
+        clean [target, inputPath, "tmp.out", "tmp.err"]
+        T.writeFile inputPath "int main(void) { return 0; }"
+        result <- exec $ mconcat
+            [ htccCmd
+            , " --img-resolution 320x240 --out "
+            , T.pack target
+            , " "
+            , T.pack inputPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist target
+        let failed = exitCode (const True) False result
+            hasExpectedError = expectedError `T.isInfixOf` stderrOut
+            ok =
+                failed
+                    && T.null stdoutLeak
+                    && not targetExists
+                    && hasExpectedError
+            details = T.unlines
+                [ "target: " <> T.pack target
+                , "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "targetExists: " <> T.pack (show targetExists)
+                , "hasExpectedError: " <> T.pack (show hasExpectedError)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult imgResolutionRequiresVisualizeAstMsg ok details
+
+suppressWarnsCanonicalFlagTest :: IO (Either T.Text T.Text, String)
+suppressWarnsCanonicalFlagTest = flip finally (clean ["tmp.err", "tmp.out", "tmp.s"]) $ do
+    htccCmd <- htccCommand
+    execErrFin $ mconcat
+        [ "echo 'int main() { return foo(); }' | "
+        , htccCmd
+        , " --suppress-warns --out tmp.s /dev/stdin > tmp.out 2> tmp.err"
+        ]
+    stdoutLeak <- T.readFile "tmp.out"
+    stderrLeak <- T.readFile "tmp.err"
+    asm <- T.readFile "tmp.s"
+    let hasFooCall = "call foo" `T.isInfixOf` asm
+        ok = T.null stdoutLeak && T.null stderrLeak && hasFooCall
+        details = T.unlines
+            [ "stdout:"
+            , stdoutLeak
+            , "stderr:"
+            , stderrLeak
+            , "hasFooCall: " <> T.pack (show hasFooCall)
+            ]
+    return $ mkResult suppressWarnsCanonicalFlagMsg ok details
+
+suppressWarnsLegacyFlagTest :: IO (Either T.Text T.Text, String)
+suppressWarnsLegacyFlagTest = flip finally (clean ["tmp.err", "tmp.out", "tmp.s"]) $ do
+    htccCmd <- htccCommand
+    execErrFin $ mconcat
+        [ "echo 'int main() { return foo(); }' | "
+        , htccCmd
+        , " --supress-warns --out tmp.s /dev/stdin > tmp.out 2> tmp.err"
+        ]
+    stdoutLeak <- T.readFile "tmp.out"
+    stderrLeak <- T.readFile "tmp.err"
+    asm <- T.readFile "tmp.s"
+    let hasFooCall = "call foo" `T.isInfixOf` asm
+        ok = T.null stdoutLeak && T.null stderrLeak && hasFooCall
+        details = T.unlines
+            [ "stdout:"
+            , stdoutLeak
+            , "stderr:"
+            , stderrLeak
+            , "hasFooCall: " <> T.pack (show hasFooCall)
+            ]
+    return $ mkResult suppressWarnsLegacyFlagMsg ok details
+
+suppressWarnsRunAsmTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeWarningWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeWarningDriverWrapper fakeWarningWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeWarningWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            compilerArgs <- T.lines <$> T.readFile fakeAssemblerLogPath
+            result <- exec "./tmp"
+            let compilerSawExpectedArgs =
+                    all (`elem` compilerArgs)
+                        [ "-x"
+                        , "assembler"
+                        , "-c"
+                        , "-o"
+                        ]
+                ranOk = exitCode (const False) True result
+                ok = T.null stdoutLeak && T.null stderrLeak && compilerSawExpectedArgs && ranOk
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "compilerArgs:"
+                    , T.unlines compilerArgs
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult suppressWarnsRunAsmMsg ok details
+
+suppressWarnsRunAsmSuppressesStdoutWarningsTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmSuppressesStdoutWarningsTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeStdoutWarningWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeStdoutWarningDriverWrapper fakeStdoutWarningWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeStdoutWarningWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            compilerArgs <- T.lines <$> T.readFile fakeAssemblerLogPath
+            result <- exec "./tmp"
+            let compilerSawExpectedArgs =
+                    all (`elem` compilerArgs)
+                        [ "-x"
+                        , "assembler"
+                        , "-c"
+                        , "-o"
+                        ]
+                ranOk = exitCode (const False) True result
+                ok = T.null stdoutLeak && T.null stderrLeak && compilerSawExpectedArgs && ranOk
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "compilerArgs:"
+                    , T.unlines compilerArgs
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult suppressWarnsRunAsmSuppressesStdoutWarningsMsg ok details
+
+suppressWarnsRunAsmPreservesBinaryOutputTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesBinaryOutputTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeBinaryWarningWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeBinaryWarningDriverWrapper fakeBinaryWarningWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeBinaryWarningWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- B.readFile "tmp.out"
+            stderrLeak <- B.readFile "tmp.err"
+            result <- exec "./tmp"
+            let ranOk = exitCode (const False) True result
+                hasBinaryStdout = B.elem 0xfe stdoutLeak
+                hasBinaryStderr = B.elem 0xff stderrLeak
+                hasWarningLeak = B.pack (map (fromIntegral . fromEnum) "warning: fake HTCC_ASSEMBLER warning")
+                    `B.isInfixOf` stderrLeak
+                ok = ranOk && hasBinaryStdout && hasBinaryStderr && not hasWarningLeak
+                details = T.unlines
+                    [ "stdoutBytes: " <> T.pack (show stdoutLeak)
+                    , "stderrBytes: " <> T.pack (show stderrLeak)
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult suppressWarnsRunAsmPreservesBinaryOutputMsg ok details
+
+suppressWarnsRunAsmPreservesUnterminatedStderrTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesUnterminatedStderrTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeUnterminatedStderrWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeUnterminatedStderrDriverWrapper fakeUnterminatedStderrWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeUnterminatedStderrWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- B.readFile "tmp.out"
+            stderrLeak <- B.readFile "tmp.err"
+            result <- exec "./tmp"
+            let ranOk = exitCode (const False) True result
+                ok = B.null stdoutLeak && stderrLeak == B.pack [88, 89, 90] && ranOk
+                details = T.unlines
+                    [ "stdoutBytes: " <> T.pack (show stdoutLeak)
+                    , "stderrBytes: " <> T.pack (show stderrLeak)
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult suppressWarnsRunAsmPreservesUnterminatedStderrMsg ok details
+
+suppressWarnsRunAsmPreservesStdoutStderrInterleavingTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesStdoutStderrInterleavingTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.out"
+            , fakeInterleavedOutputWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeInterleavedOutputDriverWrapper fakeInterleavedOutputWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeInterleavedOutputWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2>&1"
+                ]
+            mergedOutput <- T.readFile "tmp.out"
+            targetExists <- doesFileExist "tmp"
+            let expectedLines =
+                    concat $
+                        replicate
+                            2
+                            [ T.pack "stdout: wrapper start"
+                            , T.pack "stderr: wrapper note"
+                            , T.pack "stdout: wrapper end"
+                            ]
+                mergedLines = T.lines mergedOutput
+                ok = mergedLines == expectedLines && targetExists
+                details = T.unlines
+                    [ "mergedOutput:"
+                    , mergedOutput
+                    , "mergedLines: " <> T.pack (show mergedLines)
+                    , "targetExists: " <> T.pack (show targetExists)
+                    ]
+            return $ mkResult suppressWarnsRunAsmPreservesStdoutStderrInterleavingMsg ok details
+
+suppressWarnsRunAsmPreservesSameReadStdoutInterleavingTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesSameReadStdoutInterleavingTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.out"
+            , fakeSameReadStdoutInterleavingWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeSameReadStdoutInterleavingDriverWrapper
+                fakeSameReadStdoutInterleavingWrapperPath
+                fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeSameReadStdoutInterleavingWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2>&1"
+                ]
+            mergedOutput <- T.readFile "tmp.out"
+            targetExists <- doesFileExist "tmp"
+            let expectedLines =
+                    concat $
+                        replicate
+                            2
+                            [ T.pack "stdout: first"
+                            , T.pack "stderr: middle"
+                            , T.pack "stdout: second"
+                            ]
+                mergedLines = T.lines mergedOutput
+                ok = mergedLines == expectedLines && targetExists
+                details = T.unlines
+                    [ "mergedOutput:"
+                    , mergedOutput
+                    , "mergedLines: " <> T.pack (show mergedLines)
+                    , "targetExists: " <> T.pack (show targetExists)
+                    ]
+            return $ mkResult suppressWarnsRunAsmPreservesSameReadStdoutInterleavingMsg ok details
+
+suppressWarnsRunAsmPreservesSameReadStderrChunksTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesSameReadStderrChunksTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.out"
+            , fakeSameReadStderrChunksWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeSameReadStderrChunksDriverWrapper fakeSameReadStderrChunksWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeSameReadStderrChunksWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2>&1"
+                ]
+            mergedOutput <- T.readFile "tmp.out"
+            targetExists <- doesFileExist "tmp"
+            let expectedLines =
+                    concat $
+                        replicate
+                            2
+                            [ T.pack "stderr: first"
+                            , T.pack "stderr: second"
+                            , T.pack "stdout: after"
+                            ]
+                mergedLines = T.lines mergedOutput
+                ok = mergedLines == expectedLines && targetExists
+                details = T.unlines
+                    [ "mergedOutput:"
+                    , mergedOutput
+                    , "mergedLines: " <> T.pack (show mergedLines)
+                    , "targetExists: " <> T.pack (show targetExists)
+                    ]
+            return $ mkResult suppressWarnsRunAsmPreservesSameReadStderrChunksMsg ok details
+
+suppressWarnsRunAsmScopesRetainedIndicesByStreamTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmScopesRetainedIndicesByStreamTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.out"
+            , fakeStreamScopedWarningWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeStreamScopedWarningDriverWrapper fakeStreamScopedWarningWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeStreamScopedWarningWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2>&1"
+                ]
+            mergedOutput <- T.readFile "tmp.out"
+            targetExists <- doesFileExist "tmp"
+            let expectedLines =
+                    [ T.pack "stdout: retained first"
+                    , T.pack "stdout: retained second"
+                    ]
+                mergedLines = T.lines mergedOutput
+                hasWarningLeak =
+                    "warning: fake HTCC_ASSEMBLER warning" `T.isInfixOf` mergedOutput
+                        || "1 warning generated." `T.isInfixOf` mergedOutput
+                ok = mergedLines == expectedLines && not hasWarningLeak && targetExists
+                details = T.unlines
+                    [ "mergedOutput:"
+                    , mergedOutput
+                    , "mergedLines: " <> T.pack (show mergedLines)
+                    , "targetExists: " <> T.pack (show targetExists)
+                    , "hasWarningLeak: " <> T.pack (show hasWarningLeak)
+                    ]
+            return $
+                mkResult
+                    suppressWarnsRunAsmScopesRetainedIndicesByStreamMsg
+                    ok
+                    details
+
+suppressWarnsRunAsmDropsSplitWarningWithInterleavedStdoutTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmDropsSplitWarningWithInterleavedStdoutTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.out"
+            , fakeSplitWarningInterleavedStdoutWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeSplitWarningInterleavedStdoutDriverWrapper
+                fakeSplitWarningInterleavedStdoutWrapperPath
+                fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeSplitWarningInterleavedStdoutWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2>&1"
+                ]
+            mergedOutput <- T.readFile "tmp.out"
+            targetExists <- doesFileExist "tmp"
+            let expectedLines = replicate 2 $ T.pack "stdout: wrapper progress"
+                mergedLines = T.lines mergedOutput
+                hasWarningLeak =
+                    "warning: fake HTCC_ASSEMBLER warning" `T.isInfixOf` mergedOutput
+                ok = mergedLines == expectedLines && not hasWarningLeak && targetExists
+                details = T.unlines
+                    [ "mergedOutput:"
+                    , mergedOutput
+                    , "mergedLines: " <> T.pack (show mergedLines)
+                    , "targetExists: " <> T.pack (show targetExists)
+                    , "hasWarningLeak: " <> T.pack (show hasWarningLeak)
+                    ]
+            return $
+                mkResult
+                    suppressWarnsRunAsmDropsSplitWarningWithInterleavedStdoutMsg
+                    ok
+                    details
+
+suppressWarnsRunAsmDropsSplitWarningPrefixTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmDropsSplitWarningPrefixTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.out"
+            , fakeSplitWarningPrefixWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeSplitWarningPrefixDriverWrapper
+                fakeSplitWarningPrefixWrapperPath
+                fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeSplitWarningPrefixWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2>&1"
+                ]
+            mergedOutput <- T.readFile "tmp.out"
+            targetExists <- doesFileExist "tmp"
+            let expectedLines = replicate 2 $ T.pack "stdout: wrapper progress"
+                mergedLines = T.lines mergedOutput
+                hasWarningLeak =
+                    "warning: fake HTCC_ASSEMBLER warning" `T.isInfixOf` mergedOutput
+                        || "{standard input}:1:1: warn" `T.isInfixOf` mergedOutput
+                ok = mergedLines == expectedLines && not hasWarningLeak && targetExists
+                details = T.unlines
+                    [ "mergedOutput:"
+                    , mergedOutput
+                    , "mergedLines: " <> T.pack (show mergedLines)
+                    , "targetExists: " <> T.pack (show targetExists)
+                    , "hasWarningLeak: " <> T.pack (show hasWarningLeak)
+                    ]
+            return $
+                mkResult
+                    suppressWarnsRunAsmDropsSplitWarningPrefixMsg
+                    ok
+                    details
+
+suppressWarnsRunAsmDropsCrossStreamWarningPreambleTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmDropsCrossStreamWarningPreambleTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeCrossStreamWarningPreambleWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeCrossStreamWarningPreambleDriverWrapper
+                fakeCrossStreamWarningPreambleWrapperPath
+                fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeCrossStreamWarningPreambleWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            result <- exec "./tmp"
+            let ranOk = exitCode (const False) True result
+                ok = T.null stdoutLeak && T.null stderrLeak && ranOk
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $
+                mkResult
+                    suppressWarnsRunAsmDropsCrossStreamWarningPreambleMsg
+                    ok
+                    details
+
+suppressWarnsRunAsmPreservesStdoutPrefixBeforeStderrTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesStdoutPrefixBeforeStderrTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.out"
+            , fakeStdoutPrefixBeforeStderrWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeStdoutPrefixBeforeStderrDriverWrapper fakeStdoutPrefixBeforeStderrWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeStdoutPrefixBeforeStderrWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2>&1"
+                ]
+            mergedOutput <- T.readFile "tmp.out"
+            targetExists <- doesFileExist "tmp"
+            let expectedLines =
+                    concat $
+                        replicate
+                            2
+                            [ T.pack "stdout: prefixstderr: note"
+                            , T.pack "stdout: suffix"
+                            ]
+                mergedLines = T.lines mergedOutput
+                ok = mergedLines == expectedLines && targetExists
+                details = T.unlines
+                    [ "mergedOutput:"
+                    , mergedOutput
+                    , "mergedLines: " <> T.pack (show mergedLines)
+                    , "targetExists: " <> T.pack (show targetExists)
+                    ]
+            return $ mkResult suppressWarnsRunAsmPreservesStdoutPrefixBeforeStderrMsg ok details
+
+suppressWarnsRunAsmPreservesStderrPrefixBeforeStdoutTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesStderrPrefixBeforeStdoutTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.out"
+            , fakeStderrPrefixBeforeStdoutWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeStderrPrefixBeforeStdoutDriverWrapper fakeStderrPrefixBeforeStdoutWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeStderrPrefixBeforeStdoutWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2>&1"
+                ]
+            mergedOutput <- B.readFile "tmp.out"
+            targetExists <- doesFileExist "tmp"
+            let expectedChunk =
+                    B.pack $
+                        map
+                            (fromIntegral . fromEnum)
+                            "stderr: prefixstdout: note\nstderr: suffix\n"
+                expectedOutput = B.concat $ replicate 2 expectedChunk
+                ok = mergedOutput == expectedOutput && targetExists
+                details = T.unlines
+                    [ "mergedOutputBytes: " <> T.pack (show mergedOutput)
+                    , "expectedOutputBytes: " <> T.pack (show expectedOutput)
+                    , "targetExists: " <> T.pack (show targetExists)
+                    ]
+            return $ mkResult suppressWarnsRunAsmPreservesStderrPrefixBeforeStdoutMsg ok details
+
+suppressWarnsRunAsmDropsWarningPreambleTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmDropsWarningPreambleTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeWarningPreambleWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeWarningPreambleDriverWrapper fakeWarningPreambleWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeWarningPreambleWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            result <- exec "./tmp"
+            let ranOk = exitCode (const False) True result
+                ok = T.null stdoutLeak && T.null stderrLeak && ranOk
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult suppressWarnsRunAsmDropsWarningPreambleMsg ok details
+
+suppressWarnsRunAsmDropsAnsiWarningPreambleTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmDropsAnsiWarningPreambleTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeAnsiWarningPreambleWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeAnsiWarningPreambleDriverWrapper fakeAnsiWarningPreambleWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeAnsiWarningPreambleWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            targetExists <- doesFileExist "tmp"
+            let ok =
+                    T.null stdoutLeak
+                        && stderrLeak == "int x;\n"
+                        && targetExists
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "targetExists: " <> T.pack (show targetExists)
+                    ]
+            return $ mkResult suppressWarnsRunAsmDropsAnsiWarningPreambleMsg ok details
+
+suppressWarnsRunAsmDropsLeadingNoteTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmDropsLeadingNoteTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeWarningLeadingNoteWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeWarningLeadingNoteDriverWrapper fakeWarningLeadingNoteWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeWarningLeadingNoteWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            result <- exec "./tmp"
+            let ranOk = exitCode (const False) True result
+                ok = T.null stdoutLeak && T.null stderrLeak && ranOk
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult suppressWarnsRunAsmDropsLeadingNoteMsg ok details
+
+suppressWarnsRunAsmDropsDriverContextTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmDropsDriverContextTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeWarningContextWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeWarningContextDriverWrapper fakeWarningContextWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeWarningContextWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            result <- exec "./tmp"
+            let ranOk = exitCode (const False) True result
+                ok = T.null stdoutLeak && T.null stderrLeak && ranOk
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult suppressWarnsRunAsmDropsDriverContextMsg ok details
+
+suppressWarnsRunAsmDropsClangSnippetTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmDropsClangSnippetTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeWarningSnippetWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeWarningSnippetDriverWrapper fakeWarningSnippetWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeWarningSnippetWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            result <- exec "./tmp"
+            let ranOk = exitCode (const False) True result
+                ok = T.null stdoutLeak && T.null stderrLeak && ranOk
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult suppressWarnsRunAsmDropsClangSnippetMsg ok details
+
+suppressWarnsRunAsmDropsMultiLineClangSnippetTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmDropsMultiLineClangSnippetTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeMultiLineWarningSnippetWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeMultiLineWarningSnippetDriverWrapper fakeMultiLineWarningSnippetWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeMultiLineWarningSnippetWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            result <- exec "./tmp"
+            let ranOk = exitCode (const False) True result
+                ok = T.null stdoutLeak && T.null stderrLeak && ranOk
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult suppressWarnsRunAsmDropsMultiLineClangSnippetMsg ok details
+
+suppressWarnsRunAsmDropsSnippetOnlyContextTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmDropsSnippetOnlyContextTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeSnippetOnlyWarningWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeSnippetOnlyWarningDriverWrapper fakeSnippetOnlyWarningWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeSnippetOnlyWarningWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            targetExists <- doesFileExist "tmp"
+            let ok =
+                    T.null stdoutLeak
+                        && stderrLeak == "int x;\n"
+                        && targetExists
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "targetExists: " <> T.pack (show targetExists)
+                    ]
+            return $ mkResult suppressWarnsRunAsmDropsSnippetOnlyContextMsg ok details
+
+suppressWarnsRunAsmDropsCrLfWarningBlockTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmDropsCrLfWarningBlockTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeCrLfWarningWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeCrLfWarningDriverWrapper fakeCrLfWarningWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeCrLfWarningWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            result <- exec "./tmp"
+            let ranOk = exitCode (const False) True result
+                ok = T.null stdoutLeak && T.null stderrLeak && ranOk
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult suppressWarnsRunAsmDropsCrLfWarningBlockMsg ok details
+
+suppressWarnsRunAsmPreservesStandaloneLeadingNoteTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesStandaloneLeadingNoteTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeStandaloneLeadingNoteWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeStandaloneLeadingNoteDriverWrapper fakeStandaloneLeadingNoteWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeStandaloneLeadingNoteWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            result <- exec "./tmp"
+            let ranOk = exitCode (const False) True result
+                ok =
+                    T.null stdoutLeak
+                        && stderrLeak == "note: using fallback linker\n"
+                        && ranOk
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult suppressWarnsRunAsmPreservesStandaloneLeadingNoteMsg ok details
+
+suppressWarnsRunAsmPreservesIndentedPostWarningStderrTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesIndentedPostWarningStderrTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeIndentedPostWarningStderrWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeIndentedPostWarningStderrDriverWrapper fakeIndentedPostWarningStderrWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeIndentedPostWarningStderrWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            result <- exec "./tmp"
+            let ranOk = exitCode (const False) True result
+                ok =
+                    T.null stdoutLeak
+                        && stderrLeak == "    cache hit: using wrapped assembler output\n"
+                        && ranOk
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult suppressWarnsRunAsmPreservesIndentedPostWarningStderrMsg ok details
+
+suppressWarnsRunAsmPreservesPunctuatedPostWarningStderrTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesPunctuatedPostWarningStderrTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakePunctuatedPostWarningStderrWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writePunctuatedPostWarningStderrDriverWrapper fakePunctuatedPostWarningStderrWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakePunctuatedPostWarningStderrWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            result <- exec "./tmp"
+            let ranOk = exitCode (const False) True result
+                ok =
+                    T.null stdoutLeak
+                        && stderrLeak
+                            == "(cached result)\nstatus; retrying\ncache=hit;\nwrapper block {\nwrapper block }\n"
+                        && ranOk
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $
+                mkResult
+                    suppressWarnsRunAsmPreservesPunctuatedPostWarningStderrMsg
+                    ok
+                    details
+
+suppressWarnsRunAsmPreservesDirectivePostWarningStderrTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesDirectivePostWarningStderrTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeDirectivePostWarningStderrWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeDirectivePostWarningStderrDriverWrapper
+                fakeDirectivePostWarningStderrWrapperPath
+                fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeDirectivePostWarningStderrWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            result <- exec "./tmp"
+            let ranOk = exitCode (const False) True result
+                expectedStderr = T.unlines
+                    [ ".section keep"
+                    , "# generated by fake HTCC_ASSEMBLER wrapper"
+                    , "1 warning generated."
+                    ]
+                ok = T.null stdoutLeak && stderrLeak == expectedStderr && ranOk
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $
+                mkResult
+                    suppressWarnsRunAsmPreservesDirectivePostWarningStderrMsg
+                    ok
+                    details
+
+suppressWarnsRunAsmPreservesStandalonePreSummaryNoteTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesStandalonePreSummaryNoteTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeStandalonePreSummaryNoteWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeStandalonePreSummaryNoteDriverWrapper fakeStandalonePreSummaryNoteWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeStandalonePreSummaryNoteWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            result <- exec "./tmp"
+            let ranOk = exitCode (const False) True result
+                ok =
+                    T.null stdoutLeak
+                        && stderrLeak == "note: using fallback linker\n"
+                        && ranOk
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult suppressWarnsRunAsmPreservesStandalonePreSummaryNoteMsg ok details
+
+suppressWarnsRunAsmPreservesStandalonePostWarningNoteTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesStandalonePostWarningNoteTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakePostWarningNoteWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writePostWarningNoteDriverWrapper fakePostWarningNoteWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakePostWarningNoteWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            result <- exec "./tmp"
+            let ranOk = exitCode (const False) True result
+                ok = T.null stdoutLeak && stderrLeak == "note: using fallback linker" && ranOk
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult suppressWarnsRunAsmPreservesStandalonePostWarningNoteMsg ok details
+
+suppressWarnsRunAsmPreservesStandalonePostWarningNoteWithoutSummaryTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesStandalonePostWarningNoteWithoutSummaryTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakePostWarningNoteWithoutSummaryWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writePostWarningNoteWithoutSummaryDriverWrapper fakePostWarningNoteWithoutSummaryWrapperPath fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakePostWarningNoteWithoutSummaryWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            result <- exec "./tmp"
+            let ranOk = exitCode (const False) True result
+                ok =
+                    T.null stdoutLeak
+                        && stderrLeak == "note: using fallback linker"
+                        && ranOk
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult suppressWarnsRunAsmPreservesStandalonePostWarningNoteWithoutSummaryMsg ok details
+
+suppressWarnsRunAsmPreservesErrorSnippetContainingWarningTokenTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesErrorSnippetContainingWarningTokenTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            , fakeErrorSnippetWarningTokenWrapperPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeErrorSnippetContainingWarningTokenDriverWrapper
+                fakeErrorSnippetWarningTokenWrapperPath
+                fakeAssemblerPath
+            result <- exec $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeErrorSnippetWarningTokenWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            targetExists <- doesFileExist "tmp"
+            let failed = exitCode (const True) False result
+                hasError = "error: fake HTCC_ASSEMBLER failure" `T.isInfixOf` stderrLeak
+                hasSnippet = "printf(\"warning:\");" `T.isInfixOf` stderrLeak
+                hasCaret = "^~~~~~~~~~~~~~~~~~~" `T.isInfixOf` stderrLeak
+                ok =
+                    failed
+                        && T.null stdoutLeak
+                        && not targetExists
+                        && hasError
+                        && hasSnippet
+                        && hasCaret
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "targetExists: " <> T.pack (show targetExists)
+                    , "hasError: " <> T.pack (show hasError)
+                    , "hasSnippet: " <> T.pack (show hasSnippet)
+                    , "hasCaret: " <> T.pack (show hasCaret)
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult suppressWarnsRunAsmPreservesErrorSnippetContainingWarningTokenMsg ok details
+
+suppressWarnsRunAsmPreservesWarningLabelErrorSnippetTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesWarningLabelErrorSnippetTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            , fakeWarningLabelErrorSnippetWrapperPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeWarningLabelErrorSnippetDriverWrapper
+                fakeWarningLabelErrorSnippetWrapperPath
+                fakeAssemblerPath
+            result <- exec $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeWarningLabelErrorSnippetWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            targetExists <- doesFileExist "tmp"
+            let failed = exitCode (const True) False result
+                hasError = "error: fake HTCC_ASSEMBLER failure" `T.isInfixOf` stderrLeak
+                hasSnippet = "warning: return 1;" `T.isInfixOf` stderrLeak
+                hasCaret = "^~~~~~~~~~~~~~~~~" `T.isInfixOf` stderrLeak
+                ok =
+                    failed
+                        && T.null stdoutLeak
+                        && not targetExists
+                        && hasError
+                        && hasSnippet
+                        && hasCaret
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "targetExists: " <> T.pack (show targetExists)
+                    , "hasError: " <> T.pack (show hasError)
+                    , "hasSnippet: " <> T.pack (show hasSnippet)
+                    , "hasCaret: " <> T.pack (show hasCaret)
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult suppressWarnsRunAsmPreservesWarningLabelErrorSnippetMsg ok details
+
+suppressWarnsRunAsmPreservesFailingDiagnosticsTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesFailingDiagnosticsTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            , fakeFailingWarningWrapperPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeFailingWarningDriverWrapper fakeFailingWarningWrapperPath fakeAssemblerPath
+            result <- exec $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeFailingWarningWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            targetExists <- doesFileExist "tmp"
+            let failed = exitCode (const True) False result
+                hasWarning = "warning: fake HTCC_ASSEMBLER warning" `T.isInfixOf` stderrLeak
+                hasPreamble = "In file included from fake-header.h:1:" `T.isInfixOf` stderrLeak
+                hasAssemblerError = "error: fake HTCC_ASSEMBLER failure" `T.isInfixOf` stderrLeak
+                hasFailure = "failed with ExitFailure 1" `T.isInfixOf` stderrLeak
+                ok =
+                    failed
+                        && T.null stdoutLeak
+                        && not targetExists
+                        && not hasWarning
+                        && hasPreamble
+                        && hasAssemblerError
+                        && hasFailure
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "targetExists: " <> T.pack (show targetExists)
+                    , "hasWarning: " <> T.pack (show hasWarning)
+                    , "hasPreamble: " <> T.pack (show hasPreamble)
+                    , "hasAssemblerError: " <> T.pack (show hasAssemblerError)
+                    , "hasFailure: " <> T.pack (show hasFailure)
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult suppressWarnsRunAsmPreservesFailingDiagnosticsMsg ok details
+
+suppressWarnsRunAsmPreservesErrorPreambleAfterWarningTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesErrorPreambleAfterWarningTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            , fakeErrorPreambleAfterWarningWrapperPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeErrorPreambleAfterWarningDriverWrapper
+                fakeErrorPreambleAfterWarningWrapperPath
+                fakeAssemblerPath
+            result <- exec $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeErrorPreambleAfterWarningWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            targetExists <- doesFileExist "tmp"
+            let failed = exitCode (const True) False result
+                hasWarning = "warning: fake HTCC_ASSEMBLER warning" `T.isInfixOf` stderrLeak
+                hasFunctionPreamble = "fake-source.c: In function 'main':" `T.isInfixOf` stderrLeak
+                hasAssemblerPreamble = "{standard input}: Assembler messages:" `T.isInfixOf` stderrLeak
+                hasAssemblerError = "error: fake HTCC_ASSEMBLER failure" `T.isInfixOf` stderrLeak
+                hasFailure = "failed with ExitFailure 1" `T.isInfixOf` stderrLeak
+                ok =
+                    failed
+                        && T.null stdoutLeak
+                        && not targetExists
+                        && not hasWarning
+                        && hasFunctionPreamble
+                        && hasAssemblerPreamble
+                        && hasAssemblerError
+                        && hasFailure
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "targetExists: " <> T.pack (show targetExists)
+                    , "hasWarning: " <> T.pack (show hasWarning)
+                    , "hasFunctionPreamble: " <> T.pack (show hasFunctionPreamble)
+                    , "hasAssemblerPreamble: " <> T.pack (show hasAssemblerPreamble)
+                    , "hasAssemblerError: " <> T.pack (show hasAssemblerError)
+                    , "hasFailure: " <> T.pack (show hasFailure)
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult suppressWarnsRunAsmPreservesErrorPreambleAfterWarningMsg ok details
+
+suppressWarnsRunAsmDoesNotHangOnInheritedPipeHandlesTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmDoesNotHangOnInheritedPipeHandlesTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeInheritedPipeHandlesWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeInheritedPipeHandlesDriverWrapper fakeInheritedPipeHandlesWrapperPath fakeAssemblerPath
+            maybeResult <- timeout 4000000 $
+                exec $ mconcat
+                    [ "echo '"
+                    , source
+                    , "' | "
+                    , "HTCC_ASSEMBLER='./"
+                    , T.pack fakeInheritedPipeHandlesWrapperPath
+                    , "' "
+                    , htccCmd
+                    , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                    ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            compilerArgs <- catchIOError
+                (T.lines <$> T.readFile fakeAssemblerLogPath)
+                (const $ pure [])
+            targetExists <- doesFileExist "tmp"
+            let completed = maybe False (exitCode (const False) True) maybeResult
+                compilerSawExpectedArgs =
+                    all (`elem` compilerArgs)
+                        [ "-x"
+                        , "assembler"
+                        , "-c"
+                        , "-o"
+                        ]
+                ok =
+                    completed
+                        && T.null stdoutLeak
+                        && T.null stderrLeak
+                        && compilerSawExpectedArgs
+                        && targetExists
+                details = T.unlines
+                    [ "timedOut: " <> T.pack (show $ maybe True (const False) maybeResult)
+                    , "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "compilerArgs:"
+                    , T.unlines compilerArgs
+                    , "targetExists: " <> T.pack (show targetExists)
+                    , "compileExitCode: " <> maybe "timeout" (T.pack . show) maybeResult
+                    ]
+            return $
+                mkResult
+                    suppressWarnsRunAsmDoesNotHangOnInheritedPipeHandlesMsg
+                    ok
+                    details
+
+suppressWarnsRunAsmStreamsRetainedStdoutPromptTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmStreamsRetainedStdoutPromptTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , fakeStreamingPromptWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeStreamingPromptDriverWrapper fakeStreamingPromptWrapperPath fakeAssemblerPath
+            let command = mconcat
+                    [ "echo '"
+                    , source
+                    , "' | "
+                    , "HTCC_ASSEMBLER='./"
+                    , T.pack fakeStreamingPromptWrapperPath
+                    , "' "
+                    , htccCmd
+                    , " --suppress-warns -r -o tmp /dev/stdin"
+                    ]
+            withCreateProcess
+                ((proc "sh" ["-c", T.unpack command]) { std_out = CreatePipe, std_err = CreatePipe })
+                (\_ maybeStdoutHandle maybeStderrHandle processHandle -> do
+                    stdoutHandle <- maybe (ioError $ userError "missing stdout pipe for streaming prompt test") pure maybeStdoutHandle
+                    stderrHandle <- maybe (ioError $ userError "missing stderr pipe for streaming prompt test") pure maybeStderrHandle
+                    maybePromptLine <- timeout 900000 $ T.hGetLine stdoutHandle
+                    processExitCode <- waitForProcess processHandle
+                    remainingStdout <- T.hGetContents stdoutHandle
+                    remainingStderr <- T.hGetContents stderrHandle
+                    compilerArgs <- catchIOError
+                        (T.lines <$> T.readFile fakeAssemblerLogPath)
+                        (const $ pure [])
+                    targetExists <- doesFileExist "tmp"
+                    let compilerSawExpectedArgs =
+                            all (`elem` compilerArgs)
+                                [ "-x"
+                                , "assembler"
+                                , "-c"
+                                , "-o"
+                                ]
+                        ok =
+                            maybePromptLine == Just "stdout: wrapper prompt"
+                                && processExitCode == ExitSuccess
+                                && T.null remainingStdout
+                                && T.null remainingStderr
+                                && compilerSawExpectedArgs
+                                && targetExists
+                        details = T.unlines
+                            [ "promptLine: " <> maybe "<timeout>" id maybePromptLine
+                            , "remainingStdout:"
+                            , remainingStdout
+                            , "remainingStderr:"
+                            , remainingStderr
+                            , "compilerArgs:"
+                            , T.unlines compilerArgs
+                            , "targetExists: " <> T.pack (show targetExists)
+                            , "processExitCode: " <> T.pack (show processExitCode)
+                            ]
+                    pure $
+                        mkResult
+                            suppressWarnsRunAsmStreamsRetainedStdoutPromptMsg
+                            ok
+                            details
+                )
+
+suppressWarnsRunAsmStreamsRetainedStdoutPromptWithoutNewlineTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmStreamsRetainedStdoutPromptWithoutNewlineTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , fakeStreamingPromptWithoutNewlineWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeStreamingPromptWithoutNewlineDriverWrapper
+                fakeStreamingPromptWithoutNewlineWrapperPath
+                fakeAssemblerPath
+            let command = mconcat
+                    [ "echo '"
+                    , source
+                    , "' | "
+                    , "HTCC_ASSEMBLER='./"
+                    , T.pack fakeStreamingPromptWithoutNewlineWrapperPath
+                    , "' "
+                    , htccCmd
+                    , " --suppress-warns -r -o tmp /dev/stdin"
+                    ]
+                expectedPromptBytes = asciiBytesForProbe "stdout: wrapper prompt"
+            withCreateProcess
+                ((proc "sh" ["-c", T.unpack command]) { std_out = CreatePipe, std_err = CreatePipe })
+                (\_ maybeStdoutHandle maybeStderrHandle processHandle -> do
+                    stdoutHandle <- maybe (ioError $ userError "missing stdout pipe for unterminated streaming prompt test") pure maybeStdoutHandle
+                    stderrHandle <- maybe (ioError $ userError "missing stderr pipe for unterminated streaming prompt test") pure maybeStderrHandle
+                    maybePromptBytes <- timeout 900000 $ B.hGetSome stdoutHandle (B.length expectedPromptBytes)
+                    processExitCode <- waitForProcess processHandle
+                    remainingStdout <- B.hGetContents stdoutHandle
+                    remainingStderr <- T.hGetContents stderrHandle
+                    compilerArgs <- catchIOError
+                        (T.lines <$> T.readFile fakeAssemblerLogPath)
+                        (const $ pure [])
+                    targetExists <- doesFileExist "tmp"
+                    let compilerSawExpectedArgs =
+                            all (`elem` compilerArgs)
+                                [ "-x"
+                                , "assembler"
+                                , "-c"
+                                , "-o"
+                                ]
+                        ok =
+                            maybePromptBytes == Just expectedPromptBytes
+                                && processExitCode == ExitSuccess
+                                && B.null remainingStdout
+                                && T.null remainingStderr
+                                && compilerSawExpectedArgs
+                                && targetExists
+                        details = T.unlines
+                            [ "promptBytes: "
+                                <> maybe "<timeout>" (T.pack . BC.unpack) maybePromptBytes
+                            , "remainingStdoutBytes: " <> T.pack (show remainingStdout)
+                            , "remainingStderr:"
+                            , remainingStderr
+                            , "compilerArgs:"
+                            , T.unlines compilerArgs
+                            , "targetExists: " <> T.pack (show targetExists)
+                            , "processExitCode: " <> T.pack (show processExitCode)
+                            ]
+                    pure $
+                        mkResult
+                            suppressWarnsRunAsmStreamsRetainedStdoutPromptWithoutNewlineMsg
+                            ok
+                            details
+                )
+
+suppressWarnsRunAsmStreamsRetainedStdoutAcrossPendingStderrTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmStreamsRetainedStdoutAcrossPendingStderrTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , fakeCrossStreamStreamingRetainedLineWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeCrossStreamStreamingRetainedLineDriverWrapper
+                fakeCrossStreamStreamingRetainedLineWrapperPath
+                fakeAssemblerPath
+            let command = mconcat
+                    [ "echo '"
+                    , source
+                    , "' | "
+                    , "HTCC_ASSEMBLER='./"
+                    , T.pack fakeCrossStreamStreamingRetainedLineWrapperPath
+                    , "' "
+                    , htccCmd
+                    , " --suppress-warns -r -o tmp /dev/stdin"
+                    ]
+            withCreateProcess
+                ((proc "sh" ["-c", T.unpack command]) { std_out = CreatePipe, std_err = CreatePipe })
+                (\_ maybeStdoutHandle maybeStderrHandle processHandle -> do
+                    stdoutHandle <- maybe (ioError $ userError "missing stdout pipe for cross-stream streaming test") pure maybeStdoutHandle
+                    stderrHandle <- maybe (ioError $ userError "missing stderr pipe for cross-stream streaming test") pure maybeStderrHandle
+                    maybeRetainedLine <- timeout 700000 $ T.hGetLine stdoutHandle
+                    earlyExit <- timeout 100000 $ waitForProcess processHandle
+                    processExitCode <- maybe (waitForProcess processHandle) pure earlyExit
+                    remainingStdout <- T.hGetContents stdoutHandle
+                    remainingStderr <- T.hGetContents stderrHandle
+                    compilerArgs <- catchIOError
+                        (T.lines <$> T.readFile fakeAssemblerLogPath)
+                        (const $ pure [])
+                    targetExists <- doesFileExist "tmp"
+                    let compilerSawExpectedArgs =
+                            all (`elem` compilerArgs)
+                                [ "-x"
+                                , "assembler"
+                                , "-c"
+                                , "-o"
+                                ]
+                        ok =
+                            maybeRetainedLine == Just "stdout: retained line"
+                                && earlyExit == Nothing
+                                && processExitCode == ExitSuccess
+                                && T.null remainingStdout
+                                && remainingStderr == "stderr: wrapper prompt\n"
+                                && compilerSawExpectedArgs
+                                && targetExists
+                        details = T.unlines
+                            [ "retainedLine: " <> maybe "<timeout>" id maybeRetainedLine
+                            , "earlyExit: " <> maybe "still-running" (T.pack . show) earlyExit
+                            , "remainingStdout:"
+                            , remainingStdout
+                            , "remainingStderr:"
+                            , remainingStderr
+                            , "compilerArgs:"
+                            , T.unlines compilerArgs
+                            , "targetExists: " <> T.pack (show targetExists)
+                            , "processExitCode: " <> T.pack (show processExitCode)
+                            ]
+                    pure $
+                        mkResult
+                            suppressWarnsRunAsmStreamsRetainedStdoutAcrossPendingStderrMsg
+                            ok
+                            details
+                )
+
+suppressWarnsRunAsmSuppressesProbeCrossStreamWarningPreambleTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmSuppressesProbeCrossStreamWarningPreambleTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeProbeCrossStreamWarningPreambleWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeProbeCrossStreamWarningPreambleDriverWrapper
+                fakeProbeCrossStreamWarningPreambleWrapperPath
+                fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeProbeCrossStreamWarningPreambleWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            result <- exec "./tmp"
+            let ranOk = exitCode (const False) True result
+                ok = T.null stdoutLeak && T.null stderrLeak && ranOk
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $
+                mkResult
+                    suppressWarnsRunAsmSuppressesProbeCrossStreamWarningPreambleMsg
+                    ok
+                    details
+
+suppressWarnsRunAsmSuppressesProbePartialCrossStreamWarningPreambleTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmSuppressesProbePartialCrossStreamWarningPreambleTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeProbePartialCrossStreamWarningPreambleWrapperPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeProbePartialCrossStreamWarningPreambleDriverWrapper
+                fakeProbePartialCrossStreamWarningPreambleWrapperPath
+                fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeProbePartialCrossStreamWarningPreambleWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            result <- exec "./tmp"
+            let ranOk = exitCode (const False) True result
+                ok = T.null stdoutLeak && T.null stderrLeak && ranOk
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $
+                mkResult
+                    suppressWarnsRunAsmSuppressesProbePartialCrossStreamWarningPreambleMsg
+                    ok
+                    details
+
+suppressWarnsRunAsmProbeClosesStdinTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmProbeClosesStdinTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.c"
+            , "tmp.err"
+            , "tmp.out"
+            , "tmp-probe-reads-stdin.fifo"
+            , fakeProbeReadsStdinWrapperPath
+            , fakeProbeReadsStdinWrapperLogPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeProbeReadsStdinWrapper
+                fakeProbeReadsStdinWrapperPath
+                fakeProbeReadsStdinWrapperLogPath
+                fakeAssemblerPath
+            T.writeFile "tmp.c" source
+            maybeResult <- timeout 1500000 $
+                exec $ mconcat
+                    [ "rm -f tmp-probe-reads-stdin.fifo;"
+                    , " mkfifo tmp-probe-reads-stdin.fifo;"
+                    , " (sleep 2 > tmp-probe-reads-stdin.fifo) & writer=$!;"
+                    , " HTCC_ASSEMBLER='./"
+                    , T.pack fakeProbeReadsStdinWrapperPath
+                    , "' "
+                    , htccCmd
+                    , " --suppress-warns -r -o tmp tmp.c"
+                    , " < tmp-probe-reads-stdin.fifo > tmp.out 2> tmp.err;"
+                    , " status=$?;"
+                    , " kill $writer 2>/dev/null || true;"
+                    , " wait $writer 2>/dev/null || true;"
+                    , " rm -f tmp-probe-reads-stdin.fifo;"
+                    , " exit $status"
+                    ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            wrapperInvocations <- catchIOError
+                (T.lines <$> T.readFile fakeProbeReadsStdinWrapperLogPath)
+                (const $ pure [])
+            compilerArgs <- catchIOError
+                (T.lines <$> T.readFile fakeAssemblerLogPath)
+                (const $ pure [])
+            targetExists <- doesFileExist "tmp"
+            let completed = maybe False (exitCode (const False) True) maybeResult
+                sawProbeAttempt =
+                    any
+                        (\line ->
+                            "-dumpmachine" `T.isInfixOf` line
+                                || "-print-target-triple" `T.isInfixOf` line
+                        )
+                        wrapperInvocations
+                compilerSawExpectedArgs =
+                    all (`elem` compilerArgs)
+                        [ "-x"
+                        , "assembler"
+                        , "-c"
+                        , "-o"
+                        ]
+                ok =
+                    completed
+                        && T.null stdoutLeak
+                        && T.null stderrLeak
+                        && sawProbeAttempt
+                        && compilerSawExpectedArgs
+                        && targetExists
+                details = T.unlines
+                    [ "timedOut: " <> T.pack (show $ maybe True (const False) maybeResult)
+                    , "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "wrapperInvocations:"
+                    , T.unlines wrapperInvocations
+                    , "compilerArgs:"
+                    , T.unlines compilerArgs
+                    , "sawProbeAttempt: " <> T.pack (show sawProbeAttempt)
+                    , "compilerSawExpectedArgs: " <> T.pack (show compilerSawExpectedArgs)
+                    , "targetExists: " <> T.pack (show targetExists)
+                    , "compileExitCode: " <> maybe "timeout" (T.pack . show) maybeResult
+                    ]
+            return $ mkResult suppressWarnsRunAsmProbeClosesStdinMsg ok details
+
+suppressWarnsRunAsmPreservesStdinForRealInvocationsTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesStdinForRealInvocationsTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.c"
+            , "tmp.err"
+            , "tmp.out"
+            , fakeRealInvocationReadsStdinWrapperPath
+            , fakeRealInvocationReadsStdinWrapperLogPath
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeRealInvocationReadsStdinWrapper
+                fakeRealInvocationReadsStdinWrapperPath
+                fakeRealInvocationReadsStdinWrapperLogPath
+                fakeAssemblerPath
+            T.writeFile "tmp.c" source
+            result <- exec $ mconcat
+                [ "printf '%s\\n' 'wrapper-token' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeRealInvocationReadsStdinWrapperPath
+                , "' "
+                , htccCmd
+                , " --suppress-warns -r -o tmp tmp.c > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrLeak <- T.readFile "tmp.err"
+            wrapperLog <- catchIOError
+                (T.lines <$> T.readFile fakeRealInvocationReadsStdinWrapperLogPath)
+                (const $ pure [])
+            compilerArgs <- catchIOError
+                (T.lines <$> T.readFile fakeAssemblerLogPath)
+                (const $ pure [])
+            targetExists <- doesFileExist "tmp"
+            runResult <- if targetExists then Just <$> exec "./tmp" else pure Nothing
+            let succeeded = exitCode (const False) True result
+                sawWrapperToken = "stdin:wrapper-token" `elem` wrapperLog
+                compilerSawExpectedArgs =
+                    all (`elem` compilerArgs)
+                        [ "-x"
+                        , "assembler"
+                        , "-c"
+                        , "-o"
+                        ]
+                targetRuns = maybe False (exitCode (const False) True) runResult
+                ok =
+                    succeeded
+                        && T.null stdoutLeak
+                        && T.null stderrLeak
+                        && sawWrapperToken
+                        && compilerSawExpectedArgs
+                        && targetExists
+                        && targetRuns
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrLeak
+                    , "wrapperLog:"
+                    , T.unlines wrapperLog
+                    , "compilerArgs:"
+                    , T.unlines compilerArgs
+                    , "sawWrapperToken: " <> T.pack (show sawWrapperToken)
+                    , "targetExists: " <> T.pack (show targetExists)
+                    , "compileExitCode: " <> T.pack (show result)
+                    , "runExitCode: " <> maybe "not-run" (T.pack . show) runResult
+                    ]
+            return $
+                mkResult
+                    suppressWarnsRunAsmPreservesStdinForRealInvocationsMsg
+                    ok
+                    details
+
 outputFileSingleInputStaticTest :: IO (Either T.Text T.Text, String)
 outputFileSingleInputStaticTest = flip finally (clean ["tmp.out", "tmp.s", "tmp.o", "tmp-single.c"]) $ do
     htccCmd <- htccCommand
@@ -2178,6 +6717,98 @@ outputFileSingleInputStaticImplicitFunctionConflictTest =
                 ]
         return $ mkResult outputFileSingleInputStaticImplicitFunctionConflictMsg ok details
 
+outputFileSingleInputImplicitFunctionDefinitionWarningTest :: IO (Either T.Text T.Text, String)
+outputFileSingleInputImplicitFunctionDefinitionWarningTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp.s", "tmp-single.c"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp.s"
+            inputPath = "tmp-single.c"
+            expectedWarning = "warning: the function 'foo' is not declared."
+        T.writeFile inputPath $ T.unlines
+            [ "int main(void) { return foo(); }"
+            , "int foo(void) { return 1; }"
+            ]
+        result <- exec $ mconcat
+            [ htccCmd
+            , " -o "
+            , T.pack target
+            , " "
+            , T.pack inputPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist target
+        asm <- if targetExists then T.readFile target else pure ""
+        let succeeded = exitCode (const False) True result
+            hasExpectedWarning = expectedWarning `T.isInfixOf` stderrOut
+            hasRequiredLabels =
+                all (`T.isInfixOf` asm)
+                    [ "foo:"
+                    , "main:"
+                    ]
+            ok =
+                succeeded
+                    && T.null stdoutLeak
+                    && targetExists
+                    && hasExpectedWarning
+                    && hasRequiredLabels
+            details = T.unlines
+                [ "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "targetExists: " <> T.pack (show targetExists)
+                , "hasExpectedWarning: " <> T.pack (show hasExpectedWarning)
+                , "hasRequiredLabels: " <> T.pack (show hasRequiredLabels)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult outputFileSingleInputImplicitFunctionDefinitionWarningMsg ok details
+
+outputFileSingleInputImplicitFunctionPrototypeWarningTest :: IO (Either T.Text T.Text, String)
+outputFileSingleInputImplicitFunctionPrototypeWarningTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp.s", "tmp-single.c"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp.s"
+            inputPath = "tmp-single.c"
+            expectedWarning = "warning: the function 'foo' is not declared."
+        T.writeFile inputPath $ T.unlines
+            [ "int main(void) { return foo(); }"
+            , "int foo(void);"
+            ]
+        result <- exec $ mconcat
+            [ htccCmd
+            , " -o "
+            , T.pack target
+            , " "
+            , T.pack inputPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist target
+        asm <- if targetExists then T.readFile target else pure ""
+        let succeeded = exitCode (const False) True result
+            hasExpectedWarning = expectedWarning `T.isInfixOf` stderrOut
+            hasMainLabel = "main:" `T.isInfixOf` asm
+            ok =
+                succeeded
+                    && T.null stdoutLeak
+                    && targetExists
+                    && hasExpectedWarning
+                    && hasMainLabel
+            details = T.unlines
+                [ "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "targetExists: " <> T.pack (show targetExists)
+                , "hasExpectedWarning: " <> T.pack (show hasExpectedWarning)
+                , "hasMainLabel: " <> T.pack (show hasMainLabel)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult outputFileSingleInputImplicitFunctionPrototypeWarningMsg ok details
+
 outputFileSingleInputPrototypeRetypeTest :: IO (Either T.Text T.Text, String)
 outputFileSingleInputPrototypeRetypeTest =
     flip finally (clean ["tmp.out", "tmp.err", "tmp.s", "tmp-single.c"]) $ do
@@ -2295,6 +6926,7 @@ stdoutMultiInputImplicitFunctionDefinitionWarningTest =
         htccCmd <- htccCommand
         let callerPath = "tmp-caller.c"
             defPath = "tmp-def.c"
+            expectedWarning = "warning: the function 'foo' is not declared."
         T.writeFile callerPath "int main(void) { return foo(1) != 1; }"
         T.writeFile defPath "int foo(int x) { return x; }"
         result <- exec $ mconcat
@@ -2311,7 +6943,7 @@ stdoutMultiInputImplicitFunctionDefinitionWarningTest =
         asm <- T.readFile "tmp.s"
         runResult <- exec "./tmp"
         let succeeded = exitCode (const False) True result
-            hasSuppressedWarning = not $ "the function 'foo' is not declared." `T.isInfixOf` stderrOut
+            warningSuppressed = not $ expectedWarning `T.isInfixOf` stderrOut
             hasRequiredLabels =
                 all (`T.isInfixOf` asm)
                     [ "foo:"
@@ -2319,19 +6951,66 @@ stdoutMultiInputImplicitFunctionDefinitionWarningTest =
                     ]
             ok =
                 succeeded
-                    && T.null stderrOut
-                    && hasSuppressedWarning
+                    && warningSuppressed
                     && hasRequiredLabels
                     && exitCode (const False) True runResult
             details = T.unlines
                 [ "stderr:"
                 , stderrOut
-                , "hasSuppressedWarning: " <> T.pack (show hasSuppressedWarning)
+                , "warningSuppressed: " <> T.pack (show warningSuppressed)
                 , "hasRequiredLabels: " <> T.pack (show hasRequiredLabels)
                 , "runExitCode: " <> T.pack (show runResult)
                 , "exitCode: " <> T.pack (show result)
                 ]
         return $ mkResult stdoutMultiInputImplicitFunctionDefinitionWarningMsg ok details
+
+stdoutMultiInputSameInputImplicitFunctionDefinitionWarningTest :: IO (Either T.Text T.Text, String)
+stdoutMultiInputSameInputImplicitFunctionDefinitionWarningTest =
+    flip finally (clean ["tmp.err", "tmp.s", "tmp-caller.c", "tmp-other.c", "tmp"]) $ do
+        htccCmd <- htccCommand
+        let callerPath = "tmp-caller.c"
+            otherPath = "tmp-other.c"
+            expectedWarning = "warning: the function 'foo' is not declared."
+        T.writeFile callerPath $ T.unlines
+            [ "int main(void) { return foo(); }"
+            , "int foo(void) { return 1; }"
+            ]
+        T.writeFile otherPath "int helper(void) { return 0; }"
+        result <- exec $ mconcat
+            [ htccCmd
+            , " "
+            , T.pack callerPath
+            , " "
+            , T.pack otherPath
+            , " > tmp.s 2> tmp.err"
+            ]
+        linkCmd <- assemblerCommand ["tmp.s", "-o", "tmp"]
+        execErrFin linkCmd
+        stderrOut <- T.readFile "tmp.err"
+        asm <- T.readFile "tmp.s"
+        runResult <- exec "./tmp"
+        let succeeded = exitCode (const False) True result
+            hasExpectedWarning = expectedWarning `T.isInfixOf` stderrOut
+            hasRequiredLabels =
+                all (`T.isInfixOf` asm)
+                    [ "foo:"
+                    , "helper:"
+                    , "main:"
+                    ]
+            ok =
+                succeeded
+                    && hasExpectedWarning
+                    && hasRequiredLabels
+                    && exitCode (const False) True runResult
+            details = T.unlines
+                [ "stderr:"
+                , stderrOut
+                , "hasExpectedWarning: " <> T.pack (show hasExpectedWarning)
+                , "hasRequiredLabels: " <> T.pack (show hasRequiredLabels)
+                , "runExitCode: " <> T.pack (show runResult)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult stdoutMultiInputSameInputImplicitFunctionDefinitionWarningMsg ok details
 
 stdoutMultiInputImplicitFunctionUnresolvedWarningTest :: IO (Either T.Text T.Text, String)
 stdoutMultiInputImplicitFunctionUnresolvedWarningTest =
@@ -2339,7 +7018,7 @@ stdoutMultiInputImplicitFunctionUnresolvedWarningTest =
         htccCmd <- htccCommand
         let callerPath = "tmp-caller.c"
             otherPath = "tmp-other.c"
-            expectedWarning = "warning: the function 'foo' is not declared."
+            unexpectedWarning = "warning: the function 'foo' is not declared."
         T.writeFile callerPath "int main(void) { return foo(1) != 1; }"
         T.writeFile otherPath "int helper(void) { return 0; }"
         result <- exec $ mconcat
@@ -2353,7 +7032,7 @@ stdoutMultiInputImplicitFunctionUnresolvedWarningTest =
         stderrOut <- T.readFile "tmp.err"
         asm <- T.readFile "tmp.s"
         let succeeded = exitCode (const False) True result
-            hasExpectedWarning = expectedWarning `T.isInfixOf` stderrOut
+            hasExpectedWarning = unexpectedWarning `T.isInfixOf` stderrOut
             hasRequiredLabels =
                 all (`T.isInfixOf` asm)
                     [ "helper:"
@@ -2371,17 +7050,22 @@ stdoutMultiInputImplicitFunctionUnresolvedWarningTest =
 
 stdoutMultiInputParseFailurePreservesWarningsTest :: IO (Either T.Text T.Text, String)
 stdoutMultiInputParseFailurePreservesWarningsTest =
-    flip finally (clean ["tmp.err", "tmp.s", "tmp-caller.c", "tmp-bad.c"]) $ do
+    flip finally (clean ["tmp.err", "tmp.s", "tmp-first.c", "tmp-second.c", "tmp-bad.c"]) $ do
         htccCmd <- htccCommand
-        let callerPath = "tmp-caller.c"
+        let firstPath = "tmp-first.c"
+            secondPath = "tmp-second.c"
             badPath = "tmp-bad.c"
-            expectedWarning = "warning: the function 'foo' is not declared."
-        T.writeFile callerPath "int main(void) { return foo(1) != 1; }"
+            firstWarning = "warning: the function 'foo' is not declared."
+            secondWarning = "warning: the function 'bar' is not declared."
+        T.writeFile firstPath "int first(void) { return foo(1) != 1; }"
+        T.writeFile secondPath "int second(void) { return bar(2) != 2; }"
         T.writeFile badPath "int broken( { return 0; }"
         result <- exec $ mconcat
             [ htccCmd
             , " "
-            , T.pack callerPath
+            , T.pack firstPath
+            , " "
+            , T.pack secondPath
             , " "
             , T.pack badPath
             , " > tmp.s 2> tmp.err"
@@ -2389,15 +7073,23 @@ stdoutMultiInputParseFailurePreservesWarningsTest =
         asm <- T.readFile "tmp.s"
         stderrOut <- T.readFile "tmp.err"
         let failed = exitCode (const True) False result
-            hasExpectedWarning = expectedWarning `T.isInfixOf` stderrOut
+            hasExpectedWarnings =
+                all (`T.isInfixOf` stderrOut) [firstWarning, secondWarning]
+            warningsInOrder = containsTextsInOrder [firstWarning, secondWarning] stderrOut
             mentionsBadInput = T.pack badPath `T.isInfixOf` stderrOut
-            ok = failed && T.null asm && hasExpectedWarning && mentionsBadInput
+            ok =
+                failed
+                    && T.null asm
+                    && hasExpectedWarnings
+                    && warningsInOrder
+                    && mentionsBadInput
             details = T.unlines
                 [ "asm:"
                 , asm
                 , "stderr:"
                 , stderrOut
-                , "hasExpectedWarning: " <> T.pack (show hasExpectedWarning)
+                , "hasExpectedWarnings: " <> T.pack (show hasExpectedWarnings)
+                , "warningsInOrder: " <> T.pack (show warningsInOrder)
                 , "mentionsBadInput: " <> T.pack (show mentionsBadInput)
                 , "exitCode: " <> T.pack (show result)
                 ]
@@ -2643,21 +7335,26 @@ outputFileMultiInputConflictPreservesWarningsTest =
 
 outputFileMultiInputReadFailurePreservesWarningsTest :: IO (Either T.Text T.Text, String)
 outputFileMultiInputReadFailurePreservesWarningsTest =
-    flip finally (clean ["tmp.out", "tmp.err", "tmp.s", "tmp-caller.c", "tmp-missing.c"]) $ do
+    flip finally (clean ["tmp.out", "tmp.err", "tmp.s", "tmp-first.c", "tmp-second.c", "tmp-missing.c"]) $ do
         htccCmd <- htccCommand
         let target = "tmp.s"
-            callerPath = "tmp-caller.c"
+            firstPath = "tmp-first.c"
+            secondPath = "tmp-second.c"
             missingPath = "tmp-missing.c"
-            expectedWarning = "warning: the function 'foo' is not declared."
-        clean ["tmp.out", "tmp.err", target, callerPath, missingPath]
+            firstWarning = "warning: the function 'foo' is not declared."
+            secondWarning = "warning: the function 'bar' is not declared."
+        clean ["tmp.out", "tmp.err", target, firstPath, secondPath, missingPath]
         T.writeFile target "stale output"
-        T.writeFile callerPath "int main(void) { return foo(1) != 1; }"
+        T.writeFile firstPath "int first(void) { return foo(1) != 1; }"
+        T.writeFile secondPath "int second(void) { return bar(2) != 2; }"
         result <- exec $ mconcat
             [ htccCmd
             , " -o "
             , T.pack target
             , " "
-            , T.pack callerPath
+            , T.pack firstPath
+            , " "
+            , T.pack secondPath
             , " "
             , T.pack missingPath
             , " > tmp.out 2> tmp.err"
@@ -2667,14 +7364,17 @@ outputFileMultiInputReadFailurePreservesWarningsTest =
         targetExists <- doesFileExist target
         targetContents <- if targetExists then T.readFile target else pure ""
         let failed = exitCode (const True) False result
-            hasExpectedWarning = expectedWarning `T.isInfixOf` stderrOut
+            hasExpectedWarnings =
+                all (`T.isInfixOf` stderrOut) [firstWarning, secondWarning]
+            warningsInOrder = containsTextsInOrder [firstWarning, secondWarning] stderrOut
             mentionsMissingInput = T.pack missingPath `T.isInfixOf` stderrOut
             ok =
                 failed
                     && T.null stdoutLeak
                     && targetExists
                     && targetContents == "stale output"
-                    && hasExpectedWarning
+                    && hasExpectedWarnings
+                    && warningsInOrder
                     && mentionsMissingInput
             details = T.unlines
                 [ "target: " <> T.pack target
@@ -2684,7 +7384,8 @@ outputFileMultiInputReadFailurePreservesWarningsTest =
                 , stderrOut
                 , "targetExists: " <> T.pack (show targetExists)
                 , "targetUnchanged: " <> T.pack (show (targetContents == "stale output"))
-                , "hasExpectedWarning: " <> T.pack (show hasExpectedWarning)
+                , "hasExpectedWarnings: " <> T.pack (show hasExpectedWarnings)
+                , "warningsInOrder: " <> T.pack (show warningsInOrder)
                 , "mentionsMissingInput: " <> T.pack (show mentionsMissingInput)
                 , "exitCode: " <> T.pack (show result)
                 ]
@@ -3184,6 +7885,109 @@ outputFileMultiInputVoidPrototypeConflictTest =
                 , "exitCode: " <> T.pack (show result)
                 ]
         return $ mkResult outputFileMultiInputVoidPrototypeConflictMsg ok details
+
+outputFileMultiInputImplicitFunctionDefinitionWarningTest :: IO (Either T.Text T.Text, String)
+outputFileMultiInputImplicitFunctionDefinitionWarningTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp.s", "tmp-caller.c", "tmp-def.c", "tmp"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp.s"
+            callerPath = "tmp-caller.c"
+            defPath = "tmp-def.c"
+            expectedWarning = "warning: the function 'foo' is not declared."
+        T.writeFile callerPath "int main(void) { return foo(1) != 1; }"
+        T.writeFile defPath "int foo(int x) { return x; }"
+        result <- exec $ mconcat
+            [ htccCmd
+            , " -o "
+            , T.pack target
+            , " "
+            , T.pack callerPath
+            , " "
+            , T.pack defPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist target
+        asm <- if targetExists then T.readFile target else pure ""
+        linkCmd <- assemblerCommand [target, "-o", "tmp"]
+        execErrFin linkCmd
+        runResult <- exec "./tmp"
+        let succeeded = exitCode (const False) True result
+            warningSuppressed = not $ expectedWarning `T.isInfixOf` stderrOut
+            hasRequiredLabels =
+                all (`T.isInfixOf` asm)
+                    [ "foo:"
+                    , "main:"
+                    ]
+            ok =
+                succeeded
+                    && T.null stdoutLeak
+                    && targetExists
+                    && warningSuppressed
+                    && hasRequiredLabels
+                    && exitCode (const False) True runResult
+            details = T.unlines
+                [ "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "targetExists: " <> T.pack (show targetExists)
+                , "warningSuppressed: " <> T.pack (show warningSuppressed)
+                , "hasRequiredLabels: " <> T.pack (show hasRequiredLabels)
+                , "runExitCode: " <> T.pack (show runResult)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult outputFileMultiInputImplicitFunctionDefinitionWarningMsg ok details
+
+outputFileMultiInputImplicitFunctionPrototypeWarningTest :: IO (Either T.Text T.Text, String)
+outputFileMultiInputImplicitFunctionPrototypeWarningTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp.s", "tmp-caller.c", "tmp-proto.c"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp.s"
+            callerPath = "tmp-caller.c"
+            protoPath = "tmp-proto.c"
+            expectedWarning = "warning: the function 'foo' is not declared."
+        T.writeFile callerPath "int main(void) { return foo(1) != 1; }"
+        T.writeFile protoPath "int foo(int x);"
+        result <- exec $ mconcat
+            [ htccCmd
+            , " -o "
+            , T.pack target
+            , " "
+            , T.pack callerPath
+            , " "
+            , T.pack protoPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist target
+        asm <- if targetExists then T.readFile target else pure ""
+        let succeeded = exitCode (const False) True result
+            warningSuppressed = not $ expectedWarning `T.isInfixOf` stderrOut
+            hasRequiredAsm =
+                all (`T.isInfixOf` asm)
+                    [ "main:"
+                    , "call foo"
+                    ]
+            ok =
+                succeeded
+                    && T.null stdoutLeak
+                    && targetExists
+                    && warningSuppressed
+                    && hasRequiredAsm
+            details = T.unlines
+                [ "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "targetExists: " <> T.pack (show targetExists)
+                , "warningSuppressed: " <> T.pack (show warningSuppressed)
+                , "hasRequiredAsm: " <> T.pack (show hasRequiredAsm)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult outputFileMultiInputImplicitFunctionPrototypeWarningMsg ok details
 
 outputFileMultiInputImplicitFunctionDefinitionTest :: IO (Either T.Text T.Text, String)
 outputFileMultiInputImplicitFunctionDefinitionTest =
@@ -3999,6 +8803,64 @@ outputFileMultiInputAggregateFunctionDesignatorInitializerTest =
                 , "exitCode: " <> T.pack (show result)
                 ]
         return $ mkResult outputFileMultiInputAggregateFunctionDesignatorInitializerMsg ok details
+
+outputFileMultiInputSameInputImplicitFunctionDefinitionWarningTest :: IO (Either T.Text T.Text, String)
+outputFileMultiInputSameInputImplicitFunctionDefinitionWarningTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp.s", "tmp-caller.c", "tmp-other.c", "tmp"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp.s"
+            callerPath = "tmp-caller.c"
+            otherPath = "tmp-other.c"
+            expectedWarning = "warning: the function 'foo' is not declared."
+        T.writeFile callerPath $ T.unlines
+            [ "int main(void) { return foo(); }"
+            , "int foo(void) { return 1; }"
+            ]
+        T.writeFile otherPath "int helper(void) { return 0; }"
+        result <- exec $ mconcat
+            [ htccCmd
+            , " -o "
+            , T.pack target
+            , " "
+            , T.pack callerPath
+            , " "
+            , T.pack otherPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist target
+        asm <- if targetExists then T.readFile target else pure ""
+        linkCmd <- assemblerCommand [target, "-o", "tmp"]
+        execErrFin linkCmd
+        runResult <- exec "./tmp"
+        let succeeded = exitCode (const False) True result
+            hasExpectedWarning = expectedWarning `T.isInfixOf` stderrOut
+            hasRequiredLabels =
+                all (`T.isInfixOf` asm)
+                    [ "foo:"
+                    , "helper:"
+                    , "main:"
+                    ]
+            ok =
+                succeeded
+                    && T.null stdoutLeak
+                    && targetExists
+                    && hasExpectedWarning
+                    && hasRequiredLabels
+                    && exitCode (const False) True runResult
+            details = T.unlines
+                [ "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "targetExists: " <> T.pack (show targetExists)
+                , "hasExpectedWarning: " <> T.pack (show hasExpectedWarning)
+                , "hasRequiredLabels: " <> T.pack (show hasRequiredLabels)
+                , "runExitCode: " <> T.pack (show runResult)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult outputFileMultiInputSameInputImplicitFunctionDefinitionWarningMsg ok details
 
 outputFileMultiInputSameInputImplicitFunctionConflictTest :: IO (Either T.Text T.Text, String)
 outputFileMultiInputSameInputImplicitFunctionConflictTest =
@@ -5147,6 +10009,239 @@ outputFileSamePathTest = flip finally (clean ["tmp.out", "tmp.err", "tmp-same.c"
             ]
     return $ mkResult outputFileSamePathMsg ok details
 
+outputFileMissingInputMatchingOutputPathTest :: IO (Either T.Text T.Text, String)
+outputFileMissingInputMatchingOutputPathTest = flip finally (clean ["tmp.out", "tmp.err", "tmp-missing.c"]) $ do
+    htccCmd <- htccCommand
+    result <- exec $ mconcat
+        [ htccCmd
+        , " -o tmp-missing.c tmp-missing.c > tmp.out 2> tmp.err"
+        ]
+    stdoutLeak <- T.readFile "tmp.out"
+    stderrOut <- T.readFile "tmp.err"
+    targetExists <- doesFileExist "tmp-missing.c"
+    let failed = exitCode (const True) False result
+        hasAliasError = "-o output path must not overwrite an input file" `T.isInfixOf` stderrOut
+        mentionsInputPath = "tmp-missing.c" `T.isInfixOf` stderrOut
+        ok =
+            failed
+                && T.null stdoutLeak
+                && not targetExists
+                && mentionsInputPath
+                && not hasAliasError
+        details = T.unlines
+            [ "stdout:"
+            , stdoutLeak
+            , "stderr:"
+            , stderrOut
+            , "targetExists: " <> T.pack (show targetExists)
+            , "mentionsInputPath: " <> T.pack (show mentionsInputPath)
+            , "hasAliasError: " <> T.pack (show hasAliasError)
+            , "exitCode: " <> T.pack (show result)
+            ]
+    return $ mkResult outputFileMissingInputMatchingOutputPathMsg ok details
+
+visualizeAstDefaultOutputSamePathTest :: IO (Either T.Text T.Text, String)
+visualizeAstDefaultOutputSamePathTest = do
+    targetDir <- createFreshTempDir "tmp-visualize-ast-default-output"
+    flip finally (clean [targetDir]) $ do
+        htccCmd <- absoluteHtccCommand
+        let inputPath = targetDir </> "out.svg"
+            stdoutPath = targetDir </> "tmp.out"
+            stderrPath = targetDir </> "tmp.err"
+        T.writeFile inputPath source
+        result <- exec $ mconcat
+            [ "cd "
+            , shellQuote $ T.pack targetDir
+            , " && "
+            , htccCmd
+            , " --visualize-ast out.svg > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile stdoutPath
+        stderrOut <- T.readFile stderrPath
+        contents <- T.readFile inputPath
+        let failed = exitCode (const True) False result
+            hasAliasError = "--visualize-ast output path must not overwrite an input file: ./out.svg" `T.isInfixOf` stderrOut
+            ok = failed && T.null stdoutLeak && contents == source && hasAliasError
+            details = T.unlines
+                [ "targetDir: " <> T.pack targetDir
+                , "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "inputUnchanged: " <> T.pack (show (contents == source))
+                , "hasAliasError: " <> T.pack (show hasAliasError)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult visualizeAstDefaultOutputSamePathMsg ok details
+
+visualizeAstDefaultOutputMissingInputTest :: IO (Either T.Text T.Text, String)
+visualizeAstDefaultOutputMissingInputTest = do
+    targetDir <- createFreshTempDir "tmp-visualize-ast-default-output-missing"
+    flip finally (clean [targetDir]) $ do
+        htccCmd <- absoluteHtccCommand
+        let inputPath = targetDir </> "out.svg"
+            stdoutPath = targetDir </> "tmp.out"
+            stderrPath = targetDir </> "tmp.err"
+            aliasError = "--visualize-ast output path must not overwrite an input file: ./out.svg"
+        result <- exec $ mconcat
+            [ "cd "
+            , shellQuote $ T.pack targetDir
+            , " && "
+            , htccCmd
+            , " --visualize-ast out.svg > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile stdoutPath
+        stderrOut <- T.readFile stderrPath
+        inputExists <- doesFileExist inputPath
+        let failed = exitCode (const True) False result
+            hasAliasError = aliasError `T.isInfixOf` stderrOut
+            mentionsInputPath = "out.svg" `T.isInfixOf` stderrOut
+            ok =
+                failed
+                    && T.null stdoutLeak
+                    && not inputExists
+                    && mentionsInputPath
+                    && not hasAliasError
+            details = T.unlines
+                [ "targetDir: " <> T.pack targetDir
+                , "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "inputExists: " <> T.pack (show inputExists)
+                , "mentionsInputPath: " <> T.pack (show mentionsInputPath)
+                , "hasAliasError: " <> T.pack (show hasAliasError)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult visualizeAstDefaultOutputMissingInputMsg ok details
+
+visualizeAstSingleInputPrototypeRetypeTest :: IO (Either T.Text T.Text, String)
+visualizeAstSingleInputPrototypeRetypeTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp.svg", "tmp-single.c"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp.svg"
+            inputPath = "tmp-single.c"
+            expectedError = "too many arguments to function call"
+        T.writeFile inputPath $ T.unlines
+            [ "int foo();"
+            , "int main(void) { return foo(1); }"
+            , "int foo(void) { return 0; }"
+            ]
+        result <- exec $ mconcat
+            [ htccCmd
+            , " --visualize-ast --out "
+            , T.pack target
+            , " "
+            , T.pack inputPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist target
+        let failed = exitCode (const True) False result
+            hasExpectedError = expectedError `T.isInfixOf` stderrOut
+            ok = failed && T.null stdoutLeak && hasExpectedError && not targetExists
+            details = T.unlines
+                [ "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "hasExpectedError: " <> T.pack (show hasExpectedError)
+                , "targetExists: " <> T.pack (show targetExists)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult visualizeAstSingleInputPrototypeRetypeMsg ok details
+
+visualizeAstUsesMergedTentativeArrayTypeTest :: IO (Either T.Text T.Text, String)
+visualizeAstUsesMergedTentativeArrayTypeTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp.svg", "tmp-single.c"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp.svg"
+            inputPath = "tmp-single.c"
+        T.writeFile inputPath $ T.unlines
+            [ "int x[];"
+            , "int *f(void) { return x; }"
+            , "int x[4];"
+            , "int main(void) { return 0; }"
+            ]
+        result <- exec $ mconcat
+            [ htccCmd
+            , " --visualize-ast --out "
+            , T.pack target
+            , " "
+            , T.pack inputPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist target
+        svg <- if targetExists then T.readFile target else pure ""
+        let succeeded = exitCode (const False) True result
+            hasMergedType = "auto int[4] x" `T.isInfixOf` svg
+            hasStaleType = "auto int[] x" `T.isInfixOf` svg
+            ok =
+                succeeded
+                    && T.null stdoutLeak
+                    && T.null stderrOut
+                    && targetExists
+                    && hasMergedType
+                    && not hasStaleType
+            details = T.unlines
+                [ "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "targetExists: " <> T.pack (show targetExists)
+                , "hasMergedType: " <> T.pack (show hasMergedType)
+                , "hasStaleType: " <> T.pack (show hasStaleType)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult visualizeAstUsesMergedTentativeArrayTypeMsg ok details
+
+visualizeAstSingleInputImplicitFunctionDefinitionWarningTest :: IO (Either T.Text T.Text, String)
+visualizeAstSingleInputImplicitFunctionDefinitionWarningTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp.svg", "tmp-single.c"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp.svg"
+            inputPath = "tmp-single.c"
+            expectedWarning = "warning: the function 'foo' is not declared."
+        T.writeFile inputPath $ T.unlines
+            [ "int main(void) { return foo(); }"
+            , "int foo(void) { return 1; }"
+            ]
+        result <- exec $ mconcat
+            [ htccCmd
+            , " --visualize-ast --out "
+            , T.pack target
+            , " "
+            , T.pack inputPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist target
+        svg <- if targetExists then T.readFile target else pure ""
+        let succeeded = exitCode (const False) True result
+            hasExpectedWarning = expectedWarning `T.isInfixOf` stderrOut
+            hasSvg = "<svg" `T.isInfixOf` svg
+            ok =
+                succeeded
+                    && T.null stdoutLeak
+                    && targetExists
+                    && hasExpectedWarning
+                    && hasSvg
+            details = T.unlines
+                [ "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "targetExists: " <> T.pack (show targetExists)
+                , "hasExpectedWarning: " <> T.pack (show hasExpectedWarning)
+                , "hasSvg: " <> T.pack (show hasSvg)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult visualizeAstSingleInputImplicitFunctionDefinitionWarningMsg ok details
+
 outputFileHardLinkAliasTest :: IO (Either T.Text T.Text, String)
 outputFileHardLinkAliasTest =
     flip finally (clean ["tmp.out", "tmp.err", "tmp-source.c", "tmp-source-link.c"]) $ do
@@ -5652,6 +10747,46 @@ outputFileWriteFailurePreservesExistingOutputTest =
                 ]
         return $ mkResult outputFileWriteFailurePreservesExistingOutputMsg ok details
 
+visualizeAstWriteFailurePreservesExistingOutputTest :: IO (Either T.Text T.Text, String)
+visualizeAstWriteFailurePreservesExistingOutputTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp-limit.svg", "tmp-large.c"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp-limit.svg"
+            inputPath = "tmp-large.c"
+        clean [target, inputPath, "tmp.out", "tmp.err"]
+        T.writeFile target "stale output"
+        T.writeFile inputPath writeFailureSource
+        result <- exec $ mconcat
+            [ "sh -c \"ulimit -f 1; "
+            , htccCmd
+            , " --visualize-ast --out "
+            , T.pack target
+            , " "
+            , T.pack inputPath
+            , " > tmp.out 2> tmp.err\""
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist target
+        targetContents <- if targetExists then T.readFile target else pure ""
+        let failed = exitCode (const True) False result
+            ok =
+                failed
+                    && T.null stdoutLeak
+                    && targetExists
+                    && targetContents == "stale output"
+            details = T.unlines
+                [ "target: " <> T.pack target
+                , "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "targetExists: " <> T.pack (show targetExists)
+                , "targetUnchanged: " <> T.pack (show (targetContents == "stale output"))
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult visualizeAstWriteFailurePreservesExistingOutputMsg ok details
+
 outputFileFreshOutputRestrictiveUmaskTest :: IO (Either T.Text T.Text, String)
 outputFileFreshOutputRestrictiveUmaskTest =
     flip finally (clean ["tmp.out", "tmp.err", "tmp-umask-input.c", "tmp-umask.s"]) $ do
@@ -5748,6 +10883,223 @@ runAsmTest = flip finally (clean ["tmp", "tmp.out", fakeAssemblerPath, fakeAssem
             ]
     return $ mkResult runAsmMsg ok details
 
+runAsmDoesNotInjectValidationMarkerIntoFinalAsmTest :: IO (Either T.Text T.Text, String)
+runAsmDoesNotInjectValidationMarkerIntoFinalAsmTest =
+    if not hostCanExecuteGeneratedElf
+        then pure (Right runAsmDoesNotInjectValidationMarkerIntoFinalAsmMsg, "")
+        else
+            flip finally
+                (clean ["tmp-stable-marker-bin", "tmp.out", "tmp.err", fakeAssemblerPath, fakeAssemblerLogPath, fakeAssemblerAsmPath])
+                $ do
+                    htccCmd <- htccCommand
+                    writeFakeAssembler fakeAssemblerPath
+                    let target = "tmp-stable-marker-bin"
+                        runOnce = do
+                            execErrFin $ mconcat
+                                [ "echo '"
+                                , source
+                                , "' | "
+                                , "HTCC_ASSEMBLER=./tmp-assembler.sh "
+                                , htccCmd
+                                , " -r -o "
+                                , T.pack target
+                                , " /dev/stdin > tmp.out 2> tmp.err"
+                                ]
+                            asm <- T.readFile fakeAssemblerAsmPath
+                            stdoutLeak <- T.readFile "tmp.out"
+                            stderrLeak <- T.readFile "tmp.err"
+                            pure (asm, stdoutLeak, stderrLeak)
+                    (firstAsm, firstStdout, firstStderr) <- runOnce
+                    (secondAsm, secondStdout, secondStderr) <- runOnce
+                    targetExists <- doesFileExist target
+                    runResult <-
+                        if targetExists
+                            then Just <$> exec ("./" <> T.pack target)
+                            else pure Nothing
+                    let validationMarker = "htcc-output-marker:runnable-linked-output"
+                        markerCount asm = T.count validationMarker asm
+                        stableAsm = firstAsm == secondAsm
+                        markerAbsent =
+                            markerCount firstAsm == 0
+                                && markerCount secondAsm == 0
+                        leaksTempNames =
+                            any
+                                (\needle ->
+                                    needle `T.isInfixOf` firstAsm || needle `T.isInfixOf` secondAsm
+                                )
+                                ["htcc-.s", "htcc-.o", ".htcc-"]
+                        ranOk = maybe False (exitCode (const False) True) runResult
+                        ok =
+                            T.null firstStdout
+                                && T.null firstStderr
+                                && T.null secondStdout
+                                && T.null secondStderr
+                                && stableAsm
+                                && markerAbsent
+                                && not leaksTempNames
+                                && ranOk
+                        details = T.unlines
+                            [ "firstStdout:"
+                            , firstStdout
+                            , "firstStderr:"
+                            , firstStderr
+                            , "secondStdout:"
+                            , secondStdout
+                            , "secondStderr:"
+                            , secondStderr
+                            , "stableAsm: " <> T.pack (show stableAsm)
+                            , "markerCount(first): " <> T.pack (show $ markerCount firstAsm)
+                            , "markerCount(second): " <> T.pack (show $ markerCount secondAsm)
+                            , "markerAbsent: " <> T.pack (show markerAbsent)
+                            , "leaksTempNames: " <> T.pack (show leaksTempNames)
+                            , "targetExists: " <> T.pack (show targetExists)
+                            , "runExitCode: " <> maybe "not-run" (T.pack . show) runResult
+                            , "firstAsm:"
+                            , firstAsm
+                            , "secondAsm:"
+                            , secondAsm
+                            ]
+                    return $ mkResult runAsmDoesNotInjectValidationMarkerIntoFinalAsmMsg ok details
+
+runAsmAcceptsUserDefinedValidationMarkerSymbolTest :: IO (Either T.Text T.Text, String)
+runAsmAcceptsUserDefinedValidationMarkerSymbolTest =
+    if not hostCanExecuteGeneratedElf
+        then pure (Right runAsmAcceptsUserDefinedValidationMarkerSymbolMsg, "")
+        else do
+            maybeGcc <- findExecutable "gcc"
+            case maybeGcc of
+                Nothing ->
+                    pure (Right runAsmAcceptsUserDefinedValidationMarkerSymbolMsg, "")
+                Just _ ->
+                    flip finally
+                        (clean ["tmp-user-marker", "tmp-user-marker.c", "tmp.out", "tmp.err"])
+                        $ do
+                            htccCmd <- htccCommand
+                            let target = "tmp-user-marker"
+                                inputPath = "tmp-user-marker.c"
+                            T.writeFile inputPath $
+                                T.unlines
+                                    [ "long htcc_runnable_output_marker = 7;"
+                                    , "int main(void) { return htcc_runnable_output_marker != 7; }"
+                                    ]
+                            result <- exec $ mconcat
+                                [ "HTCC_ASSEMBLER=gcc "
+                                , htccCmd
+                                , " -r -o "
+                                , T.pack target
+                                , " "
+                                , T.pack inputPath
+                                , " > tmp.out 2> tmp.err"
+                                ]
+                            stdoutLeak <- T.readFile "tmp.out"
+                            stderrOut <- T.readFile "tmp.err"
+                            targetExists <- doesFileExist target
+                            runResult <-
+                                if targetExists
+                                    then Just <$> exec ("./" <> T.pack target)
+                                    else pure Nothing
+                            let succeeded = exitCode (const False) True result
+                                ranOk = maybe False (exitCode (const False) True) runResult
+                                multipleDefinition =
+                                    "multiple definition" `T.isInfixOf` stderrOut
+                                ok =
+                                    succeeded
+                                        && T.null stdoutLeak
+                                        && T.null stderrOut
+                                        && targetExists
+                                        && ranOk
+                                details = T.unlines
+                                    [ "stdout:"
+                                    , stdoutLeak
+                                    , "stderr:"
+                                    , stderrOut
+                                    , "targetExists: " <> T.pack (show targetExists)
+                                    , "multipleDefinition: " <> T.pack (show multipleDefinition)
+                                    , "compileExitCode: " <> T.pack (show result)
+                                    , "runExitCode: " <> maybe "not-run" (T.pack . show) runResult
+                                    ]
+                            pure $
+                                mkResult
+                                    runAsmAcceptsUserDefinedValidationMarkerSymbolMsg
+                                    ok
+                                    details
+
+runAsmAcceptsGcSectionsLinkerTest :: IO (Either T.Text T.Text, String)
+runAsmAcceptsGcSectionsLinkerTest =
+    if os == "mingw32"
+        then pure (Right runAsmAcceptsGcSectionsLinkerMsg, "")
+        else
+            flip finally
+                (clean
+                    [ "tmp-gc-sections"
+                    , "tmp.out"
+                    , "tmp.err"
+                    , fakeGcSectionsLinkDriverPath
+                    , fakeGcSectionsLinkDriverLogPath
+                    ]
+                )
+                $ do
+                    htccCmd <- htccCommand
+                    writeGcSectionsLinkDriver
+                        fakeGcSectionsLinkDriverPath
+                        fakeGcSectionsLinkDriverLogPath
+                    result <- exec $ mconcat
+                        [ "echo '"
+                        , source
+                        , "' | "
+                        , "HTCC_ASSEMBLER=./"
+                        , T.pack fakeGcSectionsLinkDriverPath
+                        , " "
+                        , htccCmd
+                        , " -r -o tmp-gc-sections /dev/stdin > tmp.out 2> tmp.err"
+                        ]
+                    stdoutLeak <- T.readFile "tmp.out"
+                    stderrOut <- T.readFile "tmp.err"
+                    targetExists <- doesFileExist "tmp-gc-sections"
+                    driverInvocations <-
+                        catchIOError
+                            (T.lines <$> T.readFile fakeGcSectionsLinkDriverLogPath)
+                            (const $ pure [])
+                    let succeeded = exitCode (const False) True result
+                        rejectedForMissingMarker =
+                            "non-runnable final output for -r" `T.isInfixOf` stderrOut
+                        sawProbeLink =
+                            any
+                                (\line ->
+                                    "-no-pie -o" `T.isInfixOf` line
+                                        && "htcc-probe-" `T.isInfixOf` line
+                                )
+                                driverInvocations
+                        sawFinalLink =
+                            any
+                                (\line ->
+                                    "-no-pie -o" `T.isInfixOf` line
+                                        && "tmp-gc-sections.htcc-" `T.isInfixOf` line
+                                )
+                                driverInvocations
+                        ok =
+                            succeeded
+                                && T.null stdoutLeak
+                                && T.null stderrOut
+                                && targetExists
+                                && sawProbeLink
+                                && sawFinalLink
+                                && not rejectedForMissingMarker
+                        details = T.unlines
+                            [ "stdout:"
+                            , stdoutLeak
+                            , "stderr:"
+                            , stderrOut
+                            , "driverInvocations:"
+                            , T.unlines driverInvocations
+                            , "targetExists: " <> T.pack (show targetExists)
+                            , "rejectedForMissingMarker: " <> T.pack (show rejectedForMissingMarker)
+                            , "sawProbeLink: " <> T.pack (show sawProbeLink)
+                            , "sawFinalLink: " <> T.pack (show sawFinalLink)
+                            , "compileExitCode: " <> T.pack (show result)
+                            ]
+                    pure $ mkResult runAsmAcceptsGcSectionsLinkerMsg ok details
+
 runAsmSingleInputImplicitFunctionConflictTest :: IO (Either T.Text T.Text, String)
 runAsmSingleInputImplicitFunctionConflictTest =
     flip finally (clean ["tmp", "tmp.out", "tmp.err", "tmp-single.c", fakeAssemblerPath, fakeAssemblerLogPath, fakeAssemblerAsmPath]) $ do
@@ -5819,6 +11171,68 @@ runAsmSpecialPathDevNullTest =
                 , "exitCode: " <> T.pack (show result)
                 ]
         return $ mkResult runAsmSpecialPathDevNullMsg ok details
+
+runAsmSpecialPathDevNullSkipsPostLinkValidationWaitTest :: IO (Either T.Text T.Text, String)
+runAsmSpecialPathDevNullSkipsPostLinkValidationWaitTest =
+    flip finally
+        ( clean
+            [ "tmp.out"
+            , "tmp.err"
+            , "tmp-devnull-delayed-run.c"
+            , fakeDriverPath
+            , fakeDriverLogPath
+            , fakeDelayedChildFinalLinkOnlyWrapperPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            let inputPath = "tmp-devnull-delayed-run.c"
+            clean
+                [ "tmp.out"
+                , "tmp.err"
+                , inputPath
+                , fakeDriverPath
+                , fakeDriverLogPath
+                , fakeDelayedChildFinalLinkOnlyWrapperPath
+                ]
+            writeLoggingDriver fakeDriverPath fakeDriverLogPath
+            writeDelayedChildFinalLinkOnlyWrapper
+                fakeDelayedChildFinalLinkOnlyWrapperPath
+                fakeDriverPath
+            T.writeFile inputPath source
+            maybeResult <- timeout 4000000 $
+                exec $ mconcat
+                    [ "HTCC_ASSEMBLER='./"
+                    , T.pack fakeDelayedChildFinalLinkOnlyWrapperPath
+                    , "' "
+                    , htccCmd
+                    , " -r -o /dev/null "
+                    , T.pack inputPath
+                    , " > tmp.out 2> tmp.err"
+                    ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrOut <- T.readFile "tmp.err"
+            driverInvocations <- catchIOError
+                (T.lines <$> T.readFile fakeDriverLogPath)
+                (const $ pure [])
+            let completed = maybe False (exitCode (const False) True) maybeResult
+                waitedForDelayedChild = not (null driverInvocations)
+                ok = completed && T.null stdoutLeak && T.null stderrOut && waitedForDelayedChild
+                details = T.unlines
+                    [ "timedOut: " <> T.pack (show $ maybe True (const False) maybeResult)
+                    , "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrOut
+                    , "driverInvocations:"
+                    , T.unlines driverInvocations
+                    , "waitedForDelayedChild: " <> T.pack (show waitedForDelayedChild)
+                    , "compileExitCode: " <> maybe "timeout" (T.pack . show) maybeResult
+                    ]
+            return $
+                mkResult
+                    runAsmSpecialPathDevNullSkipsPostLinkValidationWaitMsg
+                    ok
+                    details
 
 runAsmPreservesExecutableBitsTest :: IO (Either T.Text T.Text, String)
 runAsmPreservesExecutableBitsTest =
@@ -6551,6 +11965,502 @@ runAsmWrappedAssemblerHostMetadataFallbackTest =
                     ]
             return $ mkResult runAsmWrappedAssemblerHostMetadataFallbackMsg ok details
 
+runAsmWrappedAssemblerDelayedChildHostMetadataTest :: IO (Either T.Text T.Text, String)
+runAsmWrappedAssemblerDelayedChildHostMetadataTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.out"
+            , "tmp.err"
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            , fakeDelayedChildHostMetadataWrapperPath
+            , fakeDelayedChildHostMetadataWrapperLogPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeDelayedChildHostMetadataWrapper
+                fakeDelayedChildHostMetadataWrapperPath
+                fakeDelayedChildHostMetadataWrapperLogPath
+                fakeAssemblerPath
+            execErrFin $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='./"
+                , T.pack fakeDelayedChildHostMetadataWrapperPath
+                , "' "
+                , htccCmd
+                , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrOut <- T.readFile "tmp.err"
+            wrapperInvocations <- T.lines <$> T.readFile fakeDelayedChildHostMetadataWrapperLogPath
+            compilerArgs <- T.lines <$> T.readFile fakeAssemblerLogPath
+            asm <- T.readFile fakeAssemblerAsmPath
+            runResult <- if hostCanExecuteGeneratedElf then Just <$> exec "./tmp" else pure Nothing
+            let sawHostMetadataProbe =
+                    any
+                        (\line ->
+                            "-dumpmachine" `T.isInfixOf` line
+                                || "-print-target-triple" `T.isInfixOf` line
+                        )
+                        wrapperInvocations
+                compilerSawExpectedArgs =
+                    all (`elem` compilerArgs)
+                        [ "-x"
+                        , "assembler"
+                        , "-c"
+                        , "-o"
+                        ]
+                hasRequiredAsm =
+                    all (`T.isInfixOf` asm)
+                        [ ".intel_syntax noprefix"
+                        , ".L.return.main:"
+                        , ".L.label.main.done:"
+                        ]
+                ranOk = maybe True (exitCode (const False) True) runResult
+                ok =
+                    T.null stdoutLeak
+                        && T.null stderrOut
+                        && sawHostMetadataProbe
+                        && compilerSawExpectedArgs
+                        && hasRequiredAsm
+                        && ranOk
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrOut
+                    , "wrapperInvocations:"
+                    , T.unlines wrapperInvocations
+                    , "compilerArgs:"
+                    , T.unlines compilerArgs
+                    , "hasRequiredAsm: " <> T.pack (show hasRequiredAsm)
+                    , "hostCanExecuteGeneratedElf: " <> T.pack (show hostCanExecuteGeneratedElf)
+                    , "runExitCode: " <> maybe "not-run" (T.pack . show) runResult
+                    ]
+            return $ mkResult runAsmWrappedAssemblerDelayedChildHostMetadataMsg ok details
+
+runAsmWrappedAssemblerDelayedChildFinalOutputTest :: IO (Either T.Text T.Text, String)
+runAsmWrappedAssemblerDelayedChildFinalOutputTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.out"
+            , "tmp.err"
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            , fakeDelayedChildFinalOutputWrapperPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeDelayedChildFinalOutputWrapper
+                fakeDelayedChildFinalOutputWrapperPath
+                fakeAssemblerPath
+            maybeResult <- timeout 4000000 $
+                exec $ mconcat
+                    [ "echo '"
+                    , source
+                    , "' | "
+                    , "HTCC_ASSEMBLER='./"
+                    , T.pack fakeDelayedChildFinalOutputWrapperPath
+                    , "' "
+                    , htccCmd
+                    , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                    ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrOut <- T.readFile "tmp.err"
+            compilerArgs <- catchIOError
+                (T.lines <$> T.readFile fakeAssemblerLogPath)
+                (const $ pure [])
+            asm <- catchIOError
+                (T.readFile fakeAssemblerAsmPath)
+                (const $ pure "")
+            targetExists <- doesFileExist "tmp"
+            runResult <- if hostCanExecuteGeneratedElf && targetExists then Just <$> exec "./tmp" else pure Nothing
+            let completed = maybe False (exitCode (const False) True) maybeResult
+                compilerSawExpectedArgs =
+                    all (`elem` compilerArgs)
+                        [ "-x"
+                        , "assembler"
+                        , "-c"
+                        , "-o"
+                        ]
+                hasRequiredAsm =
+                    all (`T.isInfixOf` asm)
+                        [ ".intel_syntax noprefix"
+                        , ".L.return.main:"
+                        , ".L.label.main.done:"
+                        ]
+                ranOk = maybe True (exitCode (const False) True) runResult
+                ok =
+                    completed
+                        && T.null stdoutLeak
+                        && T.null stderrOut
+                        && compilerSawExpectedArgs
+                        && hasRequiredAsm
+                        && targetExists
+                        && ranOk
+                details = T.unlines
+                    [ "timedOut: " <> T.pack (show $ maybe True (const False) maybeResult)
+                    , "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrOut
+                    , "compilerArgs:"
+                    , T.unlines compilerArgs
+                    , "hasRequiredAsm: " <> T.pack (show hasRequiredAsm)
+                    , "targetExists: " <> T.pack (show targetExists)
+                    , "hostCanExecuteGeneratedElf: " <> T.pack (show hostCanExecuteGeneratedElf)
+                    , "runExitCode: " <> maybe "not-run" (T.pack . show) runResult
+                    , "compileExitCode: " <> maybe "timeout" (T.pack . show) maybeResult
+                    ]
+            return $ mkResult runAsmWrappedAssemblerDelayedChildFinalOutputMsg ok details
+
+runAsmDoesNotWaitOnBackgroundProcessGroupHelpersTest :: IO (Either T.Text T.Text, String)
+runAsmDoesNotWaitOnBackgroundProcessGroupHelpersTest =
+    flip finally
+        (cleanupBackgroundProcessGroupHelperPids fakeBackgroundProcessGroupHelperPidPath
+            *> clean
+                [ "tmp"
+                , "tmp.out"
+                , "tmp.err"
+                , fakeAssemblerPath
+                , fakeAssemblerLogPath
+                , fakeAssemblerAsmPath
+                , fakeBackgroundProcessGroupHelperWrapperPath
+                , fakeBackgroundProcessGroupHelperPidPath
+                ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeBackgroundProcessGroupHelperWrapper
+                fakeBackgroundProcessGroupHelperWrapperPath
+                fakeBackgroundProcessGroupHelperPidPath
+                fakeAssemblerPath
+            maybeResult <- timeout 2500000 $
+                exec $ mconcat
+                    [ "echo '"
+                    , source
+                    , "' | "
+                    , "HTCC_ASSEMBLER='./"
+                    , T.pack fakeBackgroundProcessGroupHelperWrapperPath
+                    , "' "
+                    , htccCmd
+                    , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                    ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrOut <- T.readFile "tmp.err"
+            compilerArgs <- catchIOError
+                (T.lines <$> T.readFile fakeAssemblerLogPath)
+                (const $ pure [])
+            helperPids <- catchIOError
+                (filter (not . T.null) . map T.strip . T.lines <$> T.readFile fakeBackgroundProcessGroupHelperPidPath)
+                (const $ pure [])
+            asm <- catchIOError
+                (T.readFile fakeAssemblerAsmPath)
+                (const $ pure "")
+            targetExists <- doesFileExist "tmp"
+            runResult <- if hostCanExecuteGeneratedElf && targetExists then Just <$> exec "./tmp" else pure Nothing
+            let completed = maybe False (exitCode (const False) True) maybeResult
+                compilerSawExpectedArgs =
+                    all (`elem` compilerArgs)
+                        [ "-x"
+                        , "assembler"
+                        , "-c"
+                        , "-o"
+                        ]
+                spawnedHelpers = length helperPids >= 3
+                hasRequiredAsm =
+                    all (`T.isInfixOf` asm)
+                        [ ".intel_syntax noprefix"
+                        , ".L.return.main:"
+                        , ".L.label.main.done:"
+                        ]
+                ranOk = maybe True (exitCode (const False) True) runResult
+                ok =
+                    completed
+                        && T.null stdoutLeak
+                        && T.null stderrOut
+                        && compilerSawExpectedArgs
+                        && spawnedHelpers
+                        && hasRequiredAsm
+                        && targetExists
+                        && ranOk
+                details = T.unlines
+                    [ "timedOut: " <> T.pack (show $ maybe True (const False) maybeResult)
+                    , "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrOut
+                    , "compilerArgs:"
+                    , T.unlines compilerArgs
+                    , "helperPids:"
+                    , T.unlines helperPids
+                    , "spawnedHelpers: " <> T.pack (show spawnedHelpers)
+                    , "hasRequiredAsm: " <> T.pack (show hasRequiredAsm)
+                    , "targetExists: " <> T.pack (show targetExists)
+                    , "hostCanExecuteGeneratedElf: " <> T.pack (show hostCanExecuteGeneratedElf)
+                    , "runExitCode: " <> maybe "not-run" (T.pack . show) runResult
+                    , "compileExitCode: " <> maybe "timeout" (T.pack . show) maybeResult
+                    ]
+            return $ mkResult runAsmDoesNotWaitOnBackgroundProcessGroupHelpersMsg ok details
+
+runAsmProbeDoesNotHangOnInheritedPipeHandlesTest :: IO (Either T.Text T.Text, String)
+runAsmProbeDoesNotHangOnInheritedPipeHandlesTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.out"
+            , "tmp.err"
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            , fakeProbeInheritedPipeHandlesWrapperPath
+            , fakeProbeInheritedPipeHandlesWrapperLogPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeProbeInheritedPipeHandlesDriverWrapper
+                fakeProbeInheritedPipeHandlesWrapperPath
+                fakeProbeInheritedPipeHandlesWrapperLogPath
+                fakeAssemblerPath
+            maybeResult <- timeout 4000000 $
+                exec $ mconcat
+                    [ "echo '"
+                    , source
+                    , "' | "
+                    , "HTCC_ASSEMBLER='./"
+                    , T.pack fakeProbeInheritedPipeHandlesWrapperPath
+                    , "' "
+                    , htccCmd
+                    , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                    ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrOut <- T.readFile "tmp.err"
+            wrapperInvocations <- catchIOError
+                (T.lines <$> T.readFile fakeProbeInheritedPipeHandlesWrapperLogPath)
+                (const $ pure [])
+            compilerArgs <- catchIOError
+                (T.lines <$> T.readFile fakeAssemblerLogPath)
+                (const $ pure [])
+            targetExists <- doesFileExist "tmp"
+            let completed = maybe False (exitCode (const False) True) maybeResult
+                sawMetadataProbe =
+                    any
+                        (\line ->
+                            "-dumpmachine" `T.isInfixOf` line
+                                || "-print-target-triple" `T.isInfixOf` line
+                        )
+                        wrapperInvocations
+                sawAssemblyProbe =
+                    any ("htcc-probe-" `T.isInfixOf`) wrapperInvocations
+                compilerSawExpectedArgs =
+                    all (`elem` compilerArgs)
+                        [ "-x"
+                        , "assembler"
+                        , "-c"
+                        , "-o"
+                        ]
+                ok =
+                    completed
+                        && T.null stdoutLeak
+                        && T.null stderrOut
+                        && sawMetadataProbe
+                        && sawAssemblyProbe
+                        && compilerSawExpectedArgs
+                        && targetExists
+                details = T.unlines
+                    [ "timedOut: " <> T.pack (show $ maybe True (const False) maybeResult)
+                    , "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrOut
+                    , "wrapperInvocations:"
+                    , T.unlines wrapperInvocations
+                    , "compilerArgs:"
+                    , T.unlines compilerArgs
+                    , "sawMetadataProbe: " <> T.pack (show sawMetadataProbe)
+                    , "sawAssemblyProbe: " <> T.pack (show sawAssemblyProbe)
+                    , "compilerSawExpectedArgs: " <> T.pack (show compilerSawExpectedArgs)
+                    , "targetExists: " <> T.pack (show targetExists)
+                    , "compileExitCode: " <> maybe "timeout" (T.pack . show) maybeResult
+                    ]
+            return $ mkResult runAsmProbeDoesNotHangOnInheritedPipeHandlesMsg ok details
+
+runAsmProbeDoesNotHangOnEarlyClosedStdoutTest :: IO (Either T.Text T.Text, String)
+runAsmProbeDoesNotHangOnEarlyClosedStdoutTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.out"
+            , "tmp.err"
+            , fakeAssemblerPath
+            , fakeAssemblerLogPath
+            , fakeAssemblerAsmPath
+            , fakeEarlyClosedStdoutProbeWrapperPath
+            , fakeEarlyClosedStdoutProbeWrapperLogPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeFakeAssembler fakeAssemblerPath
+            writeEarlyClosedStdoutProbeDriverWrapper
+                fakeEarlyClosedStdoutProbeWrapperPath
+                fakeEarlyClosedStdoutProbeWrapperLogPath
+                fakeAssemblerPath
+            maybeResult <- timeout 5000000 $
+                exec $ mconcat
+                    [ "echo '"
+                    , source
+                    , "' | "
+                    , "HTCC_ASSEMBLER='./"
+                    , T.pack fakeEarlyClosedStdoutProbeWrapperPath
+                    , "' "
+                    , htccCmd
+                    , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                    ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrOut <- T.readFile "tmp.err"
+            wrapperInvocations <- catchIOError
+                (T.lines <$> T.readFile fakeEarlyClosedStdoutProbeWrapperLogPath)
+                (const $ pure [])
+            compilerArgs <- catchIOError
+                (T.lines <$> T.readFile fakeAssemblerLogPath)
+                (const $ pure [])
+            targetExists <- doesFileExist "tmp"
+            runResult <- if targetExists then Just <$> exec "./tmp" else pure Nothing
+            let completed = maybe False (exitCode (const False) True) maybeResult
+                sawMetadataProbe =
+                    any
+                        (\line ->
+                            "-dumpmachine" `T.isInfixOf` line
+                                || "-print-target-triple" `T.isInfixOf` line
+                        )
+                        wrapperInvocations
+                sawAssemblyProbe = any ("htcc-probe-" `T.isInfixOf`) wrapperInvocations
+                compilerSawExpectedArgs =
+                    all (`elem` compilerArgs)
+                        [ "-x"
+                        , "assembler"
+                        , "-c"
+                        , "-o"
+                        ]
+                preservedFlood = "probe-stderr-flood" `T.isInfixOf` stderrOut
+                ranOk = maybe False (exitCode (const False) True) runResult
+                ok =
+                    completed
+                        && T.null stdoutLeak
+                        && preservedFlood
+                        && sawMetadataProbe
+                        && sawAssemblyProbe
+                        && compilerSawExpectedArgs
+                        && targetExists
+                        && ranOk
+                details = T.unlines
+                    [ "timedOut: " <> T.pack (show $ maybe True (const False) maybeResult)
+                    , "stdout:"
+                    , stdoutLeak
+                    , "stderrHasFlood: " <> T.pack (show preservedFlood)
+                    , "stderrBytes: " <> T.pack (show $ T.length stderrOut)
+                    , "wrapperInvocations:"
+                    , T.unlines wrapperInvocations
+                    , "compilerArgs:"
+                    , T.unlines compilerArgs
+                    , "sawMetadataProbe: " <> T.pack (show sawMetadataProbe)
+                    , "sawAssemblyProbe: " <> T.pack (show sawAssemblyProbe)
+                    , "compilerSawExpectedArgs: " <> T.pack (show compilerSawExpectedArgs)
+                    , "targetExists: " <> T.pack (show targetExists)
+                    , "compileExitCode: " <> maybe "timeout" (T.pack . show) maybeResult
+                    , "runExitCode: " <> maybe "not-run" (T.pack . show) runResult
+                    ]
+            pure $ mkResult runAsmProbeDoesNotHangOnEarlyClosedStdoutMsg ok details
+
+runAsmTildeExpandedAssemblerPathTest :: IO (Either T.Text T.Text, String)
+runAsmTildeExpandedAssemblerPathTest =
+    if os == "mingw32"
+        then pure (Right runAsmTildeExpandedAssemblerPathMsg, "")
+        else
+            flip finally
+                (clean
+                    [ "tmp"
+                    , "tmp.out"
+                    , "tmp.err"
+                    , "tmp-home"
+                    , fakeAssemblerLogPath
+                    , fakeAssemblerAsmPath
+                    ]
+                ) $ do
+                    htccCmd <- htccCommand
+                    let fakeHomeDir = "tmp-home"
+                        fakeHomeAssemblerPath = fakeHomeDir </> fakeAssemblerPath
+                    createDirectoryIfMissing True fakeHomeDir
+                    writeFakeAssemblerWithLogs
+                        fakeAssemblerLogPath
+                        fakeAssemblerAsmPath
+                        fakeHomeAssemblerPath
+                    result <- exec $ mconcat
+                        [ "echo '"
+                        , source
+                        , "' | "
+                        , "HOME=$(pwd)/"
+                        , T.pack fakeHomeDir
+                        , " "
+                        , "HTCC_ASSEMBLER='~/"
+                        , T.pack fakeAssemblerPath
+                        , "' "
+                        , htccCmd
+                        , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                        ]
+                    stdoutLeak <- T.readFile "tmp.out"
+                    stderrOut <- T.readFile "tmp.err"
+                    compilerArgs <- T.lines <$> T.readFile fakeAssemblerLogPath
+                    asm <- T.readFile fakeAssemblerAsmPath
+                    outputExists <- doesFileExist "tmp"
+                    ranOk <- if outputExists
+                        then exitCode (const False) True <$> exec "./tmp"
+                        else pure False
+                    let compilerSawExpectedArgs =
+                            all (`elem` compilerArgs)
+                                [ "-x"
+                                , "assembler"
+                                , "-c"
+                                , "-o"
+                                ]
+                        hasRequiredAsm =
+                            all (`T.isInfixOf` asm)
+                                [ ".intel_syntax noprefix"
+                                , ".L.return.main:"
+                                , ".L.label.main.done:"
+                                ]
+                        ok =
+                            exitCode (const False) True result
+                                && T.null stdoutLeak
+                                && T.null stderrOut
+                                && compilerSawExpectedArgs
+                                && hasRequiredAsm
+                                && outputExists
+                                && (not hostCanExecuteGeneratedElf || ranOk)
+                        details = T.unlines
+                            [ "stdout:"
+                            , stdoutLeak
+                            , "stderr:"
+                            , stderrOut
+                            , "compilerArgs:"
+                            , T.unlines compilerArgs
+                            , "hasRequiredAsm: " <> T.pack (show hasRequiredAsm)
+                            , "outputExists: " <> T.pack (show outputExists)
+                            , "hostCanExecuteGeneratedElf: " <> T.pack (show hostCanExecuteGeneratedElf)
+                            , "ranOk: " <> T.pack (show ranOk)
+                            , "exitCode: " <> T.pack (show result)
+                            ]
+                    return $ mkResult runAsmTildeExpandedAssemblerPathMsg ok details
+
 runAsmLeadingEnvAssignmentTest :: IO (Either T.Text T.Text, String)
 runAsmLeadingEnvAssignmentTest =
     flip finally
@@ -6619,6 +12529,274 @@ runAsmLeadingEnvAssignmentTest =
                     ]
             return $ mkResult runAsmLeadingEnvAssignmentMsg ok details
 
+runAsmLeadingEnvAssignmentExpandsTildePathTest :: IO (Either T.Text T.Text, String)
+runAsmLeadingEnvAssignmentExpandsTildePathTest =
+    if os == "mingw32"
+        then pure (Right runAsmLeadingEnvAssignmentExpandsTildePathMsg, "")
+        else
+            flip finally
+                (clean
+                    [ "tmp"
+                    , "tmp.out"
+                    , "tmp.err"
+                    , "tmp-home"
+                    , fakePathAssemblerLogPath
+                    , fakeAssemblerAsmPath
+                    ]
+                ) $ do
+                    htccCmd <- htccCommand
+                    let fakeHomeDir = "tmp-home"
+                        fakeHomeBinDir = fakeHomeDir </> "bin"
+                        fakeHomeAssemblerPath = fakeHomeBinDir </> fakeAssemblerPath
+                    createDirectoryIfMissing True fakeHomeBinDir
+                    writeFakeAssemblerWithLogs
+                        fakePathAssemblerLogPath
+                        fakeAssemblerAsmPath
+                        fakeHomeAssemblerPath
+                    catPath <- maybe (ioError $ userError "missing cat executable for test") pure
+                        =<< findExecutable "cat"
+                    writeExecutableProxy (fakeHomeBinDir </> "cat") catPath
+                    chmodPath <- maybe (ioError $ userError "missing chmod executable for test") pure
+                        =<< findExecutable "chmod"
+                    writeExecutableProxy (fakeHomeBinDir </> "chmod") chmodPath
+                    result <- exec $ mconcat
+                        [ "echo '"
+                        , source
+                        , "' | "
+                        , "HOME=$(pwd)/"
+                        , T.pack fakeHomeDir
+                        , " "
+                        , "HTCC_ASSEMBLER='PATH=~/bin tmp-assembler.sh' "
+                        , htccCmd
+                        , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                        ]
+                    stdoutLeak <- T.readFile "tmp.out"
+                    stderrOut <- T.readFile "tmp.err"
+                    compilerArgs <- T.lines <$> T.readFile fakePathAssemblerLogPath
+                    asm <- T.readFile fakeAssemblerAsmPath
+                    outputExists <- doesFileExist "tmp"
+                    ranOk <- if outputExists
+                        then exitCode (const False) True <$> exec "./tmp"
+                        else pure False
+                    let compilerSawExpectedArgs =
+                            all (`elem` compilerArgs)
+                                [ "-x"
+                                , "assembler"
+                                , "-c"
+                                , "-o"
+                                ]
+                        envAssignmentPassedAsArg =
+                            any ("PATH=~/" `T.isPrefixOf`) compilerArgs
+                                || any ("PATH=" `T.isPrefixOf`) compilerArgs
+                        hasRequiredAsm =
+                            all (`T.isInfixOf` asm)
+                                [ ".intel_syntax noprefix"
+                                , ".L.return.main:"
+                                , ".L.label.main.done:"
+                                ]
+                        ok =
+                            exitCode (const False) True result
+                                && T.null stdoutLeak
+                                && T.null stderrOut
+                                && compilerSawExpectedArgs
+                                && not envAssignmentPassedAsArg
+                                && hasRequiredAsm
+                                && outputExists
+                                && (not hostCanExecuteGeneratedElf || ranOk)
+                        details = T.unlines
+                            [ "stdout:"
+                            , stdoutLeak
+                            , "stderr:"
+                            , stderrOut
+                            , "compilerArgs:"
+                            , T.unlines compilerArgs
+                            , "envAssignmentPassedAsArg: " <> T.pack (show envAssignmentPassedAsArg)
+                            , "hasRequiredAsm: " <> T.pack (show hasRequiredAsm)
+                            , "outputExists: " <> T.pack (show outputExists)
+                            , "hostCanExecuteGeneratedElf: " <> T.pack (show hostCanExecuteGeneratedElf)
+                            , "ranOk: " <> T.pack (show ranOk)
+                            , "exitCode: " <> T.pack (show result)
+                            ]
+                    return $ mkResult runAsmLeadingEnvAssignmentExpandsTildePathMsg ok details
+
+runAsmExpandedAssignmentWordFailsTest :: IO (Either T.Text T.Text, String)
+runAsmExpandedAssignmentWordFailsTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.out"
+            , "tmp.err"
+            , fakeAssemblerPath
+            , fakeAssemblerAsmPath
+            , fakePathBinDir
+            , fakePathAssemblerLogPath
+            , fakeLocalAssemblerLogPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            createDirectoryIfMissing False fakePathBinDir
+            writeFakeAssemblerWithLogs fakePathAssemblerLogPath fakeAssemblerAsmPath fakePathAssemblerPath
+            writeFailingCompiler fakeAssemblerPath fakeLocalAssemblerLogPath
+            result <- exec $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "PATH=.:$PATH "
+                , "WRAPPED_ASSEMBLER='PATH=./"
+                , T.pack fakePathBinDir
+                , " tmp-assembler.sh' "
+                , "HTCC_ASSEMBLER='$WRAPPED_ASSEMBLER' "
+                , htccCmd
+                , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrOut <- T.readFile "tmp.err"
+            pathAssemblerWasInvoked <- doesFileExist fakePathAssemblerLogPath
+            localAssemblerWasInvoked <- doesFileExist fakeLocalAssemblerLogPath
+            outputExists <- doesFileExist "tmp"
+            let failed = exitCode (const True) False result
+                hasExpectedError =
+                    "failed to determine an x86_64-ELF target from HTCC_ASSEMBLER"
+                        `T.isInfixOf` stderrOut
+                ok =
+                    failed
+                        && T.null stdoutLeak
+                        && hasExpectedError
+                        && not pathAssemblerWasInvoked
+                        && not localAssemblerWasInvoked
+                        && not outputExists
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrOut
+                    , "pathAssemblerWasInvoked: " <> T.pack (show pathAssemblerWasInvoked)
+                    , "localAssemblerWasInvoked: " <> T.pack (show localAssemblerWasInvoked)
+                    , "outputExists: " <> T.pack (show outputExists)
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult runAsmExpandedAssignmentWordFailsMsg ok details
+
+runAsmQuotedAssignmentLikeExecutableTest :: IO (Either T.Text T.Text, String)
+runAsmQuotedAssignmentLikeExecutableTest =
+    flip finally
+        (clean ["tmp", "tmp.out", "tmp.err", "PATH=tmp-assembler.sh", fakeAssemblerLogPath, fakeAssemblerAsmPath]) $ do
+            htccCmd <- htccCommand
+            let quotedAssemblerPath = "PATH=tmp-assembler.sh"
+            writeFakeAssembler quotedAssemblerPath
+            result <- exec $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='\""
+                , T.pack quotedAssemblerPath
+                , "\"' "
+                , htccCmd
+                , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrOut <- T.readFile "tmp.err"
+            compilerArgs <- T.lines <$> T.readFile fakeAssemblerLogPath
+            asm <- T.readFile fakeAssemblerAsmPath
+            outputExists <- doesFileExist "tmp"
+            ranOk <- if outputExists
+                then exitCode (const False) True <$> exec "./tmp"
+                else pure False
+            let compilerSawExpectedArgs =
+                    all (`elem` compilerArgs)
+                        [ "-x"
+                        , "assembler"
+                        , "-c"
+                        , "-o"
+                        ]
+                hasRequiredAsm =
+                    all (`T.isInfixOf` asm)
+                        [ ".intel_syntax noprefix"
+                        , ".L.return.main:"
+                        , ".L.label.main.done:"
+                        ]
+                ok =
+                    exitCode (const False) True result
+                        && T.null stdoutLeak
+                        && T.null stderrOut
+                        && compilerSawExpectedArgs
+                        && hasRequiredAsm
+                        && outputExists
+                        && (not hostCanExecuteGeneratedElf || ranOk)
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrOut
+                    , "compilerArgs:"
+                    , T.unlines compilerArgs
+                    , "hasRequiredAsm: " <> T.pack (show hasRequiredAsm)
+                    , "outputExists: " <> T.pack (show outputExists)
+                    , "hostCanExecuteGeneratedElf: " <> T.pack (show hostCanExecuteGeneratedElf)
+                    , "ranOk: " <> T.pack (show ranOk)
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult runAsmQuotedAssignmentLikeExecutableMsg ok details
+
+runAsmEscapedAssignmentLikeExecutableTest :: IO (Either T.Text T.Text, String)
+runAsmEscapedAssignmentLikeExecutableTest =
+    flip finally
+        (clean ["tmp", "tmp.out", "tmp.err", "FOO=bar", fakeAssemblerLogPath, fakeAssemblerAsmPath]) $ do
+            htccCmd <- htccCommand
+            let escapedAssemblerPath = "FOO=bar"
+            writeFakeAssembler escapedAssemblerPath
+            result <- exec $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER='FOO\\=bar' "
+                , htccCmd
+                , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrOut <- T.readFile "tmp.err"
+            compilerArgs <- T.lines <$> T.readFile fakeAssemblerLogPath
+            asm <- T.readFile fakeAssemblerAsmPath
+            outputExists <- doesFileExist "tmp"
+            ranOk <- if outputExists
+                then exitCode (const False) True <$> exec "./tmp"
+                else pure False
+            let compilerSawExpectedArgs =
+                    all (`elem` compilerArgs)
+                        [ "-x"
+                        , "assembler"
+                        , "-c"
+                        , "-o"
+                        ]
+                hasRequiredAsm =
+                    all (`T.isInfixOf` asm)
+                        [ ".intel_syntax noprefix"
+                        , ".L.return.main:"
+                        , ".L.label.main.done:"
+                        ]
+                ok =
+                    exitCode (const False) True result
+                        && T.null stdoutLeak
+                        && T.null stderrOut
+                        && compilerSawExpectedArgs
+                        && hasRequiredAsm
+                        && outputExists
+                        && (not hostCanExecuteGeneratedElf || ranOk)
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrOut
+                    , "compilerArgs:"
+                    , T.unlines compilerArgs
+                    , "hasRequiredAsm: " <> T.pack (show hasRequiredAsm)
+                    , "outputExists: " <> T.pack (show outputExists)
+                    , "hostCanExecuteGeneratedElf: " <> T.pack (show hostCanExecuteGeneratedElf)
+                    , "ranOk: " <> T.pack (show ranOk)
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult runAsmEscapedAssignmentLikeExecutableMsg ok details
+
 runAsmLeadingEnvAssignmentWithoutEnvPathTest :: IO (Either T.Text T.Text, String)
 runAsmLeadingEnvAssignmentWithoutEnvPathTest =
     flip finally
@@ -6640,6 +12818,10 @@ runAsmLeadingEnvAssignmentWithoutEnvPathTest =
             chmodPath <- maybe (ioError $ userError "missing chmod executable for test") pure
                 =<< findExecutable "chmod"
             writeExecutableProxy (fakePathBinDir </> "chmod") chmodPath
+            when (htccCmd == "htcc") $ do
+                compilerPath <- maybe (ioError $ userError "missing htcc executable for test") pure
+                    =<< findExecutable "htcc"
+                writeExecutableProxy (fakePathBinDir </> "htcc") compilerPath
             when (htccCmd == "stack exec htcc --") $ do
                 stackPath <- maybe (ioError $ userError "missing stack executable for test") pure
                     =<< findExecutable "stack"
@@ -6766,6 +12948,317 @@ runAsmLeadingEnvAssignmentPreservesPathOverrideTest =
                     , "exitCode: " <> T.pack (show result)
                     ]
             return $ mkResult runAsmLeadingEnvAssignmentPreservesPathOverrideMsg ok details
+
+runAsmLeadingEnvAssignmentPreservesLiteralPercentAndBangTest :: IO (Either T.Text T.Text, String)
+runAsmLeadingEnvAssignmentPreservesLiteralPercentAndBangTest =
+    if os == "mingw32"
+        then pure (Right runAsmLeadingEnvAssignmentPreservesLiteralPercentAndBangMsg, "")
+        else
+            flip finally
+                (clean
+                    [ "tmp"
+                    , "tmp.out"
+                    , "tmp.err"
+                    , fakeAssemblerPath
+                    , fakeAssemblerLogPath
+                    , fakeAssemblerAsmPath
+                    , fakeEnvLoggingWrapperPath
+                    , fakeEnvLoggingWrapperLogPath
+                    ]
+                ) $ do
+                    htccCmd <- htccCommand
+                    writeFakeAssembler fakeAssemblerPath
+                    writeEnvLoggingForwardingWrapper
+                        fakeEnvLoggingWrapperPath
+                        fakeEnvLoggingWrapperLogPath
+                        ["MSG_PERCENT", "MSG_BANG"]
+                    result <- exec $ mconcat
+                        [ "echo '"
+                        , source
+                        , "' | "
+                        , "HTCC_ASSEMBLER='MSG_PERCENT=%foo% MSG_BANG=!bar! ./"
+                        , T.pack fakeEnvLoggingWrapperPath
+                        , " "
+                        , T.pack fakeAssemblerPath
+                        , "' "
+                        , htccCmd
+                        , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                        ]
+                    stdoutLeak <- T.readFile "tmp.out"
+                    stderrOut <- T.readFile "tmp.err"
+                    envLog <- do
+                        logExists <- doesFileExist fakeEnvLoggingWrapperLogPath
+                        if logExists
+                            then T.lines <$> T.readFile fakeEnvLoggingWrapperLogPath
+                            else pure []
+                    outputExists <- doesFileExist "tmp"
+                    ranOk <- if outputExists
+                        then exitCode (const False) True <$> exec "./tmp"
+                        else pure False
+                    let linkedOk =
+                            outputExists
+                                && (not hostCanExecuteGeneratedElf || ranOk)
+                        preservedPercent = "MSG_PERCENT=%foo%" `elem` envLog
+                        preservedBang = "MSG_BANG=!bar!" `elem` envLog
+                        ok =
+                            exitCode (const False) True result
+                                && T.null stdoutLeak
+                                && T.null stderrOut
+                                && preservedPercent
+                                && preservedBang
+                                && linkedOk
+                        details = T.unlines
+                            [ "stdout:"
+                            , stdoutLeak
+                            , "stderr:"
+                            , stderrOut
+                            , "envLog:"
+                            , T.unlines envLog
+                            , "preservedPercent: " <> T.pack (show preservedPercent)
+                            , "preservedBang: " <> T.pack (show preservedBang)
+                            , "outputExists: " <> T.pack (show outputExists)
+                            , "hostCanExecuteGeneratedElf: " <> T.pack (show hostCanExecuteGeneratedElf)
+                            , "ranOk: " <> T.pack (show ranOk)
+                            , "exitCode: " <> T.pack (show result)
+                            ]
+                    return $ mkResult runAsmLeadingEnvAssignmentPreservesLiteralPercentAndBangMsg ok details
+
+runAsmLeadingEnvAssignmentPreservesSinglePassPosixExpansionTest :: IO (Either T.Text T.Text, String)
+runAsmLeadingEnvAssignmentPreservesSinglePassPosixExpansionTest =
+    if os == "mingw32"
+        then pure (Right runAsmLeadingEnvAssignmentPreservesSinglePassPosixExpansionMsg, "")
+        else
+            flip finally
+                (clean
+                    [ "tmp"
+                    , "tmp.out"
+                    , "tmp.err"
+                    , fakeAssemblerPath
+                    , fakeAssemblerLogPath
+                    , fakeAssemblerAsmPath
+                    , fakeEnvLoggingWrapperPath
+                    , fakeEnvLoggingWrapperLogPath
+                    ]
+                ) $ do
+                    htccCmd <- htccCommand
+                    writeFakeAssembler fakeAssemblerPath
+                    writeEnvLoggingForwardingWrapper
+                        fakeEnvLoggingWrapperPath
+                        fakeEnvLoggingWrapperLogPath
+                        ["MSG"]
+                    result <- exec $ mconcat
+                        [ "echo '"
+                        , source
+                        , "' | "
+                        , "HTCC_TEST_LITERAL='$HOME' "
+                        , "HTCC_ASSEMBLER='MSG=$HTCC_TEST_LITERAL ./"
+                        , T.pack fakeEnvLoggingWrapperPath
+                        , " "
+                        , T.pack fakeAssemblerPath
+                        , "' "
+                        , htccCmd
+                        , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                        ]
+                    stdoutLeak <- T.readFile "tmp.out"
+                    stderrOut <- T.readFile "tmp.err"
+                    envLog <- do
+                        logExists <- doesFileExist fakeEnvLoggingWrapperLogPath
+                        if logExists
+                            then T.lines <$> T.readFile fakeEnvLoggingWrapperLogPath
+                            else pure []
+                    outputExists <- doesFileExist "tmp"
+                    ranOk <- if outputExists
+                        then exitCode (const False) True <$> exec "./tmp"
+                        else pure False
+                    let linkedOk =
+                            outputExists
+                                && (not hostCanExecuteGeneratedElf || ranOk)
+                        preservedLiteral = "MSG=$HOME" `elem` envLog
+                        recursivelyExpanded =
+                            any (\line -> "MSG=" `T.isPrefixOf` line && line /= "MSG=$HOME") envLog
+                        ok =
+                            exitCode (const False) True result
+                                && T.null stdoutLeak
+                                && T.null stderrOut
+                                && preservedLiteral
+                                && not recursivelyExpanded
+                                && linkedOk
+                        details = T.unlines
+                            [ "stdout:"
+                            , stdoutLeak
+                            , "stderr:"
+                            , stderrOut
+                            , "envLog:"
+                            , T.unlines envLog
+                            , "preservedLiteral: " <> T.pack (show preservedLiteral)
+                            , "recursivelyExpanded: " <> T.pack (show recursivelyExpanded)
+                            , "outputExists: " <> T.pack (show outputExists)
+                            , "hostCanExecuteGeneratedElf: " <> T.pack (show hostCanExecuteGeneratedElf)
+                            , "ranOk: " <> T.pack (show ranOk)
+                            , "exitCode: " <> T.pack (show result)
+                            ]
+                    return $ mkResult runAsmLeadingEnvAssignmentPreservesSinglePassPosixExpansionMsg ok details
+
+runAsmLeadingEnvAssignmentPreservesInheritedPwdTest :: IO (Either T.Text T.Text, String)
+runAsmLeadingEnvAssignmentPreservesInheritedPwdTest =
+    if os == "mingw32"
+        then pure (Right runAsmLeadingEnvAssignmentPreservesInheritedPwdMsg, "")
+        else
+            flip finally
+                (clean
+                    [ "tmp"
+                    , "tmp.out"
+                    , "tmp.err"
+                    , "tmp-pwd-override"
+                    , fakeAssemblerPath
+                    , fakeAssemblerLogPath
+                    , fakeAssemblerAsmPath
+                    , fakeEnvLoggingWrapperPath
+                    , fakeEnvLoggingWrapperLogPath
+                    ]
+                ) $ do
+                    htccCmd <- htccCommand
+                    workingDir <- getCurrentDirectory
+                    let logicalPwdDir = "tmp-pwd-override"
+                        logicalPwd = workingDir </> logicalPwdDir
+                        expectedMsgEntry = "MSG=" <> T.pack logicalPwd
+                        expectedPwdEntry = "PWD=" <> T.pack logicalPwd
+                    createDirectoryIfMissing False logicalPwdDir
+                    writeFakeAssembler fakeAssemblerPath
+                    writeEnvLoggingForwardingWrapper
+                        fakeEnvLoggingWrapperPath
+                        fakeEnvLoggingWrapperLogPath
+                        ["MSG", "PWD"]
+                    result <- exec $ mconcat
+                        [ "echo '"
+                        , source
+                        , "' | "
+                        , "PWD="
+                        , shellQuote (T.pack logicalPwd)
+                        , " "
+                        , "HTCC_ASSEMBLER='MSG=$PWD ./"
+                        , T.pack fakeEnvLoggingWrapperPath
+                        , " "
+                        , T.pack fakeAssemblerPath
+                        , "' "
+                        , htccCmd
+                        , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                        ]
+                    stdoutLeak <- T.readFile "tmp.out"
+                    stderrOut <- T.readFile "tmp.err"
+                    envLog <- do
+                        logExists <- doesFileExist fakeEnvLoggingWrapperLogPath
+                        if logExists
+                            then T.lines <$> T.readFile fakeEnvLoggingWrapperLogPath
+                            else pure []
+                    outputExists <- doesFileExist "tmp"
+                    ranOk <- if outputExists
+                        then exitCode (const False) True <$> exec "./tmp"
+                        else pure False
+                    let linkedOk =
+                            outputExists
+                                && (not hostCanExecuteGeneratedElf || ranOk)
+                        preservedExpandedPwd = expectedMsgEntry `elem` envLog
+                        preservedChildPwd = expectedPwdEntry `elem` envLog
+                        ok =
+                            exitCode (const False) True result
+                                && T.null stdoutLeak
+                                && T.null stderrOut
+                                && preservedExpandedPwd
+                                && preservedChildPwd
+                                && linkedOk
+                        details = T.unlines
+                            [ "stdout:"
+                            , stdoutLeak
+                            , "stderr:"
+                            , stderrOut
+                            , "envLog:"
+                            , T.unlines envLog
+                            , "expectedMsgEntry: " <> expectedMsgEntry
+                            , "expectedPwdEntry: " <> expectedPwdEntry
+                            , "preservedExpandedPwd: " <> T.pack (show preservedExpandedPwd)
+                            , "preservedChildPwd: " <> T.pack (show preservedChildPwd)
+                            , "outputExists: " <> T.pack (show outputExists)
+                            , "hostCanExecuteGeneratedElf: " <> T.pack (show hostCanExecuteGeneratedElf)
+                            , "ranOk: " <> T.pack (show ranOk)
+                            , "exitCode: " <> T.pack (show result)
+                            ]
+                    return $ mkResult runAsmLeadingEnvAssignmentPreservesInheritedPwdMsg ok details
+
+runAsmLeadingEnvAssignmentPreservesEscapedPosixLiteralTest :: IO (Either T.Text T.Text, String)
+runAsmLeadingEnvAssignmentPreservesEscapedPosixLiteralTest =
+    if os == "mingw32"
+        then pure (Right runAsmLeadingEnvAssignmentPreservesEscapedPosixLiteralMsg, "")
+        else
+            flip finally
+                (clean
+                    [ "tmp"
+                    , "tmp.out"
+                    , "tmp.err"
+                    , fakeAssemblerPath
+                    , fakeAssemblerLogPath
+                    , fakeAssemblerAsmPath
+                    , fakeEnvLoggingWrapperPath
+                    , fakeEnvLoggingWrapperLogPath
+                    ]
+                ) $ do
+                    htccCmd <- htccCommand
+                    writeFakeAssembler fakeAssemblerPath
+                    writeEnvLoggingForwardingWrapper
+                        fakeEnvLoggingWrapperPath
+                        fakeEnvLoggingWrapperLogPath
+                        ["MSG"]
+                    result <- exec $ mconcat
+                        [ "echo '"
+                        , source
+                        , "' | "
+                        , "HTCC_ASSEMBLER='MSG=\\$PWD ./"
+                        , T.pack fakeEnvLoggingWrapperPath
+                        , " "
+                        , T.pack fakeAssemblerPath
+                        , "' "
+                        , htccCmd
+                        , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                        ]
+                    stdoutLeak <- T.readFile "tmp.out"
+                    stderrOut <- T.readFile "tmp.err"
+                    envLog <- do
+                        logExists <- doesFileExist fakeEnvLoggingWrapperLogPath
+                        if logExists
+                            then T.lines <$> T.readFile fakeEnvLoggingWrapperLogPath
+                            else pure []
+                    outputExists <- doesFileExist "tmp"
+                    ranOk <- if outputExists
+                        then exitCode (const False) True <$> exec "./tmp"
+                        else pure False
+                    let linkedOk =
+                            outputExists
+                                && (not hostCanExecuteGeneratedElf || ranOk)
+                        preservedLiteral = "MSG=$PWD" `elem` envLog
+                        expandedWorkingDirectory =
+                            any (\line -> "MSG=" `T.isPrefixOf` line && line /= "MSG=$PWD") envLog
+                        ok =
+                            exitCode (const False) True result
+                                && T.null stdoutLeak
+                                && T.null stderrOut
+                                && preservedLiteral
+                                && not expandedWorkingDirectory
+                                && linkedOk
+                        details = T.unlines
+                            [ "stdout:"
+                            , stdoutLeak
+                            , "stderr:"
+                            , stderrOut
+                            , "envLog:"
+                            , T.unlines envLog
+                            , "preservedLiteral: " <> T.pack (show preservedLiteral)
+                            , "expandedWorkingDirectory: " <> T.pack (show expandedWorkingDirectory)
+                            , "outputExists: " <> T.pack (show outputExists)
+                            , "hostCanExecuteGeneratedElf: " <> T.pack (show hostCanExecuteGeneratedElf)
+                            , "ranOk: " <> T.pack (show ranOk)
+                            , "exitCode: " <> T.pack (show result)
+                            ]
+                    return $ mkResult runAsmLeadingEnvAssignmentPreservesEscapedPosixLiteralMsg ok details
 
 runAsmEnvPathOverrideEmptyEntryTest :: IO (Either T.Text T.Text, String)
 runAsmEnvPathOverrideEmptyEntryTest =
@@ -7749,6 +14242,38 @@ runAsmFailurePreservesInputOutputAliasScenario htccCmd outputArgs inputPath = do
             ]
     pure (ok, details)
 
+runAsmMissingInputMatchingOutputPathTest :: IO (Either T.Text T.Text, String)
+runAsmMissingInputMatchingOutputPathTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp-missing"]) $ do
+        htccCmd <- htccCommand
+        result <- exec $ mconcat
+            [ htccCmd
+            , " -r -o tmp-missing tmp-missing > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist "tmp-missing"
+        let failed = exitCode (const True) False result
+            hasAliasError = "-r output path must not overwrite an input file" `T.isInfixOf` stderrOut
+            mentionsInputPath = "tmp-missing" `T.isInfixOf` stderrOut
+            ok =
+                failed
+                    && T.null stdoutLeak
+                    && not targetExists
+                    && mentionsInputPath
+                    && not hasAliasError
+            details = T.unlines
+                [ "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "targetExists: " <> T.pack (show targetExists)
+                , "mentionsInputPath: " <> T.pack (show mentionsInputPath)
+                , "hasAliasError: " <> T.pack (show hasAliasError)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult runAsmMissingInputMatchingOutputPathMsg ok details
+
 runAsmFailurePreservesHardLinkInputOutputAliasTest :: IO (Either T.Text T.Text, String)
 runAsmFailurePreservesHardLinkInputOutputAliasTest =
     flip finally
@@ -7968,7 +14493,8 @@ runAsmRejectsMissingAssemblerDriverTest =
         targetExists <- doesFileExist "tmp"
         let failed = exitCode (const True) False result
             hasExpectedError =
-                "failed to determine an x86_64-ELF target from HTCC_ASSEMBLER" `T.isInfixOf` stderrOut
+                "failed to start HTCC_ASSEMBLER probe" `T.isInfixOf` stderrOut
+                    && T.pack fakeMissingAssemblerDriverPath `T.isInfixOf` stderrOut
             leakedRawProcessException =
                 "readCreateProcessWithExitCode" `T.isInfixOf` stderrOut
             ok =
@@ -7988,6 +14514,53 @@ runAsmRejectsMissingAssemblerDriverTest =
                 , "exitCode: " <> T.pack (show result)
                 ]
         return $ mkResult runAsmRejectsMissingAssemblerDriverMsg ok details
+
+runAsmRejectsNonExecutableAssemblerDriverTest :: IO (Either T.Text T.Text, String)
+runAsmRejectsNonExecutableAssemblerDriverTest =
+    flip finally (clean ["tmp", "tmp.out", "tmp.err", fakeNonExecutableAssemblerDriverPath]) $ do
+        htccCmd <- htccCommand
+        T.writeFile fakeNonExecutableAssemblerDriverPath $ T.unlines
+            [ "#!/bin/sh"
+            , "exit 0"
+            ]
+        setFileMode fakeNonExecutableAssemblerDriverPath $
+            ownerReadMode `unionFileModes` ownerWriteMode
+        result <- exec $ mconcat
+            [ "echo '"
+            , source
+            , "' | "
+            , "HTCC_ASSEMBLER=./"
+            , T.pack fakeNonExecutableAssemblerDriverPath
+            , " "
+            , htccCmd
+            , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist "tmp"
+        let failed = exitCode (const True) False result
+            hasExpectedError =
+                "failed to start HTCC_ASSEMBLER probe" `T.isInfixOf` stderrOut
+                    && T.pack fakeNonExecutableAssemblerDriverPath `T.isInfixOf` stderrOut
+            leakedRawProcessException =
+                "readCreateProcessWithExitCode" `T.isInfixOf` stderrOut
+            ok =
+                failed
+                    && T.null stdoutLeak
+                    && hasExpectedError
+                    && not leakedRawProcessException
+                    && not targetExists
+            details = T.unlines
+                [ "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "hasExpectedError: " <> T.pack (show hasExpectedError)
+                , "leakedRawProcessException: " <> T.pack (show leakedRawProcessException)
+                , "targetExists: " <> T.pack (show targetExists)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult runAsmRejectsNonExecutableAssemblerDriverMsg ok details
 
 runAsmRejectsAssemblerWithoutLinkDriverTest :: IO (Either T.Text T.Text, String)
 runAsmRejectsAssemblerWithoutLinkDriverTest =
@@ -8044,6 +14617,87 @@ runAsmRejectsAssemblerWithoutLinkDriverTest =
                 , "exitCode: " <> T.pack (show result)
                 ]
         return $ mkResult runAsmRejectsAssemblerWithoutLinkDriverMsg ok details
+
+runAsmRejectsSingleObjectOnlyLinkDriverTest :: IO (Either T.Text T.Text, String)
+runAsmRejectsSingleObjectOnlyLinkDriverTest =
+    flip finally
+        (clean ["tmp", "tmp.out", "tmp.err", fakeSingleObjectOnlyLinkDriverPath, fakeSingleObjectOnlyLinkDriverLogPath])
+        $ do
+            htccCmd <- htccCommand
+            writeSingleObjectOnlyLinkDriver
+                fakeSingleObjectOnlyLinkDriverPath
+                fakeSingleObjectOnlyLinkDriverLogPath
+            result <- exec $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER=./"
+                , T.pack fakeSingleObjectOnlyLinkDriverPath
+                , " "
+                , htccCmd
+                , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrOut <- T.readFile "tmp.err"
+            targetExists <- doesFileExist "tmp"
+            driverInvocations <- T.lines <$> T.readFile fakeSingleObjectOnlyLinkDriverLogPath
+            let failed = exitCode (const True) False result
+                hasExpectedError =
+                    "failed a link probe for -r" `T.isInfixOf` stderrOut
+                        && "supports both assembly and linking for -r" `T.isInfixOf` stderrOut
+                sawMetadataProbe =
+                    any
+                        (\line ->
+                            "-dumpmachine" `T.isInfixOf` line
+                                || "-print-target-triple" `T.isInfixOf` line
+                        )
+                        driverInvocations
+                sawAssemblyProbe =
+                    any
+                        (\line ->
+                            "-x assembler -c -o" `T.isInfixOf` line
+                                && "htcc-probe-" `T.isInfixOf` line
+                        )
+                        driverInvocations
+                sawLinkProbe =
+                    any
+                        (\line ->
+                            "-no-pie -o" `T.isInfixOf` line
+                                && "htcc-probe-" `T.isInfixOf` line
+                        )
+                        driverInvocations
+                sawFinalLink =
+                    any
+                        (\line ->
+                            "-no-pie -o" `T.isInfixOf` line
+                                && "tmp.htcc-" `T.isInfixOf` line
+                        )
+                        driverInvocations
+                ok =
+                    failed
+                        && T.null stdoutLeak
+                        && hasExpectedError
+                        && sawMetadataProbe
+                        && sawAssemblyProbe
+                        && sawLinkProbe
+                        && not sawFinalLink
+                        && not targetExists
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrOut
+                    , "driverInvocations:"
+                    , T.unlines driverInvocations
+                    , "hasExpectedError: " <> T.pack (show hasExpectedError)
+                    , "sawMetadataProbe: " <> T.pack (show sawMetadataProbe)
+                    , "sawAssemblyProbe: " <> T.pack (show sawAssemblyProbe)
+                    , "sawLinkProbe: " <> T.pack (show sawLinkProbe)
+                    , "sawFinalLink: " <> T.pack (show sawFinalLink)
+                    , "targetExists: " <> T.pack (show targetExists)
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            pure $ mkResult runAsmRejectsSingleObjectOnlyLinkDriverMsg ok details
 
 runAsmRejectsScriptLinkProbeDriverTest :: IO (Either T.Text T.Text, String)
 runAsmRejectsScriptLinkProbeDriverTest =
@@ -8156,6 +14810,92 @@ runAsmRejectsSharedLinkProbeDriverTest =
                 , "exitCode: " <> T.pack (show result)
                 ]
         return $ mkResult runAsmRejectsSharedLinkProbeDriverMsg ok details
+
+runAsmRejectsForeignAbiLinkProbeDriverTest :: IO (Either T.Text T.Text, String)
+runAsmRejectsForeignAbiLinkProbeDriverTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.out"
+            , "tmp.err"
+            , fakeForeignAbiLinkProbeDriverPath
+            , fakeForeignAbiLinkProbeDriverLogPath
+            ]
+        ) $ do
+            htccCmd <- htccCommand
+            writeForeignAbiLinkProbeDriver fakeForeignAbiLinkProbeDriverPath fakeForeignAbiLinkProbeDriverLogPath
+            result <- exec $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER=./"
+                , T.pack fakeForeignAbiLinkProbeDriverPath
+                , " "
+                , htccCmd
+                , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrOut <- T.readFile "tmp.err"
+            targetExists <- doesFileExist "tmp"
+            driverLogExists <- doesFileExist fakeForeignAbiLinkProbeDriverLogPath
+            driverInvocations <-
+                catchIOError
+                    (T.lines <$> T.readFile fakeForeignAbiLinkProbeDriverLogPath)
+                    (const $ pure [])
+            let succeeded = exitCode (const False) True result
+                sawMetadataProbe =
+                    any
+                        (\line ->
+                            "-dumpmachine" `T.isInfixOf` line
+                                || "-print-target-triple" `T.isInfixOf` line
+                        )
+                        driverInvocations
+                sawProbeAssembly =
+                    any
+                        (\line ->
+                            "-x assembler -c -o" `T.isInfixOf` line
+                                && "htcc-probe-" `T.isInfixOf` line
+                        )
+                        driverInvocations
+                sawProbeLink =
+                    any
+                        (\line ->
+                            "-no-pie -o" `T.isInfixOf` line
+                                && "htcc-probe-" `T.isInfixOf` line
+                        )
+                        driverInvocations
+                sawFinalLink =
+                    any
+                        (\line ->
+                            "-no-pie -o" `T.isInfixOf` line
+                                && "tmp.htcc-" `T.isInfixOf` line
+                        )
+                        driverInvocations
+                ok =
+                    succeeded
+                        && T.null stdoutLeak
+                        && T.null stderrOut
+                        && sawMetadataProbe
+                        && sawProbeAssembly
+                        && sawProbeLink
+                        && sawFinalLink
+                        && targetExists
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrOut
+                    , "driverInvocations:"
+                    , T.unlines driverInvocations
+                    , "sawMetadataProbe: " <> T.pack (show sawMetadataProbe)
+                    , "sawProbeAssembly: " <> T.pack (show sawProbeAssembly)
+                    , "sawProbeLink: " <> T.pack (show sawProbeLink)
+                    , "sawFinalLink: " <> T.pack (show sawFinalLink)
+                    , "driverLogExists: " <> T.pack (show driverLogExists)
+                    , "targetExists: " <> T.pack (show targetExists)
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult runAsmRejectsForeignAbiLinkProbeDriverMsg ok details
 
 runAsmRejectsBlobLinkProbeDriverTest :: IO (Either T.Text T.Text, String)
 runAsmRejectsBlobLinkProbeDriverTest =
@@ -8281,27 +15021,27 @@ runAsmRejectsSymlinkLinkProbeDriverTest =
                     ]
             return $ mkResult runAsmRejectsSymlinkLinkProbeDriverMsg ok details
 
-runAsmAcceptsMarkerStrippedFinalOutputTest :: IO (Either T.Text T.Text, String)
-runAsmAcceptsMarkerStrippedFinalOutputTest =
+runAsmRejectsSymlinkSpecialLinkProbeDriverTest :: IO (Either T.Text T.Text, String)
+runAsmRejectsSymlinkSpecialLinkProbeDriverTest =
     flip finally
         (clean
             [ "tmp"
             , "tmp.out"
             , "tmp.err"
-            , fakeMarkerStrippingFinalLinkDriverPath
-            , fakeMarkerStrippingFinalLinkDriverLogPath
+            , fakeSymlinkSpecialLinkProbeDriverPath
+            , fakeSymlinkSpecialLinkProbeDriverLogPath
             ])
         $ do
             htccCmd <- htccCommand
-            writeMarkerStrippingFinalLinkDriver
-                fakeMarkerStrippingFinalLinkDriverPath
-                fakeMarkerStrippingFinalLinkDriverLogPath
+            writeSymlinkSpecialLinkProbeDriver
+                fakeSymlinkSpecialLinkProbeDriverPath
+                fakeSymlinkSpecialLinkProbeDriverLogPath
             result <- exec $ mconcat
                 [ "echo '"
                 , source
                 , "' | "
                 , "HTCC_ASSEMBLER=./"
-                , T.pack fakeMarkerStrippingFinalLinkDriverPath
+                , T.pack fakeSymlinkSpecialLinkProbeDriverPath
                 , " "
                 , htccCmd
                 , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
@@ -8309,33 +15049,104 @@ runAsmAcceptsMarkerStrippedFinalOutputTest =
             stdoutLeak <- T.readFile "tmp.out"
             stderrOut <- T.readFile "tmp.err"
             targetExists <- doesFileExist "tmp"
-            driverInvocations <- T.lines <$> T.readFile fakeMarkerStrippingFinalLinkDriverLogPath
-            targetMode <- if targetExists then permissionBits . fileMode <$> getFileStatus "tmp" else pure 0
-            let succeeded = exitCode (const False) True result
-                sawProbeLink =
+            driverInvocations <- T.lines <$> T.readFile fakeSymlinkSpecialLinkProbeDriverLogPath
+            let failed = exitCode (const True) False result
+                hasExpectedError =
+                    "failed a link probe for -r" `T.isInfixOf` stderrOut
+                        && "supports both assembly and linking for -r" `T.isInfixOf` stderrOut
+                sawMetadataProbe =
                     any
                         (\line ->
-                            "-no-pie -o" `T.isInfixOf` line
-                                && "htcc-probe-" `T.isInfixOf` line
+                            "-dumpmachine" `T.isInfixOf` line
+                                || "-print-target-triple" `T.isInfixOf` line
                         )
                         driverInvocations
-                sawFinalLink =
-                    any
-                        (\line ->
-                            "-no-pie -o" `T.isInfixOf` line
-                                && "tmp.htcc-" `T.isInfixOf` line
-                        )
-                        driverInvocations
-                targetIsExecutable =
-                    intersectFileModes targetMode ownerExecuteMode /= 0
+                sawAssemblyProbe = any ("-x assembler -c -o" `T.isInfixOf`) driverInvocations
+                sawLinkProbe = any ("-no-pie -o" `T.isInfixOf`) driverInvocations
                 ok =
-                    succeeded
+                    failed
                         && T.null stdoutLeak
-                        && T.null stderrOut
-                        && targetExists
-                        && targetIsExecutable
-                        && sawProbeLink
-                        && sawFinalLink
+                        && hasExpectedError
+                        && sawMetadataProbe
+                        && sawAssemblyProbe
+                        && sawLinkProbe
+                        && not targetExists
+                details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrOut
+                    , "driverInvocations:"
+                    , T.unlines driverInvocations
+                    , "hasExpectedError: " <> T.pack (show hasExpectedError)
+                    , "sawMetadataProbe: " <> T.pack (show sawMetadataProbe)
+                    , "sawAssemblyProbe: " <> T.pack (show sawAssemblyProbe)
+                    , "sawLinkProbe: " <> T.pack (show sawLinkProbe)
+                    , "targetExists: " <> T.pack (show targetExists)
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult runAsmRejectsSymlinkSpecialLinkProbeDriverMsg ok details
+
+runAsmRejectsNonExecutableLinkProbeDriverTest :: IO (Either T.Text T.Text, String)
+runAsmRejectsNonExecutableLinkProbeDriverTest =
+    flip finally
+        (clean
+            [ "tmp"
+            , "tmp.out"
+            , "tmp.err"
+            , fakeNonExecutableLinkProbeDriverPath
+            , fakeNonExecutableLinkProbeDriverLogPath
+            , fakeNonExecutableLinkProbeObjectPath
+            , fakeNonExecutableLinkProbeOutputPath
+            ])
+        $ do
+            htccCmd <- htccCommand
+            let probeMarker = "htcc-probe-marker:non-executable"
+            B.writeFile fakeNonExecutableLinkProbeObjectPath $ linkedElfHeaderForProbe 1
+            B.writeFile
+                fakeNonExecutableLinkProbeOutputPath
+                (linkedElfHeaderForProbe 2 <> asciiBytesForProbe probeMarker)
+            setFileMode fakeNonExecutableLinkProbeOutputPath permissionFileModeMask
+            writeNonExecutableLinkProbeDriver
+                fakeNonExecutableLinkProbeDriverPath
+                fakeNonExecutableLinkProbeDriverLogPath
+                fakeNonExecutableLinkProbeObjectPath
+                fakeNonExecutableLinkProbeOutputPath
+            result <- exec $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER=./"
+                , T.pack fakeNonExecutableLinkProbeDriverPath
+                , " "
+                , htccCmd
+                , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrOut <- T.readFile "tmp.err"
+            targetExists <- doesFileExist "tmp"
+            driverInvocations <- T.lines <$> T.readFile fakeNonExecutableLinkProbeDriverLogPath
+            let failed = exitCode (const True) False result
+                hasExpectedError =
+                    "failed a link probe for -r" `T.isInfixOf` stderrOut
+                        && "supports both assembly and linking for -r" `T.isInfixOf` stderrOut
+                sawMetadataProbe =
+                    any
+                        (\line ->
+                            "-dumpmachine" `T.isInfixOf` line
+                                || "-print-target-triple" `T.isInfixOf` line
+                        )
+                        driverInvocations
+                sawAssemblyProbe = any ("-x assembler -c -o" `T.isInfixOf`) driverInvocations
+                sawLinkProbe = any ("-no-pie -o" `T.isInfixOf`) driverInvocations
+                ok =
+                    failed
+                        && T.null stdoutLeak
+                        && hasExpectedError
+                        && sawMetadataProbe
+                        && sawAssemblyProbe
+                        && sawLinkProbe
+                        && not targetExists
             let details = T.unlines
                     [ "stdout:"
                     , stdoutLeak
@@ -8343,13 +15154,85 @@ runAsmAcceptsMarkerStrippedFinalOutputTest =
                     , stderrOut
                     , "driverInvocations:"
                     , T.unlines driverInvocations
+                    , "hasExpectedError: " <> T.pack (show hasExpectedError)
+                    , "sawMetadataProbe: " <> T.pack (show sawMetadataProbe)
+                    , "sawAssemblyProbe: " <> T.pack (show sawAssemblyProbe)
+                    , "sawLinkProbe: " <> T.pack (show sawLinkProbe)
                     , "targetExists: " <> T.pack (show targetExists)
-                    , "targetIsExecutable: " <> T.pack (show targetIsExecutable)
-                    , "sawProbeLink: " <> T.pack (show sawProbeLink)
-                    , "sawFinalLink: " <> T.pack (show sawFinalLink)
                     , "exitCode: " <> T.pack (show result)
                     ]
-            return $ mkResult runAsmAcceptsMarkerStrippedFinalOutputMsg ok details
+            return $ mkResult runAsmRejectsNonExecutableLinkProbeDriverMsg ok details
+
+runAsmRejectsMarkerlessFinalOutputTest :: IO (Either T.Text T.Text, String)
+runAsmRejectsMarkerlessFinalOutputTest =
+    if not hostCanExecuteGeneratedElf
+        then pure (Right runAsmRejectsMarkerlessFinalOutputMsg, "")
+        else
+            flip finally
+                (clean
+                    [ "tmp"
+                    , "tmp.out"
+                    , "tmp.err"
+                    , fakeMarkerStrippingFinalLinkDriverPath
+                    , fakeMarkerStrippingFinalLinkDriverLogPath
+                    ])
+                $ do
+                    htccCmd <- htccCommand
+                    writeMarkerStrippingFinalLinkDriver
+                        fakeMarkerStrippingFinalLinkDriverPath
+                        fakeMarkerStrippingFinalLinkDriverLogPath
+                    result <- exec $ mconcat
+                        [ "echo '"
+                        , source
+                        , "' | "
+                        , "HTCC_ASSEMBLER=./"
+                        , T.pack fakeMarkerStrippingFinalLinkDriverPath
+                        , " "
+                        , htccCmd
+                        , " -r -o tmp /dev/stdin > tmp.out 2> tmp.err"
+                        ]
+                    stdoutLeak <- T.readFile "tmp.out"
+                    stderrOut <- T.readFile "tmp.err"
+                    targetExists <- doesFileExist "tmp"
+                    driverInvocations <- T.lines <$> T.readFile fakeMarkerStrippingFinalLinkDriverLogPath
+                    let failed = exitCode (const True) False result
+                        hasExpectedError =
+                            "non-runnable final output for -r" `T.isInfixOf` stderrOut
+                        sawProbeLink =
+                            any
+                                (\line ->
+                                    "-no-pie -o" `T.isInfixOf` line
+                                        && "htcc-probe-" `T.isInfixOf` line
+                                )
+                                driverInvocations
+                        sawFinalLink =
+                            any
+                                (\line ->
+                                    "-no-pie -o" `T.isInfixOf` line
+                                        && "tmp.htcc-" `T.isInfixOf` line
+                                )
+                                driverInvocations
+                        ok =
+                            failed
+                                && T.null stdoutLeak
+                                && hasExpectedError
+                                && not targetExists
+                                && sawProbeLink
+                                && sawFinalLink
+                    let details = T.unlines
+                            [ "stdout:"
+                            , stdoutLeak
+                            , "stderr:"
+                            , stderrOut
+                            , "driverInvocations:"
+                            , T.unlines driverInvocations
+                            , "hasExpectedError: " <> T.pack (show hasExpectedError)
+                            , "targetExists: " <> T.pack (show targetExists)
+                            , "sawProbeLink: " <> T.pack (show sawProbeLink)
+                            , "sawFinalLink: " <> T.pack (show sawFinalLink)
+                            , "exitCode: " <> T.pack (show result)
+                            ]
+                    return $ mkResult runAsmRejectsMarkerlessFinalOutputMsg ok details
 
 runAsmRejectsBogusFinalLinkOutputTest :: IO (Either T.Text T.Text, String)
 runAsmRejectsBogusFinalLinkOutputTest =
@@ -8425,6 +15308,80 @@ runAsmRejectsBogusFinalLinkOutputTest =
                     , "exitCode: " <> T.pack (show result)
                     ]
             return $ mkResult runAsmRejectsBogusFinalLinkOutputMsg ok details
+
+runAsmRejectsNamedPipeFinalLinkOutputTest :: IO (Either T.Text T.Text, String)
+runAsmRejectsNamedPipeFinalLinkOutputTest =
+    flip finally
+        (clean
+            [ "tmp-final-link.fifo.out"
+            , "tmp.out"
+            , "tmp.err"
+            , fakeNamedPipeFinalLinkDriverPath
+            , fakeNamedPipeFinalLinkDriverLogPath
+            ])
+        $ do
+            htccCmd <- htccCommand
+            writeNamedPipeFinalLinkDriver
+                fakeNamedPipeFinalLinkDriverPath
+                fakeNamedPipeFinalLinkDriverLogPath
+            T.writeFile "tmp-final-link.fifo.out" "#!/bin/sh\nexit 97\n"
+            setFileMode "tmp-final-link.fifo.out" permissionFileModeMask
+            result <- exec $ mconcat
+                [ "echo '"
+                , source
+                , "' | "
+                , "HTCC_ASSEMBLER=./"
+                , T.pack fakeNamedPipeFinalLinkDriverPath
+                , " "
+                , htccCmd
+                , " -r -o tmp-final-link.fifo.out /dev/stdin > tmp.out 2> tmp.err"
+                ]
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrOut <- T.readFile "tmp.err"
+            targetExists <- doesFileExist "tmp-final-link.fifo.out"
+            driverInvocations <- T.lines <$> T.readFile fakeNamedPipeFinalLinkDriverLogPath
+            targetContents <- if targetExists then T.readFile "tmp-final-link.fifo.out" else pure ""
+            targetRunResult <- if targetExists then Just <$> exec "./tmp-final-link.fifo.out" else pure Nothing
+            let failed = exitCode (const True) False result
+                hasExpectedError =
+                    "non-runnable final output for -r" `T.isInfixOf` stderrOut
+                sawProbeLink =
+                    any ("-no-pie -o" `T.isInfixOf`) $
+                        filter ("htcc-probe-" `T.isInfixOf`) driverInvocations
+                sawFinalLink =
+                    any
+                        (\line ->
+                            "-no-pie -o" `T.isInfixOf` line
+                                && "tmp-final-link.fifo.out.htcc-" `T.isInfixOf` line
+                        )
+                        driverInvocations
+                preservedTarget = targetContents == "#!/bin/sh\nexit 97\n"
+                targetStillRuns = maybe False (exitCode (== 97) False) targetRunResult
+                ok =
+                    failed
+                        && T.null stdoutLeak
+                        && hasExpectedError
+                        && targetExists
+                        && preservedTarget
+                        && targetStillRuns
+                        && sawProbeLink
+                        && sawFinalLink
+            let details = T.unlines
+                    [ "stdout:"
+                    , stdoutLeak
+                    , "stderr:"
+                    , stderrOut
+                    , "driverInvocations:"
+                    , T.unlines driverInvocations
+                    , "hasExpectedError: " <> T.pack (show hasExpectedError)
+                    , "targetExists: " <> T.pack (show targetExists)
+                    , "preservedTarget: " <> T.pack (show preservedTarget)
+                    , "targetRunExitCode: " <> maybe "not-run" (T.pack . show) targetRunResult
+                    , "sawProbeLink: " <> T.pack (show sawProbeLink)
+                    , "sawFinalLink: " <> T.pack (show sawFinalLink)
+                    , "exitCode: " <> T.pack (show result)
+                    ]
+            return $ mkResult runAsmRejectsNamedPipeFinalLinkOutputMsg ok details
 
 runAsmRejectsExecutableObjectProbeDriverTest :: IO (Either T.Text T.Text, String)
 runAsmRejectsExecutableObjectProbeDriverTest =

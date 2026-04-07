@@ -52,7 +52,7 @@ runParserWithMode ::
     -> FilePath
     -> T.Text
     -> Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs i, PSV.GlobalVars i, PSV.Literals i, PF.Functions i)
-runParserWithMode allowSameInputExternalCollisions p fp input =
+runParserWithMode allowSameInputExternalCollisionsMode p fp input =
     ( warns (snd result)
     ,,
       PSV.globals (PS.vars $ scope $ snd result)
@@ -65,4 +65,4 @@ runParserWithMode allowSameInputExternalCollisions p fp input =
             runIdentity $
                 runStateT
                     (M.runParserT p fp input)
-                    (ConstructionData mempty PS.initScope False allowSameInputExternalCollisions)
+                    (ConstructionData mempty PS.initScope False allowSameInputExternalCollisionsMode)

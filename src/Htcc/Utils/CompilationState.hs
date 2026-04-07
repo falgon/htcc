@@ -27,7 +27,8 @@ import           Control.Monad.State                             (StateT, get,
                                                                   gets, put)
 import           Data.Bool                                       (bool)
 import           Data.Maybe                                      (catMaybes)
-import           Data.MonoTraversable                            (Element, MonoFoldable (..),
+import           Data.MonoTraversable                            (Element,
+                                                                  MonoFoldable (..),
                                                                   headMay)
 import qualified Data.Sequences                                  as S
 import           Data.Tuple.Extra                                (first, second)

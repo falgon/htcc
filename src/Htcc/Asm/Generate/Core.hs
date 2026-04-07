@@ -307,17 +307,31 @@ genStmt (ATNode (ATLabel ident) _ _ _) = IT.gotoLabel ident
 genStmt (ATNode (ATFor exps) _ _ _) = IT.bracketBrkCnt $ do
     n <- IT.incrLbl
     IT.applyCnt >> IT.applyBrk
-    maybe (return ()) (genStmt . fromATKindFor) $ find isATForInit exps
+    maybe (return ()) genStmt $ nonEmptyForClause isATForInit
     IT.begin n
-    maybe (return ()) (genStmt . fromATKindFor) $ find isATForCond exps
-    IT.pop rax
-    IT.cmp rax (0 :: Int)
-    IT.je $ IT.refBreak n
-    maybe (return ()) (genStmt . fromATKindFor) $ find isATForStmt exps
+    maybe
+        (return ())
+        ( \cond -> do
+            genStmt cond
+            IT.pop rax
+            IT.cmp rax (0 :: Int)
+            IT.je $ IT.refBreak n
+        )
+        $ nonEmptyForClause isATForCond
+    maybe (return ()) genStmt $ nonEmptyForClause isATForStmt
     IT.continue n
-    maybe (return ()) (genStmt . fromATKindFor) $ find isATForIncr exps
+    maybe (return ()) genStmt $ nonEmptyForClause isATForIncr
     IT.jmp $ IT.refBegin n
     IT.break n
+    where
+        nonEmptyForClause predicate =
+            fromATKindFor
+                <$> find
+                    (\kind -> predicate kind && case fromATKindFor kind of
+                        ATEmpty -> False
+                        _       -> True
+                    )
+                    exps
 genStmt (ATNode ATWhile _ lhs rhs) = IT.bracketBrkCnt $ do
     n <- IT.incrLbl
     IT.applyCnt >> IT.applyBrk

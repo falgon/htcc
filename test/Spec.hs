@@ -2,7 +2,8 @@
 module Main where
 
 import           Codec.Binary.UTF8.String  (decodeString)
-import           Control.Monad             (foldM)
+import           Control.Exception         (bracket)
+import           Control.Monad             (foldM, when)
 import           Control.Monad.Extra       (partitionM)
 import           Control.Monad.Trans       (lift)
 import           Control.Monad.Trans.State (StateT, evalStateT, gets, modify,
@@ -18,9 +19,16 @@ import           Htcc.Utils                (tshow)
 import qualified Options.Applicative       as OA
 import           System.Directory          (createDirectoryIfMissing,
                                             doesDirectoryExist, listDirectory)
+import           System.Environment        (lookupEnv, setEnv, unsetEnv)
+import           System.Exit               (ExitCode (..), exitFailure)
 import           System.FilePath           ((</>))
 import           System.IO                 (hFlush, stdout)
 import           System.Process            (readCreateProcess, shell)
+import           Tests.CommandSelection    (Command (..), autoHtccBinOverride,
+                                            collectCommandExitCodes,
+                                            commandsToRun,
+                                            needsHtccCommandOverride,
+                                            resolveCommand)
 import qualified Tests.ComponentsTests     as ComponentsTests
 import qualified Tests.SubProcTests        as SubProcTests
 import           Tests.Utils
@@ -34,11 +42,9 @@ asmDir = workDir </> "asm"
 dockerComposePath :: FilePath
 dockerComposePath = "." </> "docker" </> "test.dhall"
 
-data Command = WithSubProc | WithDocker | WithSelf | WithComponents
-
 data Opts = Opts
     { optClean :: !Bool
-    , optCmd   :: !Command
+    , optCmd   :: !(Maybe Command)
     }
 
 subProcCmd :: OA.Mod OA.CommandFields Command
@@ -66,12 +72,12 @@ cleanOpt = OA.switch $ mconcat [
 programOptions :: OA.Parser Opts
 programOptions = Opts
     <$> cleanOpt
-    <*> OA.hsubparser (mconcat [
-        subProcCmd
-      , dockerCmd
-      , selfCmd
-      , componentsCmd
-      ])
+    <*> OA.optional (OA.hsubparser (mconcat [
+            subProcCmd
+          , dockerCmd
+          , selfCmd
+          , componentsCmd
+          ]))
 
 optsParser :: OA.ParserInfo Opts
 optsParser = OA.info (OA.helper <*> programOptions) $ mconcat [
@@ -137,10 +143,46 @@ runDhallDocker = createProcessDhallDocker dockerComposePath
 main :: IO ()
 main = do
     opts <- OA.execParser optsParser
-    case optCmd opts of
-        WithSubProc -> SubProcTests.exec
-        WithDocker
-            | optClean opts -> runDhallDocker "down --rmi all"
-            | otherwise -> genTestAsm *> runDhallDocker "up --build" *> clean [workDir]
-        WithSelf    -> genTestBins >>= mapM_ execErrFin >> clean [workDir]
-        WithComponents -> ComponentsTests.exec
+    command <- resolveCommand (optClean opts) (optCmd opts)
+    let commands = commandsToRun (optCmd opts) command
+    autoCompilerCommand <-
+        if needsHtccCommandOverride (optCmd opts) command
+            then autoHtccBinOverride
+            else pure Nothing
+    exitCodes <- collectCommandExitCodes $ map (runCommand opts autoCompilerCommand) commands
+    when (any (/= ExitSuccess) exitCodes) exitFailure
+
+runCommand :: Opts -> Maybe T.Text -> Command -> IO ()
+runCommand opts autoCompilerCommand command = case command of
+    WithSubProc ->
+        maybe
+            SubProcTests.exec
+            (\compilerCommand ->
+                withEnvOverride "HTCC_BIN" (T.unpack compilerCommand) SubProcTests.exec
+            )
+            autoCompilerCommand
+    WithDocker
+        | optClean opts -> runDhallDocker "down --rmi all"
+        | otherwise -> genTestAsm *> runDhallDocker "up --build" *> clean [workDir]
+    WithSelf ->
+        maybe
+            (genTestBins >>= mapM_ execErrFin >> clean [workDir])
+            (\compilerCommand ->
+                withEnvOverride
+                    "HTCC_BIN"
+                    (T.unpack compilerCommand)
+                    (genTestBins >>= mapM_ execErrFin >> clean [workDir])
+            )
+            autoCompilerCommand
+    WithComponents -> ComponentsTests.exec
+
+withEnvOverride :: String -> String -> IO a -> IO a
+withEnvOverride name value =
+    bracket
+        (do
+            oldValue <- lookupEnv name
+            setEnv name value
+            pure oldValue
+        )
+        (\oldValue -> maybe (unsetEnv name) (setEnv name) oldValue)
+        . const

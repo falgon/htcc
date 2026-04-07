@@ -9,9 +9,14 @@
 .serena/
 dist-newstyle/
 dist-newstyle-review*/
+.cabal-review/
+.stack-review/
 dist-newstyle-sandbox/
+dist-newstyle-sandbox-check/
 dist-newstyle-local/
 dist-review*/
+.home-local/
+htcc-test-noexec-like-cwd-debug.*/
 a.out
 .DS_Store
 *.hi

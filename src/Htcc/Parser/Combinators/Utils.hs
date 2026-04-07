@@ -260,15 +260,18 @@ isInvalidObjectPointerValue :: (Ord i, Bits i, Integral i) => CT.StorageClass i 
 isInvalidObjectPointerValue targetTy expr
     | not (isObjectPointerType targetTy) = False
     | isNullPointerConstant expr = False
-    | otherwise = case CT.toTypeKind sourceTy of
-        CT.CTPtr (CT.CTFunc _ _) ->
-            True
-        CT.CTPtr _ ->
-            not $ objectPointerTypesCompatible targetTy sourceTy
-        _ ->
-            True
+    | otherwise = not $ any (maybe False isCompatibleObjectPointerSource) sourceTypes
     where
-        sourceTy = decayExprType $ atype expr
+        sourceTypes =
+            [Just $ decayExprType $ atype expr]
+
+        isCompatibleObjectPointerSource sourceTy = case CT.toTypeKind sourceTy of
+            CT.CTPtr (CT.CTFunc _ _) ->
+                False
+            CT.CTPtr _ ->
+                objectPointerTypesCompatible targetTy sourceTy
+            _ ->
+                False
 
 isInvalidFunctionPointerValue :: (Ord i, Bits i, Integral i) => CT.StorageClass i -> ATree i -> Bool
 isInvalidFunctionPointerValue targetTy at
