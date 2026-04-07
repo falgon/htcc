@@ -55,7 +55,7 @@ binOpIntOnly :: (Monad m, MonadFail m, Alternative m, Ord i, Bits i, Show i)
 binOpIntOnly k lhs rhs
     | lor [CT.isIntegral, (CT.CTBool==) . CT.toTypeKind] (atype lhs) &&
         lor [CT.isIntegral, (CT.CTBool ==) . CT.toTypeKind] (atype rhs) =
-            return $ ATNode k (CT.SCAuto $ CT.CTLong CT.CTInt) lhs rhs
+            return $ ATNode k (resultTy k (atype lhs) (atype rhs)) lhs rhs
     | otherwise = fail $ mconcat
             [ "invalid operands of types '"
             , show (atype lhs)
@@ -65,6 +65,10 @@ binOpIntOnly k lhs rhs
             , show k
             , "'"
             ]
+    where
+        resultTy ATShl lhsTy _ = CT.SCAuto $ CT.integerPromotedTypeKind $ CT.toTypeKind lhsTy
+        resultTy ATShr lhsTy _ = CT.SCAuto $ CT.integerPromotedTypeKind $ CT.toTypeKind lhsTy
+        resultTy _ lhsTy rhsTy = CT.conversion lhsTy rhsTy
 
 notFollowedOp :: Parser i a -> Parser i b -> Parser i a
 notFollowedOp op nop = M.try $ lexeme $ op `notFollowedBy` nop

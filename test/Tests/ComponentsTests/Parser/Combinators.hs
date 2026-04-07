@@ -286,6 +286,10 @@ parseProgramAsts input =
     (\(_, asts, _, _, _) -> asts)
         <$> (runParser parser "" input :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, PV.GlobalVars Integer, PV.Literals Integer, PF.Functions Integer))
 
+parseAssignExpr :: T.Text -> Either (M.ParseErrorBundle T.Text Void) (ATree Integer)
+parseAssignExpr =
+    runInitializerParser . (spaceConsumer *>) . (<* M.eof) $ assign
+
 parseProgramAllowSameInputExternalCollisions :: T.Text -> Either (M.ParseErrorBundle T.Text Void) ()
 parseProgramAllowSameInputExternalCollisions input =
     () <$
@@ -719,6 +723,20 @@ constantExpressionTest = TestLabel "Parser.Program.constant-expression" $
                 "int (*p)[]; int main(void) { switch (0) { case _Alignof(*p): return 1; default: return 0; } }"
         ]
 
+integerOperatorTypeTest :: Test
+integerOperatorTypeTest = TestLabel "Parser.Program.integer-operator-type" $
+    TestList
+        [ "preserves int result types for bitwise operators on int operands" ~:
+            (CT.toTypeKind . atype <$> parseAssignExpr "((int)1) & ((int)2)")
+                ~?= Right CT.CTInt
+        , "preserves promoted int result types for shift operators" ~:
+            (CT.toTypeKind . atype <$> parseAssignExpr "((char)1) << 1")
+                ~?= Right CT.CTInt
+        , "treats enum types as integral for integer-only operators" ~:
+            CT.isIntegral (CT.SCAuto $ CT.CTEnum CT.CTInt mempty)
+                ~?= True
+        ]
+
 globalInitializerTest :: Test
 globalInitializerTest = TestLabel "Parser.Program.global-initializer" $
     TestList
@@ -962,6 +980,18 @@ globalInitializerTest = TestLabel "Parser.Program.global-initializer" $
         , "rejects pointer-typed casts in non-pointer file-scope initializers" ~:
             isLeft (parseProgram "int x = (char*)0;")
                 ~?= True
+        , "rejects file-scope void objects without initializers" ~:
+            isLeft (parseProgram "void x;")
+                ~?= True
+        , "rejects file-scope void objects with initializers" ~:
+            isLeft (parseProgram "void x = 0;")
+                ~?= True
+        , "rejects file-scope arrays of void" ~:
+            isLeft (parseProgram "void a[1];")
+                ~?= True
+        , "rejects file-scope omitted-bound arrays of void with initializers" ~:
+            isLeft (parseProgram "void a[] = {0};")
+                ~?= True
         ]
 
 scalarInitializerTest :: Test
@@ -1025,6 +1055,24 @@ scalarInitializerTest = TestLabel "Parser.Program.scalar-initializer" $
                 ~?= True
         , "accepts function designators cast to integers in local scalar initializers" ~:
             isRight (parseProgram "int foo(void) { return 1; } int main(void) { long x = (long)foo; return x != 0; }")
+                ~?= True
+        , "rejects block-scope void objects without initializers" ~:
+            isLeft (parseProgram "int main(void) { void x; return 0; }")
+                ~?= True
+        , "rejects block-scope void objects with initializers" ~:
+            isLeft (parseProgram "int main(void) { void x = 0; return 0; }")
+                ~?= True
+        , "rejects block-scope arrays of void" ~:
+            isLeft (parseProgram "int main(void) { void a[1]; return 0; }")
+                ~?= True
+        , "rejects block-scope omitted-bound arrays of void with initializers" ~:
+            isLeft (parseProgram "int main(void) { void a[] = {0}; return 0; }")
+                ~?= True
+        , "rejects block-scope incomplete arrays without initializers" ~:
+            isLeft (parseProgram "int main(void) { int a[]; return 0; }")
+                ~?= True
+        , "accepts block-scope omitted-bound arrays with initializers" ~:
+            isRight (parseProgram "int main(void) { int a[] = {1, 2}; return a[1]; }")
                 ~?= True
         , TestLabel "rejects conditional-wrapped function designators in local scalar initializers" $ TestCase $
             assertProgramErrorContains
@@ -1359,6 +1407,7 @@ test = TestLabel "Parser.Combinators.Core" $
       , structInitializerTest
       , incompleteArrayInitializerTest
       , constantExpressionTest
+      , integerOperatorTypeTest
       , globalInitializerTest
       , scalarInitializerTest
       , sameInputExternalCollisionTest

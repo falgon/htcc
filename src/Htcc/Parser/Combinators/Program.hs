@@ -121,6 +121,32 @@ requireCompleteObjectType err ty = do
         then fail err
         else pure resolvedTy
 
+isVoidObjectType :: CT.StorageClass i -> Bool
+isVoidObjectType = go . CT.toTypeKind
+    where
+        go = \case
+            CT.CTLong innerTy   -> go innerTy
+            CT.CTShort innerTy  -> go innerTy
+            CT.CTSigned innerTy -> go innerTy
+            CT.CTArray _ innerTy -> go innerTy
+            CT.CTIncomplete (CT.IncompleteArray innerTy) -> go innerTy
+            CT.CTVoid           -> True
+            _                   -> False
+
+requireNonVoidObjectType :: String -> CT.StorageClass i -> Parser i (CT.StorageClass i)
+requireNonVoidObjectType err ty
+    | isVoidObjectType ty = fail err
+    | otherwise = pure ty
+
+requireInitializedObjectType
+    :: (Ord i, Bits i, Read i, Show i, Integral i)
+    => String
+    -> CT.StorageClass i
+    -> Parser i (CT.StorageClass i)
+requireInitializedObjectType err ty
+    | isTopLevelOmittedBoundArrayType ty = pure ty
+    | otherwise = requireCompleteObjectType err ty
+
 resolveDerefObjectType
     :: (Ord i, Bits i, Read i, Show i, Integral i)
     => String
@@ -366,7 +392,9 @@ global = do
                     [ declaration ty' ident
                     , definition ty' ident pos
                     ]
-            (ty', Just ident) -> gvarDecl ty' ident
+            (ty', Just ident) ->
+                requireNonVoidObjectType "variable declared void" ty'
+                    *> gvarDecl ty' ident
 
         isFunctionType ty' = case CT.toTypeKind ty' of
             CT.CTFunc _ _ -> True
@@ -418,6 +446,7 @@ global = do
                     >> pure ATEmpty
 
         withInit ty ident = do
+            void $ requireInitializedObjectType "defining global variables with a incomplete type" ty
             void equal
             (ty', initWith) <- parseGlobalVarInit ty ident
             registerGVarWith ty' ident initWith <* semi
@@ -989,13 +1018,19 @@ stmt = choice
             where
                 declLVar ty = declarator ty >>= \case
                     (_, Nothing) -> fail "variable name omitted, expected unqualified-id"
-                    (ty', Just ident) -> M.choice
-                        [ nonInit ty' ident
-                        , withInit ty' ident
-                        ]
+                    (ty', Just ident) ->
+                        requireNonVoidObjectType "variable declared void" ty'
+                            *> M.choice
+                                [ nonInit ty' ident
+                                , withInit ty' ident
+                                ]
 
-                nonInit ty ident = semi *> registerLVar ty ident <&> atNull
-                withInit ty ident = equal *> varInit assign ty ident <* semi
+                nonInit ty ident =
+                    requireCompleteObjectType "declaration of variable with incomplete type" ty
+                        *> (semi *> registerLVar ty ident <&> atNull)
+                withInit ty ident =
+                    requireInitializedObjectType "declaration of variable with incomplete type" ty
+                        *> (equal *> varInit assign ty ident <* semi)
 
 expr = assign >>= go
     where
