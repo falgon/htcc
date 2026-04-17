@@ -9,7 +9,6 @@ Portability : POSIX
 
 C language parser type
 -}
-{-# LANGUAGE FlexibleContexts, OverloadedStrings, RankNTypes, TupleSections #-}
 module Htcc.Parser.Combinators.ParserType (
     runParser
   , runParserAllowSameInputExternalCollisions
@@ -91,7 +90,16 @@ runParserWithModeDetailed ::
         , PF.Functions i
         )
 runParserWithModeDetailed allowSameInputExternalCollisionsMode p fp input =
-    (\asts -> (warns (snd result), asts, visibleGlobals finalScope, mergeGlobals finalScope, PSV.literals (PS.vars finalScope), PS.functions finalScope, mergeFunctions finalScope))
+    (\asts ->
+        ( warns (snd result)
+        , asts
+        , visibleGlobals finalScope
+        , mergeGlobals finalScope
+        , PSV.literals (PS.vars finalScope)
+        , PS.functions finalScope
+        , mergeFunctions finalScope
+        )
+    )
         <$> fst result
     where
         finalScope = scope $ snd result

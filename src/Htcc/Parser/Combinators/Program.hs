@@ -31,7 +31,7 @@ import           Data.Bits                                   (Bits, bit,
                                                               shiftL, shiftR,
                                                               xor, (.&.), (.|.))
 import           Data.Char                                   (ord)
-import           Data.Functor                                ((<&>))
+import           Data.Functor                                (($>), (<&>))
 import           Data.List                                   (find, sortBy)
 import           Data.Maybe                                  (fromJust,
                                                               fromMaybe, isJust,
@@ -491,11 +491,11 @@ global = do
 
         declaration ty ident = do
             resolvedTy <- gets (`normalizeCompletedStorageClass` ty)
-            ATEmpty <$ (semi *> registerFunc False False resolvedTy ident)
+            semi *> registerFunc False False resolvedTy ident $> ATEmpty
 
         typedefDecl ty ident = do
             resolvedTy <- requireTypedefDeclType "typedef declaration has invalid array element type" ty
-            semi *> registerTypedef resolvedTy ident *> pure ATEmpty
+            semi *> registerTypedef resolvedTy ident $> ATEmpty
 
         definition ty ident pos paramScopes = do
             resolvedTy <- gets (`normalizeCompletedStorageClass` ty)
@@ -571,7 +571,7 @@ global = do
                     *> (requireExternDeclObjectType "declaration of variable with incomplete type" ty
                             >>= \resolvedTy -> registerGVarWith resolvedTy ident PV.GVarInitWithExternDecl
                        )
-                    *> pure ATEmpty
+                    $> ATEmpty
             | CT.isIncompleteArray ty && isValidTentativeFileScopeArrayType ty =
                 semi *> registerGVar ty ident *> pure ATEmpty
             | CT.isIncompleteArray ty =
@@ -1172,7 +1172,7 @@ stmt = choice
                                 | isFunctionType ty' ->
                                     do
                                         resolvedTy <- gets (`normalizeCompletedStorageClass` ty')
-                                        semi *> registerFunc False False resolvedTy ident *> pure ATEmpty
+                                        semi *> registerFunc False False resolvedTy ident $> ATEmpty
                                 | otherwise ->
                                     requireNonVoidObjectType "variable declared void" ty'
                                         *> externDecl ty' ident
@@ -1193,7 +1193,7 @@ stmt = choice
                     equal *> varInit assign resolvedTy ident <* semi
                 typedefDecl ty ident = do
                     resolvedTy <- requireTypedefDeclType "typedef declaration has invalid array element type" ty
-                    semi *> registerTypedef resolvedTy ident *> pure ATEmpty
+                    semi *> registerTypedef resolvedTy ident $> ATEmpty
                 externDecl ty ident =
                     M.choice
                         [ equal *> fail "initializer is not allowed in block scope extern declaration"
@@ -1204,7 +1204,7 @@ stmt = choice
                                     >>= \resolvedTy ->
                                         registerGVarWith resolvedTy ident PV.GVarInitWithExternDecl
                                )
-                            *> pure ATEmpty
+                            $> ATEmpty
                         ]
 
 expr = assign >>= go

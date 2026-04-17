@@ -9,7 +9,7 @@ Portability : POSIX
 
 The types of C language
 -}
-{-# LANGUAGE BangPatterns, DeriveGeneric, LambdaCase #-}
+{-# LANGUAGE BangPatterns, DeriveGeneric, LambdaCase, TupleSections #-}
 module Htcc.CRules.Types.TypeKind (
     -- * TypeKind data type
     ScopeId (..),
@@ -32,11 +32,13 @@ module Htcc.CRules.Types.TypeKind (
 
 import           Control.Applicative     ((<|>))
 import           Control.DeepSeq         (NFData (..))
+import           Data.Bifunctor          (bimap)
 import           Data.Bits               (Bits (..), complement, (.&.))
 import           Data.Foldable           (Foldable (..))
 import           Data.List               (find, intercalate, maximumBy)
 import           Data.List.Split         (chunksOf)
 import qualified Data.Map                as M
+import           Data.Maybe              (isJust)
 import qualified Data.Text               as T
 import           Data.Tree               (Tree (..))
 import           Data.Tuple.Extra        (first, second)
@@ -229,7 +231,7 @@ combTable _            = Nothing
 arSizes :: (Num i, Enum i) => TypeKind i -> (i, [[i]])
 arSizes = arSizes' 0
     where
-        arSizes' !dp (CTArray v t) = second ([0..pred $ fromIntegral v]:) $ arSizes' (succ dp) t
+        arSizes' !dp (CTArray v t) = bimap id ([0..pred $ fromIntegral v]:) $ arSizes' (succ dp) t
         arSizes' !dp _ = (dp, [])
 
 -- | The type of designator
@@ -445,9 +447,9 @@ instance TypeKindBase TypeKind where
     isIntegral _            = False
 
     {-# INLINE isCTStruct #-}
-    isCTStruct (CTStruct _)          = True
-    isCTStruct (CTNamedStruct _ _ _) = True
-    isCTStruct _                     = False
+    isCTStruct (CTStruct _)     = True
+    isCTStruct CTNamedStruct {} = True
+    isCTStruct _                = False
 
     {-# INLINE isCTUndef #-}
     isCTUndef CTUndef = True
@@ -687,9 +689,9 @@ mergeCompatibleFunctionParamLists lhsParams rhsParams
         isUnspecifiedParamList _  = False
 
         oldStyleCompatibleWithPrototype =
-            all (maybe False (const True) . (\ty -> mergeCompatibleTypeKinds ty $ defaultPromotedFunctionParamType ty))
+            all (isJust . (\ty -> mergeCompatibleTypeKinds ty $ defaultPromotedFunctionParamType ty))
         mergeCompatibleFunctionParam ((lhsTy, lhsName), (rhsTy, rhsName)) =
-            (\mergedTy -> (mergedTy, rhsName <|> lhsName))
+            (, rhsName <|> lhsName)
                 <$> ( mergeCompatibleTypeKinds lhsTy rhsTy
                         <|> mergeCompatibleTypeKinds
                             (canonicalizeFunctionParamType lhsTy)

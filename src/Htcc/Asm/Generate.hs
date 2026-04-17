@@ -20,8 +20,8 @@ module Htcc.Asm.Generate (
     casmNormalized'
 ) where
 
-import           Control.Monad                               (when)
 import           Control.Applicative                         ((<|>))
+import           Control.Monad                               (when)
 import           Data.Bits                                   (Bits)
 import           Data.Foldable                               (traverse_)
 import qualified Data.Map.Strict                             as M
@@ -52,7 +52,7 @@ import           Htcc.Parser.ConstructionData.Scope.Var      (GVar (..),
 type InputCCode = T.Text
 
 normalizeGlobalInitializers :: (Integral i, Bits i, Read i, Show i, Ord i) => GlobalVars i -> Either String (GlobalVars i)
-normalizeGlobalInitializers gvars = M.traverseWithKey resolveGlobalInit gvars
+normalizeGlobalInitializers = M.traverseWithKey resolveGlobalInit
     where
         resolveGlobalInit _ gvar = case initWith gvar of
             GVarInitWithAST ast ->
@@ -63,20 +63,20 @@ normalizeGlobalInitializers gvars = M.traverseWithKey resolveGlobalInit gvars
 
 mergedGlobalType :: Eq i => Maybe (GlobalVars i) -> T.Text -> CT.StorageClass i -> CT.StorageClass i
 mergedGlobalType maybeGVars name currentTy =
-    case maybeGVars >>= M.lookup name of
-        Just gvar ->
+    maybe currentTy mergeDeclaredGlobalType $
+        maybeGVars >>= M.lookup name
+    where
+        mergeDeclaredGlobalType gvar =
             let declaredTy = gvtype gvar
-             in fromMaybe declaredTy $
+             in maybe declaredTy
                     (\mergedTy -> CT.mapTypeKind (const mergedTy) declaredTy)
-                        <$> ( CT.mergeCompatibleTypeKinds
-                                (CT.toTypeKind declaredTy)
-                                (CT.toTypeKind currentTy)
-                            <|> CT.mergeCompatibleTypeKinds
-                                (CT.toTypeKind currentTy)
-                                (CT.toTypeKind declaredTy)
-                            )
-        Nothing ->
-            currentTy
+                    ( CT.mergeCompatibleTypeKinds
+                        (CT.toTypeKind declaredTy)
+                        (CT.toTypeKind currentTy)
+                        <|> CT.mergeCompatibleTypeKinds
+                            (CT.toTypeKind currentTy)
+                            (CT.toTypeKind declaredTy)
+                    )
 
 retypeResolvedGlobalRefs :: Eq i => GlobalVars i -> ASTs i -> ASTs i
 retypeResolvedGlobalRefs = map . retypeResolvedGlobalRefsInATree

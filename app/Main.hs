@@ -19,6 +19,7 @@ import           Control.Exception                           (SomeException,
                                                               try)
 import           Control.Monad                               (foldM, forM_,
                                                               unless, when)
+import           Data.Bifunctor                              (first)
 import           Data.Bits                                   (Bits (shiftL, (.&.), (.|.)))
 import           Data.Bool                                   (bool)
 import qualified Data.ByteString                             as B
@@ -26,12 +27,12 @@ import qualified Data.ByteString.Char8                       as BC
 import           Data.Char                                   (isAlpha,
                                                               isAlphaNum,
                                                               isSpace, toLower)
-import           Data.Functor                                ((<&>))
+import           Data.Either                                 (fromRight)
+import           Data.Functor                                (($>), (<&>))
 import           Data.IORef                                  (modifyIORef',
                                                               newIORef,
                                                               readIORef,
                                                               writeIORef)
-import           Data.Bifunctor                              (first)
 import           Data.List                                   (foldl',
                                                               intercalate,
                                                               isInfixOf,
@@ -454,8 +455,8 @@ shellWordsWithContext commandLine =
             | otherwise =
                 Parsec.choice [doubleEscaped, doubleBare]
         doubleBare =
-            pure . pure . doubleQuotedExpandableShellWordSpan
-                =<< Parsec.many1 (Parsec.satisfy isDoubleBareChar)
+            (pure . doubleQuotedExpandableShellWordSpan)
+                <$> Parsec.many1 (Parsec.satisfy isDoubleBareChar)
         doubleEscaped = do
             _ <- Parsec.char '\\'
             c <- Parsec.anyChar
@@ -479,7 +480,7 @@ shellWordsWithContext commandLine =
         escaped = do
             _ <- Parsec.char '\\'
             c <- Parsec.anyChar
-            pure $ (False, [literalShellWordSpan $ case c of
+            pure (False, [literalShellWordSpan $ case c of
                 '\n' -> ""
                 _    -> [c]
                 ])
@@ -669,7 +670,7 @@ resolveCompilerCommandIn maybeWorkingDir compiler = do
             maybe (firstResolved resolvePaths) (pure . Just) resolved
 
         normalizeLocalExecutablePath maybeWorkingDir' cmd candidatePath
-            | maybe False (const True) maybeWorkingDir' && not (isAbsolute cmd) = candidatePath
+            | isJust maybeWorkingDir' && not (isAbsolute cmd) = candidatePath
             | hasExplicitPath cmd = cmd
             | otherwise = "./" <> cmd
 
@@ -732,11 +733,10 @@ environmentNameKey name
 
 environmentFromList :: [(String, String)] -> Map.Map String String
 environmentFromList =
-    Map.fromList . map (\(name, value) -> (environmentNameKey name, value))
+    Map.fromList . map (first environmentNameKey)
 
 environmentInsert :: String -> String -> Map.Map String String -> Map.Map String String
-environmentInsert name value =
-    Map.insert (environmentNameKey name) value
+environmentInsert = Map.insert . environmentNameKey
 
 environmentLookup :: String -> Map.Map String String -> Maybe String
 environmentLookup name =
@@ -1343,8 +1343,8 @@ compilerProcessEnv compiler
             <$> baseProcessEnvironment Nothing
 
 showCompilerCommandForUser :: CompilerCommand -> [String] -> String
-showCompilerCommandForUser compiler extraArgs =
-    renderCompilerCommandForUserHost os compiler extraArgs
+showCompilerCommandForUser =
+    renderCompilerCommandForUserHost os
 
 renderCompilerCommandForUserHost :: String -> CompilerCommand -> [String] -> String
 renderCompilerCommandForUserHost hostOs compiler extraArgs
@@ -1786,7 +1786,7 @@ compilerProcessGroupAlive =
         (pure False)
         ( \processGroup ->
             catchIOError
-                (signalProcessGroup nullSignal processGroup *> pure True)
+                (signalProcessGroup nullSignal processGroup $> True)
                 ( \ioErr ->
                     case ioeGetErrorType ioErr of
                         NoSuchThing      -> pure False
@@ -1807,12 +1807,12 @@ waitForCompilerProcessPostExitCompletion processGroupId postExitSatisfied =
                 go
 
 capturedCompilerTargetLineAvailableAfterExit :: IO [CapturedCompilerOutputChunk] -> IO Bool
-capturedCompilerTargetLineAvailableAfterExit readCapturedChunks = do
-    capturedChunks <- readCapturedChunks
-    pure $
-        any isCompleteTargetLine $
-            completeStdoutLines $
-                compilerOutputBytesForStream CompilerStdout capturedChunks
+capturedCompilerTargetLineAvailableAfterExit =
+    fmap
+        ( any isCompleteTargetLine
+            . completeStdoutLines
+            . compilerOutputBytesForStream CompilerStdout
+        )
     where
         completeStdoutLines bytes
             | B.null bytes = []
@@ -2777,8 +2777,8 @@ buildCapturedCompilerOutputChunks
     -> Int
     -> [CompilerOutputChunk]
     -> [CapturedCompilerOutputChunk]
-buildCapturedCompilerOutputChunks outputStream startIndex outputChunks =
-    zipWith mkCapturedChunk [startIndex ..] outputChunks
+buildCapturedCompilerOutputChunks outputStream startIndex =
+    zipWith mkCapturedChunk [startIndex ..]
     where
         mkCapturedChunk outputIndex outputChunk =
             CapturedCompilerOutputChunk
@@ -3142,9 +3142,9 @@ groupCapturedCompilerOutputChunksForWarningSuppression capturedChunks =
                         )
                         capturedChunk
                 completedChunk =
-                    if capturedCompilerOutputChunkEndsLine capturedChunk
-                        then [buildSuppressibleCapturedCompilerOutputChunk pendingChunk]
-                        else []
+                    [ buildSuppressibleCapturedCompilerOutputChunk pendingChunk
+                    | capturedCompilerOutputChunkEndsLine capturedChunk
+                    ]
              in case capturedCompilerOutputStream capturedChunk of
                     CompilerStdout ->
                         ( if null completedChunk then Just pendingChunk else Nothing
@@ -3320,7 +3320,7 @@ validateRunnableLinkedOutput path maybeProbeMarker =
                                 bytes <- B.readFile path
                                 let markerPresent = maybe
                                         True
-                                        (\probeMarker -> probeMarkerPresent probeMarker bytes)
+                                        (`probeMarkerPresent` bytes)
                                         maybeProbeMarker
                                     linkedOutputOk =
                                         maybe
@@ -3380,11 +3380,9 @@ linkedOutputElfDynamicEntriesDescribeStandaloneInterpreter elf dynamicOffset dyn
                 | entryOffset >= dynamicEnd = False
                 | otherwise =
                     let entryTag = linkedOutputElfDynamicEntryTag elf entryOffset
-                     in if entryTag == elfDynamicTagNull
-                            then True
-                            else
-                                entryTag /= elfDynamicTagNeeded
-                                    && go (entryOffset + fromIntegral elfDynamicEntrySize)
+                     in entryTag == elfDynamicTagNull
+                            || entryTag /= elfDynamicTagNeeded
+                                && go (entryOffset + fromIntegral elfDynamicEntrySize)
          in go dynamicOffset
 
 parseLinkedOutputElf :: B.ByteString -> Maybe LinkedOutputElf
@@ -3567,13 +3565,12 @@ linkedOutputElfDynamicEntriesContainStaticPieFlag elf dynamicOffset dynamicSize
                 | otherwise =
                     let entryTag = linkedOutputElfDynamicEntryTag elf entryOffset
                         entryValue = linkedOutputElfDynamicEntryValue elf entryOffset
-                     in if entryTag == elfDynamicTagNull
-                            then False
-                            else
-                                ( entryTag == elfDynamicTagFlags1
+                     in entryTag /= elfDynamicTagNull
+                            && ( ( entryTag == elfDynamicTagFlags1
                                     && entryValue .&. elfDynamicFlag1Pie /= 0
                                 )
                                     || go (entryOffset + fromIntegral elfDynamicEntrySize)
+                               )
          in go dynamicOffset
 
 linkedOutputElfHasRunnableProgramHeader :: LinkedOutputElf -> Int -> Bool
@@ -4029,7 +4026,7 @@ ensureX86_64ElfCompiler suppressWarnsOutput compilerSpec = do
             Just . (\(exitCode, _, _) -> exitCode)
                 <$> wrapCompilerProbeIOError compilerSpec' args
                     ( readCompilerProcessWithExitCodeProbeUntil
-                        (\_ -> postExitDrainSatisfied)
+                        (const postExitDrainSatisfied)
                         suppressWarnsOutput
                         compilerSpec'
                         args
@@ -4852,7 +4849,7 @@ mergeParsedInputs finalize parsedInputs =
                                     Left "internal compiler error: unexpected same-input symbol merge result"
                         | otherwise -> case existingSymbol of
                             ExternalImplicitFunction ->
-                                mergeExternalFunctions name (implicitExternalFunction, False) (func, hasBody) >>= \_ ->
+                                mergeExternalFunctions name (implicitExternalFunction, False) (func, hasBody) >>
                                     pure
                                         ( insertSymbol origin semanticName newSymbol symbols
                                         , staticSymbols
@@ -4976,7 +4973,7 @@ mergeParsedInputs finalize parsedInputs =
             , snd new || snd old
             )
         preserveMergedGlobalType name new old =
-            either (const old) id $
+            fromRight old $
                 mergeExternalGlobals name old new
 
 runAsm :: Maybe Handle -> Opts -> SI.Asm SI.AsmCodeCtx Integer a -> IO a

@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveGeneric, LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric, OverloadedStrings #-}
 {-|
 Module      : Htcc.Parser.ConstructionData.Scope.Var
 Description : The Data type of variables and its utilities used in parsing
@@ -271,7 +271,7 @@ addGVarWith cnd t cur@(_, HT.TKIdent ident) iw vars = do
             Just existing ->
                 (\merged -> (merged, M.insert ident merged sts)) <$> mergeGVar storedDepth existing (newGVar storedDepth)
 
-        newGVar storedDepth = GVar t iw storedDepth
+        newGVar = GVar t iw
 
         mergeGVar storedDepth lhs rhs = case mergeGVarTypes lhs rhs of
             Nothing -> Left ("redeclaration of '" <> ident <> "' with no linkage", cur)

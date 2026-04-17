@@ -23,7 +23,8 @@ import                          Control.Monad.State                           (g
                                                                                gets,
                                                                                put)
 import                          Data.Bits                                     (Bits)
-import                          Data.Functor                                  ((<&>))
+import                          Data.Functor                                  (($>),
+                                                                               (<&>))
 import                qualified Data.Map.Strict                               as MP
 import                          Data.Maybe                                    (catMaybes)
 import                qualified Data.Text                                     as T
@@ -161,21 +162,21 @@ structSpecifier = do
                     incompleteStructTy =
                         CT.SCAuto $ CT.CTIncomplete $ CT.IncompleteStruct tag scopeId
                 maybe
-                    (registerIncompleteStructTag tag *> pure incompleteStructTy)
+                    (registerIncompleteStructTag tag $> incompleteStructTy)
                     (ensureStructTag depth scopeId standaloneForwardDecl)
                     (lookupTag tag scp)
             where
                 ensureStructTag depth scopeId standaloneForwardDecl tagInfo
                     | standaloneForwardDecl && PST.stNestDepth tagInfo < depth =
                         registerIncompleteStructTag tag
-                            *> pure (CT.SCAuto $ CT.CTIncomplete $ CT.IncompleteStruct tag scopeId)
+                            $> (CT.SCAuto $ CT.CTIncomplete $ CT.IncompleteStruct tag scopeId)
                     | PST.stKind tagInfo == PST.StructTag = pure $ PST.sttype tagInfo
                     | otherwise = fail $ "use of 'struct " <> T.unpack tag <> "' with wrong tag type"
 
         structMembers = go (0 :: Natural) MP.empty
             where
                 go offset acc =
-                    (M.lookAhead rbrace *> pure acc)
+                    (M.lookAhead rbrace $> acc)
                         <|> do
                             (nextOffset, name, mem) <- structMember offset
                             when (MP.member name acc) $
@@ -271,7 +272,7 @@ enumSpecifier = do
                             let acc' = MP.insert ident val acc
                                 nextVal' = succ val
                             if hasComma then
-                                (M.lookAhead rbrace *> pure acc') <|> go nextVal' acc'
+                                (M.lookAhead rbrace $> acc') <|> go nextVal' acc'
                             else
                                 pure acc'
 

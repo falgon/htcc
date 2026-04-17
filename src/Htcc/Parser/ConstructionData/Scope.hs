@@ -284,8 +284,7 @@ lookupGVar = lookupVar' PV.lookupGVar
 {-# INLINE lookupVar #-}
 lookupVar :: T.Text -> Scoped i -> LookupVarResult i
 lookupVar ident scp =
-    fromMaybe NotFound $
-        fmap snd $
+    maybe NotFound snd $
         selectDeepest
             [ (\local -> (PV.nestDepth local, FoundLVar local)) <$> lookupLVar ident scp
             , (\enum -> (SE.enNestDepth enum, FoundEnum enum)) <$> lookupEnumerator ident scp

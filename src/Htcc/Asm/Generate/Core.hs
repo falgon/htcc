@@ -18,9 +18,10 @@ module Htcc.Asm.Generate.Core (
 import           Control.Monad                             (forM_, unless, when,
                                                             zipWithM_)
 import           Control.Monad.Finally                     (MonadFinally (..))
+import           Data.Bifunctor                            (bimap)
 import           Data.Int                                  (Int32)
 import           Data.IORef                                (readIORef)
-import           Data.List                                 (find)
+import           Data.List                                 (find, foldl')
 import qualified Data.Map                                  as M
 import           Data.Maybe                                (fromJust, isJust)
 import qualified Data.Set                                  as S
@@ -28,8 +29,7 @@ import qualified Data.Text                                 as T
 import qualified Data.Text.IO                              as T
 import           Prelude                                   hiding (truncate)
 
-import           Data.List                                 (foldl')
-import           Data.Tuple.Extra                          (dupe, first, second)
+import           Data.Tuple.Extra                          (dupe)
 import           Htcc.Asm.Intrinsic.Operand
 import           Htcc.Asm.Intrinsic.Register
 import qualified Htcc.Asm.Intrinsic.Structure              as SI
@@ -53,7 +53,10 @@ import           Numeric.Natural
 stackSize :: (Show i, Integral i) => ATree i -> Natural
 stackSize (ATNode (ATDefFunc _ args) _ body _) = let ms = f body $ maybe S.empty (foldr (\(ATNode (ATLVar t x) _ _ _) acc -> S.insert (t, x) acc) S.empty) args in
     if S.size ms == 1 then toNatural $ flip CR.alignas 8 $ toInteger $ CR.sizeof $ fst $ head (S.toList ms) else toNatural $ flip CR.alignas 8 $ uncurry (+) $
-        first (toInteger . CR.sizeof . fst) $ second (fromIntegral . snd) $ dupe $ foldl' (\acc x -> if snd acc < snd x then x else acc) (CR.SCUndef CR.CTUndef, 0) $ S.toList ms
+        bimap (toInteger . CR.sizeof . fst) (fromIntegral . snd) $
+            dupe $
+                foldl' (\acc x -> if snd acc < snd x then x else acc) (CR.SCUndef CR.CTUndef, 0) $
+                    S.toList ms
     where
         f ATEmpty !s = s
         f (ATNode (ATCallFunc _ (Just arg)) t l r) !s = f (ATNode (ATBlock arg) t l r) s

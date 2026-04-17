@@ -31,6 +31,7 @@ import qualified Data.Map                               as MP
 import           Data.Maybe                             (fromJust, fromMaybe)
 import qualified Data.Sequence                          as SQ
 import qualified Data.Text                              as T
+import           Data.Tuple.Extra                       (second)
 import qualified Htcc.CRules.Types                      as CT
 import           Htcc.Parser.AST                        (ATKind (..),
                                                          ATree (..), addKind,
@@ -116,9 +117,8 @@ inferredArrayBoundElementType ty = fromMaybe (arrayElementType ty) logicalElemTy
     where
         (baseTy, rebuild) = CT.dctorArray $ CT.toTypeKind ty
         logicalElemTy =
-            CT.fromIncompleteArray baseTy
-                <&> rebuild
-                <&> \logicalTy -> CT.mapTypeKind (const logicalTy) ty
+            (\elemTy -> CT.mapTypeKind (const $ rebuild elemTy) ty)
+                <$> CT.fromIncompleteArray baseTy
 
 fixedCharArrayStringFits :: Integral i => i -> String -> Bool
 fixedCharArrayStringFits len s = toInteger (length s) <= toInteger len + 1
@@ -172,7 +172,7 @@ inferArrayBoundFromInitializer' ty = do
                 lift $ lookInitializerStringFor ty
                 len <- length <$> lift stringLiteral
                 void $ lift $ M.option () (() <$ comma)
-                lift rbrace
+                void $ lift rbrace
                 pure $ InferArrayBoundLength len
             | otherwise = M.empty
 
@@ -220,7 +220,7 @@ skipInitializer allowStructBraceElision ty = M.choice
     [ lift lookInitializerString *> void (lift stringLiteral)
     , lift lookInitializerList *> leadingBraceInitializer
     , braceElidedAggregateInit
-    , rejectScalarFallback *> (void $ asks snd >>= lift >>= validateScalarInitializer ty)
+    , rejectScalarFallback *> void (asks snd >>= lift >>= validateScalarInitializer ty)
     ]
     where
         lookInitializerString = lookInitializerStringFor ty
@@ -387,10 +387,10 @@ initLoop :: (Integral i, Bits i, Read i, Show i, Ord i)
     -> SQ.Seq (ATree i)
     -> SQ.Seq (CT.Desg i)
     -> DesignatorParser i (SQ.Seq (ATree i), i)
-initLoop ty ai desg = fmap (\(rs, idx) -> (rs, fromIntegral idx)) (initLoop' ai) <* lift rbrace
+initLoop ty ai desg = second fromIntegral <$> initLoop' ai <* lift rbrace
     where
         initLoop' ai' = case fixedArrayLength ty of
-            Just n -> ($ (0 :: Natural, ai')) . fix $ \f (idx, rl) -> do
+            Just n -> fix (\f (idx, rl) -> do
                 let arrayLen = fromIntegral n
                 when (idx >= arrayLen) $ failCommitted "excess elements in array initializer"
                 rs <- desgInit True elemTy rl (CT.DesgIdx (fromIntegral idx) SQ.<| desg)
@@ -399,6 +399,7 @@ initLoop ty ai desg = fmap (\(rs, idx) -> (rs, fromIntegral idx)) (initLoop' ai)
                     (pure (rs, succ idx))
                     (f (succ idx, rs))
                     continue
+                ) (0 :: Natural, ai')
             Nothing -> fail "internal compiler error"
         elemTy = arrayElementType ty
 
@@ -530,7 +531,7 @@ bracedInitializerString allowStructBraceElision ty ai desg = do
     lift $ lookInitializerStringFor ty
     rs <- initializerString allowStructBraceElision ty ai desg
     void $ lift $ M.option () (() <$ comma)
-    lift rbrace
+    void $ lift rbrace
     pure rs
 
 initializerList :: (Integral i, Bits i, Read i, Show i, Ord i)
@@ -574,7 +575,7 @@ initializerList ty ai desg = M.choice
                     _ -> do
                         rs <- desgInit False ty ai desg
                         void $ lift $ M.option () (() <$ comma)
-                        lift rbrace
+                        void $ lift rbrace
                         pure rs
             where
                 elemTy = arrayElementType ty
@@ -673,7 +674,7 @@ desgInit allowStructBraceElision ty ai desg = M.choice
         rejectScalarFallback = rejectScalarFallbackFor ty
         scalarFallback = do
             rhs <- asks snd >>= lift >>= validateScalarInitializer ty
-            (\stmt -> ai SQ.|> stmt) <$> desgNode rhs desg
+            (ai SQ.|>) <$> desgNode rhs desg
 
 varInit' :: (Integral i, Bits i, Read i, Show i, Ord i)
     => Parser i (ATree i)

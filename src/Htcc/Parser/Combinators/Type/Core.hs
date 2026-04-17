@@ -9,7 +9,7 @@ Portability : POSIX
 
 C language parser Combinators
 -}
-{-# LANGUAGE FlexibleContexts, LambdaCase, OverloadedStrings, TupleSections #-}
+{-# LANGUAGE FlexibleContexts, LambdaCase, OverloadedStrings #-}
 module Htcc.Parser.Combinators.Type.Core (
     typeSuffix
   -- * Helper functions
@@ -26,14 +26,13 @@ import                          Control.Monad.State                     (get,
 import                          Control.Monad.Trans                     (MonadTrans (..))
 import                          Control.Monad.Trans.Maybe               (MaybeT (..),
                                                                          runMaybeT)
+import                          Data.Bifunctor                          (bimap)
 import                          Data.Bits                               (Bits (..))
 import                          Data.Functor                            ((<&>))
 import                          Data.Maybe                              (fromJust,
                                                                          isJust)
 import                qualified Data.Text                               as T
-import                          Data.Tuple.Extra                        (dupe,
-                                                                         first,
-                                                                         second)
+import                          Data.Tuple.Extra                        (dupe)
 import                qualified Htcc.CRules.Types                       as CT
 import                          Htcc.Parser.Combinators.ConstExpr       (evalConstexpr)
 import                          Htcc.Parser.Combinators.Core
@@ -81,7 +80,7 @@ arraySuffix ty = choice
             where
                 multiple = CT.mapTypeKind $
                     uncurry ((.) fromJust . CT.concatCTArray)
-                        . first (CT.CTIncomplete . CT.IncompleteArray . CT.removeAllExtents)
+                        . bimap (CT.CTIncomplete . CT.IncompleteArray . CT.removeAllExtents) id
                         . dupe
 
 funcParams :: (Show i, Read i, Integral i, Bits i)
@@ -144,7 +143,7 @@ toNamedParams :: (Show i, Read i, Integral i, Bits i)
     -> Parser i [(CT.StorageClass i, T.Text)]
 toNamedParams ty = case CT.toTypeKind ty of
     (CT.CTFunc _ params) -> pure
-        [ first CT.SCAuto $ second fromJust p
+        [ bimap CT.SCAuto fromJust p
         | p <- params
         , fst p /= CT.CTVoid
         , isJust $ snd p
