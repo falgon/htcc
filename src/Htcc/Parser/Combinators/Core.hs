@@ -9,7 +9,7 @@ Portability : POSIX
 
 C language lexer
 -}
-{-# LANGUAGE FlexibleContexts, OverloadedStrings, RankNTypes, TupleSections #-}
+{-# LANGUAGE FlexibleContexts, OverloadedStrings #-}
 module Htcc.Parser.Combinators.Core (
     runParser
   , ConstructionDataState

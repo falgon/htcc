@@ -231,7 +231,7 @@ combTable _            = Nothing
 arSizes :: (Num i, Enum i) => TypeKind i -> (i, [[i]])
 arSizes = arSizes' 0
     where
-        arSizes' !dp (CTArray v t) = bimap id ([0..pred $ fromIntegral v]:) $ arSizes' (succ dp) t
+        arSizes' !dp (CTArray v t) = second ([0..pred $ fromIntegral v]:) $ arSizes' (succ dp) t
         arSizes' !dp _ = (dp, [])
 
 -- | The type of designator

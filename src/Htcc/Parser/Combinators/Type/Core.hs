@@ -26,7 +26,8 @@ import                          Control.Monad.State                     (get,
 import                          Control.Monad.Trans                     (MonadTrans (..))
 import                          Control.Monad.Trans.Maybe               (MaybeT (..),
                                                                          runMaybeT)
-import                          Data.Bifunctor                          (bimap)
+import                          Data.Bifunctor                          (bimap,
+                                                                         first)
 import                          Data.Bits                               (Bits (..))
 import                          Data.Functor                            ((<&>))
 import                          Data.Maybe                              (fromJust,
@@ -80,7 +81,7 @@ arraySuffix ty = choice
             where
                 multiple = CT.mapTypeKind $
                     uncurry ((.) fromJust . CT.concatCTArray)
-                        . bimap (CT.CTIncomplete . CT.IncompleteArray . CT.removeAllExtents) id
+                        . first (CT.CTIncomplete . CT.IncompleteArray . CT.removeAllExtents)
                         . dupe
 
 funcParams :: (Show i, Read i, Integral i, Bits i)

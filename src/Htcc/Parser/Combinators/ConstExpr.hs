@@ -9,7 +9,7 @@ Portability : POSIX
 
 C language parser Combinators
 -}
-{-# LANGUAGE LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Htcc.Parser.Combinators.ConstExpr (
     evalConstexpr
 ) where

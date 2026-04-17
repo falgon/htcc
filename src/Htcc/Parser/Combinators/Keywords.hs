@@ -14,11 +14,11 @@ module Htcc.Parser.Combinators.Keywords (
     kAuto, kBreak, kCase, kChar, kConst, kContinue,
     kDefault, kDo, kDouble, kElse, kEnum, kExtern,
     kFloat, kFor, kGoto, kIf, kInline, kInt,
-    kLong, kRegister, kRestrict, kReturn, kShort, kSigned,
-    kSizeof, kStatic, kStruct, kSwitch, kTypedef, kUnion,
-    kUnsigned, kVoid, kVolatile, kWhile, k_Alignas, k_Alignof,
-    k_Atomic, k_Bool, k_Complex, k_Generic, k_Imaginary, k_Noreturn,
-    k_Static_assert, k_Thread_local, kBasicTypes
+    kLong, kRegister, kRestrict, kReturn, kShort, kSigned, kSizeof,
+    kStatic, kStruct, kSwitch, kTypedef, kUnion, kUnsigned, kVoid,
+    kVolatile, kWhile, kAlignas, kAlignof, kAtomic, kBool, kComplex,
+    kGeneric, kImaginary, kNoreturn, kStaticAssert, kThreadLocal,
+    kBasicTypes
 ) where
 
 import qualified Data.Text                    as T
@@ -35,9 +35,9 @@ kAuto, kBreak, kCase, kChar, kConst, kContinue,
     kFloat, kFor, kGoto, kIf, kInline, kInt,
     kLong, kRegister, kRestrict, kReturn, kShort, kSigned,
     kSizeof, kStatic, kStruct, kSwitch, kTypedef, kUnion,
-    kUnsigned, kVoid, kVolatile, kWhile, k_Alignas, k_Alignof,
-    k_Atomic, k_Bool, k_Complex, k_Generic, k_Imaginary, k_Noreturn,
-    k_Static_assert, k_Thread_local :: (Monad m, Ord e) => M.ParsecT e T.Text m T.Text
+    kUnsigned, kVoid, kVolatile, kWhile, kAlignas, kAlignof,
+    kAtomic, kBool, kComplex, kGeneric, kImaginary, kNoreturn,
+    kStaticAssert, kThreadLocal :: (Monad m, Ord e) => M.ParsecT e T.Text m T.Text
 kAuto = pKeyword "auto"
 kBreak = pKeyword "break"
 kCase = pKeyword "case"
@@ -72,16 +72,16 @@ kUnsigned = pKeyword "unsigned"
 kVoid = pKeyword "void"
 kVolatile = pKeyword "volatile"
 kWhile = pKeyword "while"
-k_Alignas = pKeyword "_Alignas"
-k_Alignof = pKeyword "_Alignof"
-k_Atomic = pKeyword "_Atomic"
-k_Bool = pKeyword "_Bool"
-k_Complex = pKeyword "_Complex"
-k_Generic = pKeyword "_Generic"
-k_Imaginary = pKeyword "_Imaginary"
-k_Noreturn = pKeyword "_Noreturn"
-k_Static_assert = pKeyword "_Static_assert"
-k_Thread_local = pKeyword "_Thread_local"
+kAlignas = pKeyword "_Alignas"
+kAlignof = pKeyword "_Alignof"
+kAtomic = pKeyword "_Atomic"
+kBool = pKeyword "_Bool"
+kComplex = pKeyword "_Complex"
+kGeneric = pKeyword "_Generic"
+kImaginary = pKeyword "_Imaginary"
+kNoreturn = pKeyword "_Noreturn"
+kStaticAssert = pKeyword "_Static_assert"
+kThreadLocal = pKeyword "_Thread_local"
 
 kBasicTypes :: (Monad m, Ord e) => [M.ParsecT e T.Text m T.Text]
 kBasicTypes = [
@@ -94,7 +94,7 @@ kBasicTypes = [
   , kSigned
   , kUnsigned
   , kVoid
-  , k_Bool
-  , k_Complex
-  , k_Imaginary
+  , kBool
+  , kComplex
+  , kImaginary
   ]

@@ -9,7 +9,7 @@ Portability : POSIX
 
 C language Program parser
 -}
-{-# LANGUAGE FlexibleContexts, LambdaCase, OverloadedStrings, TupleSections #-}
+{-# LANGUAGE FlexibleContexts, LambdaCase, OverloadedStrings #-}
 module Htcc.Parser.Combinators.Program (
     parser
   , assign
@@ -1429,7 +1429,7 @@ factor = choice
                             pure $ atUnary deferredKind (CT.SCAuto $ CT.CTLong CT.CTInt) u'
 
         sizeof = memOp kSizeof ATSizeof CT.sizeof "sizeof"
-        alignof = memOp k_Alignof ATAlignof CT.alignof "_Alignof"
+        alignof = memOp kAlignof ATAlignof CT.alignof "_Alignof"
 
         strLiteral = stringLiteral >>= registerStringLiteral
 

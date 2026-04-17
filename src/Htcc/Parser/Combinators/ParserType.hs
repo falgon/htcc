@@ -90,19 +90,18 @@ runParserWithModeDetailed ::
         , PF.Functions i
         )
 runParserWithModeDetailed allowSameInputExternalCollisionsMode p fp input =
-    (\asts ->
-        ( warns (snd result)
-        , asts
-        , visibleGlobals finalScope
-        , mergeGlobals finalScope
-        , PSV.literals (PS.vars finalScope)
-        , PS.functions finalScope
-        , mergeFunctions finalScope
-        )
-    )
-        <$> fst result
+    attachDetailedResult <$> fst result
     where
         finalScope = scope $ snd result
+        attachDetailedResult asts =
+            ( warns (snd result)
+            , asts
+            , visibleGlobals finalScope
+            , mergeGlobals finalScope
+            , PSV.literals (PS.vars finalScope)
+            , PS.functions finalScope
+            , mergeFunctions finalScope
+            )
         visibleGlobals scp = PSV.globals $ PS.vars scp
         mergeGlobals scp
             | allowSameInputExternalCollisionsMode = PSV.externalGlobals $ PS.vars scp

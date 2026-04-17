@@ -18,7 +18,7 @@ module Htcc.CRules.Types.StorageClass (
 ) where
 
 import           Control.DeepSeq            (NFData (..))
-import           Data.Tuple.Extra           (first, second)
+import           Data.Bifunctor             (bimap, first)
 import           GHC.Generics               (Generic)
 
 import qualified Data.Text                  as T
@@ -83,8 +83,8 @@ instance Ord i => CType (StorageClass i) where
     alignof = alignof . toTypeKind
     deref x = picksc x <$> deref (toTypeKind x)
     ctorPtr n = mapTypeKind (ctorPtr n)
-    dctorPtr x = first (picksc x) $ second (\f y -> picksc y $ f $ toTypeKind y) $ dctorPtr $ toTypeKind x
-    dctorArray x = first (picksc x) $ second (\f y -> picksc y $ f $ toTypeKind y) $ dctorArray $ toTypeKind x
+    dctorPtr x = bimap (picksc x) (\f y -> picksc y $ f $ toTypeKind y) $ dctorPtr $ toTypeKind x
+    dctorArray x = bimap (picksc x) (\f y -> picksc y $ f $ toTypeKind y) $ dctorArray $ toTypeKind x
     removeAllExtents = mapTypeKind removeAllExtents
     conversion x y = SCAuto $ conversion (toTypeKind x) (toTypeKind y)
     implicitInt = mapTypeKind implicitInt

@@ -9,7 +9,6 @@ Portability : POSIX
 
 C language parser Combinators
 -}
-{-# LANGUAGE TupleSections #-}
 module Htcc.Parser.Combinators.Type.Utils (
     starsToPtrCtor
   , starsToPtr

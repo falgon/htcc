@@ -34,11 +34,11 @@ module Text.Megaparsec (
 ) where
 
 import           Control.Applicative       (Alternative (..), many, (<|>))
-import           Control.Monad             (MonadPlus)
+import           Control.Monad             (MonadPlus, void)
 import qualified Control.Monad.State.Class as MS
 import           Control.Monad.Trans.Class (MonadTrans (..))
 import           Data.Bool                 (bool)
-import           Data.Foldable             (toList)
+import           Data.Foldable             (asum, toList)
 import           Data.Functor.Identity     (Identity, runIdentity)
 import           Data.List                 (intercalate)
 import           Data.List.NonEmpty        (NonEmpty ((:|)))
@@ -64,7 +64,7 @@ instance MS.MonadState st m => MS.MonadState st (ParsecT e s m) where
 
 type Parsec e s = ParsecT e s Identity
 
-data ErrorFancy e
+newtype ErrorFancy e
     = ErrorFail String
     deriving (Eq, Ord, Show)
 
@@ -99,7 +99,7 @@ runParser p fp input = runIdentity $ runParserT p fp input
 
 runParserT :: Monad m => ParsecT e T.Text m a -> FilePath -> T.Text -> m (Either (ParseErrorBundle T.Text e) a)
 runParserT (ParsecT p) fp input =
-    fmap (either (Left . toBundle input) Right) $
+    either (Left . toBundle input) Right <$>
         P.runParserT p input fp input
     where
         toBundle source err =
@@ -163,7 +163,7 @@ option :: Monad m => a -> ParsecT e T.Text m a -> ParsecT e T.Text m a
 option x = ParsecT . P.option x . unParsecT
 
 choice :: Alternative f => [f a] -> f a
-choice = foldr (<|>) empty
+choice = asum
 
 manyTill :: Monad m => ParsecT e T.Text m a -> ParsecT e T.Text m end -> ParsecT e T.Text m [a]
 manyTill p end = ParsecT $ P.manyTill (unParsecT p) (unParsecT end)
@@ -208,12 +208,12 @@ getParserState = ParsecT $ do
         }
 
 setParserState :: Monad m => ParserState T.Text -> ParsecT e T.Text m ()
-setParserState parserState = ParsecT $
-    () <$ PPri.setParserState
+setParserState ParserState { stateInput = input, statePosState = PosState { pstateInput = userInput, pstateSourcePos = sourcePos } } = ParsecT $
+    void $ PPri.setParserState
         PPri.State
-            { PPri.stateInput = stateInput parserState
-            , PPri.statePos = pstateSourcePos $ statePosState parserState
-            , PPri.stateUser = pstateInput $ statePosState parserState
+            { PPri.stateInput = input
+            , PPri.statePos = sourcePos
+            , PPri.stateUser = userInput
             }
 
 withRecovery
