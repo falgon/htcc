@@ -9,9 +9,11 @@ Portability : POSIX
 
 Data types and type synonyms used during AST construction
 -}
+{-# LANGUAGE LambdaCase #-}
 module Htcc.Parser.ConstructionData.Core (
     -- * Main type
     ConstructionData (..),
+    FunctionParamScope (..),
     Warnings,
     -- * Adding funcitons
     addLVar,
@@ -36,14 +38,16 @@ module Htcc.Parser.ConstructionData.Core (
     initConstructionData,
     resetLocal,
     pushWarn,
-    incomplete
+    incomplete,
+    normalizeCompletedStorageClass,
+    hasIncompleteObjectType
 ) where
 
 import                          Data.Bits                                       (Bits (..))
-import                          Data.Maybe                                      (fromJust)
 import                qualified Data.Sequence                                   as SQ
 import                qualified Data.Text                                       as T
 import                          Data.Tuple.Extra                                (second)
+import                          Numeric.Natural                                 (Natural)
 
 import                qualified Htcc.CRules.Types                               as CT
 import                          Htcc.Parser.AST.Core                            (ATree (..))
@@ -67,12 +71,21 @@ import                qualified Text.Megaparsec                                 
 -- | The warning messages type
 type Warnings = SQ.Seq (M.ParseErrorBundle T.Text Void)
 
+data FunctionParamScope i = FunctionParamScope
+    {
+        fpsScopeId     :: CT.ScopeId,
+        fpsTags        :: PS.Tags i,
+        fpsEnumerators :: SE.Enumerators i
+    } deriving Show
+
 -- | `ConstructionData` is a set of "things" used during the construction of the AST.
 -- Contains error messages and scope information.
 data ConstructionData i = ConstructionData -- ^ The constructor of ConstructionData
     {
         warns                            :: Warnings, -- ^ The warning messages
         scope                            :: AS.Scoped i, -- ^ Scope type
+        tagHistory                       :: PS.TagHistory i, -- ^ Historical tag bindings used for deferred struct completion.
+        functionParamScopes              :: [FunctionParamScope i], -- ^ Deferred outer function parameter scopes captured while parsing declarators.
         isSwitchStmt                     :: Bool, -- ^ When the statement is @switch@, this flag will be `True`, otherwise will be `False`.
         allowSameInputExternalCollisions :: Bool -- ^ When `True`, same-input globals and function declarations may coexist so multi-input `-o` merge can resolve them.
     } deriving Show
@@ -193,8 +206,18 @@ lookupEnumerator = lookupFromScope AS.lookupEnumerator
 -- This function is equivalent to
 --
 -- >>> (\y -> x { scope = y }) <$> Htcc.Parser.AST.Scope.addTag ty tkn (scope x)
-addTag :: Num i => CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ConstructionData i)
-addTag ty tkn cd = (\x -> cd { scope = x }) <$> AS.addTag ty tkn (scope cd)
+addTag :: Num i => PS.TagKind -> CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ConstructionData i)
+addTag kind ty tkn cd = do
+    scp <- AS.addTag kind ty tkn (scope cd)
+    pure $
+        cd
+            { scope = scp
+            , tagHistory = case tkn of
+                (_, HT.TKIdent ident) ->
+                    PS.remember (AS.curScopeId $ scope cd) (AS.curNestDepth $ scope cd) kind ty ident (tagHistory cd)
+                _ ->
+                    tagHistory cd
+            }
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.addTypedef` for variable @x@ of type `ConstructionData`.
 -- This function is equivalent to
@@ -227,7 +250,7 @@ addEnumerator ty tkn n cd = (\x -> cd { scope = x }) <$> AS.addEnumerator ty tkn
 -- | Shortcut to the initial state of `ConstructionData`.
 {-# INLINE initConstructionData #-}
 initConstructionData :: ConstructionData i
-initConstructionData = ConstructionData SQ.empty AS.initScope False False
+initConstructionData = ConstructionData SQ.empty AS.initScope PS.emptyTagHistory [] False False
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.resetLocal` for variable @x@ of type `ConstructionData`.
 -- This function is equivalent to
@@ -250,6 +273,87 @@ pushWarn posState warnMsg = do
 incomplete :: CT.StorageClass i -> ConstructionData i -> Maybe (CT.StorageClass i)
 incomplete ty scp
     | not (CT.isCTIncomplete ty) = Just ty
-    | CT.isIncompleteStruct ty = (>>=) (lookupTag (fromJust $ CT.fromIncompleteStruct ty) scp) $ \tag ->
-        if CT.isCTIncomplete (PS.sttype tag) then Nothing else Just (PS.sttype tag)
-    | otherwise = Nothing
+    | otherwise = case CT.toTypeKind ty of
+        CT.CTIncomplete (CT.IncompleteStruct tag scopeId) ->
+            completedStructTagType scp tag scopeId
+        _ ->
+            Nothing
+
+completedStructTagType :: ConstructionData i -> T.Text -> CT.ScopeId -> Maybe (CT.StorageClass i)
+completedStructTagType cd tag scopeId =
+    case PS.lookupAtScope tag scopeId (tagHistory cd) of
+        Just tagInfo
+            | PS.stKind tagInfo == PS.StructTag
+            , not (CT.isCTIncomplete $ PS.sttype tagInfo) ->
+                Just $ PS.sttype tagInfo
+        _ ->
+            Nothing
+
+normalizeCompletedStorageClass :: ConstructionData i -> CT.StorageClass i -> CT.StorageClass i
+normalizeCompletedStorageClass cd =
+    CT.mapTypeKind (normalizeCompletedTypeKind S.empty)
+    where
+        normalizeCompletedTypeKind seen = \case
+            CT.CTPtr innerTy ->
+                CT.CTPtr $ normalizeCompletedTypeKind seen innerTy
+            CT.CTArray n innerTy ->
+                CT.CTArray n $ normalizeCompletedTypeKind seen innerTy
+            CT.CTFunc retTy params ->
+                CT.CTFunc
+                    (normalizeCompletedTypeKind seen retTy)
+                    (map (secondParam seen) params)
+            CT.CTEnum baseTy members ->
+                CT.CTEnum (normalizeCompletedTypeKind seen baseTy) members
+            CT.CTStruct members ->
+                CT.CTStruct $ fmap (normalizeStructMember seen) members
+            CT.CTNamedStruct tag scopeId members ->
+                CT.CTNamedStruct tag scopeId $
+                    fmap (normalizeStructMemberForTag seen (tag, scopeId)) members
+            CT.CTIncomplete (CT.IncompleteArray innerTy) ->
+                CT.CTIncomplete $
+                    CT.IncompleteArray $ normalizeCompletedTypeKind seen innerTy
+            CT.CTIncomplete (CT.IncompleteStruct tag scopeId) ->
+                case completedStructTagType cd tag scopeId of
+                    Just completedTy
+                        | S.member (tag, scopeId) seen ->
+                            CT.toTypeKind completedTy
+                        | otherwise ->
+                            normalizeCompletedTypeKind
+                                (S.insert (tag, scopeId) seen)
+                                (CT.toTypeKind completedTy)
+                    Nothing ->
+                        CT.CTIncomplete $ CT.IncompleteStruct tag scopeId
+            tyKind ->
+                tyKind
+
+        secondParam seen' (paramTy, ident) =
+            (normalizeCompletedTypeKind seen' paramTy, ident)
+
+        normalizeStructMember seen member =
+            member {
+                CT.smType = normalizeCompletedTypeKind seen (CT.smType member)
+            }
+
+        normalizeStructMemberForTag seen tagKey member =
+            member {
+                CT.smType =
+                    normalizeCompletedTypeKind
+                        (S.insert tagKey seen)
+                        (CT.smType member)
+            }
+
+hasIncompleteObjectType :: CT.StorageClass i -> Bool
+hasIncompleteObjectType = go . CT.toTypeKind
+    where
+        go = \case
+            CT.CTLong innerTy   -> go innerTy
+            CT.CTShort innerTy  -> go innerTy
+            CT.CTSigned innerTy -> go innerTy
+            CT.CTArray _ innerTy -> go innerTy
+            CT.CTEnum baseTy _  -> go baseTy
+            CT.CTStruct members ->
+                any (go . CT.smType) members
+            CT.CTNamedStruct _ _ members ->
+                any (go . CT.smType) members
+            CT.CTIncomplete _   -> True
+            _                   -> False

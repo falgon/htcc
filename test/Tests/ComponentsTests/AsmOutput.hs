@@ -332,7 +332,7 @@ tentativeIncompleteArraySizeofFallbackTest = TestLabel "Asm.Output.tentative-inc
         materializedTy :: CT.StorageClass Integer
         materializedTy = CT.SCAuto $ CT.CTArray 1 CT.CTInt
         gvars :: GlobalVars Integer
-        gvars = Map.fromList [("x", GVar incompleteTy GVarInitWithZero)]
+        gvars = Map.fromList [("x", GVar incompleteTy GVarInitWithZero 0)]
         sizeofExpr =
             ATNode
                 ATSizeof
@@ -501,9 +501,9 @@ compatibleTaggedStructCompletionMergeUnitTest = TestLabel "Asm.Output.compatible
             [ ("value", CT.StructMember CT.CTInt 0)
             ]
         incompletePtrTy :: CT.TypeKind Integer
-        incompletePtrTy = CT.CTPtr $ CT.CTIncomplete $ CT.IncompleteStruct "Foo"
+        incompletePtrTy = CT.CTPtr $ CT.CTIncomplete $ CT.IncompleteStruct "Foo" (CT.ScopeId 0)
         completePtrTy :: CT.TypeKind Integer
-        completePtrTy = CT.CTPtr $ CT.CTNamedStruct "Foo" members
+        completePtrTy = CT.CTPtr $ CT.CTNamedStruct "Foo" (CT.ScopeId 0) members
     assertEqual
         "pointer-compatible type merging should accept completion of a tagged opaque struct declaration"
         (Just completePtrTy)
@@ -520,9 +520,9 @@ incompatibleTaggedStructAliasMergeUnitTest = TestLabel "Asm.Output.incompatible-
             [ ("value", CT.StructMember CT.CTInt 0)
             ]
         fooPtrTy :: CT.TypeKind Integer
-        fooPtrTy = CT.CTPtr $ CT.CTNamedStruct "Foo" members
+        fooPtrTy = CT.CTPtr $ CT.CTNamedStruct "Foo" (CT.ScopeId 0) members
         barPtrTy :: CT.TypeKind Integer
-        barPtrTy = CT.CTPtr $ CT.CTNamedStruct "Bar" members
+        barPtrTy = CT.CTPtr $ CT.CTNamedStruct "Bar" (CT.ScopeId 0) members
     assertEqual
         "pointer-compatible type merging should reject tagged structs that only match structurally"
         Nothing
@@ -574,9 +574,9 @@ compatibleNamedStructAnonymousMemberMergeUnitTest = TestLabel "Asm.Output.compat
             [ ("anon", CT.StructMember (CT.CTStruct rhsAnonMembers) 0)
             ]
         lhsTy :: CT.TypeKind Integer
-        lhsTy = CT.CTNamedStruct "Outer" lhsOuterMembers
+        lhsTy = CT.CTNamedStruct "Outer" (CT.ScopeId 0) lhsOuterMembers
         rhsTy :: CT.TypeKind Integer
-        rhsTy = CT.CTNamedStruct "Outer" rhsOuterMembers
+        rhsTy = CT.CTNamedStruct "Outer" (CT.ScopeId 0) rhsOuterMembers
     assertEqual
         "struct-compatible type merging should accept named structs whose anonymous member structs match structurally"
         (Just rhsTy)
@@ -593,6 +593,7 @@ tentativeNestedArrayMaterializationUnitTest = TestLabel "Asm.Output.tentative-ne
             GVar
                 { gvtype = CT.SCAuto $ CT.CTIncomplete (CT.IncompleteArray (CT.CTArray 4 CT.CTInt))
                 , initWith = GVarInitWithZero
+                , gvNestDepth = 0
                 }
         expectedTy :: CT.StorageClass Integer
         expectedTy = CT.SCAuto $ CT.CTArray 4 (CT.CTArray 1 CT.CTInt)
@@ -831,6 +832,59 @@ directIntegralFunctionCallNormalizationTest = TestLabel "Asm.Output.direct-integ
         , "call ret_int"
         , "movsxd rax, eax"
         , "push rax"
+        ]
+        mainSection
+
+blockScopeExternObjectShadowsOuterLocalAsmTest :: Test
+blockScopeExternObjectShadowsOuterLocalAsmTest = TestLabel "Asm.Output.block-scope-extern-object-shadows-outer-local" $ TestCase $ do
+    asm <- renderAsm "int foo = 2; int main(void) { int foo = 1; { extern int foo; return foo; } }"
+    let mainSection = extractFunctionSection "main" asm
+    assertContains
+        "block-scope extern object references the global symbol instead of the outer local"
+        [ "push offset foo"
+        ]
+        mainSection
+
+blockScopeExternObjectShadowsEnumeratorAsmTest :: Test
+blockScopeExternObjectShadowsEnumeratorAsmTest = TestLabel "Asm.Output.block-scope-extern-object-shadows-enumerator" $ TestCase $ do
+    asm <- renderAsm "enum E { A = 5 }; int f(void) { extern int A; return A; }"
+    let fSection = extractFunctionSection "f" asm
+    assertContains
+        "block-scope extern object resolves to a global symbol load instead of folding the enumerator"
+        [ "push offset A"
+        ]
+        fSection
+    assertBool
+        "block-scope extern object should not fold to the outer enumerator constant"
+        (not $ "push 5" `T.isInfixOf` fSection)
+
+blockScopeExternFunctionShadowsEnumeratorAsmTest :: Test
+blockScopeExternFunctionShadowsEnumeratorAsmTest = TestLabel "Asm.Output.block-scope-extern-function-shadows-enumerator" $ TestCase $ do
+    asm <- renderAsm "enum E { foo = 1 }; int f(void) { extern int foo(void); return foo(); }"
+    let fSection = extractFunctionSection "f" asm
+    assertContains
+        "block-scope extern prototype resolves to a function call instead of the outer enumerator"
+        [ "call foo"
+        ]
+        fSection
+
+blockScopeExternStaticFunctionAsmTest :: Test
+blockScopeExternStaticFunctionAsmTest = TestLabel "Asm.Output.block-scope-extern-static-function" $ TestCase $ do
+    asm <- renderAsm "static int foo(void) { return 3; } int main(void) { extern int foo(void); return foo(); }"
+    let mainSection = extractFunctionSection "main" asm
+    assertContains
+        "block-scope extern prototypes inherit visible static function linkage"
+        [ "call foo"
+        ]
+        mainSection
+
+blockScopeExternStaticObjectAsmTest :: Test
+blockScopeExternStaticObjectAsmTest = TestLabel "Asm.Output.block-scope-extern-static-object" $ TestCase $ do
+    asm <- renderAsm "static int x = 4; int main(void) { extern int x; return x; }"
+    let mainSection = extractFunctionSection "main" asm
+    assertContains
+        "block-scope extern objects inherit visible static object linkage"
+        [ "push offset x"
         ]
         mainSection
 
@@ -1868,8 +1922,8 @@ globalInitializerIncompleteSizeofRevalidationTest = TestLabel "Asm.Output.global
         gvars :: GlobalVars Integer
         gvars =
             Map.fromList
-                [ ("p", GVar arrayPointerTy GVarInitWithZero)
-                , ("n", GVar longTy (GVarInitWithAST initAst))
+                [ ("p", GVar arrayPointerTy GVarInitWithZero 0)
+                , ("n", GVar longTy (GVarInitWithAST initAst) 0)
                 ]
     case prepareAsmInput Map.empty [] gvars of
         Left err ->
@@ -2371,6 +2425,11 @@ test = TestLabel "Asm.Output" $
         , indirectFunctionPointerCallTest
         , indirectFunctionPointerCallAlignmentTest
         , directBoolFunctionCallNormalizationTest
+        , blockScopeExternObjectShadowsOuterLocalAsmTest
+        , blockScopeExternObjectShadowsEnumeratorAsmTest
+        , blockScopeExternFunctionShadowsEnumeratorAsmTest
+        , blockScopeExternStaticFunctionAsmTest
+        , blockScopeExternStaticObjectAsmTest
         , indirectBoolFunctionPointerCallNormalizationTest
         , directIntegralFunctionCallNormalizationTest
         , indirectIntegralFunctionPointerCallNormalizationTest

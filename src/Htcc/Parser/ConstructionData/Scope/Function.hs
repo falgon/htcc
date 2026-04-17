@@ -20,6 +20,7 @@ import           Control.DeepSeq                                 (NFData (..))
 import qualified Data.Map                                        as M
 import qualified Data.Text                                       as T
 import           GHC.Generics                                    (Generic (..))
+import           Numeric.Natural                                 (Natural)
 
 import qualified Htcc.CRules.Types                               as CT
 import           Htcc.Parser.ConstructionData.Scope.ManagedScope
@@ -29,16 +30,17 @@ import qualified Htcc.Tokenizer.Token                            as HT
 -- | The data type of a typedef tag
 data Function a = Function -- ^ The contypedefor of a typedef tag
     {
-        fntype     :: CT.StorageClass a, -- ^ The type of this typedef
-        fnDefined  :: Bool, -- ^ If the function is defined, it will be `True`, otherwise will be `False`.
-        fnImplicit :: Bool -- ^ `True` only when the function only exists because of an implicit declaration synthesized from a call site.
+        fntype      :: CT.StorageClass a, -- ^ The type of this typedef
+        fnDefined   :: Bool, -- ^ If the function is defined, it will be `True`, otherwise will be `False`.
+        fnImplicit  :: Bool, -- ^ `True` only when the function only exists because of an implicit declaration synthesized from a call site.
+        fnNestDepth :: !Natural -- ^ The nest depth of this function declaration.
     } deriving (Eq, Ord, Show, Generic)
 
 instance NFData a => NFData (Function a)
 
 instance ManagedScope (Function i) where
     lookup = M.lookup
-    fallBack = flip const
+    fallBack pre post = M.union pre $ M.filter ((== 0) . fnNestDepth) post
     initial = M.empty
 
 -- | The typedefs data typedefs
@@ -49,14 +51,14 @@ type Functions i = M.Map T.Text (Function i)
 -- return an error message and its location as a pair.
 -- Otherwise, add a new tag to `Functions` and return it.
 -- If the token does not indicate an identifier, an error indicating internal compiler error is returned.
-add :: (Eq i, Num i) => Bool -> Bool -> CT.StorageClass i -> HT.TokenLC i -> Functions i -> Either (ASTError i) (Functions i)
-add df isImplicit t cur@(_, HT.TKIdent ident) sts = case M.lookup ident sts of
+add :: (Eq i, Num i) => Natural -> Bool -> Bool -> CT.StorageClass i -> HT.TokenLC i -> Functions i -> Either (ASTError i) (Functions i)
+add cnd df isImplicit t cur@(_, HT.TKIdent ident) sts = case M.lookup ident sts of
     Just foundFunc ->
         case mergeFunctionTypes (fntype foundFunc) t of
             Nothing ->
                 Left ("conflicting types for '" <> ident <> "'", cur)
             Just mergedType
-                | fnDefined foundFunc && df ->
+                | fnNestDepth foundFunc == cnd && fnDefined foundFunc && df ->
                     Left ("conflicting types for '" <> ident <> "'", cur)
                 | otherwise ->
                     Right $
@@ -66,6 +68,7 @@ add df isImplicit t cur@(_, HT.TKIdent ident) sts = case M.lookup ident sts of
                                 { fntype = mergedType
                                 , fnDefined = fnDefined foundFunc || df
                                 , fnImplicit = fnImplicit foundFunc && isImplicit
+                                , fnNestDepth = storedDepth
                                 }
                             sts
     Nothing ->
@@ -76,14 +79,21 @@ add df isImplicit t cur@(_, HT.TKIdent ident) sts = case M.lookup ident sts of
                     { fntype = t
                     , fnDefined = df
                     , fnImplicit = isImplicit
+                    , fnNestDepth = storedDepth
                     }
                 sts
-add _ _ _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
+    where
+        storedDepth
+            | isImplicit = 0
+            | otherwise  = cnd
+add _ _ _ _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
 
 mergeFunctionTypes :: Eq i => CT.StorageClass i -> CT.StorageClass i -> Maybe (CT.StorageClass i)
 mergeFunctionTypes (CT.SCAuto lhs) (CT.SCAuto rhs) =
     CT.SCAuto <$> CT.mergeCompatibleTypeKinds lhs rhs
 mergeFunctionTypes (CT.SCStatic lhs) (CT.SCStatic rhs) =
+    CT.SCStatic <$> CT.mergeCompatibleTypeKinds lhs rhs
+mergeFunctionTypes (CT.SCStatic lhs) (CT.SCAuto rhs) =
     CT.SCStatic <$> CT.mergeCompatibleTypeKinds lhs rhs
 mergeFunctionTypes (CT.SCRegister lhs) (CT.SCRegister rhs) =
     CT.SCRegister <$> CT.mergeCompatibleTypeKinds lhs rhs

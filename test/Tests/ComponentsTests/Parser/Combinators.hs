@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, RankNTypes #-}
+{-# LANGUAGE LambdaCase, OverloadedStrings, RankNTypes #-}
 module Tests.ComponentsTests.Parser.Combinators (
     test
 ) where
@@ -8,7 +8,8 @@ import           Data.Char                                   (chr)
 import           Data.Either                                 (isLeft, isRight)
 import           Data.Functor.Identity                       (runIdentity)
 import qualified Data.Map                                    as MP
-import           Data.Maybe                                  (mapMaybe)
+import           Data.Maybe                                  (listToMaybe,
+                                                              mapMaybe)
 import qualified Data.Text                                   as T
 import           Data.Void                                   (Void)
 import qualified Htcc.CRules                                 as CR
@@ -16,7 +17,8 @@ import qualified Htcc.CRules.Types                           as CT
 import qualified Htcc.MegaparsecCompat                       as M
 import           Htcc.Parser.AST                             (ASTs, ATKind (..),
                                                               ATKindFor (..),
-                                                              ATree (..))
+                                                              ATree (..),
+                                                              fromATKindFor)
 import           Htcc.Parser.Combinators.Core
 import           Htcc.Parser.Combinators.ParserType          (runParserAllowSameInputExternalCollisions)
 import           Htcc.Parser.Combinators.Program             (assign, parser)
@@ -268,6 +270,15 @@ inferGlobalType ident input =
         (PV.gvtype . maybe (error $ "missing global variable " <> T.unpack ident) id . MP.lookup ident)
         $ (\(_, _, gvars, _, _) -> gvars) <$> runParser parser "" input
 
+inferGlobalInitWith
+    :: T.Text
+    -> T.Text
+    -> Either (M.ParseErrorBundle T.Text Void) (PV.GVarInitWith Integer)
+inferGlobalInitWith ident input =
+    fmap
+        (PV.initWith . maybe (error $ "missing global variable " <> T.unpack ident) id . MP.lookup ident)
+        $ (\(_, _, gvars, _, _) -> gvars) <$> runParser parser "" input
+
 inferFunctionType
     :: T.Text
     -> T.Text
@@ -276,6 +287,14 @@ inferFunctionType ident input =
     fmap
         (PF.fntype . maybe (error $ "missing function " <> T.unpack ident) id . MP.lookup ident)
         $ (\(_, _, _, _, fns) -> fns) <$> runParser parser "" input
+
+hasFunctionBinding
+    :: T.Text
+    -> T.Text
+    -> Either (M.ParseErrorBundle T.Text Void) Bool
+hasFunctionBinding ident input =
+    fmap (MP.member ident . (\(_, _, _, _, fns) -> fns)) $
+        (runParser parser "" input :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, PV.GlobalVars Integer, PV.Literals Integer, PF.Functions Integer))
 
 parseProgram :: T.Text -> Either (M.ParseErrorBundle T.Text Void) ()
 parseProgram input =
@@ -296,6 +315,73 @@ parseProgramAllowSameInputExternalCollisions input =
         ( runParserAllowSameInputExternalCollisions parser "" input
             :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, PV.GlobalVars Integer, PV.Literals Integer, PF.Functions Integer)
         )
+
+firstLocalDeclType
+    :: T.Text
+    -> Either (M.ParseErrorBundle T.Text Void) (CT.StorageClass Integer)
+firstLocalDeclType input =
+    fmap
+        ( maybe
+            (error "missing local declaration")
+            id
+            . listToMaybe
+            . concatMap collectLocalDeclTypes
+        )
+        (parseProgramAsts input)
+
+collectLocalDeclTypes :: ATree Integer -> [CT.StorageClass Integer]
+collectLocalDeclTypes ATEmpty = []
+collectLocalDeclTypes (ATNode kind _ lhs rhs) =
+    kindLocalDeclTypes kind
+        <> collectLocalDeclTypes lhs
+        <> collectLocalDeclTypes rhs
+    where
+        kindLocalDeclTypes = \case
+            ATNull (ATNode (ATLVar ty _) _ _ _) ->
+                [ty]
+            ATConditional cond tr fl ->
+                collectLocalDeclTypes cond
+                    <> collectLocalDeclTypes tr
+                    <> collectLocalDeclTypes fl
+            ATSwitch cond cases ->
+                collectLocalDeclTypes cond
+                    <> concatMap collectLocalDeclTypes cases
+            ATFor kinds ->
+                concatMap (collectLocalDeclTypes . fromATKindFor) kinds
+            ATBlock ats ->
+                concatMap collectLocalDeclTypes ats
+            ATStmtExpr ats ->
+                concatMap collectLocalDeclTypes ats
+            ATDefFunc _ params ->
+                maybe [] (concatMap collectLocalDeclTypes) params
+            ATCallFunc _ params ->
+                maybe [] (concatMap collectLocalDeclTypes) params
+            ATCallPtr params ->
+                maybe [] (concatMap collectLocalDeclTypes) params
+            _ ->
+                []
+
+containsIncompleteStructTag :: T.Text -> CT.TypeKind Integer -> Bool
+containsIncompleteStructTag tag = \case
+    CT.CTPtr innerTy ->
+        containsIncompleteStructTag tag innerTy
+    CT.CTArray _ innerTy ->
+        containsIncompleteStructTag tag innerTy
+    CT.CTFunc retTy params ->
+        containsIncompleteStructTag tag retTy
+            || any (containsIncompleteStructTag tag . fst) params
+    CT.CTEnum baseTy _ ->
+        containsIncompleteStructTag tag baseTy
+    CT.CTStruct members ->
+        any (containsIncompleteStructTag tag . CT.smType) members
+    CT.CTNamedStruct _ _ members ->
+        any (containsIncompleteStructTag tag . CT.smType) members
+    CT.CTIncomplete (CT.IncompleteArray innerTy) ->
+        containsIncompleteStructTag tag innerTy
+    CT.CTIncomplete (CT.IncompleteStruct foundTag _) ->
+        foundTag == tag
+    _ ->
+        False
 
 assertProgramErrorContains :: T.Text -> T.Text -> IO ()
 assertProgramErrorContains errMsg input = case parseProgram input of
@@ -769,6 +855,12 @@ globalInitializerTest = TestLabel "Parser.Program.global-initializer" $
         , "rejects same-file tentative arrays whose element type is an incomplete struct" ~:
             isLeft (parseProgram "struct S a[];")
                 ~?= True
+        , "rejects extern arrays whose fixed-bound element type is incomplete" ~:
+            isLeft (parseProgram "extern struct S arr[1]; struct S { int a; }; int main(void) { return 0; }")
+                ~?= True
+        , "accepts extern arrays whose top-level bound is omitted" ~:
+            isRight (parseProgram "extern int a[]; int main(void) { return 0; }")
+                ~?= True
         , "rejects same-file tentative arrays whose omitted bound is not the only incompleteness" ~:
             isLeft (parseProgram "int a[][];")
                 ~?= True
@@ -880,6 +972,24 @@ globalInitializerTest = TestLabel "Parser.Program.global-initializer" $
         , "accepts same-file function-pointer redeclarations that refine empty parameter lists to void prototypes" ~:
             isRight (parseProgram "int foo(void) { return 1; } int (*fp)(); int (*fp)(void) = foo;")
                 ~?= True
+        , "accepts function parameters that shadow file-scope objects" ~:
+            isRight (parseProgram "int x; int f(int x) { return x; }")
+                ~?= True
+        , "accepts function parameters that shadow file-scope typedefs" ~:
+            isRight (parseProgram "typedef int T; int f(int T) { return T; }")
+                ~?= True
+        , "drops function parameters from scope before later file-scope typedef uses" ~:
+            isRight (parseProgram "typedef int T; int f(int T) { return T; } T g; int main(void) { return 0; }")
+                ~?= True
+        , "drops function parameters from scope before later file-scope enumerator uses" ~:
+            isRight (parseProgram "enum { N = 1 }; int f(int N) { return N; } int a = N; int main(void) { return a - 1; }")
+                ~?= True
+        , "rejects prototypes where earlier parameter names hide typedefs" ~:
+            isLeft (parseProgram "typedef int T; int f(int T, T x);")
+                ~?= True
+        , "rejects block-scope locals that redeclare parameters in the same function scope" ~:
+            isLeft (parseProgram "int f(int x) { int x; return x; }")
+                ~?= True
         , "rejects same-file pointer-to-array redeclarations that complete an omitted pointee bound" ~:
             isLeft (parseProgram "int (*p)[]; int (*p)[4]; int main(void) { return 0; }")
                 ~?= True
@@ -889,9 +999,10 @@ globalInitializerTest = TestLabel "Parser.Program.global-initializer" $
         , "rejects same-file function redeclarations that refine pointer-to-array parameter bounds" ~:
             isLeft (parseProgram "int f(int (*p)[]); int f(int (*p)[4]); int main(void) { return 0; }")
                 ~?= True
-        , "accepts implicit direct calls even when a same-file global already uses the identifier" ~:
-            isRight (parseProgram "int foo; int main(void) { return foo(); }")
-                ~?= True
+        , TestLabel "rejects direct calls on same-file object identifiers" $ TestCase $
+            assertProgramErrorContains
+                "called object is not a function or function pointer"
+                "int foo; int main(void) { return foo(); }"
         , TestLabel "rejects same-file function declarations that reuse a global identifier" $ TestCase $
             assertProgramErrorContains
                 "conflicting types for 'bar'"
@@ -1342,6 +1453,284 @@ functionPointerAssignmentTest = TestLabel "Parser.Program.function-pointer-assig
                 "int main(void) { int x; int *p = &x; int (*fp)(void) = 0; fp = p; return 0; }"
         ]
 
+declarationSpecifierTest :: Test
+declarationSpecifierTest = TestLabel "Parser.Program.declaration-specifier" $
+    TestList
+        [ "accepts typedef declarations and typedef-names in later declarations" ~:
+            isRight
+                (parseProgram "typedef int myint; myint x; int main(void) { myint y; return 0; }")
+                ~?= True
+        , "accepts typedef names for incomplete struct tags" ~:
+            isRight
+                (parseProgram "struct Node; typedef struct Node Node; Node *next; int main(void) { return 0; }")
+                ~?= True
+        , "rejects typedef declarations combined with static" ~:
+            isLeft
+                (parseProgram "typedef static int T; int main(void) { return 0; }")
+                ~?= True
+        , "rejects typedef declarations combined with register" ~:
+            isLeft
+                (parseProgram "typedef register int T; int main(void) { return 0; }")
+                ~?= True
+        , "rejects typedef declarations combined with auto" ~:
+            isLeft
+                (parseProgram "typedef auto int T; int main(void) { return 0; }")
+                ~?= True
+        , "rejects multiple ordinary storage-class specifiers" ~:
+            isLeft
+                (parseProgram "static register int x; int main(void) { return 0; }")
+                ~?= True
+        , "accepts extern function declarations" ~:
+            isRight
+                (parseProgram "extern int puts(); int main(void) { return 0; }")
+                ~?= True
+        , "accepts extern declarations when the storage-class follows the type specifier" ~:
+            isRight
+                (parseProgram "int extern x; int main(void) { return x; }")
+                ~?= True
+        , "accepts typedef declarations when the storage-class follows the type specifier" ~:
+            isRight
+                (parseProgram "int typedef U; U x; int main(void) { return 0; }")
+                ~?= True
+        , "accepts signed typedef declarations when the storage-class follows the type specifier" ~:
+            isRight
+                (parseProgram "signed typedef U; U x; int main(void) { return 0; }")
+                ~?= True
+        , "rejects unsupported unsigned typedef declarations without crashing" ~:
+            isLeft
+                (parseProgram "unsigned typedef U; U x; int main(void) { return 0; }")
+                ~?= True
+        , "does not leak block-scope extern function declarations" ~:
+            hasFunctionBinding "foo" "int main(void) { extern int foo(void); return 0; }"
+                ~?= Right False
+        , "keeps extern object declarations as declaration-only globals" ~:
+            inferGlobalInitWith "x" "extern int x; int main(void) { return 0; }"
+                ~?= Right PV.GVarInitWithExternDecl
+        , "re-resolves completed struct tags for extern object uses" ~:
+            isRight
+                (parseProgram "extern struct S x; struct S { int a; }; int main(void) { return sizeof(x); }")
+                ~?= True
+        , "re-resolves completed nested struct tags for extern object uses" ~:
+            isRight
+                (parseProgram "extern struct S (*p)[1]; struct S { int a; }; int main(void) { return sizeof(**p); }")
+                ~?= True
+        , "preserves deferred extern object struct bindings across inner forward declarations" ~:
+            isRight
+                (parseProgram "extern struct S x; struct S { int a; }; int main(void) { { struct S; return sizeof(x); } }")
+                ~?= True
+        , "normalizes completed typedef-backed function declarations before registration" ~:
+            isRight
+                (parseProgram "typedef struct S T; struct S { int a; }; T foo(void); int main(void) { return sizeof(foo()); }")
+                ~?= True
+        , "preserves deferred typedef-backed struct bindings across inner forward declarations" ~:
+            isRight
+                (parseProgram "typedef struct S T; struct S { int a; }; int main(void) { { struct S; T x; return sizeof(x); } }")
+                ~?= True
+        , "preserves deferred function return struct bindings across inner forward declarations" ~:
+            isRight
+                (parseProgram "struct S foo(void); struct S { int a; }; int main(void) { { struct S; return sizeof(foo()); } }")
+                ~?= True
+        , "re-resolves completed typedef-backed local object types before storing them" ~:
+            isRight
+                (parseProgram "int main(void) { typedef struct S T; struct S { int a; }; T x; return sizeof(x); }")
+                ~?= True
+        , "preserves function-definition parameter-scope struct tags for the body" ~:
+            isRight
+                (parseProgram "int f(struct S { int x; } a) { struct S b; return sizeof(b); } int main(void) { return 0; }")
+                ~?= True
+        , "preserves outer parameter-scope struct tags when nested function-pointer parameters add prototype scopes" ~:
+            isRight
+                (parseProgram "int f(int (*g)(struct Inner { int y; } inner), struct Outer { int x; } outer) { struct Outer b; return sizeof(b); } int main(void) { return 0; }")
+                ~?= True
+        , "preserves outer parameter-scope struct tags for nested declarator function definitions" ~:
+            isRight
+                (parseProgram "int (*f(struct S { int x; } a))(void) { struct S b; return 0; } int main(void) { return 0; }")
+                ~?= True
+        , "rejects nested function-pointer parameter struct tags leaking into function bodies" ~:
+            isLeft
+                (parseProgram "int f(struct Outer { int x; } outer, int (*g)(struct Inner { int y; } inner)) { struct Inner i; return 0; } int main(void) { return 0; }")
+                ~?= True
+        , "preserves function-definition parameter-scope enums for the body" ~:
+            isRight
+                (parseProgram "int f(enum E { A = 3 } e) { return A; } int main(void) { return 0; }")
+                ~?= True
+        , "preserves outer parameter-scope enums when nested function-pointer parameters add prototype scopes" ~:
+            isRight
+                (parseProgram "int f(int (*g)(enum Inner { I = 1 } inner), enum Outer { O = 2 } outer) { return O; } int main(void) { return 0; }")
+                ~?= True
+        , "preserves outer parameter-scope enums for nested declarator function definitions" ~:
+            isRight
+                (parseProgram "int (*f(enum E { A = 3 } e))(void) { if (A) return 0; return 0; } int main(void) { return 0; }")
+                ~?= True
+        , "rejects nested function-pointer parameter enums leaking into function bodies" ~:
+            isLeft
+                (parseProgram "int f(enum Outer { O = 1 } outer, int (*g)(enum Inner { I = 2 } inner)) { return I; } int main(void) { return 0; }")
+                ~?= True
+        , "rejects redefinition of parameter-scope struct tags inside the function body" ~:
+            isLeft
+                (parseProgram "int f(struct S { int x; } a) { struct S { int y; } b; return 0; } int main(void) { return 0; }")
+                ~?= True
+        , "re-resolves completed struct tags for function parameters when locals complete them later" ~:
+            isRight
+                (parseProgram "int f(struct S *p) { struct S { int x; }; return sizeof(*p); } int main(void) { return 0; }")
+                ~?= True
+        , "re-resolves completed struct tags for earlier parameters when later parameters complete them" ~:
+            isRight
+                (parseProgram "int f(struct S *p, struct S { int x; } q) { return sizeof(*p); } int main(void) { return 0; }")
+                ~?= True
+        , "normalizes completed typedef-backed local pointer declarators before storing them" ~:
+            fmap (containsIncompleteStructTag "S" . CT.toTypeKind) (firstLocalDeclType "int main(void) { typedef struct S T; struct S { int a; }; T *p; return 0; }")
+                ~?= Right False
+        , "accepts block-scope extern arrays after typedef-backed element types complete" ~:
+            isRight
+                (parseProgram "typedef struct S T; struct S { int a; }; int main(void) { extern T arr[1]; return sizeof arr[0]; }")
+                ~?= True
+        , "treats visible typedefs as shadowing ordinary identifiers in expressions" ~:
+            isLeft
+                (parseProgram "int foo(void) { return 1; } int main(void) { typedef int foo; return foo(); }")
+                ~?= True
+        , TestLabel "block-scope forward struct declarations shadow outer tags" $ TestCase $
+            assertProgramErrorContains
+                "invalid application of 'sizeof' to incomplete type"
+                "struct S { int a; }; int f(void) { struct S; return sizeof(struct S); }"
+        , "does not shadow struct tags for typedef-backed null declarations" ~:
+            isRight
+                (parseProgram "struct S { int a; }; typedef struct S T; int main(void) { T; return sizeof(struct S); }")
+                ~?= True
+        , TestLabel "rejects incomplete element types in local object declarations" $ TestCase $
+            assertProgramErrorContains
+                "declaration of variable with incomplete type"
+                "int main(void) { struct S; struct S a[1]; return sizeof(a); }"
+        , TestLabel "rejects block-scope extern arrays with incomplete element types" $ TestCase $
+            assertProgramErrorContains
+                "declaration of variable with incomplete type"
+                "int main(void) { extern struct S arr[1]; struct S { int a; }; return 0; }"
+        , TestLabel "rejects incomplete by-value function definition parameters" $ TestCase $
+            assertProgramErrorContains
+                "declaration of variable with incomplete type"
+                "int f(struct S s) { return 0; } int main(void) { return 0; }"
+        , "rejects incomplete element types in struct members" ~:
+            isLeft
+                (parseProgram "int main(void) { struct S; struct T { struct S a[1]; }; return 0; }")
+                ~?= True
+        , "rejects file-scope typedef arrays whose element type stays incomplete" ~:
+            isLeft
+                (parseProgram "typedef struct S A[1]; struct S { int a; }; int main(void) { return 0; }")
+                ~?= True
+        , "rejects block-scope typedef arrays whose element type is void" ~:
+            isLeft
+                (parseProgram "int main(void) { typedef void V[1]; return 0; }")
+                ~?= True
+        , TestLabel "rejects storage-class specifiers in struct members" $ TestCase $
+            assertProgramErrorContains
+                "invalid storage-class specifier"
+                "struct S { auto int x; }; int main(void) { return 0; }"
+        , "rejects later file-scope object declarations incompatible with block-scope extern objects" ~:
+            isLeft
+                (parseProgram "int main(void) { extern int x; return 0; } char x;")
+                ~?= True
+        , "rejects local objects that reuse a same-block extern object name" ~:
+            isLeft
+                (parseProgram "int main(void) { extern int x; int x; return 0; }")
+                ~?= True
+        , "rejects block-scope extern objects that collide with visible outer functions" ~:
+            isLeft
+                (parseProgram "int foo(void); int main(void) { extern int foo; return 0; }")
+                ~?= True
+        , "rejects later file-scope function declarations incompatible with block-scope extern prototypes" ~:
+            isLeft
+                (parseProgram "int main(void) { extern int foo(void); return 0; } char foo(void) { return 0; }")
+                ~?= True
+        , "rejects block-scope extern prototypes that collide with visible outer objects" ~:
+            isLeft
+                (parseProgram "int foo; int main(void) { extern int foo(void); return 0; }")
+                ~?= True
+        , "rejects block-scope enum constants that collide with same-scope extern functions" ~:
+            isLeft
+                (parseProgram "int main(void) { extern int foo(void); enum E { foo = 1 }; return 0; }")
+                ~?= True
+        , "treats block-scope extern objects as ordinary identifiers inside the same block" ~:
+            isLeft
+                (parseProgram "typedef int T; int main(void) { extern int T; T x; return 0; }")
+                ~?= True
+        , TestLabel "rejects calling block-scope extern objects as functions" $ TestCase $
+            assertProgramErrorContains
+                "called object is not a function or function pointer"
+                "int main(void) { extern int foo; return foo(); }"
+        , "accepts extern redeclarations of visible static functions" ~:
+            isRight
+                (parseProgram "static int foo(void); extern int foo(void); int main(void) { return 0; }")
+                ~?= True
+        , "accepts block-scope extern redeclarations of visible static functions" ~:
+            isRight
+                (parseProgram "static int foo(void); int main(void) { extern int foo(void); return 0; }")
+                ~?= True
+        , "accepts extern redeclarations of visible static objects" ~:
+            isRight
+                (parseProgram "static int x; extern int x; int main(void) { return 0; }")
+                ~?= True
+        , "rejects plain file-scope tentative redeclarations after visible static objects" ~:
+            isLeft
+                (parseProgram "static int x; int x; int main(void) { return 0; }")
+                ~?= True
+        , "rejects plain file-scope initialized redeclarations after visible static objects" ~:
+            isLeft
+                (parseProgram "static int x; int x = 1; int main(void) { return x; }")
+                ~?= True
+        , "accepts block-scope extern redeclarations of visible static objects" ~:
+            isRight
+                (parseProgram "static int x; int main(void) { extern int x; return x; }")
+                ~?= True
+        , "rejects file-scope extern void objects" ~:
+            isLeft
+                (parseProgram "extern void x; int main(void) { return 0; }")
+                ~?= True
+        , "accepts struct definitions and tagged uses" ~:
+            isRight
+                (parseProgram "struct X { int v; }; int main(void) { struct X x; return 0; }")
+                ~?= True
+        , "rejects duplicate struct member names" ~:
+            isLeft
+                (parseProgram "struct S { int x; char x; }; int main(void) { return 0; }")
+                ~?= True
+        , "rejects function-typed struct members" ~:
+            isLeft
+                (parseProgram "struct S { int f(void); }; int main(void) { return 0; }")
+                ~?= True
+        , "rejects redeclarations that use distinct anonymous struct definitions" ~:
+            isLeft
+                (parseProgram "struct { int a; } x; struct { int a; } x; int main(void) { return 0; }")
+                ~?= True
+        , "rejects struct tag uses that resolve to enum tags" ~:
+            isLeft
+                (parseProgram "enum E { A }; int main(void) { struct E *p; return p == 0; }")
+                ~?= True
+        , "accepts enum definitions and tagged uses" ~:
+            isRight
+                (parseProgram "enum E { A }; int main(void) { enum E e; e = A; return e; }")
+                ~?= True
+        , "rejects empty enums" ~:
+            isLeft
+                (parseProgram "enum E { }; int main(void) { return 0; }")
+                ~?= True
+        , "rejects reusing a struct tag as an enum tag in the same scope" ~:
+            isLeft
+                (parseProgram "struct S; enum S { A }; int main(void) { return 0; }")
+                ~?= True
+        , "rejects globals that collide with typedef names" ~:
+            isLeft
+                (parseProgram "typedef int T; int T;")
+                ~?= True
+        , "rejects globals that collide with enum constants" ~:
+            isLeft
+                (parseProgram "enum E { A }; int A;")
+                ~?= True
+        , "rejects typedef names shadowed by local ordinary identifiers" ~:
+            isLeft
+                (parseProgram "typedef int T; int main(void) { int T = 0; T x; return x; }")
+                ~?= True
+        ]
+
 functionPointerArithmeticTest :: Test
 functionPointerArithmeticTest = TestLabel "Parser.Program.function-pointer-arithmetic" $
     TestList
@@ -1392,6 +1781,12 @@ sameInputExternalCollisionTest = TestLabel "Parser.Program.same-input-external-c
                     "int foo; int foo(void); int main(void) { return 0; }"
                 )
                 ~?= True
+        , "rejects sibling block-scope tagged declarations that only share a nesting depth" ~:
+            isLeft
+                ( parseProgramAllowSameInputExternalCollisions
+                    "int a(void) { struct S { int x; }; extern struct S *f(void); return 0; } int b(void) { struct S { char y; }; extern struct S *f(void); return 0; } int main(void) { return 0; }"
+                )
+                ~?= True
         ]
 
 test :: Test
@@ -1415,6 +1810,7 @@ test = TestLabel "Parser.Combinators.Core" $
       , functionCallTest
       , conditionalPointerTypeTest
       , functionPointerAssignmentTest
+      , declarationSpecifierTest
       , functionPointerArithmeticTest
       , emptyForBodyPreservationTest
-    ]
+      ]

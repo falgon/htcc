@@ -34,7 +34,8 @@ import           Data.Char                                   (ord)
 import           Data.Functor                                ((<&>))
 import           Data.List                                   (find, sortBy)
 import           Data.Maybe                                  (fromJust,
-                                                              fromMaybe, isJust)
+                                                              fromMaybe, isJust,
+                                                              listToMaybe)
 import           Data.Ord                                    (comparing)
 import qualified Data.Text                                   as T
 import           Data.Tuple.Extra                            (dupe, first,
@@ -56,9 +57,9 @@ import           Htcc.Parser.AST.Core                        (ATKind (..),
                                                               atDefault, atElse,
                                                               atExprStmt, atFor,
                                                               atGVar, atGoto,
-                                                              atIf, atLabel,
-                                                              atNoLeaf, atNull,
-                                                              atNumLit,
+                                                              atIf, atLVar,
+                                                              atLabel, atNoLeaf,
+                                                              atNull, atNumLit,
                                                               atReturn,
                                                               atSwitch, atUnary,
                                                               atWhile,
@@ -67,13 +68,16 @@ import           Htcc.Parser.AST.Type                        (ASTs)
 import           Htcc.Parser.Combinators.BasicOperator
 import           Htcc.Parser.Combinators.ConstExpr           (evalConstexpr)
 import           Htcc.Parser.Combinators.Core
-import           Htcc.Parser.Combinators.Decl                (absDeclarator,
+import           Htcc.Parser.Combinators.Decl                (DeclStorage (..),
+                                                              absDeclarator,
+                                                              declarationSpec,
                                                               declarator,
                                                               declspec)
 import qualified Htcc.Parser.Combinators.GNUExtensions       as GNU
 import           Htcc.Parser.Combinators.Keywords
 import           Htcc.Parser.Combinators.Type                (toNamedParams)
 import           Htcc.Parser.Combinators.Utils               (bracket,
+                                                              captureFunctionParamScopes,
                                                               conditionalResultType,
                                                               decayExprType,
                                                               getPosState,
@@ -85,19 +89,25 @@ import           Htcc.Parser.Combinators.Utils               (bracket,
                                                               registerGVar,
                                                               registerGVarWith,
                                                               registerLVar,
-                                                              registerStringLiteral)
+                                                              registerStringLiteral,
+                                                              registerTypedef)
 import           Htcc.Parser.Combinators.Var                 (varInit)
-import           Htcc.Parser.ConstructionData.Core           (fallBack,
+import           Htcc.Parser.ConstructionData.Core           (ConstructionData (scope),
+                                                              FunctionParamScope (..),
+                                                              fallBack,
+                                                              hasIncompleteObjectType,
                                                               incomplete,
                                                               isSwitchStmt,
                                                               lookupFunction,
                                                               lookupGVar,
                                                               lookupLVar,
                                                               lookupVar,
+                                                              normalizeCompletedStorageClass,
                                                               pushWarn,
                                                               resetLocal,
                                                               succNest)
-import           Htcc.Parser.ConstructionData.Scope          (LookupVarResult (..))
+import           Htcc.Parser.ConstructionData.Scope          (LookupVarResult (..),
+                                                              Scoped (curNestDepth, curScopeId, enumerators, structs))
 import qualified Htcc.Parser.ConstructionData.Scope.Function as PSF
 import qualified Htcc.Parser.ConstructionData.Scope.Var      as PV
 import           Numeric.Natural                             (Natural)
@@ -116,8 +126,8 @@ requireCompleteObjectType
     -> CT.StorageClass i
     -> Parser i (CT.StorageClass i)
 requireCompleteObjectType err ty = do
-    resolvedTy <- gets (incomplete ty) >>= maybeToParser err
-    if CT.isIncompleteArray resolvedTy
+    resolvedTy <- gets (`normalizeCompletedStorageClass` ty)
+    if hasIncompleteObjectType resolvedTy
         then fail err
         else pure resolvedTy
 
@@ -146,6 +156,76 @@ requireInitializedObjectType
 requireInitializedObjectType err ty
     | isTopLevelOmittedBoundArrayType ty = pure ty
     | otherwise = requireCompleteObjectType err ty
+
+requireExternDeclObjectType
+    :: (Ord i, Bits i, Read i, Show i, Integral i)
+    => String
+    -> CT.StorageClass i
+    -> Parser i (CT.StorageClass i)
+requireExternDeclObjectType err ty = do
+    resolvedTy <- gets (`normalizeCompletedStorageClass` ty)
+    if hasInvalidExternArrayElementType resolvedTy
+        then fail err
+        else pure resolvedTy
+    where
+        hasInvalidExternArrayElementType = goTop . CT.toTypeKind
+
+        goTop = \case
+            CT.CTArray _ innerTy ->
+                hasIncompleteArrayElementType innerTy
+            CT.CTIncomplete (CT.IncompleteArray elemTy) ->
+                hasIncompleteArrayElementType elemTy
+            _ ->
+                False
+
+        hasIncompleteArrayElementType = \case
+            CT.CTArray _ innerTy ->
+                hasIncompleteArrayElementType innerTy
+            CT.CTIncomplete _ ->
+                True
+            _ ->
+                False
+
+requireTypedefDeclType
+    :: (Ord i, Bits i, Read i, Show i, Integral i)
+    => String
+    -> CT.StorageClass i
+    -> Parser i (CT.StorageClass i)
+requireTypedefDeclType err ty = do
+    resolvedTy <- gets (`normalizeCompletedStorageClass` ty)
+    if hasInvalidTypedefArrayElementType resolvedTy
+        then fail err
+        else pure resolvedTy
+    where
+        hasInvalidTypedefArrayElementType = goTop . CT.toTypeKind
+
+        goTop = \case
+            CT.CTArray _ innerTy ->
+                hasInvalidArrayElementType innerTy
+            CT.CTIncomplete (CT.IncompleteArray elemTy) ->
+                hasInvalidArrayElementType elemTy
+            _ ->
+                False
+
+        hasInvalidArrayElementType = \case
+            CT.CTArray _ innerTy ->
+                hasInvalidArrayElementType innerTy
+            CT.CTIncomplete _ ->
+                True
+            innerTy ->
+                isVoidTypeKind innerTy
+
+        isVoidTypeKind = \case
+            CT.CTLong innerTy ->
+                isVoidTypeKind innerTy
+            CT.CTShort innerTy ->
+                isVoidTypeKind innerTy
+            CT.CTSigned innerTy ->
+                isVoidTypeKind innerTy
+            CT.CTVoid ->
+                True
+            _ ->
+                False
 
 resolveDerefObjectType
     :: (Ord i, Bits i, Read i, Show i, Integral i)
@@ -370,11 +450,15 @@ global,
 global = do
     pos <- getPosState
     rejectInvalidFileScopeStorageClass
-    ty <- declspec
-    choice
-        [ ATEmpty <$ semi
-        , globalDecl ty pos
-        ]
+    (declStorage, ty) <- declarationSpec
+    case declStorage of
+        TypedefDecl ->
+            globalDecl declStorage ty pos
+        _ ->
+            choice
+                [ ATEmpty <$ semi
+                , globalDecl declStorage ty pos
+                ]
     where
         rejectInvalidFileScopeStorageClass =
             M.lookAhead $
@@ -384,31 +468,79 @@ global = do
                     , pure ()
                     ]
 
-        globalDecl ty pos = declarator ty >>= \case
-            (_, Nothing) -> fail "variable name omitted, expected unqualified-id"
-            (ty', Just ident)
+        globalDecl declStorage ty pos = captureFunctionParamScopes (declarator ty) >>= \case
+            ((_, Nothing), _) -> fail $
+                if declStorage == TypedefDecl
+                    then "typedef name omitted, expected unqualified-id"
+                    else "variable name omitted, expected unqualified-id"
+            ((ty', Just ident), paramScopes)
+                | declStorage == TypedefDecl ->
+                    typedefDecl ty' ident
                 | isFunctionType ty' -> modify resetLocal
                 *> choice
                     [ declaration ty' ident
-                    , definition ty' ident pos
+                    , definition ty' ident pos paramScopes
                     ]
-            (ty', Just ident) ->
+            ((ty', Just ident), _) ->
                 requireNonVoidObjectType "variable declared void" ty'
-                    *> gvarDecl ty' ident
+                    *> gvarDecl declStorage ty' ident
 
         isFunctionType ty' = case CT.toTypeKind ty' of
             CT.CTFunc _ _ -> True
             _             -> False
 
-        declaration ty ident = ATEmpty <$ (semi *> registerFunc False False ty ident)
+        declaration ty ident = do
+            resolvedTy <- gets (`normalizeCompletedStorageClass` ty)
+            ATEmpty <$ (semi *> registerFunc False False resolvedTy ident)
 
-        definition ty ident pos = do
-            registerFunc True False ty ident
-            params <- mapM (uncurry registerLVar) =<< toNamedParams ty
-            stmt >>= fromValidFunc params
+        typedefDecl ty ident = do
+            resolvedTy <- requireTypedefDeclType "typedef declaration has invalid array element type" ty
+            semi *> registerTypedef resolvedTy ident *> pure ATEmpty
+
+        definition ty ident pos paramScopes = do
+            resolvedTy <- gets (`normalizeCompletedStorageClass` ty)
+            registerFunc True False resolvedTy ident
+            bracket get (modify . fallBack) $ const $ do
+                paramScope <- maybe
+                    (fail "internal compiler error: missing function parameter scope")
+                    pure
+                    -- The function body's scope is the earliest prototype scope created
+                    -- while parsing the declarator. Nested parameter prototypes and
+                    -- trailing function suffixes are created later and must not leak.
+                    (listToMaybe $ sortBy (comparing fpsScopeId) paramScopes)
+                params <- registerFunctionParams paramScope resolvedTy
+                functionBody >>= fromValidFunc resolvedTy params
             where
-                fromValidFunc params' st@(ATNode (ATBlock block) _ _ _)
-                    | CT.toTypeKind ty == CT.CTVoid =
+                registerFunctionParams paramScope fnTy = do
+                    enterFunctionScope paramScope
+                    params' <-
+                        mapM registerNamedParam
+                            =<< toNamedParams fnTy
+                    pure params'
+                    where
+                        registerNamedParam (paramTy, ident) = do
+                            resolvedParamTy <-
+                                requireCompleteObjectType
+                                    "declaration of variable with incomplete type"
+                                    paramTy
+                            registerLVar resolvedParamTy ident
+
+                enterFunctionScope paramScope =
+                    modify $ \cd ->
+                        cd
+                            { scope =
+                                (scope cd)
+                                    { curNestDepth = succ $ curNestDepth $ scope cd
+                                    , curScopeId = fpsScopeId paramScope
+                                    , structs = fpsTags paramScope
+                                    , enumerators = fpsEnumerators paramScope
+                                    }
+                            }
+
+                functionBody = atBlock <$> braces (M.many stmt)
+
+                fromValidFunc fnTy params' st@(ATNode (ATBlock block) _ _ _)
+                    | CT.toTypeKind fnTy == CT.CTVoid =
                         if isJust (find isNonEmptyReturn block) then
                             fail $ mconcat
                                 [ "the return type of function '"
@@ -416,32 +548,37 @@ global = do
                                 , "' is void, but the statement returns a value"
                                 ]
                         else
-                            pure $ atDefFunc ident (if null params' then Nothing else Just params') ty st
+                            pure $ atDefFunc ident (if null params' then Nothing else Just params') fnTy st
                     | otherwise = do
                         when (isJust (find isEmptyReturn block)) $
                             pushWarn pos $ mconcat
                                 [ "the return type of function '"
                                 , T.unpack ident
                                 , "' is "
-                                , show (CT.toTypeKind ty)
+                                , show (CT.toTypeKind fnTy)
                                     , ", but the statement returns no value"
                                     ]
-                        pure $ atDefFunc ident (if null params' then Nothing else Just params') ty st
-                fromValidFunc _ _ = fail "internal compiler error"
+                        pure $ atDefFunc ident (if null params' then Nothing else Just params') fnTy st
+                fromValidFunc _ _ _ = fail "internal compiler error"
 
-        gvarDecl ty ident = choice
-            [ nonInit ty ident
+        gvarDecl declStorage ty ident = choice
+            [ nonInit declStorage ty ident
             , withInit ty ident
             ]
-        nonInit ty ident
+        nonInit declStorage ty ident
+            | declStorage == ExternDecl =
+                semi
+                    *> (requireExternDeclObjectType "declaration of variable with incomplete type" ty
+                            >>= \resolvedTy -> registerGVarWith resolvedTy ident PV.GVarInitWithExternDecl
+                       )
+                    *> pure ATEmpty
             | CT.isIncompleteArray ty && isValidTentativeFileScopeArrayType ty =
                 semi *> registerGVar ty ident *> pure ATEmpty
             | CT.isIncompleteArray ty =
                 fail "defining global variables with a incomplete type"
             | otherwise =
                 semi
-                    >> gets (incomplete ty)
-                    >>= maybeToParser "defining global variables with a incomplete type"
+                    >> requireCompleteObjectType "defining global variables with a incomplete type" ty
                     >>= flip registerGVar ident
                     >> pure ATEmpty
 
@@ -1010,27 +1147,65 @@ stmt = choice
         labelStmt = atLabel <$> M.try (identifier <* colon)
 
         lvarStmt = do
-            ty <- M.try declspec
-            M.choice
-                [ ATEmpty <$ semi
-                , declLVar ty
-                ]
+            (declStorage, ty) <- M.try declarationSpec
+            case declStorage of
+                TypedefDecl ->
+                    declLVar declStorage ty
+                _ ->
+                    M.choice
+                        [ standaloneDecl
+                        , declLVar declStorage ty
+                        ]
             where
-                declLVar ty = declarator ty >>= \case
-                    (_, Nothing) -> fail "variable name omitted, expected unqualified-id"
-                    (ty', Just ident) ->
-                        requireNonVoidObjectType "variable declared void" ty'
-                            *> M.choice
-                                [ nonInit ty' ident
-                                , withInit ty' ident
-                                ]
+                standaloneDecl = ATEmpty <$ semi
+
+                declLVar declStorage ty = captureFunctionParamScopes (declarator ty) >>= \case
+                    ((_, Nothing), _) -> fail $
+                        if declStorage == TypedefDecl
+                            then "typedef name omitted, expected unqualified-id"
+                            else "variable name omitted, expected unqualified-id"
+                    ((ty', Just ident), _) ->
+                        case declStorage of
+                            TypedefDecl ->
+                                typedefDecl ty' ident
+                            ExternDecl
+                                | isFunctionType ty' ->
+                                    do
+                                        resolvedTy <- gets (`normalizeCompletedStorageClass` ty')
+                                        semi *> registerFunc False False resolvedTy ident *> pure ATEmpty
+                                | otherwise ->
+                                    requireNonVoidObjectType "variable declared void" ty'
+                                        *> externDecl ty' ident
+                            OrdinaryDecl ->
+                                requireNonVoidObjectType "variable declared void" ty'
+                                    *> M.choice
+                                        [ nonInit ty' ident
+                                        , withInit ty' ident
+                                        ]
 
                 nonInit ty ident =
                     requireCompleteObjectType "declaration of variable with incomplete type" ty
-                        *> (semi *> registerLVar ty ident <&> atNull)
-                withInit ty ident =
-                    requireInitializedObjectType "declaration of variable with incomplete type" ty
-                        *> (equal *> varInit assign ty ident <* semi)
+                        >>= \resolvedTy ->
+                            semi *> registerLVar resolvedTy ident <&> atNull
+                withInit ty ident = do
+                    resolvedTy <-
+                        requireInitializedObjectType "declaration of variable with incomplete type" ty
+                    equal *> varInit assign resolvedTy ident <* semi
+                typedefDecl ty ident = do
+                    resolvedTy <- requireTypedefDeclType "typedef declaration has invalid array element type" ty
+                    semi *> registerTypedef resolvedTy ident *> pure ATEmpty
+                externDecl ty ident =
+                    M.choice
+                        [ equal *> fail "initializer is not allowed in block scope extern declaration"
+                        , semi
+                            *> ( requireExternDeclObjectType
+                                    "declaration of variable with incomplete type"
+                                    ty
+                                    >>= \resolvedTy ->
+                                        registerGVarWith resolvedTy ident PV.GVarInitWithExternDecl
+                               )
+                            *> pure ATEmpty
+                        ]
 
 expr = assign >>= go
     where
@@ -1262,23 +1437,23 @@ factor = choice
             pos <- getPosState
             ident <- identifier
             gets (lookupVar ident) >>= \case
-                FoundGVar gvar ->
-                    let gvarNode =
-                            atGVar
-                                (PV.gvtype gvar)
-                                ident
-                     in if callableSignature (PV.gvtype gvar) == Nothing
-                        then
-                            M.option gvarNode $
-                                M.lookAhead lparen *> fnCall ident pos
-                        else
-                            pure gvarNode
+                FoundGVar gvar -> do
+                    let declaredTy = PV.gvtype gvar
+                    resolvedTy <- gets (`normalizeCompletedStorageClass` declaredTy)
+                    pure $
+                        atGVar
+                            resolvedTy
+                            ident
                 FoundLVar sct ->
-                    return $ treealize sct
+                    gets (\cd -> normalizeCompletedStorageClass cd (PV.lvtype sct))
+                        >>= \resolvedTy -> return $ atLVar resolvedTy (PV.rbpOffset sct)
                 FoundEnum sct ->
                     return $ treealize sct
                 FoundFunc sct ->
-                    return $ atNoLeaf (ATFuncPtr ident) (PSF.fntype sct)
+                    gets (\cd -> normalizeCompletedStorageClass cd (PSF.fntype sct))
+                        >>= \resolvedTy -> return $ atNoLeaf (ATFuncPtr ident) resolvedTy
+                FoundTypedef _ ->
+                    fail $ "'" <> T.unpack ident <> "' is a typedef name, not an expression"
                 NotFound ->
                     M.try (fnCall ident pos)
                         M.<|> fail ("The '" <> T.unpack ident <> "' is not defined identifier")
@@ -1299,10 +1474,11 @@ factor = choice
                                 pushWarn pos ("the function '" <> T.unpack ident <> "' is not declared.")
                                 pure $ atNoLeaf (ATCallFunc ident params') (CT.SCAuto CT.CTInt)
                         Just fn -> do
+                            resolvedFnTy <- gets (\cd -> normalizeCompletedStorageClass cd (PSF.fntype fn))
                             (callTy, formalParamTys) <- maybe
                                 (fail "internal compiler error: function lookup returned non-callable type")
                                 pure
-                                (callableSignature $ PSF.fntype fn)
+                                (callableSignature resolvedFnTy)
                             params <- applyCallArgConversions formalParamTys rawParams
                             let
                                 params' = if null params then Nothing else Just params

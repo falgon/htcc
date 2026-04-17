@@ -21,6 +21,7 @@ module Htcc.Asm.Generate (
 ) where
 
 import           Control.Monad                               (when)
+import           Control.Applicative                         ((<|>))
 import           Data.Bits                                   (Bits)
 import           Data.Foldable                               (traverse_)
 import qualified Data.Map.Strict                             as M
@@ -60,7 +61,24 @@ normalizeGlobalInitializers gvars = M.traverseWithKey resolveGlobalInit gvars
             _ ->
                 Right gvar
 
-retypeResolvedGlobalRefs :: GlobalVars i -> ASTs i -> ASTs i
+mergedGlobalType :: Eq i => Maybe (GlobalVars i) -> T.Text -> CT.StorageClass i -> CT.StorageClass i
+mergedGlobalType maybeGVars name currentTy =
+    case maybeGVars >>= M.lookup name of
+        Just gvar ->
+            let declaredTy = gvtype gvar
+             in fromMaybe declaredTy $
+                    (\mergedTy -> CT.mapTypeKind (const mergedTy) declaredTy)
+                        <$> ( CT.mergeCompatibleTypeKinds
+                                (CT.toTypeKind declaredTy)
+                                (CT.toTypeKind currentTy)
+                            <|> CT.mergeCompatibleTypeKinds
+                                (CT.toTypeKind currentTy)
+                                (CT.toTypeKind declaredTy)
+                            )
+        Nothing ->
+            currentTy
+
+retypeResolvedGlobalRefs :: Eq i => GlobalVars i -> ASTs i -> ASTs i
 retypeResolvedGlobalRefs = map . retypeResolvedGlobalRefsInATree
     where
         retypeResolvedGlobalRefsInATKindFor gvars kind = case kind of
@@ -95,7 +113,7 @@ retypeResolvedGlobalRefs = map . retypeResolvedGlobalRefsInATree
             ATCallPtr args ->
                 ATCallPtr $ map (retypeResolvedGlobalRefsInATree gvars) <$> args
             ATGVar ty name ->
-                ATGVar (maybe ty gvtype $ M.lookup name gvars) name
+                ATGVar (mergedGlobalType (Just gvars) name ty) name
             _ ->
                 kind
 
@@ -279,7 +297,7 @@ refreshMergedValueTypes funcs maybeGVars = go
             ATCallPtr args ->
                 ATCallPtr $ map go <$> args
             ATGVar ty name ->
-                ATGVar (maybe ty gvtype $ maybeGVars >>= M.lookup name) name
+                ATGVar (mergedGlobalType maybeGVars name ty) name
             other ->
                 other
 
@@ -447,7 +465,7 @@ revalidateMergedFunctionTree mode funcs maybeGVars = revalidateTree M.empty Noth
             ATDefFunc name _ ->
                 (kind, mergedFunctionType funcs name currentTy)
             ATGVar _ name ->
-                let resolvedTy = maybe currentTy gvtype $ maybeGVars >>= M.lookup name
+                let resolvedTy = mergedGlobalType maybeGVars name currentTy
                  in (ATGVar resolvedTy name, resolvedTy)
             ATFuncPtr name ->
                 let resolvedTy = mergedFunctionType funcs name currentTy

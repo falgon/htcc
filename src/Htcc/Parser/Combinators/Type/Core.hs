@@ -9,18 +9,23 @@ Portability : POSIX
 
 C language parser Combinators
 -}
-{-# LANGUAGE LambdaCase, OverloadedStrings, TupleSections #-}
+{-# LANGUAGE FlexibleContexts, LambdaCase, OverloadedStrings, TupleSections #-}
 module Htcc.Parser.Combinators.Type.Core (
     typeSuffix
   -- * Helper functions
   , toNamedParams
 ) where
-import                          Control.Monad                           (mfilter)
+import                          Control.Applicative                     ((<|>))
+import                          Control.Monad                           (mfilter,
+                                                                         void)
 import                          Control.Monad.Combinators               (choice)
+import                          Control.Monad.State                     (get,
+                                                                         gets,
+                                                                         modify,
+                                                                         put)
 import                          Control.Monad.Trans                     (MonadTrans (..))
 import                          Control.Monad.Trans.Maybe               (MaybeT (..),
                                                                          runMaybeT)
-import                          Control.Monad.Trans.State               (gets)
 import                          Data.Bits                               (Bits (..))
 import                          Data.Functor                            ((<&>))
 import                          Data.Maybe                              (fromJust,
@@ -34,7 +39,12 @@ import                          Htcc.Parser.Combinators.ConstExpr       (evalCon
 import                          Htcc.Parser.Combinators.Core
 import {-# SOURCE #-}           Htcc.Parser.Combinators.Decl.Declarator
 import                          Htcc.Parser.Combinators.Decl.Spec       (declspec)
-import                          Htcc.Parser.ConstructionData.Core       (incomplete)
+import                          Htcc.Parser.Combinators.Utils           (registerLVar)
+import                          Htcc.Parser.ConstructionData.Core       (ConstructionData (functionParamScopes, scope, tagHistory),
+                                                                         FunctionParamScope (..),
+                                                                         incomplete,
+                                                                         succNest)
+import                          Htcc.Parser.ConstructionData.Scope      (Scoped (curScopeId, enumerators, nextScopeId, structs))
 import                          Htcc.Utils                              (toNatural)
 import                qualified Text.Megaparsec                         as M
 
@@ -77,24 +87,50 @@ arraySuffix ty = choice
 funcParams :: (Show i, Read i, Integral i, Bits i)
     => CT.StorageClass i
     -> Parser i (CT.StorageClass i)
-funcParams ty = lparen
-    *> choice
-        [ [(CT.SCAuto CT.CTVoid, Nothing)] <$ (symbol "void" *> rparen)
-        , withParams
-        ]
-    <&> CT.wrapCTFunc ty
+funcParams ty = lparen *> do
+    pre <- get
+    modify succNest
+    params <- scopedParams
+    post <- get
+    let paramScope = scope post
+        carry =
+            FunctionParamScope
+                { fpsScopeId = curScopeId paramScope
+                , fpsTags = structs paramScope
+                , fpsEnumerators = enumerators paramScope
+                }
+        restoredScope = (scope pre) { nextScopeId = nextScopeId paramScope }
+    put $
+        pre
+            { scope = restoredScope
+            , tagHistory = tagHistory post
+            , functionParamScopes = carry : functionParamScopes post
+            }
+    pure $ CT.wrapCTFunc ty params
     where
-        withParams = M.manyTill
-            (M.try (declIdentFuncParam comma) M.<|> declIdentFuncParam (M.lookAhead rparen))
-            rparen
+        scopedParams =
+            choice
+                [ [(CT.SCAuto CT.CTVoid, Nothing)] <$ (symbol "void" *> rparen)
+                , [] <$ rparen
+                , withParams
+                ]
 
-        declIdentFuncParam sep = do
+        withParams = do
+            firstParam <- declIdentFuncParam
+            restParams <- M.many (comma *> declIdentFuncParam)
+            void rparen
+            pure $ firstParam : restParams
+
+        declIdentFuncParam = do
             ty' <- M.try declspec
             M.choice
-                [ (ty', Nothing) <$ sep
+                [ M.try $ (ty', Nothing) <$ M.lookAhead (comma <|> rparen)
                 , declarator ty' >>= \case
-                    (t, Nothing) -> (t, Nothing) <$ sep
-                    (t, Just ident) -> (narrowPtr t, Just ident) <$ sep
+                    (t, Nothing) -> pure (t, Nothing)
+                    (t, Just ident) -> do
+                        let paramTy = narrowPtr t
+                        void $ registerLVar paramTy ident
+                        pure (paramTy, Just ident)
                 ]
             where
                 narrowPtr ty'

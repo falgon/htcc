@@ -31,6 +31,7 @@ import           Data.IORef                                  (modifyIORef',
                                                               newIORef,
                                                               readIORef,
                                                               writeIORef)
+import           Data.Bifunctor                              (first)
 import           Data.List                                   (foldl',
                                                               intercalate,
                                                               isInfixOf,
@@ -4249,7 +4250,14 @@ validateOpts opts
             hPutStr stderr ("-o output path must not overwrite an input file: " <> fromMaybe "" (optOutput opts) <> "\n")
                 *> exitFailure
 
-type ParsedInput = (ASTs Integer, GlobalVars Integer, Literals Integer, PF.Functions Integer)
+type ParsedInput =
+    ( ASTs Integer
+    , GlobalVars Integer
+    , GlobalVars Integer
+    , Literals Integer
+    , PF.Functions Integer
+    , PF.Functions Integer
+    )
 type ParsedInputWithWarnings = (Warnings, ParsedInput)
 
 emitWarnings :: Foldable f => f (M.ParseErrorBundle T.Text Void) -> IO ()
@@ -4279,12 +4287,12 @@ implicitFunctionWarningName M.ParseErrorBundle { M.bundleErrors = bundledError :
 implicitFunctionWarningName _ = Nothing
 
 originatingInputDeclaresFunction :: ParsedInput -> T.Text -> Bool
-originatingInputDeclaresFunction (_, _, _, funcs) name =
+originatingInputDeclaresFunction (_, _, _, _, _, funcs) name =
     maybe False (not . PF.fnImplicit) $
         Map.lookup name funcs
 
 implicitFunctionResolvedAfterMerge :: ParsedInput -> T.Text -> Bool
-implicitFunctionResolvedAfterMerge (_, _, _, funcs) name =
+implicitFunctionResolvedAfterMerge (_, _, _, _, funcs, _) name =
     maybe
         False
         (\func -> not (CT.isSCStatic $ PF.fntype func) && not (PF.fnImplicit func))
@@ -4372,11 +4380,13 @@ shiftLiteralLabelsInATree offset (ATNode kind ty lhs rhs) =
         (shiftLiteralLabelsInATree offset rhs)
 
 shiftLiteralLabels :: Natural -> ParsedInput -> ParsedInput
-shiftLiteralLabels offset (asts, gvars, lits, funcs) =
+shiftLiteralLabels offset (asts, gvars, mergeGVars, lits, funcs, mergeFuncs) =
     ( map (shiftLiteralLabelsInATree offset) asts
     , Map.map (shiftLiteralLabelsInGVar offset) gvars
+    , Map.map (shiftLiteralLabelsInGVar offset) mergeGVars
     , map (\lit -> lit { ln = ln lit + offset }) lits
     , funcs
+    , mergeFuncs
     )
 
 namespaceInternalSymbol :: Natural -> T.Text -> T.Text
@@ -4481,7 +4491,7 @@ renameInternalSymbolsInATree renames (ATNode kind ty lhs rhs) =
         (renameInternalSymbolsInATree renames rhs)
 
 internalSymbolRenames :: Natural -> ParsedInput -> InternalSymbolRenames
-internalSymbolRenames inputIndex (_, gvars, _, funcs) =
+internalSymbolRenames inputIndex (_, gvars, _, _, funcs, _) =
     InternalSymbolRenames
         { functionSymbolRenames = Map.fromList
             [ (name, namespaceInternalSymbol inputIndex name)
@@ -4496,20 +4506,22 @@ internalSymbolRenames inputIndex (_, gvars, _, funcs) =
         }
 
 renameInternalSymbols :: Natural -> ParsedInput -> ParsedInput
-renameInternalSymbols inputIndex (asts, gvars, lits, funcs) =
+renameInternalSymbols inputIndex (asts, gvars, mergeGVars, lits, funcs, mergeFuncs) =
     ( map (renameInternalSymbolsInATree renames) asts
     , Map.mapKeys (renameObjectSymbol renames) $ Map.map (renameInternalSymbolsInGVar renames) gvars
+    , Map.mapKeys (renameObjectSymbol renames) $ Map.map (renameInternalSymbolsInGVar renames) mergeGVars
     , lits
     , Map.mapKeys (renameFunctionSymbol renames) funcs
+    , Map.mapKeys (renameFunctionSymbol renames) mergeFuncs
     )
     where
-        renames = internalSymbolRenames inputIndex (asts, gvars, lits, funcs)
+        renames = internalSymbolRenames inputIndex (asts, gvars, mergeGVars, lits, funcs, mergeFuncs)
 
 shiftLiteralLabelsInInputs :: [ParsedInput] -> [ParsedInput]
 shiftLiteralLabelsInInputs parsedInputs = snd $ mapAccumL step (0, 0) parsedInputs
     where
         shouldNamespaceInternalSymbols = length parsedInputs > 1
-        step (inputIndex, offset) parsed@(_, _, lits, _) =
+        step (inputIndex, offset) parsed@(_, _, _, lits, _, _) =
             let renamed = bool parsed (renameInternalSymbols inputIndex parsed) shouldNamespaceInternalSymbols
                 shifted = shiftLiteralLabels offset renamed
              in ((succ inputIndex, offset + fromIntegral (length lits)), shifted)
@@ -4560,18 +4572,66 @@ isTentativeExternalGlobal gvar =
             GVarInitWithZero -> True
             _                -> False
 
+isExternOnlyExternalGlobal :: GVar Integer -> Bool
+isExternOnlyExternalGlobal gvar =
+    not (CT.isSCStatic $ gvtype gvar)
+        && case initWith gvar of
+            GVarInitWithExternDecl -> True
+            _                      -> False
+
+mergeCrossInputTypeKinds :: CT.TypeKind Integer -> CT.TypeKind Integer -> Maybe (CT.TypeKind Integer)
+mergeCrossInputTypeKinds lhs rhs =
+    CT.mergeCompatibleTypeKinds
+        (normalizeCrossInputTypeScopes lhs)
+        (normalizeCrossInputTypeScopes rhs)
+    where
+        -- `ScopeId` is allocated per parser run, so it cannot participate in
+        -- cross-input compatibility checks.
+        normalizeCrossInputTypeScopes = \case
+            CT.CTSigned ty ->
+                CT.CTSigned $ normalizeCrossInputTypeScopes ty
+            CT.CTShort ty ->
+                CT.CTShort $ normalizeCrossInputTypeScopes ty
+            CT.CTLong ty ->
+                CT.CTLong $ normalizeCrossInputTypeScopes ty
+            CT.CTPtr ty ->
+                CT.CTPtr $ normalizeCrossInputTypeScopes ty
+            CT.CTArray len ty ->
+                CT.CTArray len $ normalizeCrossInputTypeScopes ty
+            CT.CTFunc ret params ->
+                CT.CTFunc
+                    (normalizeCrossInputTypeScopes ret)
+                    (map (first normalizeCrossInputTypeScopes) params)
+            CT.CTIncomplete incompleteTy ->
+                CT.CTIncomplete $ case incompleteTy of
+                    CT.IncompleteArray elemTy ->
+                        CT.IncompleteArray $ normalizeCrossInputTypeScopes elemTy
+                    CT.IncompleteStruct tag _ ->
+                        CT.IncompleteStruct tag (CT.ScopeId 0)
+            CT.CTStruct members ->
+                CT.CTStruct $ fmap normalizeCrossInputStructMember members
+            CT.CTNamedStruct tag _ members ->
+                CT.CTNamedStruct tag (CT.ScopeId 0) $ fmap normalizeCrossInputStructMember members
+            CT.CTEnum underlyingTy members ->
+                CT.CTEnum (normalizeCrossInputTypeScopes underlyingTy) members
+            ty ->
+                ty
+
+        normalizeCrossInputStructMember member =
+            member { CT.smType = normalizeCrossInputTypeScopes $ CT.smType member }
+
 mergeExternalGlobalTypes
     :: CT.StorageClass Integer
     -> CT.StorageClass Integer
     -> Maybe (CT.StorageClass Integer)
 mergeExternalGlobalTypes (CT.SCAuto lhs) (CT.SCAuto rhs) =
-    CT.SCAuto <$> CT.mergeCompatibleTypeKinds lhs rhs
+    CT.SCAuto <$> mergeCrossInputTypeKinds lhs rhs
 mergeExternalGlobalTypes (CT.SCStatic lhs) (CT.SCStatic rhs) =
-    CT.SCStatic <$> CT.mergeCompatibleTypeKinds lhs rhs
+    CT.SCStatic <$> mergeCrossInputTypeKinds lhs rhs
 mergeExternalGlobalTypes (CT.SCRegister lhs) (CT.SCRegister rhs) =
-    CT.SCRegister <$> CT.mergeCompatibleTypeKinds lhs rhs
+    CT.SCRegister <$> mergeCrossInputTypeKinds lhs rhs
 mergeExternalGlobalTypes (CT.SCUndef lhs) (CT.SCUndef rhs) =
-    CT.SCUndef <$> CT.mergeCompatibleTypeKinds lhs rhs
+    CT.SCUndef <$> mergeCrossInputTypeKinds lhs rhs
 mergeExternalGlobalTypes _ _ = Nothing
 
 mergeExternalGlobals :: T.Text -> GVar Integer -> GVar Integer -> Either String (GVar Integer)
@@ -4579,6 +4639,12 @@ mergeExternalGlobals name lhs rhs = case mergeExternalGlobalTypes (gvtype lhs) (
     Nothing ->
         Left $ conflictingExternalDeclarationError name lhs rhs
     Just mergedType
+        | isExternOnlyExternalGlobal lhs && isExternOnlyExternalGlobal rhs ->
+            Right $ lhs { gvtype = mergedType }
+        | isExternOnlyExternalGlobal lhs ->
+            Right $ rhs { gvtype = mergedType }
+        | isExternOnlyExternalGlobal rhs ->
+            Right $ lhs { gvtype = mergedType }
         | isTentativeExternalGlobal lhs && isTentativeExternalGlobal rhs ->
             Right $ lhs { gvtype = mergedType }
         | isTentativeExternalGlobal lhs ->
@@ -4621,19 +4687,20 @@ implicitExternalFunction =
         { PF.fntype = CT.SCAuto $ CT.CTFunc CT.CTInt []
         , PF.fnDefined = False
         , PF.fnImplicit = True
+        , PF.fnNestDepth = 0
         }
 
 definedFunctions :: ParsedInput -> Set.Set T.Text
-definedFunctions (asts, _, _, _) =
+definedFunctions (asts, _, _, _, _, _) =
     Set.fromList
         [ name
         | ATNode (ATDefFunc name _) _ _ _ <- asts
         ]
 
 implicitFunctionCalls :: ParsedInput -> Set.Set T.Text
-implicitFunctionCalls (asts, _, _, funcs) =
+implicitFunctionCalls (asts, _, _, _, _, mergeFuncs) =
     foldMap implicitFunctionCallsInATree asts
-        `Set.difference` Set.fromList (Map.keys funcs)
+        `Set.difference` Set.fromList (Map.keys mergeFuncs)
 
 implicitFunctionCallsInATKindFor :: ATKindFor Integer -> Set.Set T.Text
 implicitFunctionCallsInATKindFor kind = case kind of
@@ -4693,7 +4760,8 @@ mergePreparedInputs prepareMergedInput =
     where
         finalize (asts, gvars, lits, funcs, _, _) = do
             (preparedAsts, preparedGVars) <- prepareMergedInput (fmap fst funcs) asts gvars
-            pure (preparedAsts, preparedGVars, lits, fmap fst funcs)
+            let visibleFuncs = fmap fst funcs
+            pure (preparedAsts, preparedGVars, preparedGVars, lits, visibleFuncs, visibleFuncs)
 
 mergeParsedInputs
     :: (( ASTs Integer
@@ -4710,12 +4778,20 @@ mergeParsedInputs
 mergeParsedInputs finalize parsedInputs =
     foldM mergeInput ([], Map.empty, [], Map.empty, Map.empty, Map.empty) (zip [0 :: Int ..] parsedInputs) >>= finalize
     where
-        mergeInput (astsAcc, gvarsAcc, litsAcc, funcsAcc, symbolsAcc, staticSymbolsAcc) (inputIndex, (asts, gvars, lits, funcs)) = do
-            let parsedInput = (asts, gvars, lits, funcs)
+        mergeInput (astsAcc, gvarsAcc, litsAcc, funcsAcc, symbolsAcc, staticSymbolsAcc) (inputIndex, (asts, visibleGVars, mergeGVars, lits, visibleFuncs, mergeFuncs)) = do
+            let parsedInput = (asts, visibleGVars, mergeGVars, lits, visibleFuncs, mergeFuncs)
                 actualDefinitions = definedFunctions parsedInput
             symbolsAcc' <- foldM (registerImplicitFunction inputIndex staticSymbolsAcc) symbolsAcc $ Set.toList $ implicitFunctionCalls parsedInput
-            (symbolsAcc'', staticSymbolsAcc', funcsAcc') <- foldM (registerFunction inputIndex actualDefinitions) (symbolsAcc', staticSymbolsAcc, funcsAcc) $ Map.toList funcs
-            (symbolsAcc''', staticSymbolsAcc'', gvarsAcc') <- foldM (registerGlobal inputIndex) (symbolsAcc'', staticSymbolsAcc', gvarsAcc) $ Map.toList gvars
+            (symbolsAcc'', staticSymbolsAcc', funcsAcc') <-
+                foldM
+                    (registerFunction inputIndex actualDefinitions visibleFuncs)
+                    (symbolsAcc', staticSymbolsAcc, funcsAcc)
+                    $ Map.toList mergeFuncs
+            (symbolsAcc''', staticSymbolsAcc'', gvarsAcc') <-
+                foldM
+                    (registerGlobal inputIndex visibleGVars)
+                    (symbolsAcc'', staticSymbolsAcc', gvarsAcc)
+                    $ Map.toList mergeGVars
             pure
                 ( astsAcc <> asts
                 , gvarsAcc'
@@ -4743,11 +4819,15 @@ mergeParsedInputs finalize parsedInputs =
                         _ ->
                             pure symbols
 
-        registerFunction origin actualDefinitions (symbols, staticSymbols, funcsAcc) (name, func)
+        registerFunction origin actualDefinitions visibleFuncs (symbols, staticSymbols, funcsAcc) (name, func)
             | CT.isSCStatic (PF.fntype func) = do
                 rejectExternalSymbolConflict origin semanticName newSymbol symbols
                 staticSymbols' <- registerStaticSymbol origin semanticName newSymbol staticSymbols
-                pure (symbols, staticSymbols', insertFunction name (func, hasBody) funcsAcc)
+                pure
+                    ( symbols
+                    , staticSymbols'
+                    , insertVisibleFunction name (func, hasBody) visibleFuncs funcsAcc
+                    )
             | otherwise = do
                 rejectStaticSymbolConflict origin semanticName newSymbol staticSymbols
                 case Map.lookup semanticName symbols of
@@ -4755,7 +4835,7 @@ mergeParsedInputs finalize parsedInputs =
                         pure
                             ( insertSymbol origin semanticName newSymbol symbols
                             , staticSymbols
-                            , insertFunction name (func, hasBody) funcsAcc
+                            , insertVisibleFunction name (func, hasBody) visibleFuncs funcsAcc
                             )
                     Just (existingOrigin, existingSymbol)
                         | existingOrigin == origin ->
@@ -4766,7 +4846,7 @@ mergeParsedInputs finalize parsedInputs =
                                     pure
                                         ( insertSymbol origin semanticName (ExternalFunction mergedFunc mergedHasBody) symbols
                                         , staticSymbols
-                                        , insertFunction name (mergedFunc, mergedHasBody) funcsAcc
+                                        , insertVisibleFunction name (mergedFunc, mergedHasBody) visibleFuncs funcsAcc
                                         )
                                 Right _ ->
                                     Left "internal compiler error: unexpected same-input symbol merge result"
@@ -4776,14 +4856,14 @@ mergeParsedInputs finalize parsedInputs =
                                     pure
                                         ( insertSymbol origin semanticName newSymbol symbols
                                         , staticSymbols
-                                        , insertFunction name (func, hasBody) funcsAcc
+                                        , insertVisibleFunction name (func, hasBody) visibleFuncs funcsAcc
                                         )
                             ExternalFunction existing existingHasBody -> do
                                 merged <- mergeExternalFunctions name (existing, existingHasBody) (func, hasBody)
                                 pure
                                     ( insertSymbol origin semanticName (uncurry ExternalFunction merged) symbols
                                     , staticSymbols
-                                    , insertFunction name merged funcsAcc
+                                    , insertVisibleFunction name merged visibleFuncs funcsAcc
                                     )
                             ExternalGlobal _ ->
                                 Left $ duplicateExternalSymbolError name
@@ -4792,11 +4872,15 @@ mergeParsedInputs finalize parsedInputs =
                 semanticName = emittedSymbolName origin (CT.isSCStatic $ PF.fntype func) name
                 newSymbol = ExternalFunction func hasBody
 
-        registerGlobal origin (symbols, staticSymbols, gvarsAcc) (name, gvar)
+        registerGlobal origin visibleGVars (symbols, staticSymbols, gvarsAcc) (name, gvar)
             | CT.isSCStatic (gvtype gvar) = do
                 rejectExternalSymbolConflict origin semanticName newSymbol symbols
                 staticSymbols' <- registerStaticSymbol origin semanticName newSymbol staticSymbols
-                pure (symbols, staticSymbols', Map.insert name gvar gvarsAcc)
+                pure
+                    ( symbols
+                    , staticSymbols'
+                    , insertVisibleGlobal name visibleGVars gvarsAcc
+                    )
             | otherwise = do
                 rejectStaticSymbolConflict origin semanticName newSymbol staticSymbols
                 case Map.lookup semanticName symbols of
@@ -4804,7 +4888,7 @@ mergeParsedInputs finalize parsedInputs =
                         pure
                             ( insertSymbol origin semanticName newSymbol symbols
                             , staticSymbols
-                            , Map.insert name gvar gvarsAcc
+                            , insertVisibleGlobal name visibleGVars gvarsAcc
                             )
                     Just (existingOrigin, existingSymbol)
                         | existingOrigin == origin ->
@@ -4815,7 +4899,7 @@ mergeParsedInputs finalize parsedInputs =
                                     pure
                                         ( insertSymbol origin semanticName (ExternalGlobal mergedGVar) symbols
                                         , staticSymbols
-                                        , Map.insert name mergedGVar gvarsAcc
+                                        , insertVisibleGlobal name visibleGVars gvarsAcc
                                         )
                                 Right _ ->
                                     Left "internal compiler error: unexpected same-input symbol merge result"
@@ -4829,13 +4913,20 @@ mergeParsedInputs finalize parsedInputs =
                                 pure
                                     ( insertSymbol origin semanticName (ExternalGlobal merged) symbols
                                     , staticSymbols
-                                    , Map.insert name merged gvarsAcc
+                                    , insertVisibleGlobal name visibleGVars gvarsAcc
                                     )
             where
                 semanticName = emittedSymbolName origin (CT.isSCStatic $ gvtype gvar) name
                 newSymbol = ExternalGlobal gvar
 
+        insertGlobal name gvar = Map.insertWith (preserveMergedGlobalType name) name gvar
         insertFunction name func = Map.insertWith preserveMergedFunctionType name func
+        insertVisibleGlobal name visibleGVars gvarsAcc =
+            maybe gvarsAcc (\gvar -> insertGlobal name gvar gvarsAcc) $
+                Map.lookup name visibleGVars
+        insertVisibleFunction name func visibleFuncs funcsAcc =
+            maybe funcsAcc (\visibleFunc -> insertFunction name (visibleFunc, snd func) funcsAcc) $
+                Map.lookup name visibleFuncs
         insertSymbol origin name symbol = Map.insert name (origin, symbol)
         insertStaticSymbol origin name symbol = Map.insert (origin, name) symbol
 
@@ -4884,6 +4975,9 @@ mergeParsedInputs finalize parsedInputs =
             ( fromMaybe (fst new) $ mergeExternalFunctionTypes (fst new) (fst old)
             , snd new || snd old
             )
+        preserveMergedGlobalType name new old =
+            either (const old) id $
+                mergeExternalGlobals name old new
 
 runAsm :: Maybe Handle -> Opts -> SI.Asm SI.AsmCodeCtx Integer a -> IO a
 runAsm outputHandle opts asm
@@ -5007,16 +5101,21 @@ main = do
             not (optIsRunAsm opts) && length (optInput opts) > 1
         emitWarnings' warningsToEmit =
             emitWarningsIfEnabled opts warningsToEmit
-        parserRunner =
-            if allowSameInputExternalCollisions
-                then PT.runParserAllowSameInputExternalCollisions
-                else runParser
-        parseInputRawEither fname txt =
-            case parserRunner parser fname txt
+        parseInputRawEitherSingleInput fname txt =
+            case runParser parser fname txt
                 :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, GlobalVars Integer, Literals Integer, PF.Functions Integer) of
                 Left x  -> Left x
                 Right (warns, asts, gvars, lits, funcs) ->
-                    Right (warns, (asts, gvars, lits, funcs))
+                    Right (warns, (asts, gvars, gvars, lits, funcs, funcs))
+        parseInputRawEitherAllowingExternalCollisions fname txt =
+            case PT.runParserAllowSameInputExternalCollisionsDetailed parser fname txt of
+                Left x  -> Left x
+                Right (warns, asts, gvars, mergeGVars, lits, funcs, mergeFuncs) ->
+                    Right (warns, (asts, gvars, mergeGVars, lits, funcs, mergeFuncs))
+        parseInputRawEither fname txt =
+            if allowSameInputExternalCollisions
+                then parseInputRawEitherAllowingExternalCollisions fname txt
+                else parseInputRawEitherSingleInput fname txt
         parseInputRaw fname txt =
             either
                 (\x -> hPutStr stderr (M.errorBundlePretty x) *> exitFailure)
@@ -5081,7 +5180,7 @@ main = do
                         , shouldEmitMergedWarning originatingInput parsedInput warning
                         ]
                     pure parsedInput
-        runParsed outputHandle (asts, gvars, lits, _) =
+        runParsed outputHandle (asts, gvars, _, lits, _, _) =
             runAsm outputHandle opts $ casmNormalized' asts gvars lits
         readInput fname = do
             txt <- withFile fname ReadMode $ \h -> do
@@ -5090,7 +5189,7 @@ main = do
                 pure txt'
             pure (fname, txt)
         runVisualize fname = do
-            (asts, _, _, _) <- readVisualizableInput fname
+            (asts, _, _, _, _, _) <- readVisualizableInput fname
             sizeSpec <- visualizeSizeSpec opts
             writeVisualization asts sizeSpec (visualizeOutputPath opts)
     if optVisualizeAst opts

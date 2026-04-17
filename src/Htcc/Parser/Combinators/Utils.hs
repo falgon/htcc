@@ -17,6 +17,7 @@ module Htcc.Parser.Combinators.Utils (
   , registerGVarWith
   , registerStringLiteral
   , registerFunc
+  , registerTypedef
   , decayExprType
   , conditionalResultType
   , isNullPointerConstant
@@ -24,11 +25,13 @@ module Htcc.Parser.Combinators.Utils (
   , isInvalidObjectPointerValue
   , isInvalidFunctionPointerValue
   , isInvalidFunctionPointerInitializer
+  , captureFunctionParamScopes
   , bracket
   , getPosState
 ) where
 import           Control.Applicative                             ((<|>))
-import           Control.Monad.State                             (gets, put)
+import           Control.Monad.State                             (gets, modify,
+                                                                  put)
 import           Control.Natural                                 (type (~>))
 import           Data.Bits                                       (Bits (..))
 import qualified Data.ByteString.UTF8                            as BSU
@@ -38,12 +41,14 @@ import qualified Htcc.CRules.Types                               as CT
 import           Htcc.Parser.AST.Core                            (ATKind (..),
                                                                   ATree (..))
 import           Htcc.Parser.Combinators.Core
-import           Htcc.Parser.ConstructionData.Core               (ConstructionData,
+import           Htcc.Parser.ConstructionData.Core               (ConstructionData (functionParamScopes),
+                                                                  FunctionParamScope,
                                                                   addFunction,
                                                                   addGVar,
                                                                   addGVarWith,
                                                                   addLVar,
-                                                                  addLiteral)
+                                                                  addLiteral,
+                                                                  addTypedef)
 import           Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
 import           Htcc.Parser.ConstructionData.Scope.Var          (GVarInitWith)
 import qualified Htcc.Tokenizer.Token                            as HT
@@ -109,6 +114,25 @@ registerFunc isDefined isImplicit ty ident = gets (addFunction isDefined isImpli
     >>= \case
         Right scp -> put scp
         Left err -> fail $ T.unpack $ fst err
+
+registerTypedef :: (Eq i, Num i)
+    => CT.StorageClass i
+    -> T.Text
+    -> Parser i ()
+registerTypedef ty ident = gets (addTypedef ty (tmpTKIdent ident))
+    >>= \case
+        Right scp -> put scp
+        Left err -> fail $ T.unpack $ fst err
+
+captureFunctionParamScopes :: Parser i a -> Parser i (a, [FunctionParamScope i])
+captureFunctionParamScopes parser = do
+    initialDepth <- gets (length . functionParamScopes)
+    result <- parser
+    scopes <- gets functionParamScopes
+    let newCount = length scopes - initialDepth
+        (newScopes, remainingScopes) = splitAt newCount scopes
+    modify $ \cd -> cd { functionParamScopes = remainingScopes }
+    pure (result, newScopes)
 
 decayExprType :: Ord i => CT.StorageClass i -> CT.StorageClass i
 decayExprType ty = case CT.toTypeKind ty of

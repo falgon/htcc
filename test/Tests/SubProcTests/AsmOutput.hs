@@ -90,6 +90,7 @@ module Tests.SubProcTests.AsmOutput (
     outputFileMultiInputAdjustedFunctionParamTypeTest,
     outputFileMultiInputCompatiblePrototypeMergeTest,
     outputFileMultiInputRepeatedPrototypeTest,
+    outputFileMultiInputTaggedPrototypeScopeMergeTest,
     outputFileMultiInputPrototypeOnlyArityRetypeTest,
     outputFileMultiInputSignedIntRedeclarationTest,
     outputFileMultiInputOldStyleDeclarationTest,
@@ -97,7 +98,12 @@ module Tests.SubProcTests.AsmOutput (
     outputFileMultiInputVoidPrototypeConflictTest,
     outputFileMultiInputImplicitFunctionDefinitionWarningTest,
     outputFileMultiInputImplicitFunctionPrototypeWarningTest,
+    outputFileMultiInputBlockScopeExternPrototypeWarningTest,
     outputFileMultiInputImplicitFunctionDefinitionTest,
+    outputFileMultiInputBlockScopeExternPrototypeDefinitionTest,
+    outputFileMultiInputBlockScopeExternObjectConflictTest,
+    outputFileMultiInputBlockScopeExternObjectFunctionConflictTest,
+    outputFileMultiInputBlockScopeExternPrototypeVisibilityTest,
     outputFileMultiInputDeferredIncompletePointeeUseTest,
     outputFileMultiInputDeferredIncompletePointerAddSubAssignRejectTest,
     outputFileMultiInputDeferredIncompletePointerIncDecRejectTest,
@@ -123,6 +129,7 @@ module Tests.SubProcTests.AsmOutput (
     outputFileMultiInputSameInputStaticImplicitFunctionConflictTest,
     outputFileMultiInputSameInputInternalLinkageConflictTest,
     outputFileMultiInputTentativeGlobalTest,
+    outputFileMultiInputExternGlobalDeclarationMergeTest,
     outputFileMultiInputTentativeArrayTest,
     outputFileMultiInputTentativeArrayDecayRetypeTest,
     outputFileMultiInputTentativeIncompleteArrayTest,
@@ -555,6 +562,9 @@ outputFileMultiInputCompatiblePrototypeMergeMsg = "CLI -o rejects extern functio
 outputFileMultiInputRepeatedPrototypeMsg :: T.Text
 outputFileMultiInputRepeatedPrototypeMsg = "CLI -o accepts repeated prototypes when another input provides the single function definition"
 
+outputFileMultiInputTaggedPrototypeScopeMergeMsg :: T.Text
+outputFileMultiInputTaggedPrototypeScopeMergeMsg = "CLI -o ignores per-input tagged-struct scope ids when merging compatible extern prototypes"
+
 outputFileMultiInputPrototypeOnlyArityRetypeMsg :: T.Text
 outputFileMultiInputPrototypeOnlyArityRetypeMsg = "CLI -o revalidates direct calls after merging later prototype-only declarations"
 
@@ -576,8 +586,23 @@ outputFileMultiInputImplicitFunctionDefinitionWarningMsg = "CLI -o suppresses cr
 outputFileMultiInputImplicitFunctionPrototypeWarningMsg :: T.Text
 outputFileMultiInputImplicitFunctionPrototypeWarningMsg = "CLI -o suppresses cross-input implicit-function warnings once another input declares the function"
 
+outputFileMultiInputBlockScopeExternPrototypeWarningMsg :: T.Text
+outputFileMultiInputBlockScopeExternPrototypeWarningMsg = "CLI -o keeps implicit-function warnings when only a same-input block-scope extern prototype exists"
+
 outputFileMultiInputImplicitFunctionDefinitionMsg :: T.Text
 outputFileMultiInputImplicitFunctionDefinitionMsg = "CLI -o accepts implicit function calls when another input provides the function definition"
+
+outputFileMultiInputBlockScopeExternPrototypeDefinitionMsg :: T.Text
+outputFileMultiInputBlockScopeExternPrototypeDefinitionMsg = "CLI -o keeps block-scope extern prototypes available for cross-input function merges"
+
+outputFileMultiInputBlockScopeExternObjectConflictMsg :: T.Text
+outputFileMultiInputBlockScopeExternObjectConflictMsg = "CLI -o rejects block-scope extern objects that conflict with later object definitions"
+
+outputFileMultiInputBlockScopeExternObjectFunctionConflictMsg :: T.Text
+outputFileMultiInputBlockScopeExternObjectFunctionConflictMsg = "CLI -o rejects block-scope extern objects that collide with later function definitions"
+
+outputFileMultiInputBlockScopeExternPrototypeVisibilityMsg :: T.Text
+outputFileMultiInputBlockScopeExternPrototypeVisibilityMsg = "CLI -o keeps block-scope extern prototype refinements from escaping into later file-scope call checking"
 
 outputFileMultiInputDeferredIncompletePointeeUseMsg :: T.Text
 outputFileMultiInputDeferredIncompletePointeeUseMsg = "CLI -o rejects cross-input function returns that only differ by pointee array bound inference"
@@ -653,6 +678,9 @@ outputFileMultiInputSameInputInternalLinkageConflictMsg = "CLI -o rejects same-i
 
 outputFileMultiInputTentativeGlobalMsg :: T.Text
 outputFileMultiInputTentativeGlobalMsg = "CLI -o coalesces tentative globals across multiple inputs"
+
+outputFileMultiInputExternGlobalDeclarationMergeMsg :: T.Text
+outputFileMultiInputExternGlobalDeclarationMergeMsg = "CLI -o treats extern-only globals as declarations during multi-input merges"
 
 outputFileMultiInputTentativeArrayMsg :: T.Text
 outputFileMultiInputTentativeArrayMsg = "CLI -o coalesces tentative array declarations across multiple inputs"
@@ -7674,6 +7702,45 @@ outputFileMultiInputRepeatedPrototypeTest =
                 ]
         return $ mkResult outputFileMultiInputRepeatedPrototypeMsg ok details
 
+outputFileMultiInputTaggedPrototypeScopeMergeTest :: IO (Either T.Text T.Text, String)
+outputFileMultiInputTaggedPrototypeScopeMergeTest =
+    flip finally (clean ["tmp.out", "tmp.s", "tmp-use.c", "tmp-def.c"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp.s"
+            usePath = "tmp-use.c"
+            defPath = "tmp-def.c"
+        clean ["tmp.out", target, usePath, defPath]
+        T.writeFile usePath $ T.unlines
+            [ "int g(void);"
+            , "int f(struct S { int x; } a);"
+            , "int main(void) { return 0; }"
+            ]
+        T.writeFile defPath "int f(struct S { int x; } a) { return 0; }"
+        execErrFin $ mconcat
+            [ htccCmd
+            , " -o "
+            , T.pack target
+            , " "
+            , T.pack usePath
+            , " "
+            , T.pack defPath
+            , " > tmp.out"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        asm <- T.readFile target
+        let hasRequiredLabels =
+                all (`T.isInfixOf` asm)
+                    [ "f:"
+                    , "main:"
+                    ]
+            ok = T.null stdoutLeak && hasRequiredLabels
+            details = T.unlines
+                [ "stdout:"
+                , stdoutLeak
+                , "hasRequiredLabels: " <> T.pack (show hasRequiredLabels)
+                ]
+        return $ mkResult outputFileMultiInputTaggedPrototypeScopeMergeMsg ok details
+
 outputFileMultiInputPrototypeOnlyArityRetypeTest :: IO (Either T.Text T.Text, String)
 outputFileMultiInputPrototypeOnlyArityRetypeTest =
     flip finally (clean ["tmp.out", "tmp.err", "tmp.s", "tmp-caller.c", "tmp-proto.c"]) $ do
@@ -7989,6 +8056,64 @@ outputFileMultiInputImplicitFunctionPrototypeWarningTest =
                 ]
         return $ mkResult outputFileMultiInputImplicitFunctionPrototypeWarningMsg ok details
 
+outputFileMultiInputBlockScopeExternPrototypeWarningTest :: IO (Either T.Text T.Text, String)
+outputFileMultiInputBlockScopeExternPrototypeWarningTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp.s", "tmp-caller.c", "tmp-def.c", "tmp"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp.s"
+            callerPath = "tmp-caller.c"
+            defPath = "tmp-def.c"
+            expectedWarning = "warning: the function 'foo' is not declared."
+        T.writeFile callerPath $ T.unlines
+            [ "int main(void) { return foo(1) != 1; }"
+            , "int probe(void) { extern int foo(int); return 0; }"
+            ]
+        T.writeFile defPath "int foo(int x) { return x; }"
+        result <- exec $ mconcat
+            [ htccCmd
+            , " -o "
+            , T.pack target
+            , " "
+            , T.pack callerPath
+            , " "
+            , T.pack defPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist target
+        asm <- if targetExists then T.readFile target else pure ""
+        linkCmd <- assemblerCommand [target, "-o", "tmp"]
+        execErrFin linkCmd
+        runResult <- exec "./tmp"
+        let succeeded = exitCode (const False) True result
+            hasExpectedWarning = expectedWarning `T.isInfixOf` stderrOut
+            hasRequiredLabels =
+                all (`T.isInfixOf` asm)
+                    [ "foo:"
+                    , "probe:"
+                    , "main:"
+                    ]
+            ok =
+                succeeded
+                    && T.null stdoutLeak
+                    && targetExists
+                    && hasExpectedWarning
+                    && hasRequiredLabels
+                    && exitCode (const False) True runResult
+            details = T.unlines
+                [ "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "targetExists: " <> T.pack (show targetExists)
+                , "hasExpectedWarning: " <> T.pack (show hasExpectedWarning)
+                , "hasRequiredLabels: " <> T.pack (show hasRequiredLabels)
+                , "runExitCode: " <> T.pack (show runResult)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult outputFileMultiInputBlockScopeExternPrototypeWarningMsg ok details
+
 outputFileMultiInputImplicitFunctionDefinitionTest :: IO (Either T.Text T.Text, String)
 outputFileMultiInputImplicitFunctionDefinitionTest =
     flip finally (clean ["tmp.out", "tmp.s", "tmp-caller.c", "tmp-def.c", "tmp"]) $ do
@@ -8023,6 +8148,188 @@ outputFileMultiInputImplicitFunctionDefinitionTest =
                 , "exitCode: " <> T.pack (show result)
                 ]
         return $ mkResult outputFileMultiInputImplicitFunctionDefinitionMsg ok details
+
+outputFileMultiInputBlockScopeExternPrototypeDefinitionTest :: IO (Either T.Text T.Text, String)
+outputFileMultiInputBlockScopeExternPrototypeDefinitionTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp.s", "tmp-caller.c", "tmp-def.c", "tmp"]) $ do
+        htccCmd <- htccCommand
+        let callerPath = "tmp-caller.c"
+            defPath = "tmp-def.c"
+        T.writeFile callerPath "int main(void) { extern char foo(void); return foo(); }"
+        T.writeFile defPath "char foo(void) { return 0; }"
+        execErrFin $ mconcat
+            [ htccCmd
+            , " -o tmp.s "
+            , T.pack callerPath
+            , " "
+            , T.pack defPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        linkCmd <- assemblerCommand ["tmp.s", "-o", "tmp"]
+        execErrFin linkCmd
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        result <- exec "./tmp"
+        asm <- T.readFile "tmp.s"
+        let hasRequiredLabels =
+                all (`T.isInfixOf` asm)
+                    [ "foo:"
+                    , "main:"
+                    ]
+            ok =
+                T.null stdoutLeak
+                    && T.null stderrOut
+                    && exitCode (const False) True result
+                    && hasRequiredLabels
+            details = T.unlines
+                [ "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "hasRequiredLabels: " <> T.pack (show hasRequiredLabels)
+                , "runExitCode: " <> T.pack (show result)
+                ]
+        return $
+            mkResult
+                outputFileMultiInputBlockScopeExternPrototypeDefinitionMsg
+                ok
+                details
+
+outputFileMultiInputBlockScopeExternObjectConflictTest :: IO (Either T.Text T.Text, String)
+outputFileMultiInputBlockScopeExternObjectConflictTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp.s", "tmp-use.c", "tmp-def.c"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp.s"
+            usePath = "tmp-use.c"
+            defPath = "tmp-def.c"
+            expectedError = "conflicting external declarations in multi-input -o mode: x"
+        T.writeFile usePath "int main(void) { extern char x; return x; }"
+        T.writeFile defPath "int x = 256;"
+        result <- exec $ mconcat
+            [ htccCmd
+            , " -o "
+            , T.pack target
+            , " "
+            , T.pack usePath
+            , " "
+            , T.pack defPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist target
+        let failed = exitCode (const True) False result
+            hasExpectedError = expectedError `T.isInfixOf` stderrOut
+            ok = failed && T.null stdoutLeak && hasExpectedError && not targetExists
+            details = T.unlines
+                [ "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "hasExpectedError: " <> T.pack (show hasExpectedError)
+                , "targetExists: " <> T.pack (show targetExists)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $
+            mkResult
+                outputFileMultiInputBlockScopeExternObjectConflictMsg
+                ok
+                details
+
+outputFileMultiInputBlockScopeExternObjectFunctionConflictTest :: IO (Either T.Text T.Text, String)
+outputFileMultiInputBlockScopeExternObjectFunctionConflictTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp.s", "tmp-use.c", "tmp-def.c"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp.s"
+            usePath = "tmp-use.c"
+            defPath = "tmp-def.c"
+            expectedError = "multiple external definitions in multi-input -o mode: x"
+        T.writeFile usePath "int main(void) { extern int x; return x; }"
+        T.writeFile defPath "int x(void) { return 0; }"
+        result <- exec $ mconcat
+            [ htccCmd
+            , " -o "
+            , T.pack target
+            , " "
+            , T.pack usePath
+            , " "
+            , T.pack defPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist target
+        let failed = exitCode (const True) False result
+            hasExpectedError = expectedError `T.isInfixOf` stderrOut
+            ok = failed && T.null stdoutLeak && hasExpectedError && not targetExists
+            details = T.unlines
+                [ "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "hasExpectedError: " <> T.pack (show hasExpectedError)
+                , "targetExists: " <> T.pack (show targetExists)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $
+            mkResult
+                outputFileMultiInputBlockScopeExternObjectFunctionConflictMsg
+                ok
+                details
+
+outputFileMultiInputBlockScopeExternPrototypeVisibilityTest :: IO (Either T.Text T.Text, String)
+outputFileMultiInputBlockScopeExternPrototypeVisibilityTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp.s", "tmp-caller.c", "tmp-other.c"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp.s"
+            callerPath = "tmp-caller.c"
+            otherPath = "tmp-other.c"
+        T.writeFile callerPath $ T.unlines
+            [ "int foo();"
+            , "int probe(void) { extern int foo(void); return 0; }"
+            , "int main(void) { return foo(1); }"
+            ]
+        T.writeFile otherPath "int side(void) { return 0; }"
+        result <- exec $ mconcat
+            [ htccCmd
+            , " -o "
+            , T.pack target
+            , " "
+            , T.pack callerPath
+            , " "
+            , T.pack otherPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist target
+        asm <- if targetExists then T.readFile target else pure ""
+        let succeeded = exitCode (const False) True result
+            hasRequiredAsm =
+                all (`T.isInfixOf` asm)
+                    [ "main:"
+                    , "call foo"
+                    ]
+            ok =
+                succeeded
+                    && T.null stdoutLeak
+                    && T.null stderrOut
+                    && targetExists
+                    && hasRequiredAsm
+            details = T.unlines
+                [ "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "targetExists: " <> T.pack (show targetExists)
+                , "hasRequiredAsm: " <> T.pack (show hasRequiredAsm)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $
+            mkResult
+                outputFileMultiInputBlockScopeExternPrototypeVisibilityMsg
+                ok
+                details
 
 outputFileMultiInputDeferredIncompletePointeeUseTest :: IO (Either T.Text T.Text, String)
 outputFileMultiInputDeferredIncompletePointeeUseTest =
@@ -9141,6 +9448,85 @@ outputFileMultiInputTentativeGlobalTest =
                 , "tentativeLabelCount: " <> T.pack (show tentativeLabelCount)
                 ]
         return $ mkResult outputFileMultiInputTentativeGlobalMsg ok details
+
+outputFileMultiInputExternGlobalDeclarationMergeTest :: IO (Either T.Text T.Text, String)
+outputFileMultiInputExternGlobalDeclarationMergeTest =
+    flip finally
+        (clean ["tmp.out", "tmp.err", "tmp.s", "tmp-decl.c", "tmp-def.c", "tmp"]) $ do
+            htccCmd <- htccCommand
+            let declPath = "tmp-decl.c"
+                defPath = "tmp-def.c"
+
+            T.writeFile declPath $ T.unlines
+                [ "extern int x;"
+                , "int main(void) { return x != 1; }"
+                ]
+            T.writeFile defPath "int x = 1;"
+            execErrFin $ mconcat
+                [ htccCmd
+                , " -o tmp.s "
+                , T.pack declPath
+                , " "
+                , T.pack defPath
+                , " > tmp.out 2> tmp.err"
+                ]
+            linkCmd <- assemblerCommand ["tmp.s", "-o", "tmp"]
+            execErrFin linkCmd
+            stdoutLeak <- T.readFile "tmp.out"
+            stderrOut <- T.readFile "tmp.err"
+            initResult <- exec "./tmp"
+            asmAfterInit <- T.readFile "tmp.s"
+
+            T.writeFile declPath $ T.unlines
+                [ "extern int y;"
+                , "int main(void) { return y; }"
+                ]
+            T.writeFile defPath "int y;"
+            execErrFin $ mconcat
+                [ htccCmd
+                , " -o tmp.s "
+                , T.pack declPath
+                , " "
+                , T.pack defPath
+                , " > tmp.out 2> tmp.err"
+                ]
+            linkCmd' <- assemblerCommand ["tmp.s", "-o", "tmp"]
+            execErrFin linkCmd'
+            stdoutLeak' <- T.readFile "tmp.out"
+            stderrOut' <- T.readFile "tmp.err"
+            tentativeResult <- exec "./tmp"
+            asmAfterTentative <- T.readFile "tmp.s"
+
+            let initOk =
+                    T.null stdoutLeak
+                        && T.null stderrOut
+                        && exitCode (const False) True initResult
+                        && "x:" `T.isInfixOf` asmAfterInit
+                tentativeOk =
+                    T.null stdoutLeak'
+                        && T.null stderrOut'
+                        && exitCode (const False) True tentativeResult
+                        && "y:" `T.isInfixOf` asmAfterTentative
+                ok = initOk && tentativeOk
+                details = T.unlines
+                    [ "initialized-case stdout:"
+                    , stdoutLeak
+                    , "initialized-case stderr:"
+                    , stderrOut
+                    , "initialized-case asm has x: " <> T.pack (show $ "x:" `T.isInfixOf` asmAfterInit)
+                    , "initialized-case runExitCode: " <> T.pack (show initResult)
+                    , "tentative-case stdout:"
+                    , stdoutLeak'
+                    , "tentative-case stderr:"
+                    , stderrOut'
+                    , "tentative-case asm has y: " <> T.pack (show $ "y:" `T.isInfixOf` asmAfterTentative)
+                    , "tentative-case runExitCode: " <> T.pack (show tentativeResult)
+                    ]
+            return $
+                mkResult
+                    outputFileMultiInputExternGlobalDeclarationMergeMsg
+                    ok
+                    details
 
 outputFileMultiInputTentativeArrayTest :: IO (Either T.Text T.Text, String)
 outputFileMultiInputTentativeArrayTest =

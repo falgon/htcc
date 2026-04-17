@@ -12,6 +12,7 @@ The types of C language
 {-# LANGUAGE BangPatterns, DeriveGeneric, LambdaCase #-}
 module Htcc.CRules.Types.TypeKind (
     -- * TypeKind data type
+    ScopeId (..),
     StructMember (..),
     TypeKind (..),
     Incomplete (..),
@@ -47,6 +48,11 @@ import           Htcc.CRules.Char
 import           Htcc.CRules.Types.CType
 import           Htcc.Utils              (dropFst3, dropSnd3, lor, maybe',
                                           spanLen, toInteger, toNatural)
+
+newtype ScopeId = ScopeId Natural
+    deriving (Eq, Ord, Show, Generic)
+
+instance NFData ScopeId
 
 -- | Class to a type based on `TypeKind`.
 class TypeKindBase a where
@@ -112,24 +118,24 @@ class IncompleteBase a where
 
 -- | The type representing an incomplete type
 data Incomplete i = IncompleteArray (TypeKind i) -- ^ incomplete array, it has a base type.
-    | IncompleteStruct T.Text -- ^ incomplete struct, it has a tag name.
+    | IncompleteStruct T.Text ScopeId -- ^ incomplete struct, it has a tag name and binding scope.
     deriving (Eq, Generic)
 
 instance IncompleteBase Incomplete where
     isIncompleteArray (IncompleteArray _) = True
     isIncompleteArray _                   = False
-    isIncompleteStruct (IncompleteStruct _) = True
-    isIncompleteStruct _                    = False
-    fromIncompleteStruct (IncompleteStruct t) = Just t
-    fromIncompleteStruct _                    = Nothing
+    isIncompleteStruct (IncompleteStruct _ _) = True
+    isIncompleteStruct _                      = False
+    fromIncompleteStruct (IncompleteStruct t _) = Just t
+    fromIncompleteStruct _                      = Nothing
     fromIncompleteArray (IncompleteArray t) = Just t
     fromIncompleteArray _                   = Nothing
     isValidIncomplete (IncompleteArray t) = isFundamental t
     isValidIncomplete _                   = True
 
 instance Show i => Show (Incomplete i) where
-    show (IncompleteArray t)  = show t ++ "[]"
-    show (IncompleteStruct t) = T.unpack t
+    show (IncompleteArray t)    = show t ++ "[]"
+    show (IncompleteStruct t _) = T.unpack t
 
 instance NFData i => NFData (Incomplete i)
 
@@ -146,7 +152,7 @@ data TypeKind i = CTInt -- ^ The type @int@ as C language
     | CTArray Natural (TypeKind i) -- ^ The array type
     | CTEnum (TypeKind i) (M.Map T.Text i) -- ^ The enum, has its underlying type and a map
     | CTStruct (M.Map T.Text (StructMember i)) -- ^ The struct, has its members and their names.
-    | CTNamedStruct T.Text (M.Map T.Text (StructMember i)) -- ^ A tagged struct definition.
+    | CTNamedStruct T.Text ScopeId (M.Map T.Text (StructMember i)) -- ^ A tagged struct definition.
     | CTIncomplete (Incomplete i) -- ^ The incomplete type.
     | CTUndef -- ^ Undefined type
     deriving Generic
@@ -154,6 +160,14 @@ data TypeKind i = CTInt -- ^ The type @int@ as C language
 {-# INLINE fundamental #-}
 fundamental :: [TypeKind i]
 fundamental = [CTChar, CTInt, CTBool, CTShort CTUndef, CTLong CTUndef, CTSigned CTUndef, CTVoid]
+
+{-# INLINE anonymousStructTagPrefix #-}
+anonymousStructTagPrefix :: T.Text
+anonymousStructTagPrefix = T.pack ".anonymous.struct."
+
+{-# INLINE isAnonymousStructTag #-}
+isAnonymousStructTag :: T.Text -> Bool
+isAnonymousStructTag = T.isPrefixOf anonymousStructTagPrefix
 
 {-# INLINE isLongShortable #-}
 isLongShortable :: TypeKind i -> Bool
@@ -259,7 +273,8 @@ instance Eq i => Eq (TypeKind i) where
     (==) (CTEnum ut1 m1) (CTEnum ut2 m2) = ut1 == ut2 && m1 == m2
     (==) (CTArray v1 t1) (CTArray v2 t2) = v1 == v2 && t1 == t2
     (==) (CTStruct m1) (CTStruct m2) = m1 == m2
-    (==) (CTNamedStruct tag1 m1) (CTNamedStruct tag2 m2) = tag1 == tag2 && m1 == m2
+    (==) (CTNamedStruct tag1 depth1 m1) (CTNamedStruct tag2 depth2 m2) =
+        tag1 == tag2 && depth1 == depth2 && m1 == m2
     (==) CTUndef CTUndef = True
     (==) (CTPtr t1) (CTPtr t2) = t1 == t2
     (==) (CTIncomplete t1) (CTIncomplete t2) = t1 == t2
@@ -284,7 +299,10 @@ instance Show i => Show (TypeKind i) where
     show (CTArray v t) = show t ++ "[" ++ show v ++ "]"
     show (CTEnum _ m) = "enum { " ++ intercalate ", " (map T.unpack $ M.keys m) ++ " }"
     show (CTStruct m) = "struct { " ++ concatMap (\(v, inf) -> show (smType inf) ++ " " ++ T.unpack v ++ "; ") (M.toList m) ++ "}"
-    show (CTNamedStruct tag m) =
+    show (CTNamedStruct tag _ m)
+        | isAnonymousStructTag tag =
+            "struct { " ++ concatMap (\(v, inf) -> show (smType inf) ++ " " ++ T.unpack v ++ "; ") (M.toList m) ++ "}"
+    show (CTNamedStruct tag _ m) =
         "struct " ++ T.unpack tag ++ " { "
             ++ concatMap (\(v, inf) -> show (smType inf) ++ " " ++ T.unpack v ++ "; ") (M.toList m)
             ++ "}"
@@ -336,7 +354,7 @@ instance Ord i => CType (TypeKind i) where
         | M.null m = 1
         | otherwise = let sn = maximumBy (flip (.) smOffset . compare . smOffset) $ M.elems m in
             toNatural $ alignas (toInteger $ smOffset sn + sizeof (smType sn)) (toInteger $ alignof t)
-    sizeof t@(CTNamedStruct _ m)
+    sizeof t@(CTNamedStruct _ _ m)
         | M.null m = 1
         | otherwise = let sn = maximumBy (flip (.) smOffset . compare . smOffset) $ M.elems m in
             toNatural $ alignas (toInteger $ smOffset sn + sizeof (smType sn)) (toInteger $ alignof t)
@@ -365,7 +383,7 @@ instance Ord i => CType (TypeKind i) where
     alignof (CTStruct m)
         | M.null m = 1
         | otherwise = maximum $ map (alignof . smType) $ M.elems m
-    alignof (CTNamedStruct _ m)
+    alignof (CTNamedStruct _ _ m)
         | M.null m = 1
         | otherwise = maximum $ map (alignof . smType) $ M.elems m
     alignof CTUndef = 0
@@ -427,9 +445,9 @@ instance TypeKindBase TypeKind where
     isIntegral _            = False
 
     {-# INLINE isCTStruct #-}
-    isCTStruct (CTStruct _)        = True
-    isCTStruct (CTNamedStruct _ _) = True
-    isCTStruct _                   = False
+    isCTStruct (CTStruct _)          = True
+    isCTStruct (CTNamedStruct _ _ _) = True
+    isCTStruct _                     = False
 
     {-# INLINE isCTUndef #-}
     isCTUndef CTUndef = True
@@ -489,9 +507,9 @@ alignas !n !aval = pred (n + aval) .&. complement (pred aval)
 
 -- | `lookupMember` search the specified member by its name from `CTStruct`.
 lookupMember :: T.Text -> TypeKind i -> Maybe (StructMember i)
-lookupMember t (CTStruct m)        = M.lookup t m
-lookupMember t (CTNamedStruct _ m) = M.lookup t m
-lookupMember _ _                   = Nothing
+lookupMember t (CTStruct m)          = M.lookup t m
+lookupMember t (CTNamedStruct _ _ m) = M.lookup t m
+lookupMember _ _                     = Nothing
 
 typeKindStructurallyEqual :: Eq i => TypeKind i -> TypeKind i -> Bool
 typeKindStructurallyEqual CTInt CTInt = True
@@ -508,8 +526,10 @@ typeKindStructurallyEqual (CTArray lhsLen lhsTy) (CTArray rhsLen rhsTy) =
     lhsLen == rhsLen && typeKindStructurallyEqual lhsTy rhsTy
 typeKindStructurallyEqual (CTStruct lhsMembers) (CTStruct rhsMembers) =
     structMembersStructurallyEqual lhsMembers rhsMembers
-typeKindStructurallyEqual (CTNamedStruct lhsTag lhsMembers) (CTNamedStruct rhsTag rhsMembers) =
-    lhsTag == rhsTag && structMembersStructurallyEqual lhsMembers rhsMembers
+typeKindStructurallyEqual (CTNamedStruct lhsTag lhsDepth lhsMembers) (CTNamedStruct rhsTag rhsDepth rhsMembers) =
+    lhsTag == rhsTag
+        && lhsDepth == rhsDepth
+        && structMembersStructurallyEqual lhsMembers rhsMembers
 typeKindStructurallyEqual (CTPtr lhsTy) (CTPtr rhsTy) =
     typeKindStructurallyEqual lhsTy rhsTy
 typeKindStructurallyEqual (CTIncomplete lhs) (CTIncomplete rhs) =
@@ -546,8 +566,8 @@ structMemberStructurallyEqual lhs rhs =
 incompleteTypesStructurallyEqual :: Eq i => Incomplete i -> Incomplete i -> Bool
 incompleteTypesStructurallyEqual (IncompleteArray lhsTy) (IncompleteArray rhsTy) =
     typeKindStructurallyEqual lhsTy rhsTy
-incompleteTypesStructurallyEqual (IncompleteStruct lhsTag) (IncompleteStruct rhsTag) =
-    lhsTag == rhsTag
+incompleteTypesStructurallyEqual (IncompleteStruct lhsTag lhsDepth) (IncompleteStruct rhsTag rhsDepth) =
+    lhsTag == rhsTag && lhsDepth == rhsDepth
 incompleteTypesStructurallyEqual _ _ = False
 
 mergeCompatibleTypeKinds :: Eq i => TypeKind i -> TypeKind i -> Maybe (TypeKind i)
@@ -573,23 +593,27 @@ mergeCompatibleTypeKinds' _ (CTFunc lhsRet lhsParams) (CTFunc rhsRet rhsParams) 
     pure $ CTFunc retTy params
 mergeCompatibleTypeKinds' allowExtentInference lhs@(CTIncomplete (IncompleteArray _)) rhs@(CTIncomplete (IncompleteArray _)) =
     mergeTentativeArrayTypeKinds' allowExtentInference lhs rhs
-mergeCompatibleTypeKinds' _ (CTIncomplete (IncompleteStruct lhsTag)) (CTIncomplete (IncompleteStruct rhsTag))
-    | lhsTag == rhsTag =
-        Just $ CTIncomplete $ IncompleteStruct lhsTag
-mergeCompatibleTypeKinds' _ (CTIncomplete (IncompleteStruct lhsTag)) rhs@(CTNamedStruct rhsTag _)
-    | lhsTag == rhsTag =
+mergeCompatibleTypeKinds' _ (CTIncomplete (IncompleteStruct lhsTag lhsDepth)) (CTIncomplete (IncompleteStruct rhsTag rhsDepth))
+    | lhsTag == rhsTag
+    , lhsDepth == rhsDepth =
+        Just $ CTIncomplete $ IncompleteStruct lhsTag lhsDepth
+mergeCompatibleTypeKinds' _ (CTIncomplete (IncompleteStruct lhsTag lhsDepth)) rhs@(CTNamedStruct rhsTag rhsDepth _)
+    | lhsTag == rhsTag
+    , lhsDepth == rhsDepth =
         Just rhs
-mergeCompatibleTypeKinds' _ lhs@(CTNamedStruct lhsTag _) (CTIncomplete (IncompleteStruct rhsTag))
-    | lhsTag == rhsTag =
+mergeCompatibleTypeKinds' _ lhs@(CTNamedStruct lhsTag lhsDepth _) (CTIncomplete (IncompleteStruct rhsTag rhsDepth))
+    | lhsTag == rhsTag
+    , lhsDepth == rhsDepth =
         Just lhs
 mergeCompatibleTypeKinds' _ (CTEnum lhsTy lhsMembers) (CTEnum rhsTy rhsMembers)
     | lhsMembers == rhsMembers =
         CTEnum <$> mergeCompatibleTypeKinds' False lhsTy rhsTy <*> pure lhsMembers
 mergeCompatibleTypeKinds' _ (CTStruct lhsMembers) (CTStruct rhsMembers) =
     CTStruct <$> mergeCompatibleStructMembers lhsMembers rhsMembers
-mergeCompatibleTypeKinds' _ (CTNamedStruct lhsTag lhsMembers) (CTNamedStruct rhsTag rhsMembers)
-    | lhsTag == rhsTag =
-        CTNamedStruct lhsTag <$> mergeCompatibleStructMembers lhsMembers rhsMembers
+mergeCompatibleTypeKinds' _ (CTNamedStruct lhsTag lhsDepth lhsMembers) (CTNamedStruct rhsTag rhsDepth rhsMembers)
+    | lhsTag == rhsTag
+    , lhsDepth == rhsDepth =
+        CTNamedStruct lhsTag lhsDepth <$> mergeCompatibleStructMembers lhsMembers rhsMembers
 mergeCompatibleTypeKinds' allowExtentInference lhs rhs =
     mergeTentativeArrayTypeKinds' allowExtentInference lhs rhs
 

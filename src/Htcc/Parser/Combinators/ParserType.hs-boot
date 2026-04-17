@@ -26,3 +26,18 @@ runParserAllowSameInputExternalCollisions ::
     -> FilePath
     -> T.Text
     -> Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs i, PSV.GlobalVars i, PSV.Literals i, PF.Functions i)
+
+runParserAllowSameInputExternalCollisionsDetailed ::
+    Parser i (ASTs i)
+    -> FilePath
+    -> T.Text
+    -> Either
+        (M.ParseErrorBundle T.Text Void)
+        ( Warnings
+        , ASTs i
+        , PSV.GlobalVars i
+        , PSV.GlobalVars i
+        , PSV.Literals i
+        , PF.Functions i
+        , PF.Functions i
+        )

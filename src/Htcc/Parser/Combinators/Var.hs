@@ -232,7 +232,7 @@ skipInitializer allowStructBraceElision ty = M.choice
                     rejectAggregateExpr "expected '{' to initialize an array" *> skipArrayNoBraces ty
                 CT.CTStruct mems ->
                     rejectAggregateExpr "expected '{' to initialize a struct" *> skipStructNoBraces (orderedStructMembers mems)
-                CT.CTNamedStruct _ mems ->
+                CT.CTNamedStruct _ _ mems ->
                     rejectAggregateExpr "expected '{' to initialize a struct" *> skipStructNoBraces (orderedStructMembers mems)
                 _ ->
                     M.empty
@@ -247,7 +247,7 @@ skipInitializerList ty = do
     case CT.toTypeKind ty of
         CT.CTArray _ _   -> skipBracedInitializerString ty M.<|> (skipArrayList ty <* lift rbrace)
         CT.CTStruct mems -> skipStructList (orderedStructMembers mems) <* lift rbrace
-        CT.CTNamedStruct _ mems -> skipStructList (orderedStructMembers mems) <* lift rbrace
+        CT.CTNamedStruct _ _ mems -> skipStructList (orderedStructMembers mems) <* lift rbrace
         _                -> do
             skipInitializer False ty
             void $ lift $ M.option () (() <$ comma)
@@ -412,7 +412,7 @@ initZero (CT.CTArray n ty) desg =
         SQ.empty
         [0..fromIntegral (pred n)]
 initZero t@(CT.CTStruct _) desg = zeroFillObject (CT.SCAuto t) desg
-initZero t@(CT.CTNamedStruct _ _) desg = zeroFillObject (CT.SCAuto t) desg
+initZero t@(CT.CTNamedStruct _ _ _) desg = zeroFillObject (CT.SCAuto t) desg
 initZero _ desg = SQ.singleton <$> desgNode (atNumLit 0) desg
 
 orderedStructMembers :: MP.Map T.Text (CT.StructMember i) -> [CT.StructMember i]
@@ -568,7 +568,7 @@ initializerList ty ai desg = M.choice
                     CT.CTStruct mems -> do
                         (ast, explicitMems, _) <- initStructLoop (orderedStructMembers mems) ai
                         (ast SQ.><) <$> zeroFillRemainingStructBytes ty explicitMems desg
-                    CT.CTNamedStruct _ mems -> do
+                    CT.CTNamedStruct _ _ mems -> do
                         (ast, explicitMems, _) <- initStructLoop (orderedStructMembers mems) ai
                         (ast SQ.><) <$> zeroFillRemainingStructBytes ty explicitMems desg
                     _ -> do
@@ -665,7 +665,7 @@ desgInit allowStructBraceElision ty ai desg = M.choice
                     rejectAggregateExpr "expected '{' to initialize an array" *> initializerArrayNoBraces ty ai desg
                 CT.CTStruct mems ->
                     rejectAggregateExpr "expected '{' to initialize a struct" *> initializerStructNoBraces (orderedStructMembers mems) ai desg
-                CT.CTNamedStruct _ mems ->
+                CT.CTNamedStruct _ _ mems ->
                     rejectAggregateExpr "expected '{' to initialize a struct" *> initializerStructNoBraces (orderedStructMembers mems) ai desg
                 _ ->
                     M.empty

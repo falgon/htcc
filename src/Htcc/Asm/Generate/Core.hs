@@ -590,8 +590,9 @@ textSection' _ = SI.errCtx "internal compiler error: all abstract tree should st
 dataSection :: (Show i, Ord i, Num i) => M.Map T.Text (GVar i) -> [Literal i] -> SI.Asm SI.AsmCodeCtx e ()
 dataSection gvars lits = ID.dAta $ do
     forM_ lits $ \(Literal _ n cnt) -> ID.label (".L.data." <> tshow n) $ ID.byte cnt
-    forM_ (M.toList gvars) $ \(var, GVar t ginit) -> case ginit of
+    forM_ (M.toList gvars) $ \(var, GVar t ginit _) -> case ginit of
         PV.GVarInitWithZero    -> ID.label var $ ID.zero (CR.sizeof t)
+        PV.GVarInitWithExternDecl -> pure ()
         PV.GVarInitWithOG ref  -> ID.label var $ ID.quad ref
         PV.GVarInitWithVal val -> ID.label var $ ID.sbyte (CR.sizeof t) val
         PV.GVarInitWithData ds -> ID.label var $ mapM_ emitInitData ds
