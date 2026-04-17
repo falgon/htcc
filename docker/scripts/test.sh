@@ -1,7 +1,9 @@
 #!/bin/bash
 find /htcc_work -name "*.s" -type f |\
-    while read fname; do 
-        gcc -xassembler -no-pie -o "$(dirname $fname)/$(basename $fname '.s').o" $fname
+    while IFS= read -r fname; do
+        out_dir=$(dirname "$fname")
+        out_file="$out_dir/$(basename "$fname" '.s').o"
+        gcc -xassembler -no-pie -o "$out_file" "$fname"
         echo ">>>>> $fname"
-        ./$(dirname $fname)/$(basename $fname ".s").o
+        "$out_file"
     done
