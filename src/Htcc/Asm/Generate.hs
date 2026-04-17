@@ -232,9 +232,8 @@ invalidIncompletePointerArithmetic kind lhs rhs = case kind of
     _ ->
         False
     where
-        hasIncompletePointerTarget expr = case CT.deref (atype expr) of
-            Just ty -> CT.isCTIncomplete ty
-            Nothing -> False
+        hasIncompletePointerTarget expr =
+            maybe False CT.isCTIncomplete $ CT.deref (atype expr)
 
 invalidIncompleteMemOp :: Ord i => ATKind i -> ATree i -> Bool
 invalidIncompleteMemOp kind lhs = case kind of

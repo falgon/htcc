@@ -1692,7 +1692,7 @@ resolveCompilerCommandWindowsUnescapesCaretEscapedSpacesTest =
 resolveCompilerCommandWindowsDecodesQuotedCmdExeEscapesTest :: Test
 resolveCompilerCommandWindowsDecodesQuotedCmdExeEscapesTest =
     TestLabel "TestRunner.resolve-compiler-command-windows-decodes-quoted-cmd-exe-escapes" $ TestCase $ do
-        compiler <- resolveCompilerCommandInForHost "mingw32" Nothing $
+        compiler <- resolveCompilerCommandInForHost "mingw32" Nothing
             "\"C:\\work\\100%% ready\\clang.exe\" \"-I\" \"C:\\SDK\\bang^!kit\\include\""
         assertEqual
             "Windows command parsing should decode cmd.exe percent escapes inside quoted compiler words before selecting the executable"
@@ -3269,7 +3269,7 @@ withEnvVar name maybeValue =
             maybe (unsetEnv name) (setEnv name) maybeValue
             pure previousValue
         )
-        (\previousValue -> maybe (unsetEnv name) (setEnv name) previousValue)
+        (maybe (unsetEnv name) (setEnv name))
         . const
 
 writeExecutableScript :: FilePath -> String -> IO ()
@@ -3506,7 +3506,7 @@ findUnreadableExecutableFile =
                     if not (isRegularFile status) || not hasExecuteBits
                         then go remainingCandidates
                         else do
-                            readable <- catchIOError (B.readFile candidate *> pure True) (const $ pure False)
+                            readable <- catchIOError (True <$ B.readFile candidate) (const $ pure False)
                             if readable
                                 then go remainingCandidates
                                 else pure (Just candidate)

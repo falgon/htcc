@@ -19,7 +19,9 @@ module Htcc.Parser.Combinators.Program (
   , foldGlobalInitWith
 ) where
 
-import           Control.Monad                               (void, when, (>=>))
+import           Control.Monad                               (unless, void,
+                                                              when, zipWithM,
+                                                              (>=>))
 import           Control.Monad.Combinators                   (choice, some)
 import           Control.Monad.Extra                         (ifM)
 import           Control.Monad.State                         (get, gets, modify)
@@ -299,7 +301,7 @@ convertCallArgs Nothing args = Right $ map defaultPromotedCallArg args
 convertCallArgs (Just paramTys) args
     | actualArgCount < expectedArgCount = Left "too few arguments to function call"
     | actualArgCount > expectedArgCount = Left "too many arguments to function call"
-    | otherwise = sequence $ zipWith convertTypedCallArg paramTys args
+    | otherwise = zipWithM convertTypedCallArg paramTys args
     where
         actualArgCount = length args
         expectedArgCount = length paramTys
@@ -511,12 +513,9 @@ global = do
                 params <- registerFunctionParams paramScope resolvedTy
                 functionBody >>= fromValidFunc resolvedTy params
             where
-                registerFunctionParams paramScope fnTy = do
+                registerFunctionParams paramScope fnTy =
                     enterFunctionScope paramScope
-                    params' <-
-                        mapM registerNamedParam
-                            =<< toNamedParams fnTy
-                    pure params'
+                        *> (mapM registerNamedParam =<< toNamedParams fnTy)
                     where
                         registerNamedParam (paramTy, ident) = do
                             resolvedParamTy <-
@@ -573,7 +572,7 @@ global = do
                        )
                     $> ATEmpty
             | CT.isIncompleteArray ty && isValidTentativeFileScopeArrayType ty =
-                semi *> registerGVar ty ident *> pure ATEmpty
+                semi *> registerGVar ty ident $> ATEmpty
             | CT.isIncompleteArray ty =
                 fail "defining global variables with a incomplete type"
             | otherwise =
@@ -954,8 +953,8 @@ evalConstexprTree = \case
         ATAnd -> binop (.&.)
         ATXor -> binop xor
         ATOr -> binop (.|.)
-        ATShl -> binop ((\l r -> shiftL l (fromIntegral r)))
-        ATShr -> binop ((\l r -> shiftR l (fromIntegral r)))
+        ATShl -> binop (\l r -> shiftL l (fromIntegral r))
+        ATShr -> binop (\l r -> shiftR l (fromIntegral r))
         ATEQ -> binop (fromBool .: (==))
         ATNEQ -> binop (fromBool .: (/=))
         ATLT -> binop (fromBool .: (<))
@@ -1030,10 +1029,7 @@ finalizeGlobalInitData totalBytes entries = mergeGlobalInitData <$> go 0 sorted
         sorted = sortBy (comparing fst) entries
 
         go offset [] =
-            pure $
-                if offset < totalBytes
-                    then [PV.GVarInitZeroBytes $ totalBytes - offset]
-                    else []
+            pure [PV.GVarInitZeroBytes $ totalBytes - offset | offset < totalBytes]
         go offset ((nextOffset, dat):rest)
             | nextOffset < offset = Left "internal compiler error: overlapping global initializer"
             | otherwise = do
@@ -1414,7 +1410,7 @@ factor = choice
             where
                 memOpType = M.try (parens absDeclarator)
                     >>= requireCompleteObjectType ("invalid application of '" <> opS <> "' to incomplete type")
-                    >>= pure . atNumLit . fromIntegral . op
+                    <&> atNumLit . fromIntegral . op
 
                 memOpUnary = do
                     u <- unary >>= requireNonFunctionOperand opS
@@ -1468,8 +1464,8 @@ factor = choice
                                 params' = if null params then Nothing else Just params
                                 implicitFnTy = CT.SCAuto $ CT.CTFunc CT.CTInt []
                              in do
-                                shadowingGlobal <- isJust <$> gets (lookupGVar ident)
-                                when (not shadowingGlobal) $
+                                shadowingGlobal <- gets (isJust . lookupGVar ident)
+                                unless shadowingGlobal $
                                     registerFunc False True implicitFnTy ident
                                 pushWarn pos ("the function '" <> T.unpack ident <> "' is not declared.")
                                 pure $ atNoLeaf (ATCallFunc ident params') (CT.SCAuto CT.CTInt)

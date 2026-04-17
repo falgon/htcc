@@ -521,8 +521,8 @@ isCompilerWarningCaptureChunk line =
         warningNeedles = [BC.pack "warning:"]
 
 isBareCompilerWarningCaptureChunk :: B.ByteString -> Bool
-isBareCompilerWarningCaptureChunk line =
-    isBareCompilerDiagnosticCaptureChunk [warningNeedle] line
+isBareCompilerWarningCaptureChunk =
+    isBareCompilerDiagnosticCaptureChunk [warningNeedle]
     where
         warningNeedle = BC.pack "warning:"
 

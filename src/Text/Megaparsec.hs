@@ -224,13 +224,13 @@ withRecovery
 withRecovery handler parser = ParsecT $ PPri.mkPT $ \state ->
     PPri.runParsecT (unParsecT parser) state >>= \case
         PPri.Consumed replyM -> pure . PPri.Consumed $ replyM >>= \case
-            ok@(PPri.Ok _ _ _) -> pure ok
+            ok@PPri.Ok {} -> pure ok
             PPri.Error err ->
                 PPri.runParsecT (unParsecT $ handler $ ParsecError True err) (recoveryState err state) >>= \case
                     PPri.Consumed handledReply -> handledReply
                     PPri.Empty handledReply    -> handledReply
         PPri.Empty replyM -> replyM >>= \case
-            ok@(PPri.Ok _ _ _) -> pure $ PPri.Empty (pure ok)
+            ok@PPri.Ok {} -> pure $ PPri.Empty (pure ok)
             PPri.Error err -> PPri.runParsecT (unParsecT $ handler $ ParsecError False err) (recoveryState err state)
     where
         recoveryState err parserState =

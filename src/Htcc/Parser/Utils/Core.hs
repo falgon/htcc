@@ -49,7 +49,7 @@ takeBrace leftb rightb xxs@((_, HT.TKReserved y):_)
             | otherwise = g l r xs'
             where
                 g = (.) (fmap (first ((p, HT.TKReserved x):)) .) . f
-        f !l !r ((p, x):xs') = first ((:) (p, x)) <$> f l r xs'
+        f !l !r ((p, x):xs') = first ((p, x):) <$> f l r xs'
 takeBrace _ _ _ = Nothing
 
 -- | Get an argument from list of `Htcc.Tokenizer.Token` (e.g: Given the token of @f(g(a, b)), 42@, return the token of @f(g(a, b))@).
@@ -74,6 +74,5 @@ takeExps :: Eq i => [HT.TokenLC i] -> Maybe [[HT.TokenLC i]]
 takeExps ((_, HT.TKReserved "("):xs) = maybe' Nothing (lastInit ((==HT.TKReserved ")") . snd) xs) $ fmap (filter (not . null)) . f
     where
         f []   = Just []
-        f args = maybe Nothing (\(ex, ds) -> (ex:) <$> f ds) $ readFn args
+        f args = readFn args >>= \(ex, ds) -> (ex:) <$> f ds
 takeExps _ = Nothing
-

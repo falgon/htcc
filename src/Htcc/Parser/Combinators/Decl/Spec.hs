@@ -169,7 +169,7 @@ structSpecifier = do
                 ensureStructTag depth scopeId standaloneForwardDecl tagInfo
                     | standaloneForwardDecl && PST.stNestDepth tagInfo < depth =
                         registerIncompleteStructTag tag
-                            $> (CT.SCAuto $ CT.CTIncomplete $ CT.IncompleteStruct tag scopeId)
+                            $> CT.SCAuto (CT.CTIncomplete $ CT.IncompleteStruct tag scopeId)
                     | PST.stKind tagInfo == PST.StructTag = pure $ PST.sttype tagInfo
                     | otherwise = fail $ "use of 'struct " <> T.unpack tag <> "' with wrong tag type"
 

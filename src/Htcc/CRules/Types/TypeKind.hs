@@ -252,7 +252,7 @@ instance (Enum i, Integral i) => Enum (Desg i) where
 -- | If the given argument is `CTArray`, it returns a list of accessible indexes of the array.
 -- Othrewise returns empty list.
 accessibleIndices :: Integral i => TypeKind i -> [[Desg i]]
-accessibleIndices = uncurry (concatMap . chunksOf) . first fromIntegral . second (concatMap (map (iNode' id) . iNode id) . arIndices') . arSizes
+accessibleIndices = uncurry (concatMap . chunksOf) . bimap fromIntegral (concatMap (map (iNode' id) . iNode id) . arIndices') . arSizes
     where
         arIndices' []     = []
         arIndices' (x:xs) = map (flip ($) (arIndices' xs) . Node) x

@@ -358,7 +358,7 @@ staticTentativeIncompleteArrayUseSiteRejectedTest :: Test
 staticTentativeIncompleteArrayUseSiteRejectedTest = TestLabel "Asm.Output.static-tentative-incomplete-array-use-site-rejected" $ TestCase $
     assertBool
         "static tentative incomplete arrays should remain incomplete at expression use sites"
-        (isLeft $
+        (isLeft
             (runParser parser "<components>"
                 "static int x[]; int main(void) { return sizeof x / sizeof x[0]; }"
             :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, GlobalVars Integer, Literals Integer, PF.Functions Integer)
@@ -369,7 +369,7 @@ nestedTentativeIncompleteArrayUseSiteRejectedTest :: Test
 nestedTentativeIncompleteArrayUseSiteRejectedTest = TestLabel "Asm.Output.nested-tentative-incomplete-array-use-site-rejected" $ TestCase $
     assertBool
         "address arithmetic on tentative incomplete arrays should be rejected before data emission"
-        (isLeft $
+        (isLeft
             (runParser parser "<components>"
                 "int x[][4]; int main(void) { return ((char*)(&x + 1)) - ((char*)&x); }"
             :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, GlobalVars Integer, Literals Integer, PF.Functions Integer)
@@ -606,7 +606,7 @@ tentativeArrayUseSiteRejectedTest :: Test
 tentativeArrayUseSiteRejectedTest = TestLabel "Asm.Output.tentative-array-use-site-rejected" $ TestCase $
     assertBool
         "later global completions must not retroactively legitimize earlier sizeof uses"
-        (isLeft $
+        (isLeft
             (runParser parser "<components>"
                 "int x[]; int main(void) { return sizeof x; } int x[4];"
             :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, GlobalVars Integer, Literals Integer, PF.Functions Integer)
@@ -617,7 +617,7 @@ tentativeArrayAddressUseSiteRejectedTest :: Test
 tentativeArrayAddressUseSiteRejectedTest = TestLabel "Asm.Output.tentative-array-address-use-site-rejected" $ TestCase $
     assertBool
         "later global completions must not retroactively legitimize earlier address arithmetic"
-        (isLeft $
+        (isLeft
             (runParser parser "<components>"
                 "int x[]; int main(void) { return ((char*)(&x + 1)) - ((char*)&x); } int x[4];"
             :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, GlobalVars Integer, Literals Integer, PF.Functions Integer)
@@ -674,7 +674,7 @@ globalInitializerTentativeArrayUseSiteRejectedTest :: Test
 globalInitializerTentativeArrayUseSiteRejectedTest = TestLabel "Asm.Output.global-initializer-tentative-array-use-site-rejected" $ TestCase $
     assertBool
         "earlier global initializers must not be retyped from later tentative-array completions"
-        (isLeft $
+        (isLeft
             (runParser parser "<components>"
                 "int x[]; int y = sizeof x; char *p = (char*)(&x + 1); int x[4]; int main(void) { return y == 16 && p == ((char*)&x) + 16; }"
             :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, GlobalVars Integer, Literals Integer, PF.Functions Integer)
@@ -977,7 +977,7 @@ indirectOldStyleBoolFunctionPointerPromotionConflictTest :: Test
 indirectOldStyleBoolFunctionPointerPromotionConflictTest = TestLabel "Asm.Output.indirect-old-style-bool-function-pointer-promotion-conflict" $ TestCase $ do
     assertBool
         "old-style function pointers must reject _Bool parameters that only match after default promotions"
-        (isLeft $
+        (isLeft
             ( runParser parser "<components>"
                 "int takes_bool(_Bool x) { return x; } int main(void) { int (*fp)(); fp = takes_bool; return fp(256); }"
                 :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, GlobalVars Integer, Literals Integer, PF.Functions Integer)
@@ -1679,7 +1679,7 @@ functionPointerGlobalObjectAddressRejectedTest = TestLabel "Asm.Output.function-
         )
     where
         rejected source =
-            isLeft $
+            isLeft
                 (runParser parser "<components>" source
                     :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, GlobalVars Integer, Literals Integer, PF.Functions Integer)
                 )
@@ -1695,7 +1695,7 @@ objectPointerGlobalAddressMismatchRejectedTest = TestLabel "Asm.Output.object-po
         )
     where
         rejected source =
-            isLeft $
+            isLeft
                 (runParser parser "<components>" source
                     :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, GlobalVars Integer, Literals Integer, PF.Functions Integer)
                 )
@@ -1952,7 +1952,7 @@ pointerIncDecRefinementRevalidationTest :: Test
 pointerIncDecRefinementRevalidationTest = TestLabel "Asm.Output.pointer-inc-dec-refinement-revalidation" $ TestCase $
     assertBool
         "same-input pointer ++/-- should reject pointer-to-array redeclarations that refine pointee bounds"
-        (isLeft $
+        (isLeft
             (runParser parser "<components>"
                 "int (*p)[]; int main(void) { ++p; p++; --p; p--; return 0; } int (*p)[4];"
             :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, GlobalVars Integer, Literals Integer, PF.Functions Integer)
@@ -1963,7 +1963,7 @@ pointerAddSubAssignRefinementRevalidationTest :: Test
 pointerAddSubAssignRefinementRevalidationTest = TestLabel "Asm.Output.pointer-add-sub-assign-refinement-revalidation" $ TestCase $
     assertBool
         "same-input pointer compound assignments should reject pointer-to-array redeclarations that refine pointee bounds"
-        (isLeft $
+        (isLeft
             (runParser parser "<components>"
                 "int (*p)[]; int main(void) { p += 1; p -= 1; return 0; } int (*p)[4];"
             :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, GlobalVars Integer, Literals Integer, PF.Functions Integer)
@@ -2016,7 +2016,7 @@ incompleteGlobalSelfReferenceRejectedTest :: Test
 incompleteGlobalSelfReferenceRejectedTest = TestLabel "Asm.Output.incomplete-global-self-reference-rejected" $ TestCase $
     assertBool
         "self-referential incomplete-array global initializers should be rejected before later normalization can retype them"
-        (isLeft $
+        (isLeft
             (runParser parser "<components>"
                 "int x[] = { sizeof x, 0 };"
             :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, GlobalVars Integer, Literals Integer, PF.Functions Integer)

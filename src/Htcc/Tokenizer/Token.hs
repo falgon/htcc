@@ -37,6 +37,7 @@ module Htcc.Tokenizer.Token (
 
 import           Control.DeepSeq                      (NFData (..),
                                                        NFData1 (..))
+import           Data.Bifunctor                       (bimap)
 import qualified Data.ByteString                      as B
 import           Data.Char                            (chr, isDigit, ord)
 import           Data.List                            (find)
@@ -112,7 +113,7 @@ instance Show i => Show (Token i) where
 instance Read i => Read (Token i) where
     readsPrec _ xxs@(x:xs)
         | isDigit x = [first (TKNum . (read :: String -> i) . (x:)) $ dropFst3 $ spanLen isDigit xs]
-        | x == '\"' = [maybe' (error "No parse: string literal was not closed") (spanStrLiteral $ T.pack xs) $ first (TKString . T.encodeUtf8 . flip T.append "\0") . second T.unpack]
+        | x == '\"' = [maybe' (error "No parse: string literal was not closed") (spanStrLiteral $ T.pack xs) $ bimap (TKString . T.encodeUtf8 . flip T.append "\0") T.unpack]
         | P.length xxs > 2 && T.pack (take 3 xxs) `elem` CR.strOps3 = [(TKReserved $ T.pack $ take 3 xxs, drop 3 xxs)]
         | not (null xs) && T.pack (take 2 xxs) `elem` CR.strOps2 = [(TKReserved $ T.pack $ take 2 xxs, drop 2 xxs)]
         | x `elem` CR.charOps = [(TKReserved (T.singleton x), xs)]

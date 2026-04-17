@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, TupleSections #-}
 module Tests.SubProcTests.AsmOutput (
     externalBoolLowByteNormalizationTest,
     externalBoolParameterLowByteNormalizationTest,
@@ -244,6 +244,7 @@ import           Control.Exception     (finally)
 import           Control.Monad         (when)
 import qualified Data.ByteString       as B
 import qualified Data.ByteString.Char8 as BC
+import           Data.Maybe            (fromMaybe, isNothing)
 import qualified Data.Text             as T
 import qualified Data.Text.IO          as T
 import           Data.Word             (Word8)
@@ -290,8 +291,8 @@ writeFailureSource = T.unlines $
            ]
 
 containsTextsInOrder :: [T.Text] -> T.Text -> Bool
-containsTextsInOrder needles =
-    go needles
+containsTextsInOrder =
+    go
     where
         go [] _ = True
         go (needle:rest) haystack =
@@ -6131,7 +6132,7 @@ suppressWarnsRunAsmDoesNotHangOnInheritedPipeHandlesTest =
                         && compilerSawExpectedArgs
                         && targetExists
                 details = T.unlines
-                    [ "timedOut: " <> T.pack (show $ maybe True (const False) maybeResult)
+                    [ "timedOut: " <> T.pack (show $ isNothing maybeResult)
                     , "stdout:"
                     , stdoutLeak
                     , "stderr:"
@@ -6199,7 +6200,7 @@ suppressWarnsRunAsmStreamsRetainedStdoutPromptTest =
                                 && compilerSawExpectedArgs
                                 && targetExists
                         details = T.unlines
-                            [ "promptLine: " <> maybe "<timeout>" id maybePromptLine
+                            [ "promptLine: " <> fromMaybe "<timeout>" maybePromptLine
                             , "remainingStdout:"
                             , remainingStdout
                             , "remainingStderr:"
@@ -6337,14 +6338,14 @@ suppressWarnsRunAsmStreamsRetainedStdoutAcrossPendingStderrTest =
                                 ]
                         ok =
                             maybeRetainedLine == Just "stdout: retained line"
-                                && earlyExit == Nothing
+                                && isNothing earlyExit
                                 && processExitCode == ExitSuccess
                                 && T.null remainingStdout
                                 && remainingStderr == "stderr: wrapper prompt\n"
                                 && compilerSawExpectedArgs
                                 && targetExists
                         details = T.unlines
-                            [ "retainedLine: " <> maybe "<timeout>" id maybeRetainedLine
+                            [ "retainedLine: " <> fromMaybe "<timeout>" maybeRetainedLine
                             , "earlyExit: " <> maybe "still-running" (T.pack . show) earlyExit
                             , "remainingStdout:"
                             , remainingStdout
@@ -6526,7 +6527,7 @@ suppressWarnsRunAsmProbeClosesStdinTest =
                         && compilerSawExpectedArgs
                         && targetExists
                 details = T.unlines
-                    [ "timedOut: " <> T.pack (show $ maybe True (const False) maybeResult)
+                    [ "timedOut: " <> T.pack (show $ isNothing maybeResult)
                     , "stdout:"
                     , stdoutLeak
                     , "stderr:"
@@ -9641,7 +9642,7 @@ externalBoolLowByteNormalizationTest =
             ]
         assemblerCommand ["-x", "assembler", "-c", "-o", "tmp-bool-ext.o", "tmp-bool-ext.s"] >>= execErrFin
         assemblerCommand ["tmp-bool-ext.o", "tmp.s", "-o", "tmp"] >>= execErrFin
-        exitCode (\status -> (status, description)) (0, description) <$> exec "./tmp"
+        exitCode (, description) (0, description) <$> exec "./tmp"
 
 externalBoolParameterLowByteNormalizationTest :: IO (Int, String)
 externalBoolParameterLowByteNormalizationTest =
@@ -9687,7 +9688,7 @@ externalBoolParameterLowByteNormalizationTest =
             ]
         assemblerCommand ["-x", "assembler", "-c", "-o", "tmp-bool-param-ext.o", "tmp-bool-param-ext.s"] >>= execErrFin
         assemblerCommand ["tmp-bool-param-ext.o", "tmp.s", "-o", "tmp"] >>= execErrFin
-        exitCode (\status -> (status, description)) (0, description) <$> exec "./tmp"
+        exitCode (, description) (0, description) <$> exec "./tmp"
 
 externalIntegralReturnNormalizationTest :: IO (Int, String)
 externalIntegralReturnNormalizationTest =
@@ -9734,7 +9735,7 @@ externalIntegralReturnNormalizationTest =
             ]
         assemblerCommand ["-x", "assembler", "-c", "-o", "tmp-int-ret-ext.o", "tmp-int-ret-ext.s"] >>= execErrFin
         assemblerCommand ["tmp-int-ret-ext.o", "tmp.s", "-o", "tmp"] >>= execErrFin
-        exitCode (\status -> (status, description)) (0, description) <$> exec "./tmp"
+        exitCode (, description) (0, description) <$> exec "./tmp"
 
 outputFileMultiInputTentativeIncompleteArrayTest :: IO (Either T.Text T.Text, String)
 outputFileMultiInputTentativeIncompleteArrayTest =
@@ -11303,7 +11304,7 @@ runAsmDoesNotInjectValidationMarkerIntoFinalAsmTest =
                             then Just <$> exec ("./" <> T.pack target)
                             else pure Nothing
                     let validationMarker = "htcc-output-marker:runnable-linked-output"
-                        markerCount asm = T.count validationMarker asm
+                        markerCount = T.count validationMarker
                         stableAsm = firstAsm == secondAsm
                         markerAbsent =
                             markerCount firstAsm == 0
@@ -11604,7 +11605,7 @@ runAsmSpecialPathDevNullSkipsPostLinkValidationWaitTest =
                 waitedForDelayedChild = not (null driverInvocations)
                 ok = completed && T.null stdoutLeak && T.null stderrOut && waitedForDelayedChild
                 details = T.unlines
-                    [ "timedOut: " <> T.pack (show $ maybe True (const False) maybeResult)
+                    [ "timedOut: " <> T.pack (show $ isNothing maybeResult)
                     , "stdout:"
                     , stdoutLeak
                     , "stderr:"
@@ -12493,7 +12494,7 @@ runAsmWrappedAssemblerDelayedChildFinalOutputTest =
                         && targetExists
                         && ranOk
                 details = T.unlines
-                    [ "timedOut: " <> T.pack (show $ maybe True (const False) maybeResult)
+                    [ "timedOut: " <> T.pack (show $ isNothing maybeResult)
                     , "stdout:"
                     , stdoutLeak
                     , "stderr:"
@@ -12579,7 +12580,7 @@ runAsmDoesNotWaitOnBackgroundProcessGroupHelpersTest =
                         && targetExists
                         && ranOk
                 details = T.unlines
-                    [ "timedOut: " <> T.pack (show $ maybe True (const False) maybeResult)
+                    [ "timedOut: " <> T.pack (show $ isNothing maybeResult)
                     , "stdout:"
                     , stdoutLeak
                     , "stderr:"
@@ -12663,7 +12664,7 @@ runAsmProbeDoesNotHangOnInheritedPipeHandlesTest =
                         && compilerSawExpectedArgs
                         && targetExists
                 details = T.unlines
-                    [ "timedOut: " <> T.pack (show $ maybe True (const False) maybeResult)
+                    [ "timedOut: " <> T.pack (show $ isNothing maybeResult)
                     , "stdout:"
                     , stdoutLeak
                     , "stderr:"
@@ -12749,7 +12750,7 @@ runAsmProbeDoesNotHangOnEarlyClosedStdoutTest =
                         && targetExists
                         && ranOk
                 details = T.unlines
-                    [ "timedOut: " <> T.pack (show $ maybe True (const False) maybeResult)
+                    [ "timedOut: " <> T.pack (show $ isNothing maybeResult)
                     , "stdout:"
                     , stdoutLeak
                     , "stderrHasFlood: " <> T.pack (show preservedFlood)

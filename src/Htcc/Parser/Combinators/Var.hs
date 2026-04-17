@@ -171,7 +171,7 @@ inferArrayBoundFromInitializer' ty = do
             | isCharArrayType ty = do
                 lift $ lookInitializerStringFor ty
                 len <- length <$> lift stringLiteral
-                void $ lift $ M.option () (() <$ comma)
+                void $ lift $ M.option () (void comma)
                 void $ lift rbrace
                 pure $ InferArrayBoundLength len
             | otherwise = M.empty
@@ -250,17 +250,17 @@ skipInitializerList ty = do
         CT.CTNamedStruct _ _ mems -> skipStructList (orderedStructMembers mems) <* lift rbrace
         _                -> do
             skipInitializer False ty
-            void $ lift $ M.option () (() <$ comma)
+            void $ lift $ M.option () (void comma)
             void $ lift rbrace
     where
         skipBracedInitializerString aty = tryDesignator $ do
             lift $ lookInitializerStringFor aty
             void $ lift stringLiteral
-            void $ lift $ M.option () (() <$ comma)
+            void $ lift $ M.option () (void comma)
             void $ lift rbrace
 
         skipArrayList aty = M.choice
-            [ () <$ lift (M.lookAhead rbrace)
+            [ void $ lift (M.lookAhead rbrace)
             , do
                 skipInitializer True (arrayElementType aty)
                 continue <- continueBracedAggregate
@@ -272,7 +272,7 @@ skipInitializerList ty = do
 
         skipStructList [] = pure ()
         skipStructList (mem:rest) = M.choice
-            [ () <$ lift (M.lookAhead rbrace)
+            [ void $ lift (M.lookAhead rbrace)
             , do
                 skipInitializer True (CT.SCAuto $ CT.smType mem)
                 continue <- continueBracedAggregate
@@ -413,7 +413,7 @@ initZero (CT.CTArray n ty) desg =
         SQ.empty
         [0..fromIntegral (pred n)]
 initZero t@(CT.CTStruct _) desg = zeroFillObject (CT.SCAuto t) desg
-initZero t@(CT.CTNamedStruct _ _ _) desg = zeroFillObject (CT.SCAuto t) desg
+initZero t@CT.CTNamedStruct {} desg = zeroFillObject (CT.SCAuto t) desg
 initZero _ desg = SQ.singleton <$> desgNode (atNumLit 0) desg
 
 orderedStructMembers :: MP.Map T.Text (CT.StructMember i) -> [CT.StructMember i]
@@ -530,7 +530,7 @@ bracedInitializerString :: (Integral i, Bits i, Read i, Show i, Ord i)
 bracedInitializerString allowStructBraceElision ty ai desg = do
     lift $ lookInitializerStringFor ty
     rs <- initializerString allowStructBraceElision ty ai desg
-    void $ lift $ M.option () (() <$ comma)
+    void $ lift $ M.option () (void comma)
     void $ lift rbrace
     pure rs
 
@@ -574,7 +574,7 @@ initializerList ty ai desg = M.choice
                         (ast SQ.><) <$> zeroFillRemainingStructBytes ty explicitMems desg
                     _ -> do
                         rs <- desgInit False ty ai desg
-                        void $ lift $ M.option () (() <$ comma)
+                        void $ lift $ M.option () (void comma)
                         void $ lift rbrace
                         pure rs
             where
@@ -689,6 +689,6 @@ varInit :: (Integral i, Bits i, Read i, Show i, Ord i)
     -> CT.StorageClass i
     -> T.Text
     -> Parser i (ATree i)
-varInit p ty ident = fromMaybe ty <$> lift (gets $ incomplete ty)
+varInit p ty ident = lift (gets $ fromMaybe ty . incomplete ty)
     >>= flip registerLVar ident
     >>= varInit' p ty ident

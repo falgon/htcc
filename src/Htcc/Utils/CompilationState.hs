@@ -25,6 +25,7 @@ import           Control.Monad                                   (replicateM)
 import           Control.Monad.Loops                             (unfoldM)
 import           Control.Monad.State                             (StateT, get,
                                                                   gets, put)
+import           Data.Bifunctor                                  (bimap)
 import           Data.Bool                                       (bool)
 import           Data.Maybe                                      (catMaybes)
 import           Data.MonoTraversable                            (Element,
@@ -56,7 +57,7 @@ itemsP n = do
 -- Defines information updates by providing a function that
 -- accepts the current information and one item to be consumed and returns the information
 itemC :: S.IsSequence mono => (cd -> Element mono -> cd) -> CompilationState cd mono i (Maybe (Element mono))
-itemC f = itemP >>= maybe (return Nothing) (\itp -> Just itp <$ (get >>= put . first (`f` itp) . second S.tailEx))
+itemC f = itemP >>= maybe (return Nothing) (\itp -> Just itp <$ (get >>= put . bimap (`f` itp) S.tailEx))
 
 {-# INLINE itemsC #-}
 -- | `itemsC` consumes at items from input data.
@@ -90,4 +91,3 @@ itemsCWhen cf f = fmap S.pack $ unfoldM $ itemCWhen cf f
 -- | `isSatisfied` returns `True` if the input data satisfies the condition of given unary function, otherwise returns `False`.
 isSatisfied :: (mono -> Bool) -> CompilationState cd mono i Bool
 isSatisfied f = gets (f . snd)
-

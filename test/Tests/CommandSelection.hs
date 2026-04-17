@@ -37,7 +37,10 @@ import           Data.Bits             (Bits (shiftL, (.&.), (.|.)))
 import qualified Data.ByteString       as B
 import qualified Data.ByteString.Char8 as BC
 import           Data.Char             (toLower)
+import           Data.Either           (fromRight)
+import           Data.Functor          (($>))
 import           Data.List             (foldl', isInfixOf, isPrefixOf)
+import           Data.Maybe            (fromMaybe, isJust)
 import qualified Data.Text             as T
 import           Data.Word             (Word64, Word8)
 import           System.Directory      (getCurrentDirectory,
@@ -89,12 +92,8 @@ defaultCommandWithProbes :: String -> String -> IO Bool -> IO Bool -> IO Command
 defaultCommandWithProbes hostOs hostArch compilerProbe assemblerProbe
     | supportsSubProcDefault hostOs hostArch = do
         compilerAvailable <- compilerProbe
-        if compilerAvailable
-            then do
-                assemblerAvailable <- assemblerProbe
-                pure $ defaultCommandFor hostOs hostArch compilerAvailable assemblerAvailable
-            else
-                pure $ defaultCommandFor hostOs hostArch compilerAvailable False
+        defaultCommandFor hostOs hostArch compilerAvailable
+            <$> if compilerAvailable then assemblerProbe else pure False
     | otherwise =
         pure $ defaultCommandFor hostOs hostArch False False
 
@@ -124,12 +123,11 @@ collectCommandExitCodes =
             Right () ->
                 pure ExitSuccess
             Left err ->
-                if maybe False (const True) (fromException err :: Maybe AsyncException)
+                if isJust (fromException err :: Maybe AsyncException)
                     then throwIO err
-                    else maybe
-                        (hPutStrLn stderr (displayException err) *> pure (ExitFailure 1))
-                        pure
-                        (fromException err)
+                    else
+                        hPutStrLn stderr (displayException err)
+                            $> fromMaybe (ExitFailure 1) (fromException err)
 
 resolveCommandWith :: IO Command -> Bool -> Maybe Command -> IO Command
 resolveCommandWith autoCommand clean maybeCommand = case maybeCommand of
@@ -142,16 +140,16 @@ resolveCommandWith autoCommand clean maybeCommand = case maybeCommand of
             autoCommand
 
 resolveCommand :: Bool -> Maybe Command -> IO Command
-resolveCommand clean maybeCommand =
-    resolveCommandWith defaultCommand clean maybeCommand
+resolveCommand =
+    resolveCommandWith defaultCommand
 
 autoHtccCommandFor :: Maybe String -> Maybe FilePath -> T.Text
-autoHtccCommandFor maybeCompilerCommand maybeRepoBuiltCompilerPath =
-    htccCommandFor maybeCompilerCommand maybeRepoBuiltCompilerPath
+autoHtccCommandFor =
+    htccCommandFor
 
 autoHtccCommandForHost :: String -> Maybe String -> Maybe FilePath -> T.Text
-autoHtccCommandForHost hostOs maybeCompilerCommand maybeRepoBuiltCompilerPath =
-    htccCommandForHost hostOs maybeCompilerCommand maybeRepoBuiltCompilerPath
+autoHtccCommandForHost =
+    htccCommandForHost
 
 autoHtccCommand :: IO T.Text
 autoHtccCommand = absoluteHtccCommand
@@ -183,13 +181,13 @@ compilerCommandAvailableWithDirectories :: [IO FilePath] -> IO T.Text -> IO Bool
 compilerCommandAvailableWithDirectories directoryProviders getCompilerCommand =
     probeAvailableDirectories
         directoryProviders
-        (\workingDir -> compilerCommandAvailableInDirectoryWith workingDir getCompilerCommand)
+        (`compilerCommandAvailableInDirectoryWith` getCompilerCommand)
     where
         compilerCommandAvailableInDirectoryWith workingDir getCompilerCommand' = do
             result <- try $ do
                 compilerCommand <- getCompilerCommand'
                 probeCompilerShellCommandAvailableInDirectory workingDir compilerCommand
-            pure $ either (const False) id (result :: Either IOException Bool)
+            pure $ fromRight False (result :: Either IOException Bool)
 
 compilerCommandAvailableWith :: IO T.Text -> IO Bool
 compilerCommandAvailableWith =
@@ -201,21 +199,20 @@ compilerCommandAvailableWith =
 assemblerCommandAvailable :: IO Bool
 assemblerCommandAvailable = do
     result <- try (assemblerCommandAvailableWith $ const assemblerCompilerCommand) :: IO (Either IOException Bool)
-    pure $ either (const False) id result
+    pure $ fromRight False result
 
 assemblerCommandAvailableWithDirectories :: [IO FilePath] -> ([String] -> IO CompilerCommand) -> IO Bool
 assemblerCommandAvailableWithDirectories directoryProviders buildAssemblerCommand =
     probeAvailableDirectories
         directoryProviders
-        (\workingDir -> assemblerCommandAvailableInDirectoryWith workingDir buildAssemblerCommand)
+        (`assemblerCommandAvailableInDirectoryWith` buildAssemblerCommand)
 
 assemblerCommandAvailableWith :: ([String] -> IO CompilerCommand) -> IO Bool
-assemblerCommandAvailableWith buildAssemblerCommand =
+assemblerCommandAvailableWith =
     assemblerCommandAvailableWithDirectories
         [ getTemporaryDirectory
         , getCurrentDirectory
         ]
-        buildAssemblerCommand
 
 assemblerCommandAvailableWithTempDirectory :: IO FilePath -> ([String] -> IO CompilerCommand) -> IO Bool
 assemblerCommandAvailableWithTempDirectory getTempDirectory buildAssemblerCommand = do
@@ -351,7 +348,7 @@ validateRunnableLinkedOutput path maybeProbeMarker =
                                 bytes <- B.readFile path
                                 let markerPresent = maybe
                                         True
-                                        (\probeMarker -> probeMarkerPresent probeMarker bytes)
+                                        (`probeMarkerPresent` bytes)
                                         maybeProbeMarker
                                     linkedOutputOk =
                                         maybe
@@ -426,11 +423,10 @@ linkedOutputElfDynamicEntriesDescribeStandaloneInterpreter elf dynamicOffset dyn
                 | entryOffset >= dynamicEnd = False
                 | otherwise =
                     let entryTag = linkedOutputElfDynamicEntryTag elf entryOffset
-                     in if entryTag == elfDynamicTagNull
-                            then True
-                            else
-                                entryTag /= elfDynamicTagNeeded
+                     in entryTag == elfDynamicTagNull
+                            || ( entryTag /= elfDynamicTagNeeded
                                     && go (entryOffset + fromIntegral elfDynamicEntrySize)
+                               )
          in go dynamicOffset
 
 parseLinkedOutputElf :: B.ByteString -> Maybe LinkedOutputElf
@@ -613,13 +609,12 @@ linkedOutputElfDynamicEntriesContainStaticPieFlag elf dynamicOffset dynamicSize
                 | otherwise =
                     let entryTag = linkedOutputElfDynamicEntryTag elf entryOffset
                         entryValue = linkedOutputElfDynamicEntryValue elf entryOffset
-                     in if entryTag == elfDynamicTagNull
-                            then False
-                            else
-                                ( entryTag == elfDynamicTagFlags1
-                                    && entryValue .&. elfDynamicFlag1Pie /= 0
-                                )
+                     in entryTag /= elfDynamicTagNull
+                            && ( ( entryTag == elfDynamicTagFlags1
+                                        && entryValue .&. elfDynamicFlag1Pie /= 0
+                                   )
                                     || go (entryOffset + fromIntegral elfDynamicEntrySize)
+                               )
          in go dynamicOffset
 
 linkedOutputElfHasRunnableProgramHeader :: LinkedOutputElf -> Int -> Bool

@@ -82,7 +82,7 @@ programOptions = Opts
 optsParser :: OA.ParserInfo Opts
 optsParser = OA.info (OA.helper <*> programOptions) $ mconcat [
     OA.fullDesc
-  , OA.progDesc $ "The htcc unit tester"
+  , OA.progDesc "The htcc unit tester"
   ]
 
 genTestAsm' :: StateT Int IO [T.Text]
@@ -184,5 +184,5 @@ withEnvOverride name value =
             setEnv name value
             pure oldValue
         )
-        (\oldValue -> maybe (unsetEnv name) (setEnv name) oldValue)
+        (maybe (unsetEnv name) (setEnv name))
         . const

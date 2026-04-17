@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase, TemplateHaskell #-}
+{-# LANGUAGE LambdaCase, TemplateHaskell, TupleSections #-}
 module Main where
 
 import           Control.Applicative                         ((<|>))
@@ -18,7 +18,8 @@ import           Control.Exception                           (SomeException,
                                                               finally, throwIO,
                                                               try)
 import           Control.Monad                               (foldM, forM_,
-                                                              unless, when)
+                                                              unless, when,
+                                                              (>=>))
 import           Data.Bifunctor                              (first)
 import           Data.Bits                                   (Bits (shiftL, (.&.), (.|.)))
 import           Data.Bool                                   (bool)
@@ -40,8 +41,10 @@ import           Data.List                                   (foldl',
                                                               mapAccumL, sortOn,
                                                               stripPrefix)
 import           Data.List.NonEmpty                          (NonEmpty (..))
-import           Data.Maybe                                  (fromMaybe, isJust,
+import           Data.Maybe                                  (catMaybes,
+                                                              fromMaybe, isJust,
                                                               mapMaybe)
+import qualified Data.Sequence                               as SQ
 import qualified Data.Text.IO                                as T
 import           Data.Version                                (showVersion)
 import           Data.Word                                   (Word64, Word8)
@@ -298,10 +301,7 @@ gitHashValue = $(do
 optsParser :: OA.ParserInfo Opts
 optsParser = OA.info (OA.helper <*> versionOption <*> programOptions) $ mconcat [
     OA.fullDesc
-  , OA.progDesc $ concat [
-        "The C Language Compiler htcc "
-      , showVersion P.version
-    ]
+  , OA.progDesc $ "The C Language Compiler htcc " ++ showVersion P.version
   ]
 
 ignoreIOException :: IO () -> IO ()
@@ -455,7 +455,7 @@ shellWordsWithContext commandLine =
             | otherwise =
                 Parsec.choice [doubleEscaped, doubleBare]
         doubleBare =
-            (pure . doubleQuotedExpandableShellWordSpan)
+            pure . doubleQuotedExpandableShellWordSpan
                 <$> Parsec.many1 (Parsec.satisfy isDoubleBareChar)
         doubleEscaped = do
             _ <- Parsec.char '\\'
@@ -538,8 +538,12 @@ resolveCompilerCommandIn maybeWorkingDir compiler = do
         Right xs -> pure xs
     let (envAssignmentWords, initialCompilerWords) =
             span isEnvironmentAssignmentWord parsedParts
-        (initialEnvOverrides, initialEnvOverrideSpecs) =
-            unzip $ map splitEnvironmentAssignment envAssignmentWords
+        splitAssignments =
+            map splitEnvironmentAssignment envAssignmentWords
+        initialEnvOverrides =
+            map fst splitAssignments
+        initialEnvOverrideSpecs =
+            map snd splitAssignments
     baseEnvironment <- baseProcessEnvironment maybeWorkingDir
     let expandedEnvOverrides =
             environmentFromList $
@@ -597,10 +601,9 @@ resolveCompilerCommandIn maybeWorkingDir compiler = do
                 Nothing ->
                     error "internal compiler error"
 
-        hasExplicitSearchPathOverride overrides' =
+        hasExplicitSearchPathOverride =
             any
                 ((== environmentNameKey "PATH") . environmentNameKey . fst)
-                overrides'
 
         findExecutablePrefix _ _ _ [] = pure Nothing
         findExecutablePrefix maybeWorkingDir' envOverrides' explicitSearchPathOverride (cmd:_) = do
@@ -610,12 +613,12 @@ resolveCompilerCommandIn maybeWorkingDir compiler = do
                     envOverrides'
                     explicitSearchPathOverride
                     cmd
-            pure $ fmap (\resolvedCmd -> (1, resolvedCmd)) resolved
+            pure $ fmap (1,) resolved
 
         resolveExecutableCommand maybeWorkingDir' envOverrides' explicitSearchPathOverride cmd = do
-            case hasExplicitPath cmd of
-                True -> localExecutablePath maybeWorkingDir' cmd
-                False ->
+            if hasExplicitPath cmd
+                then localExecutablePath maybeWorkingDir' cmd
+                else
                     findExecutableInSearchPath
                         maybeWorkingDir'
                         envOverrides'
@@ -1350,10 +1353,7 @@ renderCompilerCommandForUserHost :: String -> CompilerCommand -> [String] -> Str
 renderCompilerCommandForUserHost hostOs compiler extraArgs
     | hostOs == "mingw32" =
         intercalate " && " $
-            (if windowsCommandNeedsDelayedExpansion
-                then ["setlocal EnableDelayedExpansion"]
-                else []
-            )
+            ["setlocal EnableDelayedExpansion" | windowsCommandNeedsDelayedExpansion]
                 <> map renderWindowsEnvOverride (compilerEnvOverrides compiler)
                 <> [renderCommandWords]
     | otherwise =
@@ -1400,7 +1400,7 @@ zipOverrideSpecs overrides maybeOverrideSpecs =
             | length overrideSpecs == length overrides ->
                 zip overrides $ map Just overrideSpecs
         _ ->
-            map (\override -> (override, Nothing)) overrides
+            map (, Nothing) overrides
 
 shellQuoteForHost :: String -> String -> String
 shellQuoteForHost hostOs
@@ -1690,7 +1690,7 @@ readCompilerProcessWithExitCodeChunksUntil postExitDrainSatisfied stdinStream co
             compiler
             extraArgs
             ()
-            (\() capturedChunk -> modifyIORef' capturedChunksRef (capturedChunk :) *> pure ())
+            (\() capturedChunk -> modifyIORef' capturedChunksRef (capturedChunk :) $> ())
     capturedChunks <- readCapturedChunks
     pure (exitCode, capturedChunks)
 
@@ -3924,7 +3924,7 @@ ensureX86_64ElfCompiler suppressWarnsOutput compilerSpec = do
                 )
 
         probeCompilerTargets compilerSpec' =
-            mapMaybe id <$> mapM (probeCompilerTarget compilerSpec')
+            catMaybes <$> mapM (probeCompilerTarget compilerSpec')
                 [ "-dumpmachine"
                 , "-print-target-triple"
                 ]
@@ -4145,7 +4145,7 @@ sameFileAs lhs rhs = do
         else do
             lhsIdentity <- fileIdentity lhs
             rhsIdentity <- fileIdentity rhs
-            pure $ maybe False id $ (==) <$> lhsIdentity <*> rhsIdentity
+            pure $ fromMaybe False $ (==) <$> lhsIdentity <*> rhsIdentity
 
 existingInputAliasesPath :: FilePath -> FilePath -> IO Bool
 existingInputAliasesPath outputPath inputPath = do
@@ -4812,7 +4812,7 @@ mergeParsedInputs finalize parsedInputs =
                             Left $ duplicateExternalSymbolError name
                         ExternalFunction existing existingHasBody ->
                             mergeExternalFunctions name (existing, existingHasBody) (implicitExternalFunction, False)
-                                *> pure symbols
+                                $> symbols
                         _ ->
                             pure symbols
 
@@ -4916,8 +4916,8 @@ mergeParsedInputs finalize parsedInputs =
                 semanticName = emittedSymbolName origin (CT.isSCStatic $ gvtype gvar) name
                 newSymbol = ExternalGlobal gvar
 
-        insertGlobal name gvar = Map.insertWith (preserveMergedGlobalType name) name gvar
-        insertFunction name func = Map.insertWith preserveMergedFunctionType name func
+        insertGlobal name = Map.insertWith (preserveMergedGlobalType name) name
+        insertFunction = Map.insertWith preserveMergedFunctionType
         insertVisibleGlobal name visibleGVars gvarsAcc =
             maybe gvarsAcc (\gvar -> insertGlobal name gvar gvarsAcc) $
                 Map.lookup name visibleGVars
@@ -4925,7 +4925,7 @@ mergeParsedInputs finalize parsedInputs =
             maybe funcsAcc (\visibleFunc -> insertFunction name (visibleFunc, snd func) funcsAcc) $
                 Map.lookup name visibleFuncs
         insertSymbol origin name symbol = Map.insert name (origin, symbol)
-        insertStaticSymbol origin name symbol = Map.insert (origin, name) symbol
+        insertStaticSymbol origin name = Map.insert (origin, name)
 
         emittedSymbolName origin isInternal name
             | isInternal =
@@ -4936,13 +4936,13 @@ mergeParsedInputs finalize parsedInputs =
         rejectExternalSymbolConflict origin name newSymbol symbols = case Map.lookup name symbols of
             Just (existingOrigin, existingSymbol)
                 | existingOrigin == origin ->
-                    mergeSameOriginExternalSymbol name existingSymbol newSymbol *> pure ()
+                    mergeSameOriginExternalSymbol name existingSymbol newSymbol $> ()
             _ ->
                 pure ()
 
         rejectStaticSymbolConflict origin name newSymbol staticSymbols = case Map.lookup (origin, name) staticSymbols of
             Just existingSymbol ->
-                mergeSameOriginExternalSymbol name existingSymbol newSymbol *> pure ()
+                mergeSameOriginExternalSymbol name existingSymbol newSymbol $> ()
             Nothing ->
                 pure ()
 
@@ -5069,7 +5069,7 @@ runAsm outputHandle opts asm
                                                         validateRunnableLinkedOutput
                                                             tmpOutputPath
                                                             (Just runnableOutputMarker)
-                                                    when (not linkedOutputOk) $
+                                                    unless linkedOutputOk $
                                                         ioError . userError $
                                                             "HTCC_ASSEMBLER produced a non-runnable final output for -r: "
                                                                 <> asmOutputPath opts
@@ -5096,8 +5096,8 @@ main = do
     validateOpts opts
     let allowSameInputExternalCollisions =
             not (optIsRunAsm opts) && length (optInput opts) > 1
-        emitWarnings' warningsToEmit =
-            emitWarningsIfEnabled opts warningsToEmit
+        emitWarnings' =
+            emitWarningsIfEnabled opts
         parseInputRawEitherSingleInput fname txt =
             case runParser parser fname txt
                 :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, GlobalVars Integer, Literals Integer, PF.Functions Integer) of
@@ -5171,11 +5171,13 @@ main = do
                     exitFailure
                 Right parsedInput -> do
                     emitWarnings'
-                        [ warning
-                        | (warnings, originatingInput) <- parsedInputsWithWarnings
-                        , warning <- foldMap pure warnings
-                        , shouldEmitMergedWarning originatingInput parsedInput warning
-                        ]
+                        (SQ.fromList
+                            [ warning
+                            | (warnings, originatingInput) <- parsedInputsWithWarnings
+                            , warning <- foldMap pure warnings
+                            , shouldEmitMergedWarning originatingInput parsedInput warning
+                            ]
+                        )
                     pure parsedInput
         runParsed outputHandle (asts, gvars, _, lits, _, _) =
             runAsm outputHandle opts $ casmNormalized' asts gvars lits
@@ -5194,13 +5196,13 @@ main = do
             [fname] -> runVisualize fname
             _       -> hPutStr stderr "internal compiler error: invalid visualize inputs\n" *> exitFailure
         else if optIsRunAsm opts
-        then forM_ (optInput opts) $ \fname ->
-            readParsedInput fname >>= runParsed Nothing
+        then forM_ (optInput opts) $
+            readParsedInput >=> runParsed Nothing
         else maybe
             (case optInput opts of
                 [_] ->
-                    forM_ (optInput opts) $ \fname ->
-                        readParsedInput fname >>= runParsed Nothing
+                    forM_ (optInput opts) $
+                        readParsedInput >=> runParsed Nothing
                 _ ->
                     readMergedInput >>= runParsed Nothing
             )

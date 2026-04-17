@@ -9,7 +9,7 @@ Portability : POSIX
 
 The tokenizer
 -}
-{-# LANGUAGE LambdaCase, MultiWayIf, OverloadedStrings, TupleSections #-}
+{-# LANGUAGE LambdaCase, OverloadedStrings, TupleSections #-}
 module Htcc.Tokenizer.Core (
     -- * Tokenizer
     tokenize'
@@ -137,11 +137,12 @@ charLit = do
         txt <- gets snd
         maybe' (lift $ Left ("invalid char literal in program", (lc, TKReserved "\'"))) (spanCharLiteral txt) $ \(lit, ds) ->
             -- Adding 3 means to add a single character literal and two @"@
-            if  | T.length lit == 1 -> Just (TKNum (fromIntegral $ ord $ T.head lit)) <$ put (lc { tkCn = 3 + tkCn lc }, ds)
+            case T.length lit of
+                1 -> Just (TKNum (fromIntegral $ ord $ T.head lit)) <$ put (lc { tkCn = 3 + tkCn lc }, ds)
                 -- For multi-character constants.
                 -- The standard states that this is an implementation definition.
                 -- Here it follows the implementation definitions of GCC and Clang.
-                | otherwise -> Just (TKNum $ fst $ head $ readHex $ foldr (\x acc -> showHex (ord x) "" <> acc) [] $ T.unpack lit) <$
+                _ -> Just (TKNum $ fst $ head $ readHex $ foldr (\x acc -> showHex (ord x) "" <> acc) [] $ T.unpack lit) <$
                     put (lc { tkCn = 2 + fromIntegral (T.length lit) + tkCn lc }, ds)
 
 operators :: (Enum i, Num i) => Tokenizer i (Maybe (Token i))

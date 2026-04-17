@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, TupleSections #-}
 module Tests.Utils (
     runTests
   , runTestsSequential
@@ -36,9 +36,11 @@ module Tests.Utils (
   , clean
 ) where
 
+import           Control.Applicative      ((<|>))
 import           Control.Exception        (bracket)
 import qualified Control.Foldl            as F
 import           Control.Monad            (filterM, void, when, zipWithM)
+import           Data.Bifunctor           (first)
 import           Data.Bool                (bool)
 import qualified Data.ByteString          as B
 import qualified Data.ByteString.Char8    as BC
@@ -48,7 +50,8 @@ import           Data.Functor             ((<&>))
 import           Data.List                (foldl', isInfixOf, isPrefixOf,
                                            isSuffixOf, tails)
 import qualified Data.Map.Strict          as Map
-import           Data.Maybe               (catMaybes, fromMaybe, isJust)
+import           Data.Maybe               (catMaybes, fromMaybe, isJust,
+                                           isNothing)
 import qualified Data.Text                as DT
 import           Data.Time.Clock          (UTCTime)
 import           System.Directory         (doesDirectoryExist, doesFileExist,
@@ -276,7 +279,7 @@ absoluteHtccCommandWith maybeExplicitCompilerCommand maybeRepoRoot maybeRepoBuil
                 compiler =
                     maybe
                         compiler1
-                        (\repoRoot -> pinStackLauncherToRepoRoot repoRoot compiler1)
+                        (`pinStackLauncherToRepoRoot` compiler1)
                         maybeRepoRoot
             pure $ renderCompilerCommand compiler []
 
@@ -295,7 +298,7 @@ clean = mapM_ $ \x -> (>>=) (doesFileExist x) $ flip bool (removeFile x) $
 
 resolveAssemblerSpec :: IO String
 resolveAssemblerSpec =
-    pure . maybe "gcc" id . nonEmptyEnv =<< lookupEnv "HTCC_ASSEMBLER"
+    fromMaybe "gcc" . nonEmptyEnv <$> lookupEnv "HTCC_ASSEMBLER"
 
 nonEmptyEnv :: Maybe String -> Maybe String
 nonEmptyEnv (Just s) | all isSpace s = Nothing
@@ -309,10 +312,7 @@ renderCompilerCommandForHost :: String -> CompilerCommand -> [String] -> DT.Text
 renderCompilerCommandForHost hostOs compiler extraArgs
     | hostOs == "mingw32" =
         DT.intercalate " && " $
-            (if windowsCommandNeedsDelayedExpansion
-                then ["setlocal EnableDelayedExpansion"]
-                else []
-            )
+            ["setlocal EnableDelayedExpansion" | windowsCommandNeedsDelayedExpansion]
                 <> map renderWindowsEnvOverride (compilerEnvOverrides compiler)
                 <> [renderCommandWords]
     | otherwise =
@@ -348,7 +348,7 @@ renderCompilerCommandForHost hostOs compiler extraArgs
                     | length overrideSpecs == length overrides ->
                         zip overrides $ map Just overrideSpecs
                 _ ->
-                    map (\override -> (override, Nothing)) overrides
+                    map (, Nothing) overrides
         renderPosixEnvOverrideSpec (CompilerEnvOverrideSpec spans) =
             let wordChars = shellWordCharsFromSpans spans
              in maybe
@@ -517,11 +517,7 @@ resolveCheckoutRootAndCompilerFromDirectories currentExecutable (executableDirec
                 Nothing ->
                     buildTreeCheckoutRootFromExecutable currentExecutable
             let maybeRepoRoot =
-                    case maybeFallbackRepoRoot of
-                        Just repoRoot ->
-                            Just repoRoot
-                        Nothing ->
-                            maybeBuildTreeRepoRoot
+                    maybeFallbackRepoRoot <|> maybeBuildTreeRepoRoot
             maybeRepoBuiltCompilerPath <- case maybeRepoRoot of
                 Just repoRoot -> do
                     buildTreeMatchesCheckout <-
@@ -599,11 +595,10 @@ buildTreeReferencesRepoRoot repoRoot currentExecutable =
                     | otherwise =
                         goContents (Just currentChar) nextChars
 
-                nextRepoRootBoundaryChar =
-                    \remainingContents ->
-                        case drop repoRootNeedleLength remainingContents of
-                            nextChar : _ -> Just nextChar
-                            []           -> Nothing
+                nextRepoRootBoundaryChar remainingContents =
+                    case drop repoRootNeedleLength remainingContents of
+                        nextChar : _ -> Just nextChar
+                        []           -> Nothing
 
         isRepoRootMatchBoundary =
             maybe True (not . isRepoRootPathContinuationChar)
@@ -720,7 +715,7 @@ computeLatestCompilerInputModificationTime repoRoot = do
 
 compilerInputFiles :: FilePath -> IO [FilePath]
 compilerInputFiles repoRoot = do
-    sourceFiles <- filter isCompilerSourceFile . concat <$> mapM collectExistingFiles compilerInputRoots
+    sourceFiles <- concatMap (filter isCompilerSourceFile) <$> mapM collectExistingFiles compilerInputRoots
     configFiles <- filterM doesFileExist compilerInputConfigFiles
     pure $ sourceFiles <> configFiles
     where
@@ -759,10 +754,7 @@ collectExistingFiles path =
                     concat <$> mapM (collectExistingFiles . (path </>)) childEntries
                 else do
                     isFile <- doesFileExist path
-                    pure $
-                        if isFile
-                            then [path]
-                            else []
+                    pure [path | isFile]
 
 safeGetModificationTime :: FilePath -> IO (Maybe UTCTime)
 safeGetModificationTime path =
@@ -806,8 +798,8 @@ shellWordsWithContextForHost hostOs commandLine =
             | otherwise =
                 Parsec.choice [doubleEscaped, doubleBare]
         doubleBare =
-            pure . pure . doubleQuotedExpandableShellWordSpan
-                =<< Parsec.many1 (Parsec.satisfy isDoubleBareChar)
+            pure . doubleQuotedExpandableShellWordSpan
+                <$> Parsec.many1 (Parsec.satisfy isDoubleBareChar)
         doubleEscaped = do
             _ <- Parsec.char '\\'
             c <- Parsec.anyChar
@@ -831,7 +823,7 @@ shellWordsWithContextForHost hostOs commandLine =
         escaped = do
             _ <- Parsec.char '\\'
             c <- Parsec.anyChar
-            pure $ (False, [literalShellWordSpan $ case c of
+            pure (False, [literalShellWordSpan $ case c of
                 '\n' -> ""
                 _    -> [c]
                 ])
@@ -1272,10 +1264,9 @@ resolveCompilerCommandInForHost hostOs maybeWorkingDir compiler = do
                 _ ->
                     error "internal compiler error"
 
-        hasExplicitSearchPathOverride overrides' =
+        hasExplicitSearchPathOverride =
             any
                 ((== environmentNameKeyForHost hostOs "PATH") . environmentNameKeyForHost hostOs . fst)
-                overrides'
 
         findExecutablePrefix _ _ _ [] = pure Nothing
         findExecutablePrefix maybeWorkingDir' envOverrides' explicitSearchPathOverride (cmd:_) = do
@@ -1285,7 +1276,7 @@ resolveCompilerCommandInForHost hostOs maybeWorkingDir compiler = do
                     envOverrides'
                     explicitSearchPathOverride
                     cmd
-            pure $ fmap (\resolvedCmd -> (1, resolvedCmd)) resolved
+            pure $ fmap (1,) resolved
 
         resolveExecutableCommand maybeWorkingDir' envOverrides' explicitSearchPathOverride cmd =
             if hasExplicitPath cmd
@@ -1299,7 +1290,7 @@ resolveCompilerCommandInForHost hostOs maybeWorkingDir compiler = do
 
         findExecutableInSearchPath maybeWorkingDir' envOverrides' explicitSearchPathOverride cmd = do
             pathValue <- maybe
-                (maybe "" id <$> lookupEnv "PATH")
+                (fromMaybe "" <$> lookupEnv "PATH")
                 pure
                 (environmentLookupForHost hostOs "PATH" envOverrides')
             maybeResolvedFromPath <- firstResolved $
@@ -1338,7 +1329,7 @@ resolveCompilerCommandInForHost hostOs maybeWorkingDir compiler = do
                     else Nothing
 
         normalizeResolvedLocalExecutablePath maybeWorkingDir' cmd candidatePath
-            | maybe False (const True) maybeWorkingDir' && not (isAbsolute cmd) = candidatePath
+            | isJust maybeWorkingDir' && not (isAbsolute cmd) = candidatePath
             | hasExplicitPath cmd = cmd
             | otherwise = "./" <> cmd
 
@@ -1395,7 +1386,7 @@ expandEnvironmentOverridesWithBaseEnvironmentForHost hostOs baseEnvironment over
                     | length overrideSpecs == length overrides' ->
                         zip overrides' $ map Just overrideSpecs
                 _ ->
-                    map (\override -> (override, Nothing)) overrides'
+                    map (, Nothing) overrides'
 
 baseProcessEnvironment :: Maybe FilePath -> IO (Map.Map String String)
 baseProcessEnvironment =
@@ -1426,11 +1417,11 @@ environmentFromList =
 
 environmentFromListForHost :: String -> [(String, String)] -> Map.Map String String
 environmentFromListForHost hostOs =
-    Map.fromList . map (\(name, value) -> (environmentNameKeyForHost hostOs name, value))
+    Map.fromList . map (first (environmentNameKeyForHost hostOs))
 
 environmentInsertForHost :: String -> String -> String -> Map.Map String String -> Map.Map String String
-environmentInsertForHost hostOs name value =
-    Map.insert (environmentNameKeyForHost hostOs name) value
+environmentInsertForHost hostOs name =
+    Map.insert (environmentNameKeyForHost hostOs name)
 
 environmentLookup :: String -> Map.Map String String -> Maybe String
 environmentLookup =
@@ -2008,7 +1999,7 @@ expandWindowsEnvironmentVariablesForHost hostOs expansionEnvironment delimiter =
                 case break (== delimiter) xs of
                     (name, _:rest)
                         | isWindowsEnvironmentVariableName name ->
-                            maybe "" id (environmentLookupForHost hostOs name expansionEnvironment) <> go rest
+                            fromMaybe "" (environmentLookupForHost hostOs name expansionEnvironment) <> go rest
                     _ ->
                         delimiter : go xs
 
@@ -2040,7 +2031,7 @@ expandWindowsEnvironmentVariablesForTest environment =
 compilerProcessEnvCommandIn :: Maybe FilePath -> CompilerCommand -> IO (Maybe [(String, String)])
 compilerProcessEnvCommandIn maybeWorkingDir compiler = do
     baseEnvironment <- baseProcessEnvironment maybeWorkingDir
-    if null (compilerEnvOverrides compiler) && maybeWorkingDir == Nothing
+    if null (compilerEnvOverrides compiler) && isNothing maybeWorkingDir
         then pure Nothing
         else do
             expandedOverrides <-

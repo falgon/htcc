@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-|
 Module      : Htcc.CRules.Char
 Description : Characters rules of C language

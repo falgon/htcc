@@ -348,7 +348,7 @@ isInvalidFunctionPointerValue targetTy at
                         ATNode (ATConditional _ th el) _ _ _ ->
                             conditionalFunctionPointerValueType th el
                         ATNode (ATStmtExpr stmts) _ _ _ ->
-                            maybe Nothing inferredFunctionPointerValueType (lastMaybe stmts)
+                            inferredFunctionPointerValueType =<< lastMaybe stmts
                         _ ->
                             Nothing
 

@@ -43,7 +43,7 @@ declarator ty = do
                 ptrf <- (fn .) <$> starsToPtrCtor
                 M.choice
                     [ parens (f (ptrf, ty'')) >>= uncurry3 nested'
-                    , (ptrf,,) <$> (Just <$> identifier) <*> M.option ty'' (typeSuffix ty'')
+                    , (ptrf,,) . Just <$> identifier <*> M.option ty'' (typeSuffix ty'')
                     ]
             where
                 nested' ptrf ident t =

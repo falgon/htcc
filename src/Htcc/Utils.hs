@@ -9,8 +9,7 @@ Portability : POSIX
 
 General-purpose utilities
 -}
-{-# LANGUAGE BangPatterns, Rank2Types, ScopedTypeVariables, TupleSections,
-             TypeOperators #-}
+{-# LANGUAGE BangPatterns, TupleSections #-}
 module Htcc.Utils (
     -- * Extra functions for lists
     module Htcc.Utils.List,

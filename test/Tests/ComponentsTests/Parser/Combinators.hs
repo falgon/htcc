@@ -8,7 +8,8 @@ import           Data.Char                                   (chr)
 import           Data.Either                                 (isLeft, isRight)
 import           Data.Functor.Identity                       (runIdentity)
 import qualified Data.Map                                    as MP
-import           Data.Maybe                                  (listToMaybe,
+import           Data.Maybe                                  (fromMaybe,
+                                                              listToMaybe,
                                                               mapMaybe)
 import qualified Data.Text                                   as T
 import           Data.Void                                   (Void)
@@ -243,17 +244,17 @@ inferInitializerType
     :: CT.StorageClass Integer
     -> T.Text
     -> Either (M.ParseErrorBundle T.Text Void) (CT.StorageClass Integer)
-inferInitializerType ty input =
-    inferInitializerTypeWithVars ty [] input
+inferInitializerType =
+    flip inferInitializerTypeWithVars []
 
 inferInitializerTypeWithVars
     :: CT.StorageClass Integer
     -> [(T.Text, CT.StorageClass Integer)]
     -> T.Text
     -> Either (M.ParseErrorBundle T.Text Void) (CT.StorageClass Integer)
-inferInitializerTypeWithVars ty surroundingVars input =
-    fmap (PV.lvtype . maybe (error "missing variable x") id . lookupLVar "x") $
-        runInitializerParserState parser' input
+inferInitializerTypeWithVars ty surroundingVars =
+    (PV.lvtype . fromMaybe (error "missing variable x") . lookupLVar "x" <$>)
+        . runInitializerParserState parser'
     where
         parser' = do
             spaceConsumer
@@ -266,39 +267,46 @@ inferGlobalType
     -> T.Text
     -> Either (M.ParseErrorBundle T.Text Void) (CT.StorageClass Integer)
 inferGlobalType ident input =
-    fmap
-        (PV.gvtype . maybe (error $ "missing global variable " <> T.unpack ident) id . MP.lookup ident)
-        $ (\(_, _, gvars, _, _) -> gvars) <$> runParser parser "" input
+    PV.gvtype
+        . fromMaybe (error $ "missing global variable " <> T.unpack ident)
+        . MP.lookup ident
+        . (\(_, _, gvars, _, _) -> gvars)
+        <$> runParser parser "" input
 
 inferGlobalInitWith
     :: T.Text
     -> T.Text
     -> Either (M.ParseErrorBundle T.Text Void) (PV.GVarInitWith Integer)
 inferGlobalInitWith ident input =
-    fmap
-        (PV.initWith . maybe (error $ "missing global variable " <> T.unpack ident) id . MP.lookup ident)
-        $ (\(_, _, gvars, _, _) -> gvars) <$> runParser parser "" input
+    PV.initWith
+        . fromMaybe (error $ "missing global variable " <> T.unpack ident)
+        . MP.lookup ident
+        . (\(_, _, gvars, _, _) -> gvars)
+        <$> runParser parser "" input
 
 inferFunctionType
     :: T.Text
     -> T.Text
     -> Either (M.ParseErrorBundle T.Text Void) (CT.StorageClass Integer)
 inferFunctionType ident input =
-    fmap
-        (PF.fntype . maybe (error $ "missing function " <> T.unpack ident) id . MP.lookup ident)
-        $ (\(_, _, _, _, fns) -> fns) <$> runParser parser "" input
+    PF.fntype
+        . fromMaybe (error $ "missing function " <> T.unpack ident)
+        . MP.lookup ident
+        . (\(_, _, _, _, fns) -> fns)
+        <$> runParser parser "" input
 
 hasFunctionBinding
     :: T.Text
     -> T.Text
     -> Either (M.ParseErrorBundle T.Text Void) Bool
 hasFunctionBinding ident input =
-    fmap (MP.member ident . (\(_, _, _, _, fns) -> fns)) $
-        (runParser parser "" input :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, PV.GlobalVars Integer, PV.Literals Integer, PF.Functions Integer))
+    MP.member ident . (\(_, _, _, _, fns) -> fns)
+        <$> (runParser parser "" input :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, PV.GlobalVars Integer, PV.Literals Integer, PF.Functions Integer))
 
 parseProgram :: T.Text -> Either (M.ParseErrorBundle T.Text Void) ()
 parseProgram input =
-    () <$ (runParser parser "" input :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, PV.GlobalVars Integer, PV.Literals Integer, PF.Functions Integer))
+    void
+        (runParser parser "" input :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, PV.GlobalVars Integer, PV.Literals Integer, PF.Functions Integer))
 
 parseProgramAsts :: T.Text -> Either (M.ParseErrorBundle T.Text Void) (ASTs Integer)
 parseProgramAsts input =
@@ -311,7 +319,7 @@ parseAssignExpr =
 
 parseProgramAllowSameInputExternalCollisions :: T.Text -> Either (M.ParseErrorBundle T.Text Void) ()
 parseProgramAllowSameInputExternalCollisions input =
-    () <$
+    void
         ( runParserAllowSameInputExternalCollisions parser "" input
             :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, PV.GlobalVars Integer, PV.Literals Integer, PF.Functions Integer)
         )
@@ -320,14 +328,10 @@ firstLocalDeclType
     :: T.Text
     -> Either (M.ParseErrorBundle T.Text Void) (CT.StorageClass Integer)
 firstLocalDeclType input =
-    fmap
-        ( maybe
-            (error "missing local declaration")
-            id
-            . listToMaybe
-            . concatMap collectLocalDeclTypes
-        )
-        (parseProgramAsts input)
+    fromMaybe (error "missing local declaration")
+        . listToMaybe
+        . concatMap collectLocalDeclTypes
+        <$> parseProgramAsts input
 
 collectLocalDeclTypes :: ATree Integer -> [CT.StorageClass Integer]
 collectLocalDeclTypes ATEmpty = []
