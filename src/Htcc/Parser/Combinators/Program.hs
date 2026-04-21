@@ -154,10 +154,18 @@ requireInitializedObjectType
     :: (Ord i, Bits i, Read i, Show i, Integral i)
     => String
     -> CT.StorageClass i
+    -> CT.StorageClass i
     -> Parser i (CT.StorageClass i)
-requireInitializedObjectType err ty
-    | isTopLevelOmittedBoundArrayType ty = pure ty
-    | otherwise = requireCompleteObjectType err ty
+requireInitializedObjectType err baseTy ty = do
+    resolvedBaseTy <- gets (`normalizeCompletedStorageClass` baseTy)
+    resolvedTy <- gets (`normalizeCompletedStorageClass` ty)
+    if hasInitializerCompletableArrayType resolvedTy
+        && not (addsOuterArrayLayerBeforeExistingOmittedBound resolvedBaseTy resolvedTy)
+        then pure resolvedTy
+        else
+            if hasIncompleteObjectType resolvedTy
+                then fail err
+                else pure resolvedTy
 
 requireExternDeclObjectType
     :: (Ord i, Bits i, Read i, Show i, Integral i)
@@ -247,6 +255,86 @@ isTopLevelOmittedBoundArrayType :: CT.StorageClass i -> Bool
 isTopLevelOmittedBoundArrayType ty = case CT.toTypeKind ty of
     CT.CTIncomplete (CT.IncompleteArray _) -> True
     _                                      -> False
+
+hasInitializerCompletableArrayType :: CT.StorageClass i -> Bool
+hasInitializerCompletableArrayType = go . CT.toTypeKind
+    where
+        go = \case
+            CT.CTLong innerTy   -> go innerTy
+            CT.CTShort innerTy  -> go innerTy
+            CT.CTSigned innerTy -> go innerTy
+            CT.CTEnum baseTy _  -> go baseTy
+            CT.CTArray _ innerTy ->
+                go innerTy
+            CT.CTIncomplete (CT.IncompleteArray elemTy) ->
+                isCompleteObjectTypeKind elemTy
+            _ ->
+                False
+
+        isCompleteObjectTypeKind = \case
+            CT.CTLong innerTy   -> isCompleteObjectTypeKind innerTy
+            CT.CTShort innerTy  -> isCompleteObjectTypeKind innerTy
+            CT.CTSigned innerTy -> isCompleteObjectTypeKind innerTy
+            CT.CTEnum baseTy _  -> isCompleteObjectTypeKind baseTy
+            CT.CTArray _ innerTy ->
+                isCompleteObjectTypeKind innerTy
+            CT.CTIncomplete _ ->
+                False
+            CT.CTVoid ->
+                False
+            CT.CTFunc _ _ ->
+                False
+            tyKind ->
+                not $ hasIncompleteObjectType $ CT.SCAuto tyKind
+
+addsOuterArrayLayerBeforeExistingOmittedBound :: CT.StorageClass i -> CT.StorageClass i -> Bool
+addsOuterArrayLayerBeforeExistingOmittedBound baseTy declaredTy
+    | not (hasInitializerCompletableArrayType baseTy) =
+        False
+    | otherwise =
+        case
+            ( outerArrayDepthBeforeFirstIncomplete baseTy
+            , outerArrayDepthBeforeFirstIncomplete declaredTy
+            ) of
+            (Just baseDepth, Just declaredDepth) ->
+                declaredDepth > baseDepth
+            _ ->
+                False
+
+outerArrayDepthBeforeFirstIncomplete :: CT.StorageClass i -> Maybe Int
+outerArrayDepthBeforeFirstIncomplete = go 0 . CT.toTypeKind
+    where
+        go depth = \case
+            CT.CTLong innerTy   -> go depth innerTy
+            CT.CTShort innerTy  -> go depth innerTy
+            CT.CTSigned innerTy -> go depth innerTy
+            CT.CTEnum baseTy _  -> go depth baseTy
+            CT.CTArray _ innerTy ->
+                go (succ depth) innerTy
+            CT.CTIncomplete (CT.IncompleteArray _) ->
+                Just depth
+            _ ->
+                Nothing
+
+canonicalizeCompletableOmittedArrayType :: CT.StorageClass i -> CT.StorageClass i
+canonicalizeCompletableOmittedArrayType ty = case CT.toTypeKind ty of
+    CT.CTIncomplete (CT.IncompleteArray elemTy) ->
+        let (baseTy, rebuild) = peelArrays elemTy
+         in CT.mapTypeKind (const $ rebuild $ CT.CTIncomplete $ CT.IncompleteArray baseTy) ty
+    _ ->
+        ty
+    where
+        peelArrays (CT.CTArray n innerTy) =
+            let (baseTy, rebuild) = peelArrays innerTy
+             in (baseTy, CT.CTArray n . rebuild)
+        peelArrays baseTy = (baseTy, id)
+
+normalizeGlobalDeclType :: CT.StorageClass i -> CT.StorageClass i
+normalizeGlobalDeclType ty
+    | hasInitializerCompletableArrayType ty =
+        canonicalizeCompletableOmittedArrayType ty
+    | otherwise =
+        ty
 
 isValidTentativeFileScopeArrayType :: CT.StorageClass i -> Bool
 isValidTentativeFileScopeArrayType = go . CT.toTypeKind
@@ -381,11 +469,11 @@ requirePointerArithmeticTargetAllowDeferred expr = case CT.deref (atype expr) of
 isDeferredIncompleteObjectExpr :: ATree i -> Bool
 isDeferredIncompleteObjectExpr = \case
     ATNode (ATLVar _ _) ty _ _ ->
-        not $ isTopLevelOmittedBoundArrayType ty
+        not $ CT.isIncompleteArray ty
     ATNode (ATGVar _ _) ty _ _ ->
-        not $ isTopLevelOmittedBoundArrayType ty
+        not $ CT.isIncompleteArray ty
     ATNode (ATMemberAcc _) ty _ _ ->
-        not $ isTopLevelOmittedBoundArrayType ty
+        not $ CT.isIncompleteArray ty
     _ ->
         True
 
@@ -485,7 +573,7 @@ global = do
                     ]
             ((ty', Just ident), _) ->
                 requireNonVoidObjectType "variable declared void" ty'
-                    *> gvarDecl declStorage ty' ident
+                    *> gvarDecl declStorage ty ty' ident
 
         isFunctionType ty' = case CT.toTypeKind ty' of
             CT.CTFunc _ _ -> True
@@ -538,54 +626,57 @@ global = do
 
                 functionBody = atBlock <$> braces (M.many stmt)
 
-                fromValidFunc fnTy params' st@(ATNode (ATBlock block) _ _ _)
-                    | CT.toTypeKind fnTy == CT.CTVoid =
-                        if isJust (find isNonEmptyReturn block) then
-                            fail $ mconcat
-                                [ "the return type of function '"
-                                , T.unpack ident
-                                , "' is void, but the statement returns a value"
-                                ]
-                        else
-                            pure $ atDefFunc ident (if null params' then Nothing else Just params') fnTy st
-                    | otherwise = do
-                        when (isJust (find isEmptyReturn block)) $
-                            pushWarn pos $ mconcat
-                                [ "the return type of function '"
-                                , T.unpack ident
-                                , "' is "
-                                , show (CT.toTypeKind fnTy)
-                                    , ", but the statement returns no value"
-                                    ]
-                        pure $ atDefFunc ident (if null params' then Nothing else Just params') fnTy st
-                fromValidFunc _ _ _ = fail "internal compiler error"
+                fromValidFunc fnTy params' st@(ATNode (ATBlock block) _ _ _) =
+                    case CT.toTypeKind fnTy of
+                        CT.CTFunc retTy _
+                            | retTy == CT.CTVoid ->
+                                if isJust (find isNonEmptyReturn block) then
+                                    fail $ mconcat
+                                        [ "the return type of function '"
+                                        , T.unpack ident
+                                        , "' is void, but the statement returns a value"
+                                        ]
+                                else
+                                    pure $ atDefFunc ident (if null params' then Nothing else Just params') fnTy st
+                            | otherwise -> do
+                                when (isJust (find isEmptyReturn block)) $
+                                    pushWarn pos $ mconcat
+                                        [ "the return type of function '"
+                                        , T.unpack ident
+                                        , "' is "
+                                        , show retTy
+                                        , ", but the statement returns no value"
+                                        ]
+                                pure $ atDefFunc ident (if null params' then Nothing else Just params') fnTy st
+                        _ ->
+                            fail "internal compiler error"
 
-        gvarDecl declStorage ty ident = choice
+        gvarDecl declStorage baseTy ty ident = choice
             [ nonInit declStorage ty ident
-            , withInit ty ident
+            , withInit baseTy ty ident
             ]
         nonInit declStorage ty ident
             | declStorage == ExternDecl =
                 semi
                     *> (requireExternDeclObjectType "declaration of variable with incomplete type" ty
-                            >>= \resolvedTy -> registerGVarWith resolvedTy ident PV.GVarInitWithExternDecl
+                            >>= \resolvedTy -> registerGVarWith (normalizeGlobalDeclType resolvedTy) ident PV.GVarInitWithExternDecl
                        )
                     $> ATEmpty
             | CT.isIncompleteArray ty && isValidTentativeFileScopeArrayType ty =
-                semi *> registerGVar ty ident $> ATEmpty
+                semi *> registerGVar (normalizeGlobalDeclType ty) ident $> ATEmpty
             | CT.isIncompleteArray ty =
                 fail "defining global variables with a incomplete type"
             | otherwise =
                 semi
                     >> requireCompleteObjectType "defining global variables with a incomplete type" ty
-                    >>= flip registerGVar ident
+                    >>= flip (registerGVar . normalizeGlobalDeclType) ident
                     >> pure ATEmpty
 
-        withInit ty ident = do
-            void $ requireInitializedObjectType "defining global variables with a incomplete type" ty
+        withInit baseTy ty ident = do
+            resolvedTy <- requireInitializedObjectType "defining global variables with a incomplete type" baseTy ty
             void equal
-            (ty', initWith) <- parseGlobalVarInit ty ident
-            registerGVarWith ty' ident initWith <* semi
+            (ty', initWith) <- parseGlobalVarInit resolvedTy ident
+            registerGVarWith (normalizeGlobalDeclType ty') ident initWith <* semi
 
 parseGlobalVarInit :: (Ord i, Bits i, Read i, Show i, Integral i)
     => CT.StorageClass i
@@ -603,7 +694,7 @@ parseGlobalVarInit ty ident =
         pure (ty', PV.GVarInitWithAST ast)
     where
         ensureTargetGlobalVisible declaredTy name =
-            void $ registerGVar declaredTy name
+            void $ registerGVar (normalizeGlobalDeclType declaredTy) name
 
         rejectIncompleteGlobalSelfReference declaredTy name ast
             | CT.isIncompleteArray declaredTy && containsGlobalRef name ast =
@@ -995,7 +1086,7 @@ evalConstexprTree = \case
                         then Left "initializer element is not constant"
                         else pure (f lhs' rhs')
         memOp opName op expr
-            | CT.isCTIncomplete (atype expr) =
+            | hasIncompleteObjectType (atype expr) =
                 Left $ "invalid application of '" <> opName <> "' to incomplete type"
             | otherwise =
                 pure $ fromIntegral $ op $ atype expr
@@ -1176,16 +1267,16 @@ stmt = choice
                                 requireNonVoidObjectType "variable declared void" ty'
                                     *> M.choice
                                         [ nonInit ty' ident
-                                        , withInit ty' ident
+                                        , withInit ty ty' ident
                                         ]
 
                 nonInit ty ident =
                     requireCompleteObjectType "declaration of variable with incomplete type" ty
                         >>= \resolvedTy ->
                             semi *> registerLVar resolvedTy ident <&> atNull
-                withInit ty ident = do
+                withInit baseTy ty ident = do
                     resolvedTy <-
-                        requireInitializedObjectType "declaration of variable with incomplete type" ty
+                        requireInitializedObjectType "declaration of variable with incomplete type" baseTy ty
                     equal *> varInit assign resolvedTy ident <* semi
                 typedefDecl ty ident = do
                     resolvedTy <- requireTypedefDeclType "typedef declaration has invalid array element type" ty
@@ -1198,7 +1289,10 @@ stmt = choice
                                     "declaration of variable with incomplete type"
                                     ty
                                     >>= \resolvedTy ->
-                                        registerGVarWith resolvedTy ident PV.GVarInitWithExternDecl
+                                        registerGVarWith
+                                            (normalizeGlobalDeclType resolvedTy)
+                                            ident
+                                            PV.GVarInitWithExternDecl
                                )
                             $> ATEmpty
                         ]

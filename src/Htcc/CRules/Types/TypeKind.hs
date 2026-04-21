@@ -270,8 +270,6 @@ instance Eq i => Eq (TypeKind i) where
     (==) CTBool CTBool = True
     (==) CTVoid CTVoid = True
     (==) (CTFunc lty lparams) (CTFunc rty rparams) = lty == rty && map fst lparams == map fst rparams
-    (==) (CTFunc lty _) rhs = lty == rhs -- function and otherwise
-    (==) lhs (CTFunc rty _) = lhs == rty -- function and otherwise
     (==) (CTEnum ut1 m1) (CTEnum ut2 m2) = ut1 == ut2 && m1 == m2
     (==) (CTArray v1 t1) (CTArray v2 t2) = v1 == v2 && t1 == t2
     (==) (CTStruct m1) (CTStruct m2) = m1 == m2

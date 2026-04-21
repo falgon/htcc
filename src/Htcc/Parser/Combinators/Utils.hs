@@ -22,6 +22,7 @@ module Htcc.Parser.Combinators.Utils (
   , conditionalResultType
   , isNullPointerConstant
   , functionDesignatorSourcePointerType
+  , carriesFunctionDesignatorValue
   , isInvalidObjectPointerValue
   , isInvalidFunctionPointerValue
   , isInvalidFunctionPointerInitializer
@@ -48,7 +49,8 @@ import           Htcc.Parser.ConstructionData.Core               (ConstructionDa
                                                                   addGVarWith,
                                                                   addLVar,
                                                                   addLiteral,
-                                                                  addTypedef)
+                                                                  addTypedef,
+                                                                  hasIncompleteObjectType)
 import           Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
 import           Htcc.Parser.ConstructionData.Scope.Var          (GVarInitWith)
 import qualified Htcc.Tokenizer.Token                            as HT
@@ -487,7 +489,7 @@ evalIntegerConstexprTree = \case
                         then Left "not an integer constant expression"
                         else pure (f lhs' rhs')
         memOp opName op expr
-            | CT.isCTIncomplete (atype expr) =
+            | hasIncompleteObjectType (atype expr) =
                 Left $ "invalid application of '" <> opName <> "' to incomplete type"
             | otherwise =
                 pure $ fromIntegral $ op $ atype expr

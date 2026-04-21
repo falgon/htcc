@@ -63,6 +63,9 @@ arraySuffix ty = choice
             M.option Nothing (Just <$> arraySuffix ty)
                 >>= \case
                     Nothing -> pure arty
+                    Just ty'
+                        | CT.isIncompleteArray ty' ->
+                            failWithTypeMaybe ty' Nothing
                     Just ty' ->
                         runMaybeT (mfilter CT.isValidIncomplete $ MaybeT $ pure $ CT.concatCTArray arty ty')
                             >>= failWithTypeMaybe ty'

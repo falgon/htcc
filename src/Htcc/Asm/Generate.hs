@@ -41,6 +41,7 @@ import           Htcc.Parser.Combinators.Utils               (conditionalResultT
                                                               decayExprType,
                                                               isInvalidFunctionPointerValue,
                                                               isInvalidObjectPointerValue)
+import           Htcc.Parser.ConstructionData.Core           (hasIncompleteObjectType)
 import qualified Htcc.Parser.ConstructionData.Scope.Function as PF
 import           Htcc.Parser.ConstructionData.Scope.Var      (GVar (..),
                                                               GVarInitWith (..),
@@ -233,14 +234,14 @@ invalidIncompletePointerArithmetic kind lhs rhs = case kind of
         False
     where
         hasIncompletePointerTarget expr =
-            maybe False CT.isCTIncomplete $ CT.deref (atype expr)
+            maybe False hasIncompleteObjectType $ CT.deref (atype expr)
 
 invalidIncompleteMemOp :: Ord i => ATKind i -> ATree i -> Bool
 invalidIncompleteMemOp kind lhs = case kind of
     ATSizeof ->
-        CT.isCTIncomplete $ atype lhs
+        hasIncompleteObjectType $ atype lhs
     ATAlignof ->
-        CT.isCTIncomplete $ atype lhs
+        hasIncompleteObjectType $ atype lhs
     _ ->
         False
 

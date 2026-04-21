@@ -19,6 +19,8 @@ import                qualified Htcc.CRules.Types               as CT
 import                          Htcc.Parser.AST.Core            (ATKind (..),
                                                                  ATree (..))
 import                          Htcc.Parser.Combinators.Core
+import                          Htcc.Parser.ConstructionData.Core
+                                                                 (hasIncompleteObjectType)
 import {-# SOURCE #-}           Htcc.Parser.Combinators.Program (conditional)
 
 evalConstexpr :: (Bits i, Integral i, Show i, Read i) => Parser i i
@@ -75,7 +77,7 @@ evalConstexpr = conditional >>= constantExp'
                                 then fail "The expression is not constant-expression"
                                 else pure $ fromIntegral $ f lhs' rhs'
                 memOp opName op expr
-                    | CT.isCTIncomplete (atype expr) =
+                    | hasIncompleteObjectType (atype expr) =
                         fail $ "invalid application of '" <> opName <> "' to incomplete type"
                     | otherwise =
                         pure $ fromIntegral $ op $ atype expr

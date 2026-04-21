@@ -102,7 +102,8 @@ int main()
     assert(1, ({ int ar[2]; int i = 0; for (; i < sizeof ar / sizeof *ar; ++i) ar[i] = i; int* p = ar; p += 1; *p; }), "({ int ar[2]; int i = 0; for (; i < sizeof ar / sizeof *ar; ++i) ar[i] = i; int* p = ar; p += 1; *p; })");
     assert(0, ({ int ar[2]; int i = 0; for (; i < sizeof ar / sizeof *ar; ++i) ar[i] = i; int* p = ar + 1; p -= 1; *p; }), "({ int ar[2]; int i = 0; for (; i < sizeof ar / sizeof *ar; ++i) ar[i] = i; int* p = ar + 1; p -= 1; *p; })");
     assert(10, ({ int ar[2 ? 5 * 2 : 5]; sizeof ar / sizeof *ar; }), "({ int ar[2 ? 5 * 2 : 5]; sizeof ar / sizeof *ar; })");
-    assert(0, ({ int ar[]; 0; }), "({ int ar[]; 0; })");
+    // Block-scope omitted-bound arrays without initializers are rejected.
+    // The negative parser coverage lives in the component tests.
     assert(42, ({ int ar[1] = { 42 }; ar[0]; }), "({ int ar[1] = { 42 }; ar[0]; })");
     assert(1, ({ int ar[3] = { 1, 2, 3 }; ar[0]; }), "({ int ar[3] = { 1, 2, 3 }; ar[0]; })");
     assert(2, ({ int ar[3] = { 1, 2, 3 }; ar[1]; }), "({ int ar[3] = { 1, 2, 3 }; ar[1]; })");

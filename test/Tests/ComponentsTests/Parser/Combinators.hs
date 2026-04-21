@@ -11,6 +11,7 @@ import qualified Data.Map                                    as MP
 import           Data.Maybe                                  (fromMaybe,
                                                               listToMaybe,
                                                               mapMaybe)
+import qualified Data.Sequence                               as SQ
 import qualified Data.Text                                   as T
 import           Data.Void                                   (Void)
 import qualified Htcc.CRules                                 as CR
@@ -307,6 +308,11 @@ parseProgram :: T.Text -> Either (M.ParseErrorBundle T.Text Void) ()
 parseProgram input =
     void
         (runParser parser "" input :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, PV.GlobalVars Integer, PV.Literals Integer, PF.Functions Integer))
+
+parseProgramWarnings :: T.Text -> Either (M.ParseErrorBundle T.Text Void) Warnings
+parseProgramWarnings input =
+    (\(warnings, _, _, _, _) -> warnings)
+        <$> (runParser parser "" input :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, PV.GlobalVars Integer, PV.Literals Integer, PF.Functions Integer))
 
 parseProgramAsts :: T.Text -> Either (M.ParseErrorBundle T.Text Void) (ASTs Integer)
 parseProgramAsts input =
@@ -825,6 +831,10 @@ integerOperatorTypeTest = TestLabel "Parser.Program.integer-operator-type" $
         , "treats enum types as integral for integer-only operators" ~:
             CT.isIntegral (CT.SCAuto $ CT.CTEnum CT.CTInt mempty)
                 ~?= True
+        , TestLabel "rejects shift operators on bare function designators even when they return _Bool" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands"
+                "_Bool f(void); int main(void) { return f << 1; }"
         ]
 
 globalInitializerTest :: Test
@@ -870,6 +880,14 @@ globalInitializerTest = TestLabel "Parser.Program.global-initializer" $
                 ~?= True
         , "rejects sizeof on a tentative array before a later completing declaration" ~:
             isLeft (parseProgram "int x[]; int main(void) { return sizeof x; } int x[4];")
+                ~?= True
+        , "rejects sizeof on a typedef-backed tentative array before completion" ~:
+            isLeft
+                (parseProgram "typedef int Row[2]; extern Row rows[]; int main(void) { return sizeof rows; }")
+                ~?= True
+        , "rejects _Alignof on a typedef-backed tentative array before completion" ~:
+            isLeft
+                (parseProgram "typedef int Row[2]; extern Row rows[]; int main(void) { return _Alignof rows; }")
                 ~?= True
         , "rejects address arithmetic on a tentative array before a later completing declaration" ~:
             isLeft (parseProgram "int x[]; int main(void) { return ((char*)(&x + 1)) - ((char*)&x); } int x[4];")
@@ -940,6 +958,39 @@ globalInitializerTest = TestLabel "Parser.Program.global-initializer" $
         , "accepts short-circuited logical-or elements in aggregate file-scope initializers" ~:
             isRight (parseProgram "int g[] = {1 || 1/0};")
                 ~?= True
+        , "accepts file-scope nested omitted-bound char arrays with initializers" ~:
+            isRight
+                (parseProgram "char str[][4] = { \"abc\", \"def\" }; int main(void) { return str[1][2]; }")
+                ~?= True
+        , "accepts file-scope typedef-backed nested omitted-bound arrays once the element struct is complete" ~:
+            isRight
+                (parseProgram "typedef struct S T; struct S { int a; }; T rows[][1] = {{{1}}}; int main(void) { return sizeof rows[0][0]; }")
+                ~?= True
+        , "accepts file-scope outer omitted-bound arrays whose element type comes from an array typedef" ~:
+            isRight
+                (parseProgram "typedef int Row[2]; Row rows[] = {{1, 2}}; int main(void) { return rows[0][1]; }")
+                ~?= True
+        , TestLabel "preserves redeclaration compatibility for file-scope typedef-backed omitted-bound arrays" $
+            TestList
+                [ "earlier tentative declaration" ~:
+                    inferGlobalType "rows" "typedef int Row[2]; Row rows[]; Row rows[] = {{1, 2}};"
+                        ~?= Right (CT.SCAuto $ CT.makeCTArray [1, 2] CT.CTInt)
+                , "earlier extern declaration" ~:
+                    inferGlobalType "rows" "typedef int Row[2]; extern Row rows[]; Row rows[] = {{1, 2}};"
+                        ~?= Right (CT.SCAuto $ CT.makeCTArray [1, 2] CT.CTInt)
+                , "later extern declaration" ~:
+                    inferGlobalType "rows" "typedef int Row[2]; Row rows[] = {{1, 2}}; extern Row rows[];"
+                        ~?= Right (CT.SCAuto $ CT.makeCTArray [1, 2] CT.CTInt)
+                ]
+        , TestLabel "preserves redeclaration compatibility for block-scope extern typedef-backed omitted-bound arrays" $
+            TestList
+                [ "definition after block-scope extern" ~:
+                    inferGlobalType "rows" "typedef int Row[2]; int f(void) { extern Row rows[]; return 0; } Row rows[] = {{1, 2}};"
+                        ~?= Right (CT.SCAuto $ CT.makeCTArray [1, 2] CT.CTInt)
+                , "definition before block-scope extern" ~:
+                    inferGlobalType "rows" "typedef int Row[2]; Row rows[] = {{1, 2}}; int f(void) { extern Row rows[]; return 0; }"
+                        ~?= Right (CT.SCAuto $ CT.makeCTArray [1, 2] CT.CTInt)
+                ]
         , "accepts GNU omitted-middle conditionals in scalar file-scope initializers" ~:
             isRight (parseProgram "int g = 1 ?: 2; int h = 0 ?: 2; int main(void) { return g == 1 && h == 2; }")
                 ~?= True
@@ -1025,6 +1076,18 @@ globalInitializerTest = TestLabel "Parser.Program.global-initializer" $
                     "unexpected error message"
                     (T.isInfixOf "redeclaration of 'p' with no linkage" $ T.pack $ show err)
                 Right _ -> assertFailure "expected parse failure"
+        , TestLabel "rejects values returned from void function definitions after function-return equality changes" $ TestCase $
+            assertProgramErrorContains
+                "is void, but the statement returns a value"
+                "void f(void) { return 1; }"
+        , TestLabel "does not warn for empty returns in void function definitions after function-return equality changes" $ TestCase $
+            case parseProgramWarnings "void f(void) { return; }" of
+                Left err ->
+                    assertFailure $ "unexpected parse error: " <> show err
+                Right warnings ->
+                    assertBool
+                        "unexpected warnings"
+                        (SQ.null warnings)
         , "accepts same-file tentative globals that spell int as signed" ~:
             isRight (parseProgram "int x; signed x; int main(void) { return x; }")
                 ~?= True
@@ -1107,6 +1170,22 @@ globalInitializerTest = TestLabel "Parser.Program.global-initializer" $
         , "rejects file-scope omitted-bound arrays of void with initializers" ~:
             isLeft (parseProgram "void a[] = {0};")
                 ~?= True
+        , TestLabel "rejects file-scope initialized arrays whose omitted bound is not outermost" $
+            TestList
+                [ "fixed outer bound before omitted bound" ~:
+                    isLeft (parseProgram "int a[2][][4] = {{{1}}, {{2}}};")
+                        ~?= True
+                , "additional omitted bound after an outer omitted bound" ~:
+                    isLeft (parseProgram "int a[][2][][4] = {{{{1}}}};")
+                        ~?= True
+                , "typedef-hidden omitted bound in the element type" ~:
+                    isLeft (parseProgram "typedef int Row[]; Row a[2] = {{1}, {2}};")
+                        ~?= True
+                ]
+        , TestLabel "rejects file-scope omitted-bound arrays whose ultimate element type is a function" $ TestCase $
+            assertProgramErrorContains
+                "incomplete type"
+                "typedef int F(void); F table[][1] = {{0}};"
         ]
 
 scalarInitializerTest :: Test
@@ -1183,12 +1262,40 @@ scalarInitializerTest = TestLabel "Parser.Program.scalar-initializer" $
         , "rejects block-scope omitted-bound arrays of void with initializers" ~:
             isLeft (parseProgram "int main(void) { void a[] = {0}; return 0; }")
                 ~?= True
+        , TestLabel "rejects block-scope omitted-bound arrays whose ultimate element type is a function" $ TestCase $
+            assertProgramErrorContains
+                "incomplete type"
+                "typedef int F(void); int main(void) { F table[][1] = {{0}}; return 0; }"
         , "rejects block-scope incomplete arrays without initializers" ~:
             isLeft (parseProgram "int main(void) { int a[]; return 0; }")
                 ~?= True
         , "accepts block-scope omitted-bound arrays with initializers" ~:
             isRight (parseProgram "int main(void) { int a[] = {1, 2}; return a[1]; }")
                 ~?= True
+        , "accepts block-scope nested omitted-bound char arrays with initializers" ~:
+            isRight
+                (parseProgram "int main(void) { char str[][4] = { \"abc\", \"def\" }; return str[1][2]; }")
+                ~?= True
+        , "accepts block-scope typedef-backed nested omitted-bound arrays once the element struct is complete" ~:
+            isRight
+                (parseProgram "typedef struct S T; struct S { int a; }; int main(void) { T rows[][1] = {{{1}}}; return sizeof rows[0][0]; }")
+                ~?= True
+        , "accepts block-scope outer omitted-bound arrays whose element type comes from an array typedef" ~:
+            isRight
+                (parseProgram "typedef int Row[2]; int main(void) { Row rows[] = {{1, 2}}; return rows[0][1]; }")
+                ~?= True
+        , TestLabel "rejects block-scope initialized arrays whose omitted bound is not outermost" $
+            TestList
+                [ "fixed outer bound before omitted bound" ~:
+                    isLeft (parseProgram "int main(void) { int a[2][][4] = {{{1}}, {{2}}}; return 0; }")
+                        ~?= True
+                , "additional omitted bound after an outer omitted bound" ~:
+                    isLeft (parseProgram "int main(void) { int a[][2][][4] = {{{{1}}}}; return 0; }")
+                        ~?= True
+                , "typedef-hidden omitted bound in the element type" ~:
+                    isLeft (parseProgram "typedef int Row[]; int main(void) { Row a[2] = {{1}, {2}}; return 0; }")
+                        ~?= True
+                ]
         , TestLabel "rejects conditional-wrapped function designators in local scalar initializers" $ TestCase $
             assertProgramErrorContains
                 "invalid initializer for scalar object"
@@ -1316,6 +1423,40 @@ functionDesignatorContextTest = TestLabel "Parser.Program.function-designator-co
             assertProgramErrorContains
                 "invalid application of '~' to function type"
                 "int f(void) { return 1; } int main(void) { return ~f; }"
+        , TestLabel "rejects multiplicative operators on bare function designators" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands"
+                "int f(void) { return 1; } int main(void) { return f * 2; }"
+        , TestLabel "rejects multiplicative operators on wrapped function designators" $
+            TestList
+                [ TestLabel "comma wrapper" $ TestCase $
+                    assertProgramErrorContains
+                        "invalid operands"
+                        "int f(void) { return 1; } int main(void) { return (0, f) * 2; }"
+                , TestLabel "conditional wrapper" $ TestCase $
+                    assertProgramErrorContains
+                        "invalid operands"
+                        "int f(void) { return 1; } int main(void) { return (1 ? f : f) / 2; }"
+                , TestLabel "statement expression wrapper" $ TestCase $
+                    assertProgramErrorContains
+                        "invalid operands"
+                        "int f(void) { return 1; } int main(void) { return ({ f; }) % 2; }"
+                ]
+        , TestLabel "accepts multiplicative operators after explicit arithmetic casts of function designators" $
+            TestList
+                [ "direct integer cast" ~:
+                    isRight
+                        (parseProgram "int f(void) { return 1; } int main(void) { return ((long)f) * 2; }")
+                        ~?= True
+                , "boolean cast" ~:
+                    isRight
+                        (parseProgram "int f(void) { return 1; } int main(void) { return ((_Bool)f) % 2; }")
+                        ~?= True
+                , "wrapped cast result" ~:
+                    isRight
+                        (parseProgram "int f(void) { return 1; } int main(void) { return (0, (long)f) / 2; }")
+                        ~?= True
+                ]
         ]
 
 functionCallTest :: Test
