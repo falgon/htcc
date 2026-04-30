@@ -1,5 +1,4 @@
 name:                htcc
-cabal-version:       2.0
 version:             0.0.0.1
 synopsis:            The full scratch implementation of tiny C compiler (x86_64)
 description: |
@@ -166,7 +165,7 @@ tests:
     source-dirs:         test
     generated-other-modules:
     - Paths_htcc
-    build-tool-depends:
+    build-tools:
     - htcc:htcc
     other-modules:
     - Tests.CommandSelection

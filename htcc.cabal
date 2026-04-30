@@ -1,10 +1,10 @@
 cabal-version: 2.0
 
--- This file has been generated from package.yaml by hpack version 0.33.0.
+-- This file has been generated from package.yaml by hpack version 0.38.1.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 850b9848b962537995097e4ec0c7bc1c88f136695936efa9068db58eece3242d
+-- hash: 5cfc5f9c6582f9417c1ee2a8e0cff1a7bb6b5a66a97a47ac4050e371a7ccdc22
 
 name:           htcc
 version:        0.0.0.1
@@ -65,6 +65,7 @@ library
       Htcc.CRules.Types.TypeKind
       Htcc.MegaparsecCompat
       Htcc.Output
+      Htcc.WarningSuppression
       Htcc.Parser
       Htcc.Parser.AST
       Htcc.Parser.AST.Core
@@ -110,7 +111,6 @@ library
       Htcc.Utils.Tuple
       Htcc.Visualizer
       Htcc.Visualizer.Core
-      Htcc.WarningSuppression
   other-modules:
       Text.Megaparsec
       Text.Megaparsec.Char
@@ -128,19 +128,19 @@ library
     , cond
     , containers
     , deepseq
-    , directory
     , diagrams-contrib
     , diagrams-lib
     , diagrams-svg
+    , directory
     , extra
     , filepath
-    , parsec
     , monad-finally
     , monad-loops
     , mono-traversable
     , mtl
     , natural-transformation
     , optparse-applicative
+    , parsec
     , parser-combinators
     , prettyprinter
     , prettyprinter-ansi-terminal
@@ -175,20 +175,20 @@ executable htcc
     , extra
     , filepath
     , htcc
-    , process
-    , stm
-    , parsec
     , monad-finally
     , monad-loops
     , mono-traversable
     , mtl
     , natural-transformation
     , optparse-applicative
+    , parsec
     , parser-combinators
     , prettyprinter
     , prettyprinter-ansi-terminal
+    , process
     , safe
     , split
+    , stm
     , template-haskell
     , text
     , transformers
@@ -240,13 +240,13 @@ test-suite htcc-test
     , hspec-contrib
     , hspec-core
     , htcc
-    , parsec
     , monad-finally
     , monad-loops
     , mono-traversable
     , mtl
     , natural-transformation
     , optparse-applicative
+    , parsec
     , parser-combinators
     , prettyprinter
     , prettyprinter-ansi-terminal
@@ -280,15 +280,17 @@ benchmark criterion
     , diagrams-contrib
     , diagrams-lib
     , diagrams-svg
+    , directory
     , extra
+    , filepath
     , htcc
-    , parsec
     , monad-finally
     , monad-loops
     , mono-traversable
     , mtl
     , natural-transformation
     , optparse-applicative
+    , parsec
     , parser-combinators
     , prettyprinter
     , prettyprinter-ansi-terminal
@@ -296,5 +298,6 @@ benchmark criterion
     , split
     , text
     , transformers
+    , unix
     , utf8-string
   default-language: Haskell2010
