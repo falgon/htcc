@@ -60,6 +60,7 @@ import           Htcc.Parser.Combinators.ParserType
 import           Control.Applicative                (Alternative (..))
 import           Control.Monad.Combinators          (between)
 import           Data.Char                          (isAlpha)
+import           Data.Functor                       (($>))
 import qualified Data.Text                          as T
 import qualified Htcc.CRules                        as CR
 import           Htcc.Utils                         (lor)
@@ -125,11 +126,62 @@ identifier,
     tilda,
     vertical,
     percent :: (Monad m, Ord e) => M.ParsecT e T.Text m T.Text
-identifier =
-    mappend
-        <$> M.takeWhile1P (Just "valid identifier") (lor [isAlpha, (=='_')])
-        <*> M.takeWhileP (Just "valid identifier") CR.isValidChar
-        <* spaceConsumer
+identifier = M.try $ do
+    ident <-
+        mappend
+            <$> M.takeWhile1P (Just "valid identifier") (lor [isAlpha, (=='_')])
+            <*> M.takeWhileP (Just "valid identifier") CR.isValidChar
+    if ident `elem` reservedKeywords
+        then fail $ "reserved keyword '" <> T.unpack ident <> "' cannot be used as identifier"
+        else spaceConsumer $> ident
+
+reservedKeywords :: [T.Text]
+reservedKeywords =
+    [ "auto"
+    , "break"
+    , "case"
+    , "char"
+    , "const"
+    , "continue"
+    , "default"
+    , "do"
+    , "double"
+    , "else"
+    , "enum"
+    , "extern"
+    , "float"
+    , "for"
+    , "goto"
+    , "if"
+    , "inline"
+    , "int"
+    , "long"
+    , "register"
+    , "restrict"
+    , "return"
+    , "short"
+    , "signed"
+    , "sizeof"
+    , "static"
+    , "struct"
+    , "switch"
+    , "typedef"
+    , "union"
+    , "unsigned"
+    , "void"
+    , "volatile"
+    , "while"
+    , "_Alignas"
+    , "_Alignof"
+    , "_Atomic"
+    , "_Bool"
+    , "_Complex"
+    , "_Generic"
+    , "_Imaginary"
+    , "_Noreturn"
+    , "_Static_assert"
+    , "_Thread_local"
+    ]
 semi = symbol ";"
 comma = symbol ","
 colon = symbol ":"

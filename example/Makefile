@@ -1,5 +1,7 @@
 SHELL=/bin/bash
 DIST_DIR=dist
+DHALL_TO_YAML ?= dhall-to-yaml
+DOCKER_COMPOSE ?= docker compose
 
 define compile
 	mkdir -p $(DIST_DIR)
@@ -9,7 +11,7 @@ endef
 define compile_docker_and_run
 	mkdir -p /tmp/htcc
 	stack exec htcc -- $1 > /tmp/htcc/spec.s
-	dhall-to-yaml < ../docker/example.dhall | docker-compose -f - up
+	$(DHALL_TO_YAML) --file ../docker/example.dhall | $(DOCKER_COMPOSE) -f - up
 	rm -r /tmp/htcc
 endef
 
@@ -42,6 +44,6 @@ clean:
 	$(RM) -r $(DIST_DIR)
 
 clean_docker:
-	dhall-to-yaml < ../docker/example.dhall | docker-compose -f - down --rmi all
+	$(DHALL_TO_YAML) --file ../docker/example.dhall | $(DOCKER_COMPOSE) -f - down --rmi all
 
 .PHONY: knapsack shuffle_and_sort merge_sort_linked_list lifegame docker_knapsack docker_shuffle_and_sort docker_merge_sort_linked_list docker clean

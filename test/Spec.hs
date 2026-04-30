@@ -23,7 +23,7 @@ import           System.Environment        (lookupEnv, setEnv, unsetEnv)
 import           System.Exit               (ExitCode (..), exitFailure)
 import           System.FilePath           ((</>))
 import           System.IO                 (hFlush, stdout)
-import           System.Process            (readCreateProcess, shell)
+import           System.Process            (proc, readCreateProcess)
 import           Tests.CommandSelection    (Command (..), autoHtccBinOverride,
                                             collectCommandExitCodes,
                                             commandsToRun,
@@ -131,13 +131,28 @@ genTestBins' = (genTestAsm' <* put 0) >>= mapM f
 genTestBins :: IO [T.Text]
 genTestBins = evalStateT genTestBins' 0
 
-createProcessDhallDocker :: FilePath -> String -> IO ()
-createProcessDhallDocker fp cmd = T.readFile fp
-    >>= dhallToYaml (defaultOptions { explain = True, omission = omitNull }) (Just fp)
-    >>= readCreateProcess (shell $ "docker-compose -f - " <> cmd) . decodeString . B.unpack
-    >>= putStrLn
+createProcessDhallDocker :: FilePath -> [String] -> IO ()
+createProcessDhallDocker fp cmd = do
+    dockerCompose <- dockerComposeCommand
+    T.readFile fp
+        >>= dhallToYaml (defaultOptions { explain = True, omission = omitNull }) (Just fp)
+        >>= readCreateProcess (uncurry proc $ dockerComposeArgs dockerCompose cmd) . decodeString . B.unpack
+        >>= putStrLn
+    where
+        dockerComposeCommand =
+            maybe (pure ["docker", "compose"]) parseDockerComposeCommand =<< lookupEnv "DOCKER_COMPOSE"
 
-runDhallDocker :: String -> IO ()
+        parseDockerComposeCommand "docker compose" = pure ["docker", "compose"]
+        parseDockerComposeCommand "docker-compose" = pure ["docker-compose"]
+        parseDockerComposeCommand value =
+            fail $ "unsupported DOCKER_COMPOSE value: " <> value
+
+        dockerComposeArgs [] composeArgs =
+            dockerComposeArgs ["docker", "compose"] composeArgs
+        dockerComposeArgs (exe:args) composeArgs =
+            (exe, args <> ["-f", "-"] <> composeArgs)
+
+runDhallDocker :: [String] -> IO ()
 runDhallDocker = createProcessDhallDocker dockerComposePath
 
 main :: IO ()
@@ -162,8 +177,8 @@ runCommand opts autoCompilerCommand command = case command of
             )
             autoCompilerCommand
     WithDocker
-        | optClean opts -> runDhallDocker "down --rmi all"
-        | otherwise -> genTestAsm *> runDhallDocker "up --build" *> clean [workDir]
+        | optClean opts -> runDhallDocker ["down", "--rmi", "all"]
+        | otherwise -> genTestAsm *> runDhallDocker ["up", "--build"] *> clean [workDir]
     WithSelf ->
         maybe
             (genTestBins >>= mapM_ execErrFin >> clean [workDir])

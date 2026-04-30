@@ -16,7 +16,8 @@ module Htcc.Parser.Combinators.Decl.Spec (
   , declspec
 ) where
 
-import                          Control.Applicative                           ((<|>))
+import                          Control.Applicative                           (some,
+                                                                               (<|>))
 import                          Control.Monad                                 (void,
                                                                                when)
 import                          Control.Monad.State                           (get,
@@ -110,23 +111,52 @@ declspecNoStorage =
         ]
 
 basicTypeSpecifier :: (Show i, Read i, Integral i) => Parser i (CT.StorageClass i)
-basicTypeSpecifier =
-    M.choice kBasicTypes >>= \ty ->
-        maybe (invalidType ty) pure $ readTypeKind $ T.unpack ty
+basicTypeSpecifier = do
+    specifiers <- some $ M.choice $ map M.try kBasicTypes
+    validateBasicTypeSpecifiers specifiers
+    pure $ CT.SCAuto $ toBasicTypeKind specifiers
     where
-        invalidType ty =
-            fail $ "unsupported type specifier '" <> T.unpack ty <> "'"
+        toBasicTypeKind specifiers
+            | has "void" specifiers = CT.CTVoid
+            | has "_Bool" specifiers = CT.CTBool
+            | has "char" specifiers && has "signed" specifiers = CT.CTSigned CT.CTChar
+            | has "char" specifiers = CT.CTChar
+            | count "long" specifiers == 2 = CT.CTLong $ CT.CTLong CT.CTInt
+            | count "long" specifiers == 1 = CT.CTLong CT.CTInt
+            | has "short" specifiers = CT.CTShort CT.CTInt
+            | otherwise = CT.CTInt
 
-readTypeKind :: (Show i, Read i, Integral i) => String -> Maybe (CT.StorageClass i)
-readTypeKind = fmap (CT.SCAuto . CT.toTypeKind . CT.implicitInt) . \case
-    "char"   -> Just CT.CTChar
-    "int"    -> Just CT.CTInt
-    "long"   -> Just $ CT.CTLong CT.CTUndef
-    "short"  -> Just $ CT.CTShort CT.CTUndef
-    "signed" -> Just $ CT.CTSigned CT.CTUndef
-    "_Bool"  -> Just CT.CTBool
-    "void"   -> Just CT.CTVoid
-    _        -> Nothing
+        validateBasicTypeSpecifiers specifiers
+            | any has ["double", "float", "unsigned", "_Complex", "_Imaginary"] = invalidCombination specifiers
+            | count "long" > 2 = invalidCombination specifiers
+            | count "signed" > 1 = invalidCombination specifiers
+            | count "short" > 1 = invalidCombination specifiers
+            | count "short" > 0 && count "long" > 0 = invalidCombination specifiers
+            | any ((> 1) . count) ["char", "int", "_Bool", "void"] = invalidCombination specifiers
+            | has "void" && length specifiers > 1 = invalidCombination specifiers
+            | has "_Bool" && length specifiers > 1 = invalidCombination specifiers
+            | has "char" && any has ["int", "long", "short"] = invalidCombination specifiers
+            | baseSpecifierCount > 1 = invalidCombination specifiers
+            | otherwise = pure ()
+            where
+                count keyword =
+                    length $ filter (== T.pack keyword) specifiers
+                has keyword =
+                    count keyword > 0
+                baseSpecifierCount =
+                    length $ filter (`elem` map T.pack ["char", "int", "_Bool", "void"]) specifiers
+
+        count keyword =
+            length . filter (== T.pack keyword)
+
+        has keyword =
+            (> 0) . count keyword
+
+        invalidCombination specifiers =
+            fail $
+                "invalid type specifier combination '"
+                    <> T.unpack (T.unwords specifiers)
+                    <> "'"
 
 structSpecifier :: (Ord i, Bits i, Show i, Read i, Integral i) => Parser i (CT.StorageClass i)
 structSpecifier = do

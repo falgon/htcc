@@ -22,7 +22,7 @@ module Htcc.Parser.Combinators.Program (
 import           Control.Monad                               (unless, void,
                                                               when, zipWithM,
                                                               (>=>))
-import           Control.Monad.Combinators                   (choice, some)
+import           Control.Monad.Combinators                   (choice)
 import           Control.Monad.Extra                         (ifM)
 import           Control.Monad.State                         (get, gets, modify)
 import           Control.Monad.Trans                         (MonadTrans (..))
@@ -120,7 +120,7 @@ import           Text.Megaparsec.Debug                       (dbg)
 
 parser, program :: (Ord i, Integral i, Bits i, Read i, Show i) => Parser i (ASTs i)
 parser = spaceConsumer *> program <* M.eof
-program = some global
+program = M.many global
 
 requireCompleteObjectType
     :: (Ord i, Bits i, Read i, Show i, Integral i)

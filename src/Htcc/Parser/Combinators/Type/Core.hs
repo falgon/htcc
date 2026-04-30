@@ -39,6 +39,7 @@ import                          Htcc.Parser.Combinators.ConstExpr       (evalCon
 import                          Htcc.Parser.Combinators.Core
 import {-# SOURCE #-}           Htcc.Parser.Combinators.Decl.Declarator
 import                          Htcc.Parser.Combinators.Decl.Spec       (declspec)
+import                          Htcc.Parser.Combinators.Keywords        (kVoid)
 import                          Htcc.Parser.Combinators.Utils           (registerLVar)
 import                          Htcc.Parser.ConstructionData.Core       (ConstructionData (functionParamScopes, scope, tagHistory),
                                                                          FunctionParamScope (..),
@@ -113,7 +114,7 @@ funcParams ty = lparen *> do
     where
         scopedParams =
             choice
-                [ [(CT.SCAuto CT.CTVoid, Nothing)] <$ (symbol "void" *> rparen)
+                [ M.try $ [(CT.SCAuto CT.CTVoid, Nothing)] <$ (kVoid *> rparen)
                 , [] <$ rparen
                 , withParams
                 ]
@@ -122,25 +123,64 @@ funcParams ty = lparen *> do
             firstParam <- declIdentFuncParam
             restParams <- M.many (comma *> declIdentFuncParam)
             void rparen
-            pure $ firstParam : restParams
+            validateVoidParams $ firstParam : restParams
 
         declIdentFuncParam = do
             ty' <- M.try declspec
-            M.choice
+            param <- M.choice
                 [ M.try $ (ty', Nothing) <$ M.lookAhead (comma <|> rparen)
-                , declarator ty' >>= \case
-                    (t, Nothing) -> pure (t, Nothing)
-                    (t, Just ident) -> do
-                        let paramTy = narrowPtr t
-                        void $ registerLVar paramTy ident
-                        pure (paramTy, Just ident)
+                , declarator ty' >>= \(t, mIdent) -> do
+                    rejectVoidArrayParam t
+                    let paramTy = narrowPtr t
+                    case mIdent of
+                        Nothing ->
+                            pure ()
+                        Just ident ->
+                            void $ registerLVar paramTy ident
+                    pure (paramTy, mIdent)
                 ]
+            pure param
             where
+                rejectVoidArrayParam paramTy
+                    | containsVoidArrayType $ CT.toTypeKind paramTy =
+                        fail "parameter declared as array of void"
+                    | otherwise = pure ()
+
+                containsVoidArrayType = \case
+                    CT.CTPtr ty'' ->
+                        containsVoidArrayType ty''
+                    CT.CTArray _ ty'' ->
+                        hasVoidArrayElement ty''
+                    CT.CTIncomplete (CT.IncompleteArray ty'') ->
+                        hasVoidArrayElement ty''
+                    _ ->
+                        False
+
+                hasVoidArrayElement = \case
+                    CT.CTArray _ ty'' ->
+                        hasVoidArrayElement ty''
+                    CT.CTIncomplete (CT.IncompleteArray ty'') ->
+                        hasVoidArrayElement ty''
+                    CT.CTVoid ->
+                        True
+                    _ ->
+                        False
+
                 narrowPtr ty'
                     | CT.isCTArray ty' = maybe ty' (CT.mapTypeKind CT.CTPtr) $ CT.deref ty'
                     | CT.isIncompleteArray ty' = flip CT.mapTypeKind ty' $
                         \(CT.CTIncomplete (CT.IncompleteArray ty'')) -> CT.CTPtr ty''
                     | otherwise = ty'
+
+        validateVoidParams params
+            | isSingleUnnamedVoid params = pure params
+            | any (isVoidParam . fst) params = fail "parameter declared void"
+            | otherwise = pure params
+
+        isSingleUnnamedVoid [(paramTy, Nothing)] = isVoidParam paramTy
+        isSingleUnnamedVoid _                    = False
+
+        isVoidParam = (CT.CTVoid ==) . CT.toTypeKind
 
 toNamedParams :: (Show i, Read i, Integral i, Bits i)
     => CT.StorageClass i

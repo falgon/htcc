@@ -1,65 +1,68 @@
 name: CI
+
 on:
   push:
     branches:
       - master
       - develop
 
+permissions:
+  contents: read
+
 jobs:
-    test:
-        name: htcc test
-        runs-on: ${{ matrix.os }}
-        strategy:
-            matrix:
-                os:
-                    - ubuntu-18.04
-                    - ubuntu-16.04
-                # - windows-latest
-                # - macos-latest
-                ghc: ["8.6.5"]
-                cabal: ["3.0"]
-        steps:
-            - uses: actions/checkout@v2
-            - name: Setup Haskell to ${{ matrix.os }} (GHC ${{ matrix.ghc }})
-              uses: actions/setup-haskell@v1.1.4
-              with:
-                  enable-stack: true
-                  stack-setup-ghc: true
-                  ghc-version: ${{ matrix.ghc }}
-                  cabal-version: ${{ matrix.cabal }}
-            - name: Cache
-              uses: actions/cache@v2
-              id: stack-cache
-              with:
-                path: ~/.stack
-                key: stack-v3-${{ runner.os }}-${{ hashFiles('stack.yaml') }}
-            - name: Setup Dhall to yaml
-              if: runner.os == 'Linux'
-              run: .travis/install-dhall-to-yaml.sh
-            - name: Add path
-              run: echo "$HOME/.local/bin" >> $GITHUB_PATH
-            - name: Install dependencies to ${{ matrix.os }}
-              run: stack build --only-dependencies
-            - name: Build htcc to ${{ matrix.os }}
-              run: stack install
-            - name: Test htcc on ${{ matrix.os }}
-              if: runner.os == 'Linux'
-              run: |
-                  stack test --test-arguments self
-                  stack test --test-arguments subp
-            - name: Compile and execute example C codes on ${{ matrix.os }}
-              if: runner.os == 'Linux'
-              run: |
-                  make
-                  cd dist
-                  ./knapsack && ./merge_sorting_linked_list && ./shuffle_and_sort
-              working-directory: ./example
-            - name: Test htcc on ${{ matrix.os }} with Docker
-              run: |
-                  stack test --test-arguments docker
-                  stack test --test-arguments docker --test-arguments --clean
-            - name: Compile and execute example C codes on ${{ matrix.os }} with Docker
-              run: |
-                  make docker
-                  make clean_docker
-              working-directory: ./example
+  test:
+    name: htcc test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            ghc: "9.10.3"
+            cabal: "3.12.1.0"
+    steps:
+      # Pinned actions/checkout v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Setup Haskell to ${{ matrix.os }} (GHC ${{ matrix.ghc }})
+        # Pinned haskell-actions/setup v2
+        uses: haskell-actions/setup@cd0d9bdd65b20557f41bea4dbe43d0b5fbbfe553
+        with:
+          enable-stack: true
+          stack-setup-ghc: true
+          ghc-version: ${{ matrix.ghc }}
+          cabal-version: ${{ matrix.cabal }}
+      - name: Cache
+        # Pinned actions/cache v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
+        id: stack-cache
+        with:
+          path: ~/.stack
+          key: stack-v4-${{ runner.os }}-${{ hashFiles('stack.yaml', 'stack.yaml.lock') }}
+      - name: Setup Dhall to yaml
+        run: .travis/install-dhall-to-yaml.sh
+      - name: Add path
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install dependencies to ${{ matrix.os }}
+        run: stack build --only-dependencies
+      - name: Build htcc to ${{ matrix.os }}
+        run: stack install
+      - name: Test htcc on ${{ matrix.os }}
+        run: |
+          stack test --test-arguments self
+          stack test --test-arguments subp
+      - name: Compile and execute example C codes on ${{ matrix.os }}
+        run: |
+          make
+          cd dist
+          ./knapsack && ./merge_sorting_linked_list && ./shuffle_and_sort
+        working-directory: ./example
+      - name: Test htcc on ${{ matrix.os }} with Docker
+        run: |
+          stack test --test-arguments docker
+          stack test --test-arguments docker --test-arguments --clean
+      - name: Compile and execute example C codes on ${{ matrix.os }} with Docker
+        run: |
+          make docker
+          make clean_docker
+        working-directory: ./example

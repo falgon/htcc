@@ -205,6 +205,15 @@ identifierTest = TestLabel "Parser.Combinators.Core.identifier" $
                     TestList [T.unpack op ~: isLeft (M.runParser identifier' "" op) ~?= True | op <- CR.strOps2]
               , TestLabel "1 characters op" $
                     TestList [[op] ~: isLeft (M.runParser identifier' "" $ T.singleton op) ~?= True | op <- CR.charOps]
+              , TestLabel "reserved keywords" $
+                    TestList
+                        [ "if" ~: isLeft (M.runParser identifier' "" "if") ~?= True
+                        , "for" ~: isLeft (M.runParser identifier' "" "for") ~?= True
+                        , "int" ~: isLeft (M.runParser identifier' "" "int") ~?= True
+                        , "return" ~: isLeft (M.runParser identifier' "" "return") ~?= True
+                        , "_Bool" ~: isLeft (M.runParser identifier' "" "_Bool") ~?= True
+                        , "typedef" ~: isLeft (M.runParser identifier' "" "typedef") ~?= True
+                        ]
             ]
     ]
     where
@@ -840,7 +849,13 @@ integerOperatorTypeTest = TestLabel "Parser.Program.integer-operator-type" $
 globalInitializerTest :: Test
 globalInitializerTest = TestLabel "Parser.Program.global-initializer" $
     TestList
-        [ "accepts file-scope declarations without declarators" ~:
+        [ "accepts empty translation units" ~:
+            isRight (parseProgram "")
+                ~?= True
+        , "accepts comment-only translation units" ~:
+            isRight (parseProgram "/* no declarations */ // no declarations\n")
+                ~?= True
+        , "accepts file-scope declarations without declarators" ~:
             isRight (parseProgram "int; int main(void) { return 0; }")
                 ~?= True
         , "accepts file-scope static declarations without declarators" ~:
@@ -1090,6 +1105,147 @@ globalInitializerTest = TestLabel "Parser.Program.global-initializer" $
                         (SQ.null warnings)
         , "accepts same-file tentative globals that spell int as signed" ~:
             isRight (parseProgram "int x; signed x; int main(void) { return x; }")
+                ~?= True
+        , "accepts void-pointer function parameters instead of treating them as empty void parameter lists" ~:
+            isRight (parseProgram "void free(void*); void f(void *p) { } int main(void) { return 0; }")
+                ~?= True
+        , "keeps exact void parameter lists valid" ~:
+            isRight (parseProgram "int f(void); int main(void) { return 0; }")
+                ~?= True
+        , "accepts typedef void as unnamed no-parameter prototype" ~:
+            isRight (parseProgram "typedef void V; int f(V); int f(void) { return 0; } int main(void) { return f(); }")
+                ~?= True
+        , "rejects typedef void mixed with other function parameters" ~:
+            isLeft (parseProgram "typedef void V; int f(V, int x); int main(void) { return 0; }")
+                ~?= True
+        , "rejects named typedef void function parameters" ~:
+            isLeft (parseProgram "typedef void V; int f(V x); int main(void) { return 0; }")
+                ~?= True
+        , "rejects void mixed with other function parameters" ~:
+            isLeft (parseProgram "int f(void, int x); int main(void) { return 0; }")
+                ~?= True
+        , "rejects named void function parameters" ~:
+            isLeft (parseProgram "int f(void x); int main(void) { return 0; }")
+                ~?= True
+        , "rejects void array function parameters" ~:
+            isLeft (parseProgram "int f(void a[]); int main(void) { return 0; }")
+                ~?= True
+        , "rejects fixed void array function parameters" ~:
+            isLeft (parseProgram "int f(void a[1]); int main(void) { return 0; }")
+                ~?= True
+        , "rejects unnamed void array function parameters" ~:
+            isLeft (parseProgram "int f(void []); int main(void) { return 0; }")
+                ~?= True
+        , "rejects unnamed fixed void array function parameters" ~:
+            isLeft (parseProgram "int f(void [1]); int main(void) { return 0; }")
+                ~?= True
+        , "rejects unnamed multidimensional void array function parameters" ~:
+            isLeft (parseProgram "int f(void [1][1]); int main(void) { return 0; }")
+                ~?= True
+        , "rejects unnamed incomplete multidimensional void array function parameters" ~:
+            isLeft (parseProgram "int f(void [][1]); int main(void) { return 0; }")
+                ~?= True
+        , "rejects unnamed void array parameters in function definitions" ~:
+            isLeft (parseProgram "int f(void [1]) { return 0; } int main(void) { return 0; }")
+                ~?= True
+        , "rejects multidimensional void array function parameters" ~:
+            isLeft (parseProgram "int f(void a[1][1]); int main(void) { return 0; }")
+                ~?= True
+        , "rejects incomplete multidimensional void array function parameters" ~:
+            isLeft (parseProgram "int f(void a[][1]); int main(void) { return 0; }")
+                ~?= True
+        , "rejects pointers to void array function parameters" ~:
+            isLeft (parseProgram "int f(void (*a)[1]); int main(void) { return 0; }")
+                ~?= True
+        , "accepts array parameters of void pointers" ~:
+            isRight (parseProgram "int f(void *a[1]); int main(void) { return 0; }")
+                ~?= True
+        , "accepts pointer-to-function parameters returning void" ~:
+            isRight (parseProgram "int f(void (*cb)(void)); int main(void) { return 0; }")
+                ~?= True
+        , "accepts multi-word integer type specifiers" ~:
+            isRight (parseProgram "long long x; signed int y; signed long z; int main(void) { return sizeof(signed long); }")
+                ~?= True
+        , "accepts signed long long type specifiers" ~:
+            isRight (parseProgram "signed long long x; int long long y; int main(void) { return sizeof(signed long long int); }")
+                ~?= True
+        , "distinguishes long and long long type equality" ~:
+            ((CT.CTLong CT.CTInt :: CT.TypeKind Integer) == CT.CTLong (CT.CTLong CT.CTInt))
+                ~?= False
+        , "distinguishes short and long long type equality" ~:
+            ((CT.CTShort CT.CTInt :: CT.TypeKind Integer) == CT.CTLong (CT.CTLong CT.CTInt))
+                ~?= False
+        , "rejects incompatible long and long long object redeclarations" ~:
+            isLeft (parseProgram "long x; long long x; int main(void) { return 0; }")
+                ~?= True
+        , "rejects incompatible long and long long function redeclarations" ~:
+            isLeft (parseProgram "long f(void); long long f(void); int main(void) { return 0; }")
+                ~?= True
+        , "rejects incompatible short and long long object redeclarations" ~:
+            isLeft (parseProgram "short x; long long x; int main(void) { return 0; }")
+                ~?= True
+        , "rejects incompatible short and long long function redeclarations" ~:
+            isLeft (parseProgram "short f(void); long long f(void); int main(void) { return 0; }")
+                ~?= True
+        , "accepts equivalent signed long specifier orderings" ~:
+            isRight (parseProgram "signed long x; long signed x; int main(void) { return 0; }")
+                ~?= True
+        , "accepts signed short specifier orderings" ~:
+            isRight (parseProgram "signed short a; short signed b; signed short int c; int short signed d; int main(void) { return sizeof(short signed int); }")
+                ~?= True
+        , "accepts signed integer specifiers as equivalent redeclarations" ~:
+            isRight (parseProgram "int i; signed int i; long l; signed long l; short s; signed short s; int main(void) { return 0; }")
+                ~?= True
+        , TestLabel "rejects invalid repeated type specifiers" $
+            TestList
+                [ "long long long" ~:
+                    isLeft (parseProgram "long long long x; int main(void) { return 0; }")
+                        ~?= True
+                , "signed signed int" ~:
+                    isLeft (parseProgram "signed signed int x; int main(void) { return 0; }")
+                        ~?= True
+                , "signed signed char" ~:
+                    isLeft (parseProgram "signed signed char x; int main(void) { return 0; }")
+                        ~?= True
+                , "short short int" ~:
+                    isLeft (parseProgram "short short int x; int main(void) { return 0; }")
+                        ~?= True
+                , "int int" ~:
+                    isLeft (parseProgram "int int x; int main(void) { return 0; }")
+                        ~?= True
+                , "short long int" ~:
+                    isLeft (parseProgram "short long int x; int main(void) { return 0; }")
+                        ~?= True
+                , "signed void" ~:
+                    isLeft (parseProgram "signed void x; int main(void) { return 0; }")
+                        ~?= True
+                , "signed _Bool" ~:
+                    isLeft (parseProgram "signed _Bool x; int main(void) { return 0; }")
+                        ~?= True
+                , "long char" ~:
+                    isLeft (parseProgram "long char x; int main(void) { return 0; }")
+                        ~?= True
+                ]
+        , TestLabel "rejects unsupported type specifiers" $
+            TestList
+                [ "unsigned" ~:
+                    isLeft (parseProgram "unsigned x; int main(void) { return 0; }")
+                        ~?= True
+                , "float" ~:
+                    isLeft (parseProgram "float x; int main(void) { return 0; }")
+                        ~?= True
+                , "double" ~:
+                    isLeft (parseProgram "double x; int main(void) { return 0; }")
+                        ~?= True
+                , "_Complex int" ~:
+                    isLeft (parseProgram "_Complex int x; int main(void) { return 0; }")
+                        ~?= True
+                , "_Imaginary int" ~:
+                    isLeft (parseProgram "_Imaginary int x; int main(void) { return 0; }")
+                        ~?= True
+                ]
+        , "rejects reserved keywords as declarator identifiers" ~:
+            isLeft (parseProgram "int for(void) { return 1; }")
                 ~?= True
         , TestLabel "preserves array declarators for function-pointer objects" $ TestCase $
             assertEqual

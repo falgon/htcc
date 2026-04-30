@@ -214,18 +214,22 @@ removeAllQualified (CTShort x)  = removeAllQualified x
 removeAllQualified (CTSigned x) = removeAllQualified x
 removeAllQualified x            = x
 
+type QualifierFingerprint = (Bool, Int, Int, Int)
+
 {-# INLINE combTable #-}
-combTable :: TypeKind i -> Maybe Int
-combTable CTChar       = Just 1
-combTable CTInt        = Just $ shiftL 1 1
-combTable CTBool       = Just $ shiftL 1 2
-combTable CTVoid       = Just $ shiftL 1 3
-combTable CTUndef      = Just $ shiftL 1 4
-combTable (CTPtr x)    = (shiftL 1 5 .|.) <$> combTable x
-combTable (CTSigned x) = (shiftL 1 6 .|.) <$> combTable x
-combTable (CTLong x)   = (shiftL 1 7 .|.) <$> combTable x
-combTable (CTShort x)  = (shiftL 1 8 .|.) <$> combTable x
-combTable _            = Nothing
+combTable :: TypeKind i -> Maybe QualifierFingerprint
+combTable = go False 0 0
+    where
+        go signed longs shorts = \case
+            CTChar       -> Just (signed, longs, shorts, 1)
+            CTInt        -> Just (signed, longs, shorts, 2)
+            CTBool       -> Just (signed, longs, shorts, 3)
+            CTVoid       -> Just (signed, longs, shorts, 4)
+            CTUndef      -> Just (signed, longs, shorts, 5)
+            CTSigned x   -> go True longs shorts x
+            CTLong x     -> go signed (succ longs) shorts x
+            CTShort x    -> go signed longs (succ shorts) x
+            _            -> Nothing
 
 {-# INLINE arSizes #-}
 arSizes :: (Num i, Enum i) => TypeKind i -> (i, [[i]])

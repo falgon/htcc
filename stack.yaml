@@ -1,4 +1,4 @@
-resolver: lts-16.13
+resolver: lts-24.38
 # User packages to be built.
 # Various formats can be used as shown in the example below.
 #
@@ -18,9 +18,11 @@ packages:
 # using the same syntax as the packages field.
 # (e.g., acme-missiles-0.3)
 extra-deps:
-- monad-finally-0.1.2@sha256:7f2c860c39d0a00908d83ddaf9cd232d09c19934381b011ed361335715b4e52e
-- monad-abort-fd-0.7@sha256:dc917e7ee2ec0b4f20d6e1cc323bef03adf5b2067619b6e7f4f324a50ae6e870,1340
+- monad-finally-0.1.2.1@sha256:a5da0f790185af394ae30e53dae9af388b7bec1babf9240304e13de51d5925e7,1637
+- monad-abort-fd-0.7.0.1@sha256:a13c744a6c1f85e72adeac6348c6e1044c7a19123f65fafa41336a98923db521,1490
 - transformers-abort-0.6.0.3@sha256:34de32cc6e852df10ad57df34e46404f841c6b0123526b7fd942c455f62a7a31,1236
+- dhall-json-1.7.12@sha256:9362f33db8a5228dfce25803d08f118a48681243f7d7a47de3eb9027ab9fbc73,4517
+- dhall-yaml-1.2.12@sha256:e27d9fad5aaaeb30abd178aba2222fef7fc8ed6334d52d273879464d15eeead4,3388
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
