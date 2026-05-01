@@ -186,18 +186,15 @@ genCallTarget callee
             CR.CTFunc _ _ -> True
             _             -> False
 
-stackArgCount :: [a] -> Int
-stackArgCount = length . drop 6
-
 callAligned
     :: (Show e, Integral e)
     => Int
     -> SI.Asm IT.TextLabelCtx e ()
     -> SI.Asm IT.TextLabelCtx e ()
     -> SI.Asm IT.TextLabelCtx e ()
-callAligned nStackArgs prepare invoke = do
-    let callPrepared = do
-            prepare
+callAligned nStackArgs restore invoke = do
+    let invokeAndCleanup = do
+            restore
             invoke
             cleanupStackArgs nStackArgs
     n <- IT.incrLbl
@@ -206,11 +203,11 @@ callAligned nStackArgs prepare invoke = do
         IT.sub rax (8 :: Int)
     IT.and rax (0x0f :: Int)
     IT.jnz $ IT.ref "call" n
-    callPrepared
+    invokeAndCleanup
     IT.jmp $ IT.refEnd n
     IT.label "call" n
     IT.sub rsp (8 :: Int)
-    callPrepared
+    invokeAndCleanup
     IT.add rsp (8 :: Int)
     IT.end n
 
@@ -223,7 +220,8 @@ prepareCallArgs
     :: (Show e, Integral e, Show i, Integral i, Ord i, IsOperand i, IT.UnaryInstruction i, IT.BinaryInstruction i)
     => [ATree i]
     -> SI.Asm IT.TextLabelCtx e ()
-prepareCallArgs args = do
+    -> SI.Asm IT.TextLabelCtx e ()
+prepareCallArgs args invoke = do
     let (nReg, _, stackArgs) = splitAtLen 6 args
         nArgs = nReg + length stackArgs
         slotRef base idx = Ref $ base `oadd` (8 * idx :: Int)
@@ -232,26 +230,28 @@ prepareCallArgs args = do
             IT.pop rdx
             IT.mov (slotRef base idx) rdx
         restoreArgs base = do
-            zipWithM_ (\reg idx -> IT.mov reg (slotRef base idx)) (reverse $ popRegs nReg) [0 .. pred nReg]
-            mapM_ (IT.push . slotRef base) $ reverse [nReg .. pred nArgs]
+            IT.mov rax base
+            zipWithM_ (\reg idx -> IT.mov reg (slotRef rax idx)) (reverse $ popRegs nReg) [0 .. pred nReg]
+            mapM_ (IT.push . slotRef rax) $ reverse [nReg .. pred nArgs]
     if nArgs == 0
-        then pure ()
+        then callAligned 0 (pure ()) invoke
         else do
             IT.push rbx
             IT.sub rsp (8 * nArgs)
             IT.mov rbx rsp
             zipWithM_ (storeValue rbx) [0..] args
-            IT.mov rax rbx
+            IT.mov (rn 10) rbx
             IT.add rsp (8 * nArgs)
             IT.pop rbx
-            restoreArgs rax
+            callAligned (length stackArgs) (restoreArgs $ rn 10) invoke
 
 prepareIndirectCall
     :: (Show e, Integral e, Show i, Integral i, Ord i, IsOperand i, IT.UnaryInstruction i, IT.BinaryInstruction i)
     => ATree i
     -> [ATree i]
     -> SI.Asm IT.TextLabelCtx e ()
-prepareIndirectCall callee args = do
+    -> SI.Asm IT.TextLabelCtx e ()
+prepareIndirectCall callee args invoke = do
     let (nReg, _, stackArgs) = splitAtLen 6 args
         nArgs = nReg + length stackArgs
         calleeSlot = nArgs
@@ -262,9 +262,10 @@ prepareIndirectCall callee args = do
             IT.pop rdx
             IT.mov (slotRef base idx) rdx
         restoreArgs base = do
-            zipWithM_ (\reg idx -> IT.mov reg (slotRef base idx)) (reverse $ popRegs nReg) [0 .. pred nReg]
-            IT.mov (rn 11) (slotRef base calleeSlot)
-            mapM_ (IT.push . slotRef base) $ reverse [nReg .. pred nArgs]
+            IT.mov rax base
+            zipWithM_ (\reg idx -> IT.mov reg (slotRef rax idx)) (reverse $ popRegs nReg) [0 .. pred nReg]
+            IT.mov (rn 11) (slotRef rax calleeSlot)
+            mapM_ (IT.push . slotRef rax) $ reverse [nReg .. pred nArgs]
     IT.push rbx
     IT.sub rsp (8 * nSlots)
     IT.mov rbx rsp
@@ -272,10 +273,10 @@ prepareIndirectCall callee args = do
     IT.pop rdx
     IT.mov (slotRef rbx calleeSlot) rdx
     zipWithM_ (storeValue rbx) [0..] args
-    IT.mov rax rbx
+    IT.mov (rn 10) rbx
     IT.add rsp (8 * nSlots)
     IT.pop rbx
-    restoreArgs rax
+    callAligned (length stackArgs) (restoreArgs $ rn 10) invoke
 
 cleanupStackArgs :: Integral e => Int -> SI.Asm IT.TextLabelCtx e ()
 cleanupStackArgs n =
@@ -288,17 +289,19 @@ genStmt (ATNode (ATCallFunc x Nothing) t _ _) = do
     normalizeCallResultRax t
     IT.push rax
 genStmt (ATNode (ATCallPtr Nothing) t callee _) = do
-    callAligned 0 (genCallTarget callee >> IT.pop (rn 11)) invokeIndirect
+    genCallTarget callee
+    IT.pop (rn 11)
+    callAligned 0 (pure ()) invokeIndirect
     normalizeCallResultRax t
     IT.push rax
 genStmt (ATNode (ATCallFunc x (Just args)) t _ _) = do
-    callAligned (stackArgCount args) (prepareCallArgs args) $ do
+    prepareCallArgs args $ do
         IT.mov rax (0 :: Int)
         IT.call x
     normalizeCallResultRax t
     IT.push rax
 genStmt (ATNode (ATCallPtr (Just args)) t callee _) = do
-    callAligned (stackArgCount args) (prepareIndirectCall callee args) invokeIndirect
+    prepareIndirectCall callee args invokeIndirect
     normalizeCallResultRax t
     IT.push rax
 genStmt (ATNode (ATBlock stmt) _ _ _) = mapM_ genStmt stmt

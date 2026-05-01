@@ -235,6 +235,14 @@ controlFlowLabelTest = TestLabel "Asm.Output.control-flow" $ TestCase $ do
         ]
         asm
 
+callArgumentGotoLabelTest :: Test
+callArgumentGotoLabelTest = TestLabel "Asm.Output.call-argument-goto-label" $ TestCase $ do
+    asm <- renderAsm "int f(int, int, char*); int main(void) { return f(3, ({ int i = 0; goto a; a: ++i; b: ++i; c: ++i; i; }), \"x\"); }"
+    assertEqual
+        "call argument code should not duplicate goto label definitions"
+        [1, 1, 1]
+        (map (\ident -> T.count (".L.label.main." <> ident <> ":") asm) ["a", "b", "c"])
+
 globalInitializerCastTest :: Test
 globalInitializerCastTest = TestLabel "Asm.Output.global-initializer-cast" $ TestCase $ do
     asm <- renderAsm "int g = (char)0x1234; int h = (char)0xff; int main() { return g == 52 && h == -1; }"
@@ -775,16 +783,15 @@ indirectFunctionPointerCallAlignmentTest :: Test
 indirectFunctionPointerCallAlignmentTest = TestLabel "Asm.Output.indirect-function-pointer-call-alignment" $ TestCase $ do
     asm <- renderAsm "int foo(void) { return 1; } int main(void) { int (*fp)(void); fp = foo; return fp(); }"
     assertContainsInOrder
-        "zero-argument indirect calls probe rsp before loading the callee and keep a padded fallback path"
-        [ "mov rax, rsp"
+        "zero-argument indirect calls load the callee once and keep a padded fallback path"
+        [ "pop r11"
+        , "mov rax, rsp"
         , "and rax, 15"
         , "jnz .L.call."
-        , "pop r11"
         , "mov rax, 0"
         , "call r11"
         , ".L.call."
         , "sub rsp, 8"
-        , "pop r11"
         , "mov rax, 0"
         , "call r11"
         , "add rsp, 8"
@@ -1008,11 +1015,11 @@ directFunctionStackArgAlignmentTest = TestLabel "Asm.Output.direct-function-stac
         , "sub rax, 8"
         , "and rax, 15"
         , "jnz .L.call."
-        , "push 7"
+        , "push [rax+48]"
         , "call sum7"
         , ".L.call."
         , "sub rsp, 8"
-        , "push 7"
+        , "push [rax+48]"
         , "call sum7"
         , "add rsp, 8"
         , "add rsp, 8"
@@ -2370,6 +2377,7 @@ test = TestLabel "Asm.Output" $
     TestList
         [ returnLabelTest
         , controlFlowLabelTest
+        , callArgumentGotoLabelTest
         , globalInitializerCastTest
         , globalInitializerDivTruncationTest
         , globalInitializerModRemainderTest

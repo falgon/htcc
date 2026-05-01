@@ -1252,6 +1252,16 @@ globalInitializerTest = TestLabel "Parser.Program.global-initializer" $
                 "unexpected function-pointer array type"
                 (Right $ CT.SCAuto $ CT.CTArray 2 $ CT.CTPtr intFunctionTy)
                 (inferGlobalType "fps" "int (*fps[2])(void);")
+        , TestLabel "preserves dimension order for parenthesized nested array declarators" $ TestCase $
+            assertEqual
+                "unexpected parenthesized nested array type"
+                (Right $ CT.SCAuto $ CT.CTArray 4 $ CT.CTArray 3 CT.CTChar)
+                (firstLocalDeclType "int main(void) { char (x[3])[4]; return sizeof x[0]; }")
+        , TestLabel "preserves pointer binding while rebuilding nested array declarators" $ TestCase $
+            assertEqual
+                "unexpected pointer-to-array element type"
+                (Right $ CT.SCAuto $ CT.CTArray 3 $ CT.CTPtr $ CT.CTArray 4 CT.CTInt)
+                (inferGlobalType "ptrs" "int (*ptrs[3])[4];")
         , TestLabel "preserves function return declarators when rebuilding nested arrays" $ TestCase $
             assertEqual
                 "unexpected function return type"

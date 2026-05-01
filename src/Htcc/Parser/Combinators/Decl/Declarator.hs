@@ -17,6 +17,7 @@ module Htcc.Parser.Combinators.Decl.Declarator (
 
 import           Control.Monad.Fix                  (fix)
 import           Data.Bits                          (Bits (..))
+import           Data.Maybe                         (fromMaybe)
 import qualified Data.Text                          as T
 import           Data.Tuple.Extra                   (uncurry3)
 import qualified Htcc.CRules.Types                  as CT
@@ -55,9 +56,10 @@ declarator ty = do
                         baseTy = CT.mapTypeKind (const baseTyKind) t
                         rebuildTy ty''' = CT.mapTypeKind (const $ rebuildTyKind $ CT.toTypeKind ty''') t
 
-                dctorDirectSuffix (CT.CTArray n ty''') =
+                dctorDirectSuffix arrayTy@(CT.CTArray n ty''') =
                     let (baseTyKind, rebuildTyKind) = dctorDirectSuffix ty'''
-                     in (baseTyKind, CT.CTArray n . rebuildTyKind)
+                        rebuild newTy = CT.CTArray n $ rebuildTyKind newTy
+                     in (baseTyKind, \newTy -> fromMaybe (rebuild newTy) (CT.concatCTArray arrayTy newTy))
                 dctorDirectSuffix (CT.CTIncomplete (CT.IncompleteArray ty''')) =
                     let (baseTyKind, rebuildTyKind) = dctorDirectSuffix ty'''
                      in (baseTyKind, CT.CTIncomplete . CT.IncompleteArray . rebuildTyKind)

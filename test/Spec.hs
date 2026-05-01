@@ -20,10 +20,11 @@ import qualified Options.Applicative       as OA
 import           System.Directory          (createDirectoryIfMissing,
                                             doesDirectoryExist, listDirectory)
 import           System.Environment        (lookupEnv, setEnv, unsetEnv)
-import           System.Exit               (ExitCode (..), exitFailure)
+import           System.Exit               (ExitCode (..), exitFailure,
+                                            exitWith)
 import           System.FilePath           ((</>))
-import           System.IO                 (hFlush, stdout)
-import           System.Process            (proc, readCreateProcess)
+import           System.IO                 (hFlush, hPutStr, stderr, stdout)
+import           System.Process            (proc, readCreateProcessWithExitCode)
 import           Tests.CommandSelection    (Command (..), autoHtccBinOverride,
                                             collectCommandExitCodes,
                                             commandsToRun,
@@ -134,10 +135,17 @@ genTestBins = evalStateT genTestBins' 0
 createProcessDhallDocker :: FilePath -> [String] -> IO ()
 createProcessDhallDocker fp cmd = do
     dockerCompose <- dockerComposeCommand
-    T.readFile fp
-        >>= dhallToYaml (defaultOptions { explain = True, omission = omitNull }) (Just fp)
-        >>= readCreateProcess (uncurry proc $ dockerComposeArgs dockerCompose cmd) . decodeString . B.unpack
-        >>= putStrLn
+    (dockerExitCode, dockerStdout, dockerStderr) <-
+        T.readFile fp
+            >>= dhallToYaml (defaultOptions { explain = True, omission = omitNull }) (Just fp)
+            >>= readCreateProcessWithExitCode (uncurry proc $ dockerComposeArgs dockerCompose cmd)
+                . decodeString
+                . B.unpack
+    putStr dockerStdout
+    hFlush stdout
+    hPutStr stderr dockerStderr
+    when (dockerExitCode /= ExitSuccess) $
+        exitWith dockerExitCode
     where
         dockerComposeCommand =
             maybe (pure ["docker", "compose"]) parseDockerComposeCommand =<< lookupEnv "DOCKER_COMPOSE"
@@ -178,7 +186,11 @@ runCommand opts autoCompilerCommand command = case command of
             autoCompilerCommand
     WithDocker
         | optClean opts -> runDhallDocker ["down", "--rmi", "all"]
-        | otherwise -> genTestAsm *> runDhallDocker ["up", "--build"] *> clean [workDir]
+        | otherwise ->
+            clean [workDir]
+                *> genTestAsm
+                *> runDhallDocker ["up", "--build", "--exit-code-from", "htcc"]
+                *> clean [workDir]
     WithSelf ->
         maybe
             (genTestBins >>= mapM_ execErrFin >> clean [workDir])
