@@ -16,7 +16,9 @@ module Htcc.Parser.Combinators.Program (
   , conditional
   , compoundStmt
   , convertCallArgs
+  , convertCallArgsWith
   , foldGlobalInitWith
+  , isInvalidAggregateValueConversion
 ) where
 
 import           Control.Monad                               (unless, void,
@@ -60,8 +62,10 @@ import           Htcc.Parser.AST.Core                        (ATKind (..),
                                                               atExprStmt, atFor,
                                                               atGVar, atGoto,
                                                               atIf, atLVar,
-                                                              atLabel, atNoLeaf,
-                                                              atNull, atNumLit,
+                                                              atLabel,
+                                                              atMemberAcc,
+                                                              atNoLeaf, atNull,
+                                                              atNumLit,
                                                               atReturn,
                                                               atSwitch, atUnary,
                                                               atWhile,
@@ -77,12 +81,14 @@ import           Htcc.Parser.Combinators.Decl                (DeclStorage (..),
                                                               declspec)
 import qualified Htcc.Parser.Combinators.GNUExtensions       as GNU
 import           Htcc.Parser.Combinators.Keywords
-import           Htcc.Parser.Combinators.Type                (toNamedParams)
 import           Htcc.Parser.Combinators.Utils               (bracket,
                                                               captureFunctionParamScopes,
                                                               conditionalResultType,
+                                                              containsEscapingStmtExprControlFlow,
                                                               decayExprType,
                                                               getPosState,
+                                                              hasInvalidStmtExprControlFlow,
+                                                              isInvalidAggregateValueConversion,
                                                               isInvalidFunctionPointerInitializer,
                                                               isInvalidFunctionPointerValue,
                                                               isInvalidObjectPointerValue,
@@ -92,9 +98,10 @@ import           Htcc.Parser.Combinators.Utils               (bracket,
                                                               registerGVarWith,
                                                               registerLVar,
                                                               registerStringLiteral,
-                                                              registerTypedef)
+                                                              registerTypedef,
+                                                              requiresUnsupportedNonAddressableArrayDecay)
 import           Htcc.Parser.Combinators.Var                 (varInit)
-import           Htcc.Parser.ConstructionData.Core           (ConstructionData (scope),
+import           Htcc.Parser.ConstructionData.Core           (ConstructionData (scope, suppressUnsupportedValueChecks),
                                                               FunctionParamScope (..),
                                                               fallBack,
                                                               hasIncompleteObjectType,
@@ -109,7 +116,7 @@ import           Htcc.Parser.ConstructionData.Core           (ConstructionData (
                                                               resetLocal,
                                                               succNest)
 import           Htcc.Parser.ConstructionData.Scope          (LookupVarResult (..),
-                                                              Scoped (curNestDepth, curScopeId, enumerators, structs))
+                                                              Scoped (curNestDepth, curScopeId, enumerators, functions, structs))
 import qualified Htcc.Parser.ConstructionData.Scope.Function as PSF
 import qualified Htcc.Parser.ConstructionData.Scope.Var      as PV
 import           Numeric.Natural                             (Natural)
@@ -119,7 +126,10 @@ import qualified Text.Megaparsec.Char                        as MC
 import           Text.Megaparsec.Debug                       (dbg)
 
 parser, program :: (Ord i, Integral i, Bits i, Read i, Show i) => Parser i (ASTs i)
-parser = spaceConsumer *> program <* M.eof
+parser = do
+    asts <- spaceConsumer *> program <* M.eof
+    rejectUnsupportedCompletedFunctionReturnTypes
+    pure asts
 program = M.many global
 
 requireCompleteObjectType
@@ -149,6 +159,46 @@ requireNonVoidObjectType :: String -> CT.StorageClass i -> Parser i (CT.StorageC
 requireNonVoidObjectType err ty
     | isVoidObjectType ty = fail err
     | otherwise = pure ty
+
+requireSupportedByValueType :: Ord i => String -> CT.StorageClass i -> Parser i (CT.StorageClass i)
+requireSupportedByValueType err ty
+    | isUnsupportedByValueAggregateType ty = fail err
+    | otherwise = pure ty
+
+isUnsupportedByValueAggregateType :: Ord i => CT.StorageClass i -> Bool
+isUnsupportedByValueAggregateType ty =
+    CT.isCTStruct ty && CT.sizeof ty > 8
+
+rejectUnsupportedCompletedFunctionReturnTypes :: Ord i => Parser i ()
+rejectUnsupportedCompletedFunctionReturnTypes = do
+    hasUnsupportedReturn <- gets $ \cd ->
+        any (definedFunctionReturnsUnsupported cd) (functions $ scope cd)
+    when hasUnsupportedReturn $
+        fail "unsupported by-value function return type"
+    where
+        definedFunctionReturnsUnsupported cd fn =
+            PSF.fnDefined fn
+                && functionReturnsUnsupported
+                    (normalizeCompletedStorageClass cd $ PSF.fntype fn)
+
+        functionReturnsUnsupported fnTy = case CT.toTypeKind fnTy of
+            CT.CTFunc retTy _ ->
+                isUnsupportedByValueAggregateType $ CT.SCAuto retTy
+            _ ->
+                False
+
+functionParamDecls :: Eq i => CT.StorageClass i -> Parser i [(CT.StorageClass i, Maybe T.Text)]
+functionParamDecls ty = case CT.toTypeKind ty of
+    CT.CTFunc _ params -> pure
+        [ (CT.SCAuto $ canonicalizeFunctionParamType paramTy, ident)
+        | (paramTy, ident) <- params
+        , paramTy /= CT.CTVoid
+        ]
+    _ -> fail "expected function parameters"
+
+unnamedFunctionParamIdent :: Int -> T.Text
+unnamedFunctionParamIdent idx =
+    "$htcc_unnamed_param_" <> T.pack (show idx)
 
 requireInitializedObjectType
     :: (Ord i, Bits i, Read i, Show i, Integral i)
@@ -381,12 +431,18 @@ canonicalizeFunctionParamType (CT.CTFunc retTy params) = CT.CTPtr $ CT.CTFunc re
 canonicalizeFunctionParamType ty = ty
 
 applyCallArgConversions :: (Ord i, Bits i, Integral i) => Maybe [CT.StorageClass i] -> [ATree i] -> Parser i [ATree i]
-applyCallArgConversions paramTys args =
-    either fail pure $ convertCallArgs paramTys args
+applyCallArgConversions paramTys args = do
+    shouldValidateUnsupported <- gets (not . suppressUnsupportedValueChecks)
+    either fail pure $ convertCallArgsWith shouldValidateUnsupported paramTys args
 
 convertCallArgs :: (Ord i, Bits i, Integral i) => Maybe [CT.StorageClass i] -> [ATree i] -> Either String [ATree i]
-convertCallArgs Nothing args = Right $ map defaultPromotedCallArg args
-convertCallArgs (Just paramTys) args
+convertCallArgs = convertCallArgsWith True
+
+convertCallArgsWith :: (Ord i, Bits i, Integral i) => Bool -> Maybe [CT.StorageClass i] -> [ATree i] -> Either String [ATree i]
+convertCallArgsWith validateUnsupported Nothing args = do
+    mapM_ (validateDeferredCallArg validateUnsupported) args
+    Right $ map defaultPromotedCallArg args
+convertCallArgsWith validateUnsupported (Just paramTys) args
     | actualArgCount < expectedArgCount = Left "too few arguments to function call"
     | actualArgCount > expectedArgCount = Left "too many arguments to function call"
     | otherwise = zipWithM convertTypedCallArg paramTys args
@@ -394,12 +450,28 @@ convertCallArgs (Just paramTys) args
         actualArgCount = length args
         expectedArgCount = length paramTys
 
-        convertTypedCallArg paramTy arg
-            | isInvalidFunctionPointerValue paramTy arg
-                || isInvalidObjectPointerValue paramTy arg =
-                Left "invalid argument type to function call"
-            | otherwise =
-                Right $ atCast paramTy arg
+        convertTypedCallArg paramTy arg = do
+            validateDeferredCallArg validateUnsupported arg
+            if isInvalidFunctionPointerValue paramTy arg
+                || isInvalidObjectPointerValue paramTy arg
+                || isInvalidAggregateValueArgument paramTy arg
+                then
+                    Left "invalid argument type to function call"
+                else Right $ atCast paramTy arg
+
+isInvalidAggregateValueArgument :: Eq i => CT.StorageClass i -> ATree i -> Bool
+isInvalidAggregateValueArgument = isInvalidAggregateValueConversion
+
+validateDeferredCallArg :: (Ord i, Bits i, Integral i) => Bool -> ATree i -> Either String ()
+validateDeferredCallArg shouldValidate arg
+    | not shouldValidate =
+        Right ()
+    | containsEscapingStmtExprControlFlow arg =
+        Left "unsupported control flow in function call argument"
+    | requiresUnsupportedNonAddressableArrayDecay arg =
+        Left "unsupported non-addressable array member decay"
+    | otherwise =
+        Right ()
 
 defaultPromotedCallArg :: Ord i => ATree i -> ATree i
 defaultPromotedCallArg = castExprType defaultPromotedCallArgType
@@ -430,6 +502,25 @@ isFunctionType ty = case CT.toTypeKind ty of
     CT.CTFunc _ _ -> True
     _             -> False
 
+isPointerType :: CT.StorageClass i -> Bool
+isPointerType ty = case CT.toTypeKind ty of
+    CT.CTPtr _ -> True
+    _          -> False
+
+isScalarOperandType :: Ord i => CT.StorageClass i -> Bool
+isScalarOperandType ty =
+    CT.isIntegral decayedTy || isPointerType decayedTy
+    where
+        decayedTy = decayExprType ty
+
+isIntegerOperandType :: Ord i => CT.StorageClass i -> Bool
+isIntegerOperandType =
+    CT.isIntegral . decayExprType
+
+isModifiableLvalueType :: CT.StorageClass i -> Bool
+isModifiableLvalueType ty =
+    not (CT.isCTArray ty) && not (isFunctionType ty)
+
 requireNonFunctionOperand
     :: String
     -> ATree i
@@ -437,6 +528,24 @@ requireNonFunctionOperand
 requireNonFunctionOperand opName expr
     | isFunctionType (atype expr) = fail $ "invalid application of '" <> opName <> "' to function type"
     | otherwise = pure expr
+
+requireScalarOperand
+    :: Ord i
+    => String
+    -> ATree i
+    -> Parser i (ATree i)
+requireScalarOperand err expr
+    | isScalarOperandType (atype expr) = pure expr
+    | otherwise = fail err
+
+requireIntegerOperand
+    :: Ord i
+    => String
+    -> ATree i
+    -> Parser i (ATree i)
+requireIntegerOperand err expr
+    | isIntegerOperandType (atype expr) = pure expr
+    | otherwise = fail err
 
 requirePointerArithmeticTarget
     :: (Ord i, Bits i, Read i, Show i, Integral i)
@@ -499,16 +608,116 @@ resolveMemOperandType err expr = do
             if isDeferredIncompleteObjectExpr expr then pure (atype expr) else fail err
 
 isModifiableLvalueExpr :: ATree i -> Bool
-isModifiableLvalueExpr (ATNode kind ty _ _)
-    | CT.isCTArray ty = False
-    | isFunctionType ty = False
+isModifiableLvalueExpr (ATNode kind ty lhs _)
+    | not $ isModifiableLvalueType ty = False
     | otherwise = case kind of
         ATLVar _ _    -> True
         ATGVar _ _    -> True
-        ATMemberAcc _ -> True
-        ATDeref       -> True
+        ATMemberAcc _ -> isModifiableLvalueExpr lhs
+        ATDeref       -> isAddressableDerefOperand lhs
         _             -> False
 isModifiableLvalueExpr _ = False
+
+isAddressableLvalueExpr :: ATree i -> Bool
+isAddressableLvalueExpr (ATNode kind _ lhs _) = case kind of
+    ATLVar _ _    -> True
+    ATGVar _ _    -> True
+    ATMemberAcc _ -> isAddressableLvalueExpr lhs
+    ATDeref       -> isAddressableDerefOperand lhs
+    _             -> False
+isAddressableLvalueExpr _ = False
+
+isAddressableDerefOperand :: ATree i -> Bool
+isAddressableDerefOperand ptr
+    | Just arrayExpr <- pointerIndexRootArrayOperand ptr =
+        isAddressableLvalueExpr arrayExpr
+    | CT.isArray (atype ptr) =
+        isAddressableLvalueExpr ptr
+isAddressableDerefOperand _ = True
+
+pointerIndexOperands :: ATree i -> Maybe (ATree i, ATree i)
+pointerIndexOperands (ATNode ATAddPtr _ arrayExpr idx) = Just (arrayExpr, idx)
+pointerIndexOperands (ATNode ATSubPtr _ arrayExpr idx) = Just (arrayExpr, idx)
+pointerIndexOperands _                                 = Nothing
+
+pointerIndexRootArrayOperand :: ATree i -> Maybe (ATree i)
+pointerIndexRootArrayOperand ptr = do
+    root <- pointerIndexRootOperand ptr
+    if CT.isArray (atype root) then Just root else Nothing
+    where
+        pointerIndexRootOperand expr = do
+            (arrayExpr, _) <- pointerIndexOperands expr
+            case pointerIndexRootOperand arrayExpr of
+                Just root -> Just root
+                Nothing   -> Just arrayExpr
+
+isAddressableUnaryOperand :: ATree i -> Bool
+isAddressableUnaryOperand (ATNode kind _ lhs _) = case kind of
+    ATLVar _ _    -> True
+    ATGVar _ _    -> True
+    ATFuncPtr _   -> True
+    ATMemberAcc _ -> isAddressableLvalueExpr lhs
+    ATDeref       -> isAddressableDerefOperand lhs
+    _             -> False
+isAddressableUnaryOperand _ = False
+
+isUnevaluatedRvalueArrayElementLvalue :: ATree i -> Bool
+isUnevaluatedRvalueArrayElementLvalue (ATNode ATDeref _ ptr _)
+    | Just arrayExpr <- pointerIndexRootArrayOperand ptr =
+        not $ isAddressableLvalueExpr arrayExpr
+    | CT.isArray (atype ptr) =
+        not $ isAddressableLvalueExpr ptr
+isUnevaluatedRvalueArrayElementLvalue (ATNode (ATMemberAcc _) _ lhs _) =
+    isUnevaluatedRvalueArrayElementLvalue lhs
+isUnevaluatedRvalueArrayElementLvalue _ = False
+
+rejectUnsupportedNonAddressableArrayDecay :: Ord i => ATree i -> Parser i ()
+rejectUnsupportedNonAddressableArrayDecay expr = do
+    shouldValidateUnsupported <- gets (not . suppressUnsupportedValueChecks)
+    when (shouldValidateUnsupported && requiresUnsupportedNonAddressableArrayDecay expr) $
+        fail "unsupported non-addressable array member decay"
+
+rejectNonScalarCondition :: Ord i => ATree i -> Parser i ()
+rejectNonScalarCondition expr
+    | isScalarConditionType (atype expr) = pure ()
+    | otherwise = fail "invalid condition type"
+
+isScalarConditionType :: Ord i => CT.StorageClass i -> Bool
+isScalarConditionType ty =
+    CT.isIntegral decayedTy || case CT.toTypeKind decayedTy of
+        CT.CTPtr _ -> True
+        _          -> False
+    where
+        decayedTy = decayExprType ty
+
+withSuppressedUnsupportedValueChecks :: Parser i a -> Parser i a
+withSuppressedUnsupportedValueChecks =
+    bracket
+        (gets suppressUnsupportedValueChecks <* modify (\cd -> cd { suppressUnsupportedValueChecks = True }))
+        (\restore -> modify (\cd -> cd { suppressUnsupportedValueChecks = restore }))
+        . const
+
+rejectingBinOp
+    :: Ord i
+    => (ATree i -> ATree i -> Parser i (ATree i))
+    -> ATree i
+    -> ATree i
+    -> Parser i (ATree i)
+rejectingBinOp op lhs rhs = do
+    rejectUnsupportedNonAddressableArrayDecay lhs
+    rejectUnsupportedNonAddressableArrayDecay rhs
+    op lhs rhs
+
+rejectingScalarBinOp
+    :: Ord i
+    => (ATree i -> ATree i -> Parser i (ATree i))
+    -> ATree i
+    -> ATree i
+    -> Parser i (ATree i)
+rejectingScalarBinOp op lhs rhs = do
+    void $ requireScalarOperand "invalid operands" lhs
+    void $ requireScalarOperand "invalid operands" rhs
+    rejectingBinOp op lhs rhs
 
 requireModifiableLvalue
     :: String
@@ -516,7 +725,13 @@ requireModifiableLvalue
     -> Parser i (ATree i)
 requireModifiableLvalue err expr
     | isModifiableLvalueExpr expr = pure expr
-    | otherwise = fail err
+    | otherwise = do
+        unsupportedChecksSuppressed <- gets suppressUnsupportedValueChecks
+        if unsupportedChecksSuppressed
+            && isModifiableLvalueType (atype expr)
+            && isUnevaluatedRvalueArrayElementLvalue expr
+            then pure expr
+            else fail err
 
 global,
     stmt,
@@ -603,14 +818,18 @@ global = do
             where
                 registerFunctionParams paramScope fnTy =
                     enterFunctionScope paramScope
-                        *> (mapM registerNamedParam =<< toNamedParams fnTy)
+                        *> (mapM registerParam . zip [0 :: Int ..] =<< functionParamDecls fnTy)
                     where
-                        registerNamedParam (paramTy, ident) = do
+                        registerParam (idx, (paramTy, mIdent)) = do
                             resolvedParamTy <-
                                 requireCompleteObjectType
                                     "declaration of variable with incomplete type"
                                     paramTy
-                            registerLVar resolvedParamTy ident
+                                    >>= requireSupportedByValueType
+                                        "unsupported by-value function parameter type"
+                            registerLVar
+                                resolvedParamTy
+                                (fromMaybe (unnamedFunctionParamIdent idx) mIdent)
 
                 enterFunctionScope paramScope =
                     modify $ \cd ->
@@ -626,19 +845,27 @@ global = do
 
                 functionBody = atBlock <$> braces (M.many stmt)
 
-                fromValidFunc fnTy params' st@(ATNode (ATBlock block) _ _ _) =
+                fromValidFunc fnTy params' st@(ATNode (ATBlock block) _ _ _) = do
+                    when (hasInvalidStmtExprControlFlow st) $
+                        fail "unsupported control flow in statement expression"
                     case CT.toTypeKind fnTy of
-                        CT.CTFunc retTy _
-                            | retTy == CT.CTVoid ->
+                        CT.CTFunc retTy _ -> do
+                            when (isUnsupportedByValueAggregateType (CT.SCAuto retTy)) $
+                                fail "unsupported by-value function return type"
+                            if retTy == CT.CTVoid then
                                 if isJust (find isNonEmptyReturn block) then
                                     fail $ mconcat
                                         [ "the return type of function '"
                                         , T.unpack ident
                                         , "' is void, but the statement returns a value"
                                         ]
-                                else
+                                else do
+                                    when (hasInvalidAggregateReturnValue (CT.SCAuto retTy) st) $
+                                        fail "invalid return type"
                                     pure $ atDefFunc ident (if null params' then Nothing else Just params') fnTy st
-                            | otherwise -> do
+                            else do
+                                when (hasInvalidAggregateReturnValue (CT.SCAuto retTy) st) $
+                                    fail "invalid return type"
                                 when (isJust (find isEmptyReturn block)) $
                                     pushWarn pos $ mconcat
                                         [ "the return type of function '"
@@ -730,6 +957,41 @@ containsGlobalRef name = go
                 maybe False (any go) args
             ATGVar _ ref ->
                 ref == name
+            _ ->
+                False
+
+hasInvalidAggregateReturnValue :: Eq i => CT.StorageClass i -> ATree i -> Bool
+hasInvalidAggregateReturnValue returnTy = go
+    where
+        go ATEmpty = False
+        go (ATNode ATReturn _ ATEmpty _) = False
+        go (ATNode ATReturn _ returnedExpr _) =
+            isInvalidAggregateValueConversion returnTy returnedExpr
+                || go returnedExpr
+        go (ATNode ATSizeof _ _ _) = False
+        go (ATNode ATAlignof _ _ _) = False
+        go (ATNode kind _ lhs rhs) =
+            goKind kind || go lhs || go rhs
+
+        goKind = \case
+            ATConditional cond tr fl ->
+                any go [cond, tr, fl]
+            ATSwitch cond cases ->
+                go cond || any go cases
+            ATFor kinds ->
+                any (go . fromATKindFor) kinds
+            ATBlock ats ->
+                any go ats
+            ATStmtExpr ats ->
+                any go ats
+            ATNull at ->
+                go at
+            ATDefFunc _ args ->
+                maybe False (any go) args
+            ATCallFunc _ args ->
+                maybe False (any go) args
+            ATCallPtr args ->
+                maybe False (any go) args
             _ ->
                 False
 
@@ -1176,35 +1438,64 @@ stmt = choice
     , labelStmt
     , atBlock <$> compoundStmt
     , lvarStmt
-    , atExprStmt <$> (expr <* semi)
+    , exprStmt
     , ATEmpty <$ semi
     ]
     where
         returnStmt = choice
             [ atReturn (CT.SCUndef CT.CTUndef) ATEmpty <$ M.try (kReturn *> semi)
-            , atReturn (CT.SCUndef CT.CTUndef) <$> (M.try kReturn *> expr) <* semi
+            , do
+                ret <- M.try kReturn *> expr
+                rejectUnsupportedNonAddressableArrayDecay ret
+                atReturn (CT.SCUndef CT.CTUndef) ret <$ semi
             ]
 
+        exprStmt = do
+            nd <- expr
+            rejectUnsupportedNonAddressableArrayDecay nd
+            atExprStmt nd <$ semi
+
         ifStmt = do
-            r <- atIf <$> (M.try kIf >> parens expr) <*> stmt
+            cond <- M.try kIf >> parens expr
+            rejectNonScalarCondition cond
+            rejectUnsupportedNonAddressableArrayDecay cond
+            r <- atIf cond <$> stmt
             M.option ATEmpty (M.try kElse >> stmt) <&> \case
                 ATEmpty -> r
                 nd -> atElse r nd
 
-        whileStmt = atWhile <$> (M.try kWhile >> parens expr) <*> stmt
+        whileStmt = do
+            cond <- M.try kWhile >> parens expr
+            rejectNonScalarCondition cond
+            rejectUnsupportedNonAddressableArrayDecay cond
+            atWhile cond <$> stmt
 
         forStmt = (>>) (M.try kFor) $ bracket get (modify . fallBack) $ const $ do
             es <- parens $ do
                 modify succNest
                 initSect <- ATForInit
-                    <$> choice [ATEmpty <$ semi, M.try (atExprStmt <$> expr <* semi), lvarStmt]
+                    <$> choice [ATEmpty <$ semi, M.try exprStmt, lvarStmt]
                 condSect <- ATForCond
-                    <$> choice [ATEmpty <$ semi, expr <* semi]
+                    <$> choice [ATEmpty <$ semi, checkedCondition <* semi]
                 incrSect <- ATForIncr
-                    <$> M.option ATEmpty (atExprStmt <$> expr)
+                    <$> M.option ATEmpty exprStmtNoSemi
                 pure [initSect, condSect, incrSect]
             atFor (es <> [ATForStmt ATEmpty]) <$ semi
                 M.<|> atFor . (es <>) . (:[]) . ATForStmt <$> stmt
+            where
+                checkedCondition = do
+                    nd <- expr
+                    rejectNonScalarCondition nd
+                    rejectUnsupportedNonAddressableArrayDecay nd
+                    pure nd
+
+                checkedExpr = do
+                    nd <- expr
+                    rejectUnsupportedNonAddressableArrayDecay nd
+                    pure nd
+
+                exprStmtNoSemi =
+                    atExprStmt <$> checkedExpr
 
         breakStmt = atBreak <$ (M.try kBreak *> semi)
 
@@ -1212,6 +1503,8 @@ stmt = choice
 
         switchStmt = do
             cond <- M.try kSwitch *> parens expr
+            rejectNonScalarCondition cond
+            rejectUnsupportedNonAddressableArrayDecay cond
             bracket (putSwitchState True) (const $ putSwitchState False) (const stmt)
                 >>= \case
                     ATNode (ATBlock ats) ty _ _ -> pure $ atSwitch cond ats ty
@@ -1302,6 +1595,8 @@ expr = assign >>= go
         go lhs = M.option lhs $ do
             void comma
             rhs <- assign
+            rejectUnsupportedNonAddressableArrayDecay lhs
+            rejectUnsupportedNonAddressableArrayDecay rhs
             go $ ATNode ATComma (decayExprType $ atype rhs) lhs rhs
 
 assign = do
@@ -1324,6 +1619,7 @@ assign = do
             requireCompletePointerArithmetic k lhs
             rhs <- assign
             requireCompatibleAssignmentOperands k lhs rhs
+            rejectUnsupportedNonAddressableArrayDecay rhs
             pure $ ATNode k (atype lhs) lhs rhs
 
         requireCompletePointerArithmetic kind expr = case kind of
@@ -1339,44 +1635,87 @@ assign = do
                 fail "invalid operands to assignment"
             | kind == ATAssign && isInvalidObjectPointerValue (atype lhs) rhs =
                 fail "invalid operands to assignment"
+            | kind == ATAssign && isInvalidAggregateValueConversion (atype lhs) rhs =
+                fail "invalid operands to assignment"
+            | kind /= ATAssign && isInvalidCompoundAssignmentOperands kind lhs rhs =
+                fail "invalid operands to assignment"
             | otherwise =
                 pure ()
 
+        isInvalidCompoundAssignmentOperands kind lhs rhs =
+            not $ case kind of
+                ATAddPtrAssign ->
+                    isPointerType (decayExprType $ atype lhs)
+                        && isIntegerOperandType (atype rhs)
+                ATSubPtrAssign ->
+                    isPointerType (decayExprType $ atype lhs)
+                        && isIntegerOperandType (atype rhs)
+                ATAddAssign ->
+                    integerOperands
+                ATSubAssign ->
+                    integerOperands
+                ATMulAssign ->
+                    integerOperands
+                ATDivAssign ->
+                    integerOperands
+                ATAndAssign ->
+                    integerOperands
+                ATOrAssign ->
+                    integerOperands
+                ATXorAssign ->
+                    integerOperands
+                ATShlAssign ->
+                    integerOperands
+                ATShrAssign ->
+                    integerOperands
+                _ ->
+                    False
+            where
+                integerOperands =
+                    isIntegerOperandType (atype lhs)
+                        && isIntegerOperandType (atype rhs)
+
 conditional = do
     nd <- logicalOr
-    ifM (M.option False (True <$ M.lookAhead question)) (GNU.condOmitted nd M.<|> condOp nd) $ pure nd
+    ifM
+        (M.option False (True <$ M.lookAhead question))
+        (rejectNonScalarCondition nd >> (GNU.condOmitted nd M.<|> condOp nd))
+        $ pure nd
     where
         condOp nd = do
+            rejectUnsupportedNonAddressableArrayDecay nd
             th <- question *> expr <* colon
             el <- conditional
             ty <- maybeToParser "invalid operands" $ conditionalResultType th el
+            rejectUnsupportedNonAddressableArrayDecay th
+            rejectUnsupportedNonAddressableArrayDecay el
             pure $ atConditional ty nd th el
 
-logicalOr = binaryOperator logicalAnd [(symbol "||", binOpBool ATLOr)]
+logicalOr = binaryOperator logicalAnd [(symbol "||", rejectingScalarBinOp $ binOpBool ATLOr)]
 
-logicalAnd = binaryOperator bitwiseOr [(symbol "&&", binOpBool ATLAnd)]
+logicalAnd = binaryOperator bitwiseOr [(symbol "&&", rejectingScalarBinOp $ binOpBool ATLAnd)]
 
-bitwiseOr = binaryOperator bitwiseXor [(vertical, binOpIntOnly ATOr)]
+bitwiseOr = binaryOperator bitwiseXor [(vertical, rejectingBinOp $ binOpIntOnly ATOr)]
 
-bitwiseXor = binaryOperator bitwiseAnd [(hat, binOpIntOnly ATXor)]
+bitwiseXor = binaryOperator bitwiseAnd [(hat, rejectingBinOp $ binOpIntOnly ATXor)]
 
-bitwiseAnd = binaryOperator equality [(MC.char '&' `notFollowedOp` MC.char '&', binOpIntOnly ATAnd)]
+bitwiseAnd = binaryOperator equality [(MC.char '&' `notFollowedOp` MC.char '&', rejectingBinOp $ binOpIntOnly ATAnd)]
 
 equality = binaryOperator relational
-    [ (symbol "==", binOpBool ATEQ)
-    , (symbol "!=", binOpBool ATNEQ)
+    [ (symbol "==", rejectingScalarBinOp $ binOpBool ATEQ)
+    , (symbol "!=", rejectingScalarBinOp $ binOpBool ATNEQ)
     ]
 
 relational = binaryOperator shift
-    [ (symbol "<=", binOpBool ATLEQ)
-    , (langle, binOpBool ATLT)
-    , (symbol ">=", binOpBool ATGEQ)
-    , (rangle, binOpBool ATGT)
+    [ (symbol "<=", rejectingScalarBinOp $ binOpBool ATLEQ)
+    , (langle, rejectingScalarBinOp $ binOpBool ATLT)
+    , (symbol ">=", rejectingScalarBinOp $ binOpBool ATGEQ)
+    , (rangle, rejectingScalarBinOp $ binOpBool ATGT)
     ]
 
 shift = binaryOperator add
-    [ (symbol "<<", binOpIntOnly ATShl)
-    , (symbol ">>", binOpIntOnly ATShr)
+    [ (symbol "<<", rejectingBinOp $ binOpIntOnly ATShl)
+    , (symbol ">>", rejectingBinOp $ binOpIntOnly ATShr)
     ]
 
 add = binaryOperator term
@@ -1387,7 +1726,13 @@ add = binaryOperator term
         pointerAwareBinaryOp mk l r = do
             node <- maybeToParser "invalid operands" $ mk (decayIncompleteArrayExpr l) (decayIncompleteArrayExpr r)
             requireCompletePointerArithmeticNode node
+            rejectUnsupportedImmediateValueUse node
             pure node
+
+        rejectUnsupportedImmediateValueUse = \case
+            ATNode ATAddPtr _ _ _ -> pure ()
+            ATNode ATSubPtr _ _ _ -> pure ()
+            node                  -> rejectUnsupportedNonAddressableArrayDecay node
 
         requireCompletePointerArithmeticNode = \case
             ATNode ATAddPtr _ ptr _ ->
@@ -1400,40 +1745,93 @@ add = binaryOperator term
             _ -> pure ()
 
 term = binaryOperator cast
-    [ (star, binOpCon ATMul)
-    , (slash, binOpCon ATDiv)
-    , (percent, binOpCon ATMod)
+    [ (star, rejectingBinOp $ binOpIntOnly ATMul)
+    , (slash, rejectingBinOp $ binOpIntOnly ATDiv)
+    , (percent, rejectingBinOp $ binOpIntOnly ATMod)
     ]
 
 cast = choice
-    [ atCast <$> M.try (parens absDeclarator) <*> cast
+    [ do
+        ty <- M.try (parens absDeclarator)
+        operand <- cast
+        rejectAggregateCast ty operand
+        rejectUnsupportedNonAddressableArrayDecay operand
+        pure $ atCast ty operand
     , unary
     ]
 
+rejectAggregateCast :: CT.StorageClass i -> ATree i -> Parser i ()
+rejectAggregateCast ty operand
+    | isAggregateType ty = fail "invalid cast type"
+    | not (isVoidType ty) && isAggregateType (atype operand) = fail "invalid cast operand"
+    | otherwise = pure ()
+    where
+        isAggregateType aggregateTy =
+            CT.isCTStruct aggregateTy || CT.isIncompleteStruct aggregateTy
+
+        isVoidType voidTy = case CT.toTypeKind voidTy of
+            CT.CTVoid -> True
+            _         -> False
+
 unary = choice
-    [ symbol "++" *> unary >>= requireModifiableLvalue "lvalue required as increment operand" <&> \n -> ATNode ATPreInc (atype n) n ATEmpty
-    , symbol "--" *> unary >>= requireModifiableLvalue "lvalue required as decrement operand" <&> \n -> ATNode ATPreDec (atype n) n ATEmpty
-    , symbol "+" *> unary >>= requireNonFunctionOperand "+" <&> integerPromotedExpr
-    , symbol "-" *> unary >>= requireNonFunctionOperand "-" <&> \n ->
+    [ symbol "++" *> checkedIncDecOperand "lvalue required as increment operand" <&> \n -> ATNode ATPreInc (atype n) n ATEmpty
+    , symbol "--" *> checkedIncDecOperand "lvalue required as decrement operand" <&> \n -> ATNode ATPreDec (atype n) n ATEmpty
+    , symbol "+" *> checkedUnaryIntegerOperand "+" <&> integerPromotedExpr
+    , symbol "-" *> checkedUnaryIntegerOperand "-" <&> \n ->
         let promoted = integerPromotedExpr n
          in ATNode ATSub (atype promoted) (atNumLit 0) promoted
-    , lnot *> unary <&> flip (ATNode ATNot (CT.SCAuto CT.CTBool)) ATEmpty
-    , tilda *> unary >>= requireNonFunctionOperand "~" <&> \n ->
+    , lnot *> checkedUnaryScalarOperand <&> flip (ATNode ATNot (CT.SCAuto CT.CTBool)) ATEmpty
+    , tilda *> checkedUnaryIntegerOperand "~" <&> \n ->
         let promoted = integerPromotedExpr n
          in ATNode ATBitNot (atype promoted) promoted ATEmpty
     , addr
-    , star *> unary >>= deref'
+    , star *> checkedUnaryDerefOperand >>= deref'
     , factor'
     ]
     where
-        addr = MC.char '&' `notFollowedOp` MC.char '&' >> unary <&> \n ->
-            atUnary ATAddr (CT.mapTypeKind CT.CTPtr $ atype n) n
+        checkedUnaryDecayOperand = do
+            n <- unary
+            rejectUnsupportedNonAddressableArrayDecay n
+            pure n
+
+        checkedUnaryDerefOperand =
+            unary
+
+        checkedUnaryScalarOperand =
+            checkedUnaryDecayOperand >>= requireScalarOperand "invalid operands"
+
+        checkedUnaryIntegerOperand op =
+            checkedUnaryDecayOperand
+                >>= requireNonFunctionOperand op
+                >>= requireIntegerOperand "invalid operands"
+
+        checkedIncDecOperand err =
+            unary
+                >>= requireModifiableLvalue err
+                >>= requireScalarOperand "invalid operands"
+
+        addr = do
+            n <- MC.char '&' `notFollowedOp` MC.char '&' >> withSuppressedUnsupportedValueChecks unary
+            unsupportedChecksSuppressed <- gets suppressUnsupportedValueChecks
+            let
+                canTakeAddress =
+                    isAddressableUnaryOperand n
+                        || ( unsupportedChecksSuppressed
+                                && isUnevaluatedRvalueArrayElementLvalue n
+                           )
+            unless canTakeAddress $
+                fail "lvalue required as unary '&' operand"
+            let node = atUnary ATAddr (CT.mapTypeKind CT.CTPtr $ atype n) n
+            rejectUnsupportedNonAddressableArrayDecay node
+            pure node
 
         factor' = factor >>= allAcc
             where
                 allAcc fac = M.option fac $ choice
                     [ callAcc fac
                     , idxAcc fac
+                    , memberAcc fac
+                    , ptrMemberAcc fac
                     , postInc fac
                     , postDec fac
                     ]
@@ -1447,6 +1845,9 @@ unary = choice
                     params <- applyCallArgConversions formalParamTys rawParams
                     let
                         params' = if null params then Nothing else Just params
+                    shouldValidateUnsupported <- gets (not . suppressUnsupportedValueChecks)
+                    when (shouldValidateUnsupported && isJust params' && containsEscapingStmtExprControlFlow fac) $
+                        fail "unsupported control flow in function call callee"
                     allAcc =<< case fac of
                         ATNode (ATFuncPtr name) _ _ _ ->
                             pure $ atNoLeaf (ATCallFunc name params') callTy
@@ -1460,27 +1861,67 @@ unary = choice
                     ty' <- resolveDerefObjectType "incomplete value dereference" ty
                     allAcc $ atUnary ATDeref ty' kt
 
+                memberAcc fac = do
+                    member <- period *> identifier
+                    structTy <- resolveMemOperandType "invalid use of incomplete type" fac
+                    member' <- lookupStructMember member structTy
+                    allAcc $ atMemberAcc member' (withType structTy fac)
+
+                ptrMemberAcc fac = do
+                    member <- M.try (symbol "->") *> identifier
+                    rejectUnsupportedNonAddressableArrayDecay fac
+                    structTy <- maybeToParser "invalid type argument of '->'" $ derefObjectType $ atype fac
+                    structTy' <- resolveDerefObjectType "invalid use of pointer to incomplete type" structTy
+                    member' <- lookupStructMember member structTy'
+                    allAcc $ atMemberAcc member' (atUnary ATDeref structTy' fac)
+
                 postInc fac = do
                     _ <- symbol "++"
-                    fac' <- requireModifiableLvalue "lvalue required as increment operand" fac
+                    fac' <-
+                        requireModifiableLvalue "lvalue required as increment operand" fac
+                            >>= requireScalarOperand "invalid operands"
                     allAcc $ atUnary ATPostInc (atype fac') fac'
 
                 postDec fac = do
                     _ <- symbol "--"
-                    fac' <- requireModifiableLvalue "lvalue required as decrement operand" fac
+                    fac' <-
+                        requireModifiableLvalue "lvalue required as decrement operand" fac
+                            >>= requireScalarOperand "invalid operands"
                     allAcc $ atUnary ATPostDec (atype fac') fac'
+
+                lookupStructMember member ty =
+                    maybeToParser
+                        ("no member named '" <> T.unpack member <> "'")
+                        (CT.lookupMember member $ CT.toTypeKind ty)
+
+                withType ty (ATNode kind _ lhs rhs) = ATNode kind ty lhs rhs
+                withType _ ATEmpty                  = ATEmpty
 
         deref' = runMaybeT . deref'' >=> maybe M.empty pure
             where
                 deref'' n
-                    | isFunctionType (atype n) =
-                    pure n
+                    | isFunctionType (atype n) = do
+                        lift $ rejectUnsupportedNonAddressableArrayDecay n
+                        pure n
                 deref'' n = do
                     ty <- MaybeT $ pure (derefObjectType $ atype n)
                     case CT.toTypeKind ty of
                         CT.CTVoid -> lift $ fail "void value not ignored as it ought to be"
-                        _ -> lift (resolveDerefObjectType "incomplete value dereference" ty)
-                            >>= lift . pure . flip (atUnary ATDeref) n
+                        _ -> do
+                            ty' <- lift $ resolveDerefObjectType "incomplete value dereference" ty
+                            pure $ atUnary ATDeref ty' (derefOperand n)
+
+                derefOperand n
+                    | isPointerArithmeticNode n =
+                        n
+                    | CT.isArray (atype n) =
+                        ATNode ATAddPtr (atype n) n (atNumLit 0)
+                    | otherwise =
+                        n
+
+                isPointerArithmeticNode (ATNode ATAddPtr _ _ _) = True
+                isPointerArithmeticNode (ATNode ATSubPtr _ _ _) = True
+                isPointerArithmeticNode _                       = False
 
 factor = choice
     [ atNumLit <$> natural
@@ -1507,7 +1948,7 @@ factor = choice
                     <&> atNumLit . fromIntegral . op
 
                 memOpUnary = do
-                    u <- unary >>= requireNonFunctionOperand opS
+                    u <- withSuppressedUnsupportedValueChecks unary >>= requireNonFunctionOperand opS
                     if CT.isCTUndef (atype u) then
                         fail $ opS <> " must be an expression or type"
                     else
@@ -1554,10 +1995,10 @@ factor = choice
                         -- TODO: set warning message
                         -- TODO: Infer the return type of a function
                         Nothing ->
-                            let params = map defaultPromotedCallArg rawParams
-                                params' = if null params then Nothing else Just params
-                                implicitFnTy = CT.SCAuto $ CT.CTFunc CT.CTInt []
-                             in do
+                            do
+                                params <- applyCallArgConversions Nothing rawParams
+                                let params' = if null params then Nothing else Just params
+                                    implicitFnTy = CT.SCAuto $ CT.CTFunc CT.CTInt []
                                 shadowingGlobal <- gets (isJust . lookupGVar ident)
                                 unless shadowingGlobal $
                                     registerFunc False True implicitFnTy ident

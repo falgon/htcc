@@ -25,5 +25,8 @@ data ConstructionData i = ConstructionData
         tagHistory                       :: PS.TagHistory i,
         functionParamScopes              :: [FunctionParamScope i],
         isSwitchStmt                     :: Bool,
+        suppressUnsupportedValueChecks   :: Bool,
         allowSameInputExternalCollisions :: Bool
     }
+
+initConstructionData :: ConstructionData i

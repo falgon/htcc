@@ -87,6 +87,7 @@ data ConstructionData i = ConstructionData -- ^ The constructor of ConstructionD
         tagHistory                       :: PS.TagHistory i, -- ^ Historical tag bindings used for deferred struct completion.
         functionParamScopes              :: [FunctionParamScope i], -- ^ Deferred outer function parameter scopes captured while parsing declarators.
         isSwitchStmt                     :: Bool, -- ^ When the statement is @switch@, this flag will be `True`, otherwise will be `False`.
+        suppressUnsupportedValueChecks   :: Bool, -- ^ Skip codegen-only value checks while parsing unevaluated operands.
         allowSameInputExternalCollisions :: Bool -- ^ When `True`, same-input globals and function declarations may coexist so multi-input `-o` merge can resolve them.
     } deriving Show
 
@@ -250,7 +251,7 @@ addEnumerator ty tkn n cd = (\x -> cd { scope = x }) <$> AS.addEnumerator ty tkn
 -- | Shortcut to the initial state of `ConstructionData`.
 {-# INLINE initConstructionData #-}
 initConstructionData :: ConstructionData i
-initConstructionData = ConstructionData SQ.empty AS.initScope PS.emptyTagHistory [] False False
+initConstructionData = ConstructionData SQ.empty AS.initScope PS.emptyTagHistory [] False False False
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.resetLocal` for variable @x@ of type `ConstructionData`.
 -- This function is equivalent to

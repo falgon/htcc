@@ -41,11 +41,14 @@ import           Htcc.Parser.AST                        (ATKind (..),
                                                          atUnary, treealize)
 import           Htcc.Parser.Combinators.Core
 import           Htcc.Parser.Combinators.Utils          (bracket,
+                                                         isInvalidAggregateValueConversion,
                                                          isInvalidFunctionPointerInitializer,
                                                          isInvalidObjectPointerValue,
                                                          maybeToParser,
-                                                         registerLVar)
-import           Htcc.Parser.ConstructionData.Core      (incomplete, lookupLVar)
+                                                         registerLVar,
+                                                         requiresUnsupportedNonAddressableArrayDecay)
+import           Htcc.Parser.ConstructionData.Core      (ConstructionData (suppressUnsupportedValueChecks),
+                                                         incomplete, lookupLVar)
 import           Htcc.Parser.ConstructionData.Scope.Var (Var (vtype))
 import           Htcc.Utils                             (tshow)
 import           Numeric.Natural                        (Natural)
@@ -61,11 +64,16 @@ runDesignator :: (SQ.Seq (ATree i) -> SQ.Seq (CT.Desg i) -> DesignatorParser i r
 runDesignator p ident assignParser = runReaderT (p SQ.empty SQ.empty) (ident, assignParser)
 
 validateScalarInitializer :: (Ord i, Bits i, Integral i) => CT.StorageClass i -> ATree i -> DesignatorParser i (ATree i)
-validateScalarInitializer targetTy at@(ATNode _ ty _ _)
-    | isVoidExpressionType ty = fail "void value not ignored as it ought to be"
-    | isInvalidFunctionInitializer = fail "invalid initializer for scalar object"
-    | isInvalidObjectInitializer = fail "invalid initializer for scalar object"
-    | otherwise = pure at
+validateScalarInitializer targetTy at@(ATNode _ ty _ _) = do
+    unsupportedChecksSuppressed <- lift $ lift $ gets suppressUnsupportedValueChecks
+    if isVoidExpressionType ty then
+        fail "void value not ignored as it ought to be"
+    else if isInvalidFunctionInitializer || isInvalidObjectInitializer || isInvalidAggregateInitializer then
+        fail "invalid initializer for scalar object"
+    else if not unsupportedChecksSuppressed && requiresUnsupportedNonAddressableArrayDecay at then
+        fail "unsupported non-addressable array member decay"
+    else
+        pure at
     where
         isVoidExpressionType = isVoidTypeKind . CT.toTypeKind
 
@@ -81,6 +89,9 @@ validateScalarInitializer targetTy at@(ATNode _ ty _ _)
 
         isInvalidObjectInitializer =
             isInvalidObjectPointerValue targetTy at
+
+        isInvalidAggregateInitializer =
+            isInvalidAggregateValueConversion targetTy at
 validateScalarInitializer _ _ = fail "expected to assign"
 
 withDesignatorCheckpoint :: DesignatorParser i a -> DesignatorParser i a

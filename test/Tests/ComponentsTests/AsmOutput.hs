@@ -1061,6 +1061,36 @@ stackPassedBoolParameterSpillTest = TestLabel "Asm.Output.stack-passed-bool-para
         ]
         asm
 
+unnamedFunctionParameterSpillTest :: Test
+unnamedFunctionParameterSpillTest = TestLabel "Asm.Output.unnamed-function-parameter-spill" $ TestCase $ do
+    asm <- renderAsm "struct S { char a; char b; char c; }; int f(struct S, int x) { return x; } int main(void) { struct S s; s.a = 1; s.b = 2; s.c = 3; return f(s, 42) - 42; }"
+    let fSection = extractFunctionSection "f" asm
+    assertContainsInOrder
+        "unnamed function parameters should still occupy their ABI argument slots before later named parameters are spilled"
+        [ "f:"
+        , "mov r10, rdi"
+        , "mov [rbp-8], esi"
+        , "lea rax, [rbp-8]"
+        ]
+        fSection
+    assertBool
+        "a named parameter after an unnamed aggregate should not be spilled from the aggregate's register"
+        (not $ "mov [rbp-8], edi" `T.isInfixOf` fSection)
+
+unnamedFunctionAdjustedParameterSpillTest :: Test
+unnamedFunctionAdjustedParameterSpillTest = TestLabel "Asm.Output.unnamed-function-adjusted-parameter-spill" $ TestCase $ do
+    asm <- renderAsm "typedef int F(int); int f(F) { return 0; }"
+    let fSection = extractFunctionSection "f" asm
+    assertContainsInOrder
+        "unnamed function-typed parameters should be registered as pointer-sized local slots"
+        [ "f:"
+        , "mov [rbp-8], rdi"
+        ]
+        fSection
+    assertBool
+        "unnamed function-typed parameters should not use the raw function type's one-byte slot"
+        (not $ "mov [rbp-1], rdi" `T.isInfixOf` fSection)
+
 writeOnlyFallbackReplacementRestoreTest :: Test
 writeOnlyFallbackReplacementRestoreTest =
     replacementFailurePreservesWriteOnlyOutputTest
@@ -1792,6 +1822,310 @@ commaAssignmentDiscardsLhsTest = TestLabel "Asm.Output.comma-assignment-discards
         ]
         asm
 
+structMemberAccessCodegenTest :: Test
+structMemberAccessCodegenTest = TestLabel "Asm.Output.struct-member-access" $ TestCase $ do
+    directAsm <- renderAsm "int main(void) { struct S { int a; int b; } x; x.b = 2; return x.b; }"
+    pointerAsm <- renderAsm "int main(void) { struct S { int a; int b; } x; struct S *p = &x; p->b = 42; return x.b; }"
+    sizeofRvalueAsm <- renderAsm "struct S { int a; int b; }; struct S make(void); int main(void) { return sizeof(make().b); }"
+    callRvalueAsm <- renderAsm "struct S { int a; int b; }; struct S make(void) { struct S x; x.a = 3; x.b = 7; return x; } int main(void) { return make().b; }"
+    assignRvalueAsm <- renderAsm "int main(void) { struct S { int a; int b; } x; struct S y; y.a = 3; y.b = 7; return (x = y).b; }"
+    arrayRvalueAsm <- renderAsm "struct S { int a[2]; }; struct S make(void) { struct S x; x.a[0] = 3; x.a[1] = 7; return x; } int main(void) { return make().a[1]; }"
+    arrayRvalueDerefAsm <- renderAsm "struct S { int a[2]; }; struct S make(void) { struct S x; x.a[0] = 3; x.a[1] = 7; return x; } int main(void) { return *make().a; }"
+    arrayRvalueDerefAddAsm <- renderAsm "struct S { int a[2]; }; struct S make(void) { struct S x; x.a[0] = 3; x.a[1] = 7; return x; } int main(void) { return *(make().a + 1); }"
+    arrayRvaluePostfixAddAsm <- renderAsm "struct S { int a[2]; }; struct S make(void) { struct S x; x.a[0] = 3; x.a[1] = 7; return x; } int main(void) { return (make().a + 1)[0]; }"
+    arrayRvalueDerefSubAsm <- renderAsm "struct S { int a[2]; }; struct S make(void) { struct S x; x.a[0] = 3; x.a[1] = 7; return x; } int main(void) { return *(make().a - 0); }"
+    assignArrayRvalueAsm <- renderAsm "int main(void) { struct S { int a[2]; } x; struct S y; y.a[0] = 3; y.a[1] = 7; return (x = y).a[1]; }"
+    stmtExprReturnArrayRvalueAsm <- renderAsm "struct S { int a[2]; }; struct S make(void); int main(void) { return ({ return 5; make(); }).a[0]; }"
+    nestedRvalueAsm <- renderAsm "struct T { char a; char b; char c; }; struct S { char pad; struct T t; }; struct S make(void) { struct S x; x.pad = 1; x.t.a = 2; x.t.b = 3; x.t.c = 4; return x; } int main(void) { return make().t.a; }"
+    threeByteRvalueAsm <- renderAsm "struct S { char a; char b; char c; }; struct S make(void) { struct S x; x.a = 1; x.b = 2; x.c = 3; return x; } int main(void) { return make().b; }"
+    threeByteAssignRvalueAsm <- renderAsm "int main(void) { struct S { char a; char b; char c; } x; struct S y; y.a = 1; y.b = 2; y.c = 3; return (x = y).b; }"
+    threeByteRegisterArgAsm <- renderAsm "struct S { char a; char b; char c; }; int sink(struct S s) { return s.b; } int main(void) { struct S x; x.a = 1; x.b = 2; x.c = 3; return sink(x); }"
+    threeByteStackArgAsm <- renderAsm "struct S { char a; char b; char c; }; int sink(int a, int b, int c, int d, int e, int f, struct S s) { return s.b; } int main(void) { struct S x; x.a = 1; x.b = 2; x.c = 3; return sink(1, 2, 3, 4, 5, 6, x); }"
+    threeByteFirstRegisterArgWithTrailingScalarsAsm <- renderAsm "struct S { char a; char b; char c; }; int sink(struct S s, int x, int y) { return s.b + x + y; } int main(void) { struct S x; x.a = 1; x.b = 2; x.c = 3; return sink(x, 4, 5); }"
+    threeByteSecondRegisterArgWithTrailingScalarAsm <- renderAsm "struct S { char a; char b; char c; }; int sink(int x, struct S s, int y) { return s.b + x + y; } int main(void) { struct S x; x.a = 1; x.b = 2; x.c = 3; return sink(4, x, 5); }"
+    sizeofLargeByValueCallAsm <- renderAsm "struct S { int a; int b; int c; }; int sink(struct S x); int main(void) { struct S x; return sizeof(sink(x)); }"
+    largeStructControlFlowDeclAsm <- renderAsm "int main(void) { if (1) { struct S { int a; int b; int c; } x; } while (0) { struct T { int a; int b; int c; } y; } for (; 0; ) { struct U { int a; int b; int c; } z; } return 0; }"
+    largePointerMemberAsm <- renderAsm "struct S { int a; int b; int c; }; struct S *p; int main(void) { return p->c; }"
+    explicitDerefLargePointerMemberAsm <- renderAsm "struct S { int a; int b; int c; }; struct S *p; int main(void) { return (*p).c; }"
+    largeAddrDerefAsm <- renderAsm "struct S { int a; int b; int c; }; struct S *p; int main(void) { return (int)&*p; }"
+    let
+        rejectsParser source =
+            isLeft
+                ( runParser parser "<components>" source
+                    :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, GlobalVars Integer, Literals Integer, PF.Functions Integer)
+                )
+        firstRegisterArgWithTrailingScalarsSection =
+            extractFunctionSection "sink" threeByteFirstRegisterArgWithTrailingScalarsAsm
+        secondRegisterArgWithTrailingScalarSection =
+            extractFunctionSection "sink" threeByteSecondRegisterArgWithTrailingScalarAsm
+        stmtExprReturnArrayRvalueMainSection =
+            extractFunctionSection "main" stmtExprReturnArrayRvalueAsm
+        clobbersAbiArgScratch segment =
+            any (`T.isInfixOf` segment) ["mov rdx, rax", "lea rsi"]
+    assertContainsInOrder
+        "direct member access should lower through the member-address codegen path"
+        [ "lea rax"
+        , "add rax, 4"
+        , "push 2"
+        , "mov [rax], edi"
+        ]
+        directAsm
+    assertContainsInOrder
+        "pointer member access should lower through the member-address codegen path"
+        [ "mov rax, [rax]"
+        , "add rax, 4"
+        , "push 42"
+        , "mov [rax], edi"
+        ]
+        pointerAsm
+    assertContainsInOrder
+        "large struct pointer member access should revalidate as address calculation, not a struct value load"
+        [ "main:"
+        , "mov rax, [rax]"
+        , "add rax, 8"
+        , "movsxd rax, dword ptr [rax]"
+        ]
+        largePointerMemberAsm
+    assertContainsInOrder
+        "explicit dereference member access should revalidate as address calculation, not a struct value load"
+        [ "main:"
+        , "mov rax, [rax]"
+        , "add rax, 8"
+        , "movsxd rax, dword ptr [rax]"
+        ]
+        explicitDerefLargePointerMemberAsm
+    assertContainsInOrder
+        "address-of dereference should revalidate as address calculation, not a struct value load"
+        [ "main:"
+        , "mov rax, [rax]"
+        , "push rax"
+        , "jmp .L.return.main"
+        ]
+        largeAddrDerefAsm
+    assertContainsInOrder
+        "sizeof member access on struct rvalues should use only the member type"
+        [ "main:"
+        , "push 4"
+        , "jmp .L.return.main"
+        ]
+        sizeofRvalueAsm
+    assertContainsInOrder
+        "member access on function-call struct rvalues should read from spilled return bytes"
+        [ "call make"
+        , "push rbx"
+        , "mov rbx, rsp"
+        , "lea rax, [rbx+4]"
+        , "movsxd rax, dword ptr [rax]"
+        , "add rsp, 8"
+        , "pop rbx"
+        ]
+        callRvalueAsm
+    assertContainsInOrder
+        "member access on assignment struct rvalues should read from spilled assignment bytes"
+        [ "push rbx"
+        , "mov rbx, rsp"
+        , "lea rax, [rbx+4]"
+        , "movsxd rax, dword ptr [rax]"
+        , "add rsp, 8"
+        , "pop rbx"
+        , "jmp .L.return.main"
+        ]
+        assignRvalueAsm
+    assertContainsInOrder
+        "array member access on function-call struct rvalues should index into spilled return bytes"
+        [ "push 1"
+        , "call make"
+        , "mov rax, [rsp+16]"
+        , "imul rax, 4"
+        , "add rax, rbx"
+        , "movsxd rax, dword ptr [rax]"
+        , "add rsp, 8"
+        ]
+        arrayRvalueAsm
+    assertContainsInOrder
+        "unary dereference of array members on function-call struct rvalues should read the first spilled element"
+        [ "push 0"
+        , "call make"
+        , "mov rax, [rsp+16]"
+        , "imul rax, 4"
+        , "add rax, rbx"
+        , "movsxd rax, dword ptr [rax]"
+        , "add rsp, 8"
+        ]
+        arrayRvalueDerefAsm
+    assertContainsInOrder
+        "unary dereference of array-member pointer arithmetic on function-call struct rvalues should index into spilled return bytes"
+        [ "push 1"
+        , "call make"
+        , "mov rax, [rsp+16]"
+        , "imul rax, 4"
+        , "add rax, rbx"
+        , "movsxd rax, dword ptr [rax]"
+        , "add rsp, 8"
+        ]
+        arrayRvalueDerefAddAsm
+    assertContainsInOrder
+        "postfix subscript of array-member pointer arithmetic on function-call struct rvalues should index into spilled return bytes"
+        [ "push 1"
+        , "push 0"
+        , "add rax, rdi"
+        , "call make"
+        , "mov rax, [rsp+16]"
+        , "imul rax, 4"
+        , "add rax, rbx"
+        , "movsxd rax, dword ptr [rax]"
+        , "add rsp, 8"
+        ]
+        arrayRvaluePostfixAddAsm
+    assertContainsInOrder
+        "unary dereference of array-member pointer subtraction on function-call struct rvalues should index into spilled return bytes"
+        [ "push 0"
+        , "push 0"
+        , "sub rax, rdi"
+        , "call make"
+        , "mov rax, [rsp+16]"
+        , "imul rax, 4"
+        , "add rax, rbx"
+        , "movsxd rax, dword ptr [rax]"
+        , "add rsp, 8"
+        ]
+        arrayRvalueDerefSubAsm
+    assertContainsInOrder
+        "array member access on assignment struct rvalues should index into spilled assignment bytes"
+        [ "push 1"
+        , "mov rax, [rsp+16]"
+        , "imul rax, 4"
+        , "add rax, rbx"
+        , "movsxd rax, dword ptr [rax]"
+        , "add rsp, 8"
+        , "jmp .L.return.main"
+        ]
+        assignArrayRvalueAsm
+    assertContainsInOrder
+        "array member access should allow statement-expression returns in rvalue bases"
+        [ "main:"
+        , "push 0"
+        , "push 5"
+        , "jmp .L.return.main"
+        ]
+        stmtExprReturnArrayRvalueMainSection
+    assertContainsInOrder
+        "nested aggregate member access on struct rvalues should load only the final scalar member"
+        [ "call make"
+        , "lea rax, [rbx+1]"
+        , "movsx rax, byte ptr [rax]"
+        , "add rsp, 8"
+        ]
+        nestedRvalueAsm
+    assertBool
+        "nested aggregate member access should not issue an 8-byte load from the subobject address"
+        (not $ "mov rax, [rbx+1]" `T.isInfixOf` nestedRvalueAsm)
+    assertContainsInOrder
+        "three-byte struct returns should be packed without an 8-byte object load"
+        [ "make:"
+        , "mov cx, word ptr [rsi]"
+        , "lea rsi, [rdx+2]"
+        , "mov cl, byte ptr [rsi]"
+        , "shl rcx, 16"
+        , "main:"
+        , "lea rax, [rbx+1]"
+        , "movsx rax, byte ptr [rax]"
+        ]
+        threeByteRvalueAsm
+    assertBool
+        "three-byte struct returns should not issue an 8-byte local object load"
+        (not $ "mov rax, [rax]" `T.isInfixOf` threeByteRvalueAsm)
+    assertContainsInOrder
+        "three-byte struct assignments should store only object bytes"
+        [ "mov word ptr [rsi], dx"
+        , "sar rdx, 16"
+        , "lea rsi, [rax+2]"
+        , "mov byte ptr [rsi], dl"
+        , "lea rax, [rbx+1]"
+        , "movsx rax, byte ptr [rax]"
+        ]
+        threeByteAssignRvalueAsm
+    assertContainsInOrder
+        "three-byte register-passed struct parameters should spill only object bytes"
+        [ "sink:"
+        , "mov r10, rdi"
+        , "mov r11, r10"
+        , "mov word ptr [rax], r11w"
+        , "sar r11, 16"
+        , "mov byte ptr [rax], r11b"
+        , "lea rax"
+        , "add rax, 1"
+        , "movsx rax, byte ptr [rax]"
+        ]
+        threeByteRegisterArgAsm
+    assertContainsInOrder
+        "three-byte stack-passed struct parameters should spill only object bytes"
+        [ "sink:"
+        , "mov rax, [rbp+16]"
+        , "mov r10, rax"
+        , "mov r11, r10"
+        , "mov word ptr [rax], r11w"
+        , "sar r11, 16"
+        , "mov byte ptr [rax], r11b"
+        , "lea rax"
+        , "add rax, 1"
+        , "movsx rax, byte ptr [rax]"
+        ]
+        threeByteStackArgAsm
+    assertContainsInOrder
+        "aggregate parameter spills should preserve following integer argument registers"
+        [ "sink:"
+        , "mov r10, rdi"
+        , "mov r11, r10"
+        , "mov word ptr [rax], r11w"
+        , "sar r11, 16"
+        , "mov byte ptr [rax], r11b"
+        , "mov [rbp-8], esi"
+        , "mov [rbp-12], edx"
+        ]
+        threeByteFirstRegisterArgWithTrailingScalarsAsm
+    assertContainsInOrder
+        "aggregate parameter spills should preserve following registers when the aggregate is not first"
+        [ "sink:"
+        , "mov [rbp-4], edi"
+        , "mov r10, rsi"
+        , "mov r11, r10"
+        , "mov word ptr [rax], r11w"
+        , "sar r11, 16"
+        , "mov byte ptr [rax], r11b"
+        , "mov [rbp-12], edx"
+        ]
+        threeByteSecondRegisterArgWithTrailingScalarAsm
+    assertBool
+        "aggregate parameter spill should not use rdx/rsi as scratch before scalar args are saved"
+        (not $ clobbersAbiArgScratch firstRegisterArgWithTrailingScalarsSection)
+    assertBool
+        "aggregate parameter spill should not use rdx/rsi as scratch for a later register aggregate"
+        (not $ clobbersAbiArgScratch secondRegisterArgWithTrailingScalarSection)
+    assertContainsInOrder
+        "sizeof call arguments should not re-enable evaluated backend-only aggregate checks"
+        [ "main:"
+        , "push 4"
+        , "jmp .L.return.main"
+        ]
+        sizeofLargeByValueCallAsm
+    assertContainsInOrder
+        "large struct declarations in control-flow bodies should not be revalidated as value reads"
+        [ "main:"
+        , "push 0"
+        , "jmp .L.return.main"
+        ]
+        largeStructControlFlowDeclAsm
+    assertBool
+        "escaping statement-expression control flow in rvalue array member indexes should be rejected before codegen"
+        (rejectsParser "struct S { int a[2]; }; struct S make(void) { struct S x; x.a[0] = 3; x.a[1] = 7; return x; } int main(void) { for (;;) { make().a[({ continue; 0; })]; } return 0; }")
+    assertBool
+        "chained rvalue array member bases on large structs should be rejected before codegen"
+        (rejectsParser "struct S { int pad; int a[2]; }; struct S make(void); int main(void) { return (make().a + 1)[0]; }")
+    assertBool
+        "nested rvalue array member bases on large structs should be rejected before codegen"
+        (rejectsParser "struct S { int pad; int a[2]; }; struct S make(void); int main(void) { return *((make().a + 1) + 0); }")
+
 globalInitializerStmtExprArrayDecaySizeofTest :: Test
 globalInitializerStmtExprArrayDecaySizeofTest = TestLabel "Asm.Output.global-initializer-stmt-expr-array-decay-sizeof" $ TestCase $ do
     asm <- renderAsm "int x[4]; int y = sizeof(({ x; })); int main(void) { return y == 8; }"
@@ -1858,6 +2192,15 @@ assertPrepareAsmInputError label source expected = do
         Right _ ->
             assertFailure $ label <> ": expected asm input preparation failure"
 
+assertPrepareAsmInputOk :: String -> T.Text -> IO ()
+assertPrepareAsmInputOk label source = do
+    (asts, gvars, _, funcs) <- parseAsmSource source
+    case prepareAsmInput funcs asts gvars of
+        Left err ->
+            assertFailure $ label <> ": unexpected asm input preparation failure: " <> err
+        Right _ ->
+            pure ()
+
 assertPrepareVisualizableInputError :: String -> T.Text -> String -> IO ()
 assertPrepareVisualizableInputError label source expected = do
     (asts, gvars, _, funcs) <- parseAsmSource source
@@ -1867,12 +2210,202 @@ assertPrepareVisualizableInputError label source expected = do
         Right _ ->
             assertFailure $ label <> ": expected visualizable input preparation failure"
 
+assertPrepareAstInputError :: String -> PF.Functions Integer -> ASTs Integer -> String -> IO ()
+assertPrepareAstInputError label funcs asts expected =
+    case prepareAsmInput funcs asts Map.empty of
+        Left err ->
+            assertEqual label expected err
+        Right _ ->
+            assertFailure $ label <> ": expected asm input preparation failure"
+
 functionCallRefinementRevalidationTest :: Test
 functionCallRefinementRevalidationTest = TestLabel "Asm.Output.function-call-refinement-revalidation" $ TestCase $
     assertPrepareAsmInputError
         "asm input preparation should revalidate refined function calls before codegen"
         "int f(); int main(void) { return f(1); } int f(void) { return 1; }"
         "too many arguments to function call"
+
+completedStructParamRevalidationTest :: Test
+completedStructParamRevalidationTest = TestLabel "Asm.Output.completed-struct-param-revalidation" $ TestCase $
+    assertPrepareAsmInputOk
+        "asm input preparation should keep completed by-value struct parameters during call revalidation"
+        "struct S; int sink(struct S); struct S { int a; }; int main(void) { struct S x; return sink(x); }"
+
+noArgIndirectCalleeControlFlowRevalidationTest :: Test
+noArgIndirectCalleeControlFlowRevalidationTest = TestLabel "Asm.Output.no-arg-indirect-callee-control-flow-revalidation" $ TestCase $
+    assertPrepareAsmInputOk
+        "asm input preparation should allow statement-expression return control flow in no-argument indirect callees"
+        "int sink(void) { return 1; } int main(void) { int (*fp)(void) = sink; ({ return 2; fp; })(); return 0; }"
+
+completedStructReturnRevalidationTest :: Test
+completedStructReturnRevalidationTest = TestLabel "Asm.Output.completed-struct-return-revalidation" $ TestCase $ do
+    assertPrepareAsmInputOk
+        "asm input preparation should preserve completed direct-call struct returns"
+        "struct S foo(void); struct S { int a; }; int main(void) { foo(); return 0; }"
+    assertPrepareAsmInputOk
+        "asm input preparation should preserve completed direct-call struct returns for member access"
+        "struct S foo(void); struct S { int a; }; int main(void) { return foo().a; }"
+
+deferredLargeStructFunctionValueRevalidationTest :: Test
+deferredLargeStructFunctionValueRevalidationTest = TestLabel "Asm.Output.deferred-large-struct-function-value-revalidation" $ TestCase $
+    assertBool
+        "function-returned incomplete struct values should be rejected before codegen"
+        (isLeft
+            (runParser parser "<components>"
+                "struct S f(); int main(void) { f(); return 0; } struct S { int a; int b; int c; };"
+            :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, GlobalVars Integer, Literals Integer, PF.Functions Integer)
+            )
+        )
+
+deferredLargeStructGlobalValueRevalidationTest :: Test
+deferredLargeStructGlobalValueRevalidationTest = TestLabel "Asm.Output.deferred-large-struct-global-value-revalidation" $ TestCase $
+    assertBool
+        "incomplete struct global values should be rejected before codegen"
+        (isLeft
+            (runParser parser "<components>"
+                "extern struct S x; int main(void) { x; return 0; } struct S { int a; int b; int c; };"
+            :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, GlobalVars Integer, Literals Integer, PF.Functions Integer)
+            )
+        )
+
+addressContextCallArgumentRevalidationTest :: Test
+addressContextCallArgumentRevalidationTest = TestLabel "Asm.Output.address-context-call-argument-revalidation" $ TestCase $ do
+    let
+        intTy = CT.SCAuto CT.CTInt
+        intArrayKind = CT.CTArray 2 CT.CTInt
+        largeStructKind =
+            CT.CTStruct $
+                Map.fromList
+                    [ ("a", CT.StructMember CT.CTInt 0)
+                    , ("b", CT.StructMember CT.CTInt 4)
+                    , ("c", CT.StructMember CT.CTInt 8)
+                    ]
+        arrayStructKind =
+            CT.CTStruct $
+                Map.fromList
+                    [ ("a", CT.StructMember intArrayKind 0)
+                    ]
+        largeStructTy = CT.SCAuto largeStructKind
+        largeStructPtrTy = CT.SCAuto $ CT.CTPtr largeStructKind
+        arrayStructTy = CT.SCAuto arrayStructKind
+        intArrayTy = CT.SCAuto intArrayKind
+        intPtrTy = CT.SCAuto $ CT.CTPtr CT.CTInt
+        num n = ATNode (ATNum n) intTy ATEmpty ATEmpty
+        largeArg = ATNode (ATGVar largeStructTy "x") largeStructTy ATEmpty ATEmpty
+        cMember = CT.StructMember CT.CTInt 8
+        arrayMember = CT.StructMember intArrayKind 0
+        function ty =
+            PF.Function
+                { PF.fntype = ty
+                , PF.fnDefined = False
+                , PF.fnImplicit = False
+                , PF.fnNestDepth = 0
+                }
+        funcs =
+            Map.fromList
+                [ ("getMemberBase", function $ CT.SCAuto $ CT.CTFunc (CT.CTPtr largeStructKind) [(largeStructKind, Nothing)])
+                , ("getAddressBase", function $ CT.SCAuto $ CT.CTFunc (CT.CTPtr CT.CTInt) [(largeStructKind, Nothing)])
+                , ("makeLargeStruct", function $ CT.SCAuto $ CT.CTFunc largeStructKind [])
+                , ("makeArrayStruct", function $ CT.SCAuto $ CT.CTFunc arrayStructKind [])
+                ]
+        memberBaseCall = ATNode (ATCallFunc "getMemberBase" (Just [largeArg])) largeStructPtrTy ATEmpty ATEmpty
+        memberExpr =
+            ATNode
+                (ATMemberAcc cMember)
+                intTy
+                (ATNode ATDeref largeStructTy memberBaseCall ATEmpty)
+                ATEmpty
+        addressBaseCall = ATNode (ATCallFunc "getAddressBase" (Just [largeArg])) intPtrTy ATEmpty ATEmpty
+        addressExpr =
+            ATNode
+                ATAddr
+                intPtrTy
+                (ATNode ATDeref intTy addressBaseCall ATEmpty)
+                ATEmpty
+        scalarMemberAddressExpr =
+            ATNode
+                ATAddr
+                intPtrTy
+                (ATNode (ATMemberAcc cMember) intTy (ATNode (ATCallFunc "makeLargeStruct" Nothing) largeStructTy ATEmpty ATEmpty) ATEmpty)
+                ATEmpty
+        arrayMemberExpr =
+            ATNode
+                (ATMemberAcc arrayMember)
+                intArrayTy
+                (ATNode (ATCallFunc "makeArrayStruct" Nothing) arrayStructTy ATEmpty ATEmpty)
+                ATEmpty
+        arrayMemberAddressExpr =
+            ATNode
+                ATAddr
+                (CT.SCAuto $ CT.CTPtr intArrayKind)
+                arrayMemberExpr
+                ATEmpty
+        pointerArithmeticExpr =
+            ATNode
+                ATAddr
+                intPtrTy
+                (ATNode ATDeref intTy (ATNode ATAddPtr intPtrTy arrayMemberExpr (num 1)) ATEmpty)
+                ATEmpty
+        nonPointerDerefExpr =
+            ATNode
+                ATAddr
+                intPtrTy
+                (ATNode ATDeref intTy (num 1) ATEmpty)
+                ATEmpty
+    assertPrepareAstInputError
+        "member-access address context should still validate evaluated call arguments"
+        funcs
+        [ATNode ATReturn intTy memberExpr ATEmpty]
+        "unsupported non-addressable array member decay"
+    assertPrepareAstInputError
+        "address-of context should still validate evaluated call arguments"
+        funcs
+        [ATNode ATExprStmt intPtrTy addressExpr ATEmpty]
+        "unsupported non-addressable array member decay"
+    assertPrepareAstInputError
+        "address-of dereference should still validate pointer-arithmetic operands"
+        funcs
+        [ATNode ATExprStmt intPtrTy pointerArithmeticExpr ATEmpty]
+        "lvalue required as unary '&' operand"
+    assertPrepareAstInputError
+        "address-of direct scalar member access should reject struct rvalue bases"
+        funcs
+        [ATNode ATExprStmt intPtrTy scalarMemberAddressExpr ATEmpty]
+        "lvalue required as unary '&' operand"
+    assertPrepareAstInputError
+        "address-of direct array member access should reject struct rvalue bases"
+        funcs
+        [ATNode ATExprStmt intPtrTy arrayMemberAddressExpr ATEmpty]
+        "lvalue required as unary '&' operand"
+    assertPrepareAstInputError
+        "address-of dereference should reject non-dereferenceable operands"
+        funcs
+        [ATNode ATExprStmt intPtrTy nonPointerDerefExpr ATEmpty]
+        "lvalue required as unary '&' operand"
+
+unevaluatedAddressOfRvalueArrayElementRevalidationTest :: Test
+unevaluatedAddressOfRvalueArrayElementRevalidationTest = TestLabel "Asm.Output.unevaluated-address-of-rvalue-array-element-revalidation" $ TestCase $ do
+    assertPrepareAsmInputOk
+        "sizeof address-of array member element on struct rvalues should remain unevaluated"
+        "struct S { int a[2]; }; struct S make(void); int main(void) { return sizeof(&make().a[1]); }"
+    assertPrepareAsmInputOk
+        "sizeof address-of dereferenced array member on struct rvalues should remain unevaluated"
+        "struct S { int a[2]; }; struct S make(void); int main(void) { return sizeof(&*make().a); }"
+    assertPrepareAsmInputOk
+        "_Alignof address-of array member element on struct rvalues should remain unevaluated"
+        "struct S { int a[2]; }; struct S make(void); int main(void) { return _Alignof(&make().a[1]); }"
+    assertPrepareAsmInputOk
+        "_Alignof address-of dereferenced array member on struct rvalues should remain unevaluated"
+        "struct S { int a[2]; }; struct S make(void); int main(void) { return _Alignof(&*make().a); }"
+
+unevaluatedAggregateReturnRevalidationTest :: Test
+unevaluatedAggregateReturnRevalidationTest = TestLabel "Asm.Output.unevaluated-aggregate-return-revalidation" $ TestCase $ do
+    assertPrepareAsmInputOk
+        "sizeof statement-expression aggregate returns should remain unevaluated during revalidation"
+        "struct S { int a; }; int main(void) { return sizeof(({ struct S s; return s; 0; })); }"
+    assertPrepareAsmInputOk
+        "_Alignof statement-expression aggregate returns should remain unevaluated during revalidation"
+        "struct S { int a; }; int main(void) { return _Alignof(({ struct S s; return s; 0; })); }"
 
 objectPointerAssignmentRefinementRevalidationTest :: Test
 objectPointerAssignmentRefinementRevalidationTest = TestLabel "Asm.Output.object-pointer-assignment-refinement-revalidation" $ TestCase $
@@ -1941,6 +2474,26 @@ globalInitializerIncompleteSizeofRevalidationTest = TestLabel "Asm.Output.global
         Right _ ->
             assertFailure "expected asm input preparation failure"
 
+globalInitializerCallRefinementRevalidationTest :: Test
+globalInitializerCallRefinementRevalidationTest = TestLabel "Asm.Output.global-initializer-call-refinement-revalidation" $ TestCase $
+    assertPrepareAsmInputError
+        "asm input preparation should revalidate calls in file-scope initializer ASTs after later function refinement"
+        "struct S { int a; }; extern struct S g; int sink(); int x = sizeof(sink(g)); struct T { int b; }; int sink(struct T);"
+        "invalid argument type to function call"
+
+globalInitializerArrayMemberPointerArithmeticSizeofTest :: Test
+globalInitializerArrayMemberPointerArithmeticSizeofTest = TestLabel "Asm.Output.global-initializer-array-member-pointer-arithmetic-sizeof" $ TestCase $ do
+    asm <- renderAsm "struct S { int a[3]; } s; int y = sizeof(s.a + 1); int main(void) { return y == 8; }"
+    assertContains
+        "file-scope sizeof should preserve the decayed pointer type for array-member pointer arithmetic"
+        [ "y:"
+        , ".4byte 8"
+        ]
+        asm
+    assertBool
+        "file-scope sizeof should not fold array-member pointer arithmetic as the array object size"
+        (not $ "y:\n\t.4byte 12" `T.isInfixOf` asm)
+
 functionPointerReturnRefinementRevalidationTest :: Test
 functionPointerReturnRefinementRevalidationTest = TestLabel "Asm.Output.function-pointer-return-refinement-revalidation" $ TestCase $
     assertPrepareAsmInputError
@@ -1954,6 +2507,89 @@ objectPointerReturnRefinementRevalidationTest = TestLabel "Asm.Output.object-poi
         "asm input preparation should reject object-pointer return expressions after later tentative-array completion"
         "int a[]; int (*f(void))[3] { return &a; } int a[4];"
         "invalid return type"
+
+aggregateCompatibilityRevalidationTest :: Test
+aggregateCompatibilityRevalidationTest = TestLabel "Asm.Output.aggregate-compatibility-revalidation" $ TestCase $ do
+    let
+        intTy = CT.SCAuto CT.CTInt
+        structAKind =
+            CT.CTStruct $
+                Map.fromList
+                    [ ("a", CT.StructMember CT.CTInt 0)
+                    ]
+        structBKind =
+            CT.CTStruct $
+                Map.fromList
+                    [ ("b", CT.StructMember CT.CTInt 0)
+                    ]
+        structATy = CT.SCAuto structAKind
+        structBTy = CT.SCAuto structBKind
+        structAFnTy = CT.SCAuto $ CT.CTFunc structAKind []
+        intFnTy = CT.SCAuto $ CT.CTFunc CT.CTInt []
+        boolTy = CT.SCAuto CT.CTBool
+        undefTy = CT.SCUndef CT.CTUndef
+        num n = ATNode (ATNum n) intTy ATEmpty ATEmpty
+        lvar ty offset = ATNode (ATLVar ty offset) ty ATEmpty ATEmpty
+        block stmts = ATNode (ATBlock stmts) undefTy ATEmpty ATEmpty
+        defFunc name fnTy stmts = ATNode (ATDefFunc name Nothing) fnTy (block stmts) ATEmpty
+        exprStmt expr = ATNode ATExprStmt undefTy expr ATEmpty
+        function ty =
+            PF.Function
+                { PF.fntype = ty
+                , PF.fnDefined = False
+                , PF.fnImplicit = False
+                , PF.fnNestDepth = 0
+                }
+        refinedAggregateFuncs = Map.singleton "makeStruct" $ function structAFnTy
+        staleStructCall = ATNode (ATCallFunc "makeStruct" Nothing) intTy ATEmpty ATEmpty
+        incompatibleAssign =
+            ATNode
+                ATExprStmt
+                undefTy
+                (ATNode ATAssign structATy (lvar structATy 0) (lvar structBTy 8))
+                ATEmpty
+        incompatibleStructReturn =
+            ATNode ATReturn structATy (lvar structBTy 8) ATEmpty
+        incompatibleScalarReturn =
+            ATNode ATReturn intTy (lvar structBTy 8) ATEmpty
+        invalidScalarAdd =
+            ATNode ATAdd intTy staleStructCall (num 1)
+        invalidScalarEquality =
+            ATNode ATEQ boolTy staleStructCall staleStructCall
+        invalidCompoundAssign =
+            ATNode ATAddAssign intTy (lvar intTy 0) staleStructCall
+        returnZero =
+            ATNode ATReturn intTy (num 0) ATEmpty
+    assertPrepareAstInputError
+        "asm input preparation should reject incompatible small-struct assignments"
+        Map.empty
+        [defFunc "assignBad" structAFnTy [incompatibleAssign, ATNode ATReturn structATy (lvar structATy 0) ATEmpty]]
+        "invalid operands to assignment"
+    assertPrepareAstInputError
+        "asm input preparation should reject incompatible small-struct returns"
+        Map.empty
+        [defFunc "returnBad" structAFnTy [incompatibleStructReturn]]
+        "invalid return type"
+    assertPrepareAstInputError
+        "asm input preparation should reject small-struct returns from scalar functions"
+        Map.empty
+        [defFunc "scalarReturnBad" intFnTy [incompatibleScalarReturn]]
+        "invalid return type"
+    assertPrepareAstInputError
+        "asm input preparation should reject refreshed small-struct arithmetic operands"
+        refinedAggregateFuncs
+        [defFunc "addOperandBad" intFnTy [exprStmt invalidScalarAdd, returnZero]]
+        "invalid operands"
+    assertPrepareAstInputError
+        "asm input preparation should reject refreshed small-struct scalar operands"
+        refinedAggregateFuncs
+        [defFunc "equalityOperandBad" intFnTy [exprStmt invalidScalarEquality, returnZero]]
+        "invalid operands"
+    assertPrepareAstInputError
+        "asm input preparation should reject refreshed small-struct compound assignment operands"
+        refinedAggregateFuncs
+        [defFunc "compoundOperandBad" intFnTy [exprStmt invalidCompoundAssign, returnZero]]
+        "invalid operands to assignment"
 
 pointerIncDecRefinementRevalidationTest :: Test
 pointerIncDecRefinementRevalidationTest = TestLabel "Asm.Output.pointer-inc-dec-refinement-revalidation" $ TestCase $
@@ -2387,12 +3023,23 @@ test = TestLabel "Asm.Output" $
         , globalInitializerWideCastTruncationTest
         , normalizeAsmInputPreservesOperatorTypesTest
         , functionCallRefinementRevalidationTest
+        , completedStructParamRevalidationTest
+        , noArgIndirectCalleeControlFlowRevalidationTest
+        , completedStructReturnRevalidationTest
+        , deferredLargeStructFunctionValueRevalidationTest
+        , deferredLargeStructGlobalValueRevalidationTest
+        , addressContextCallArgumentRevalidationTest
+        , unevaluatedAddressOfRvalueArrayElementRevalidationTest
+        , unevaluatedAggregateReturnRevalidationTest
         , objectPointerAssignmentRefinementRevalidationTest
         , globalInitializerFunctionPointerRefinementRevalidationTest
         , globalInitializerObjectPointerRefinementRevalidationTest
         , globalInitializerIncompleteSizeofRevalidationTest
+        , globalInitializerCallRefinementRevalidationTest
+        , globalInitializerArrayMemberPointerArithmeticSizeofTest
         , functionPointerReturnRefinementRevalidationTest
         , objectPointerReturnRefinementRevalidationTest
+        , aggregateCompatibilityRevalidationTest
         , pointerIncDecRefinementRevalidationTest
         , pointerAddSubAssignRefinementRevalidationTest
         , pointerIncDecIncompleteRevalidationFailureTest
@@ -2451,6 +3098,8 @@ test = TestLabel "Asm.Output" $
         , directFunctionLateStackArgCallOrderTest
         , stackPassedParameterSpillTest
         , stackPassedBoolParameterSpillTest
+        , unnamedFunctionParameterSpillTest
+        , unnamedFunctionAdjustedParameterSpillTest
         , writeOnlyFallbackReplacementRestoreTest
         , writeOnlyExecutableFallbackReplacementRestoreTest
         , unreadableStagedFallbackReplacementTest
@@ -2483,6 +3132,7 @@ test = TestLabel "Asm.Output" $
         , globalInitializerAddressConditionRelocTest
         , commaFunctionDesignatorCallDecayTest
         , commaAssignmentDiscardsLhsTest
+        , structMemberAccessCodegenTest
         , globalInitializerStmtExprArrayDecaySizeofTest
         , visualizerSizeofExprTest
         , visualizerFunctionDesignatorTest

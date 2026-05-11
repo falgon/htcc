@@ -137,6 +137,44 @@ genAddr (ATNode (ATMemberAcc m) _ lhs _) = do
     IT.push rax
 genAddr _ = SI.errCtx "lvalue required as left operand of assignment"
 
+isAddressableExpr :: ATree i -> Bool
+isAddressableExpr (ATNode kind _ lhs _) = case kind of
+    ATLVar _ _    -> True
+    ATGVar _ _    -> True
+    ATFuncPtr _   -> True
+    ATMemberAcc _ -> isAddressableExpr lhs
+    ATDeref       -> True
+    _             -> False
+isAddressableExpr _ = False
+
+rvalueSubobjectBaseOffset :: ATree i -> Maybe (ATree i, Natural)
+rvalueSubobjectBaseOffset (ATNode (ATMemberAcc member) _ lhs _)
+    | isAddressableExpr lhs = Nothing
+    | otherwise = case rvalueSubobjectBaseOffset lhs of
+        Just (base, offset) -> Just (base, offset + CR.smOffset member)
+        Nothing             -> Just (lhs, CR.smOffset member)
+rvalueSubobjectBaseOffset _ = Nothing
+
+rvalueArrayElementPointerChain :: ATree i -> Maybe (ATree i, Natural, [RvalueArrayIndexStep i])
+rvalueArrayElementPointerChain ptr = do
+    (arrayExpr, idxs) <- pointerIndexChain ptr
+    if CR.isArray (atype arrayExpr)
+        then case rvalueSubobjectBaseOffset arrayExpr of
+            Just (base, offset) -> Just (base, offset, idxs)
+            Nothing             -> Nothing
+        else Nothing
+    where
+        pointerIndexChain (ATNode ATAddPtr _ arrayExpr idx) =
+            appendIndex RvalueArrayIndexAdd arrayExpr idx
+        pointerIndexChain (ATNode ATSubPtr _ arrayExpr idx) =
+            appendIndex RvalueArrayIndexSub arrayExpr idx
+        pointerIndexChain _ =
+            Nothing
+
+        appendIndex direction arrayExpr idx = case pointerIndexChain arrayExpr of
+            Just (root, idxs) -> Just (root, idxs <> [(direction, idx)])
+            Nothing           -> Just (arrayExpr, [(direction, idx)])
+
 genLVal :: (Integral e, Show e, IsOperand i, Integral i, Ord i, IT.UnaryInstruction i, IT.BinaryInstruction i) => ATree i -> SI.Asm IT.TextLabelCtx e ()
 genLVal xs@(ATNode _ t _ _)
     | CR.isCTArray t = SI.errCtx "lvalue required as left operand of assignment"
@@ -145,10 +183,215 @@ genLVal _ = SI.errCtx "internal compiler error: genLVal catch ATEmpty"
 
 load :: Ord i => CR.StorageClass i -> SI.Asm IT.TextLabelCtx e ()
 load t
+    | isAggregateType t = loadPackedObject t
     | CR.sizeof t == 1 = IT.pop rax >> IT.movsx rax (IT.byte IT.Ptr (Ref rax)) >> IT.push rax
     | CR.sizeof t == 2 = IT.pop rax >> IT.movsx rax (IT.word IT.Ptr (Ref rax)) >> IT.push rax
     | CR.sizeof t == 4 = IT.pop rax >> IT.movsxd rax (IT.dword IT.Ptr (Ref rax)) >> IT.push rax
     | otherwise = IT.pop rax >> IT.mov rax (Ref rax) >> IT.push rax
+
+isAggregateType :: CR.StorageClass i -> Bool
+isAggregateType ty = CR.isArray ty || CR.isCTStruct ty
+
+objectChunks :: Natural -> [(Natural, Natural)]
+objectChunks = go 0
+    where
+        go _ 0 = []
+        go offset remaining
+            | remaining >= 4 = (offset, 4) : go (offset + 4) (remaining - 4)
+            | remaining >= 2 = (offset, 2) : go (offset + 2) (remaining - 2)
+            | otherwise = [(offset, 1)]
+
+loadPackedObject :: Ord i => CR.StorageClass i -> SI.Asm IT.TextLabelCtx e ()
+loadPackedObject ty
+    | objectSize <= 8 = do
+        IT.pop rdx
+        IT.mov rax (0 :: Int)
+        mapM_ loadChunk (objectChunks objectSize)
+        IT.push rax
+    | otherwise =
+        SI.errCtx "unsupported aggregate value load"
+    where
+        objectSize = CR.sizeof ty
+
+        loadChunk (offset, width) = do
+            IT.mov rcx (0 :: Int)
+            IT.lea rsi (refAt rdx offset)
+            case width of
+                4 -> IT.mov ecx (IT.dword IT.Ptr $ Ref rsi)
+                2 -> IT.mov cx (IT.word IT.Ptr $ Ref rsi)
+                1 -> IT.mov cl (IT.byte IT.Ptr $ Ref rsi)
+                _ -> SI.errCtx "internal compiler error: invalid packed object load width"
+            unless (offset == 0) $
+                IT.shl rcx (fromIntegral (offset * 8) :: Int)
+            IT.or rax rcx
+
+storePackedObject :: Ord i => CR.StorageClass i -> SI.Asm IT.TextLabelCtx e ()
+storePackedObject ty
+    | objectSize <= 8 = do
+        IT.pop rdi
+        IT.pop rax
+        mapM_ storeChunk (objectChunks objectSize)
+        IT.push rdi
+    | otherwise =
+        SI.errCtx "unsupported aggregate value store"
+    where
+        objectSize = CR.sizeof ty
+
+        storeChunk (offset, width) = do
+            IT.mov rdx rdi
+            unless (offset == 0) $
+                IT.sar rdx (fromIntegral (offset * 8) :: Int)
+            IT.lea rsi (refAt rax offset)
+            case width of
+                4 -> IT.mov (IT.dword IT.Ptr $ Ref rsi) edx
+                2 -> IT.mov (IT.word IT.Ptr $ Ref rsi) dx
+                1 -> IT.mov (IT.byte IT.Ptr $ Ref rsi) dl
+                _ -> SI.errCtx "internal compiler error: invalid packed object store width"
+
+storePackedRegisterObject
+    :: Integral e
+    => Natural
+    -> Register
+    -> (Natural -> Ref Operand)
+    -> SI.Asm IT.TextLabelCtx e ()
+storePackedRegisterObject objectSize srcReg destAt
+    | objectSize <= 8 = do
+        IT.mov packedValueReg srcReg
+        mapM_ storeChunk (objectChunks objectSize)
+    | otherwise =
+        SI.errCtx "internal compiler error: unsupported aggregate parameter width"
+    where
+        packedValueReg = rn 10
+        chunkReg = rn 11
+        chunkRegD = rnd 11
+        chunkRegW = rnw 11
+        chunkRegB = rnb 11
+
+        storeChunk (offset, width) = do
+            IT.mov chunkReg packedValueReg
+            unless (offset == 0) $
+                IT.sar chunkReg (fromIntegral (offset * 8) :: Int)
+            IT.lea rax (destAt offset)
+            case width of
+                4 -> IT.mov (IT.dword IT.Ptr $ Ref rax) chunkRegD
+                2 -> IT.mov (IT.word IT.Ptr $ Ref rax) chunkRegW
+                1 -> IT.mov (IT.byte IT.Ptr $ Ref rax) chunkRegB
+                _ -> SI.errCtx "internal compiler error: invalid packed object parameter width"
+
+refAt :: IsOperand a => a -> Natural -> Ref Operand
+refAt base offset = Ref $ base `oadd` (fromIntegral offset :: Integer)
+
+isScalarLoadType :: CR.StorageClass i -> Bool
+isScalarLoadType ty =
+    not (isAggregateType ty)
+        && case CR.toTypeKind ty of
+            CR.CTFunc _ _ -> False
+            _             -> True
+
+data RvalueArrayIndexDirection
+    = RvalueArrayIndexAdd
+    | RvalueArrayIndexSub
+
+type RvalueArrayIndexStep i = (RvalueArrayIndexDirection, ATree i)
+
+withSmallRvalueObject
+    :: (Integral e, Show e, IsOperand i, Integral i, Ord i, IT.UnaryInstruction i, IT.BinaryInstruction i)
+    => ATree i
+    -> (Register -> SI.Asm IT.TextLabelCtx e ())
+    -> SI.Asm IT.TextLabelCtx e ()
+withSmallRvalueObject base useBase
+    | CR.sizeof (atype base) <= 8 = do
+        genStmt base
+        IT.pop rax
+        IT.push rbx
+        IT.sub rsp (8 :: Int)
+        IT.mov (Ref rsp) rax
+        IT.mov rbx rsp
+        useBase rbx
+        IT.pop rax
+        IT.add rsp (8 :: Int)
+        IT.pop rbx
+        IT.push rax
+    | otherwise =
+        SI.errCtx "unsupported non-addressable struct member access"
+
+loadRvalueSubobject
+    :: (Integral e, Show e, IsOperand i, Integral i, Ord i, IT.UnaryInstruction i, IT.BinaryInstruction i)
+    => CR.StorageClass i
+    -> ATree i
+    -> Natural
+    -> SI.Asm IT.TextLabelCtx e ()
+loadRvalueSubobject ty base offset
+    | not (isScalarLoadType ty) =
+        SI.errCtx "unsupported non-addressable aggregate member access"
+    | accessEnd <= CR.sizeof (atype base) =
+        withSmallRvalueObject base $ \baseReg -> loadFromBaseOffset baseReg offset ty
+    | otherwise =
+        SI.errCtx "unsupported non-addressable struct member access"
+    where
+        accessEnd = offset + CR.sizeof ty
+
+loadRvalueArrayElement
+    :: (Integral e, Show e, IsOperand i, Integral i, Ord i, IT.UnaryInstruction i, IT.BinaryInstruction i)
+    => CR.StorageClass i
+    -> ATree i
+    -> Natural
+    -> [RvalueArrayIndexStep i]
+    -> SI.Asm IT.TextLabelCtx e ()
+loadRvalueArrayElement elemTy base offset idxs
+    | not (isScalarLoadType elemTy) =
+        SI.errCtx "unsupported non-addressable aggregate array element access"
+    | CR.sizeof (atype base) > 8 =
+        SI.errCtx "unsupported non-addressable struct member access"
+    | otherwise = do
+        genRvalueArrayIndex idxs
+        withSmallRvalueObject base $ \baseReg -> do
+            IT.mov rax (refAt rsp 16)
+            IT.imul rax elemSize
+            IT.add rax baseReg
+            IT.add rax offset'
+            IT.push rax
+            load elemTy
+        IT.pop rax
+        IT.add rsp (8 :: Int)
+        IT.push rax
+    where
+        elemSize = fromIntegral (CR.sizeof elemTy) :: Int
+        offset' = fromIntegral offset :: Integer
+
+genRvalueArrayIndex
+    :: (Integral e, Show e, IsOperand i, Integral i, Ord i, IT.UnaryInstruction i, IT.BinaryInstruction i)
+    => [RvalueArrayIndexStep i]
+    -> SI.Asm IT.TextLabelCtx e ()
+genRvalueArrayIndex [] = IT.push (0 :: Int)
+genRvalueArrayIndex ((direction, idx):idxs) = do
+    genFirstIndex direction idx
+    forM_ idxs $ \(direction', idx') -> do
+        genStmt idx'
+        combineIndex direction'
+    where
+        genFirstIndex RvalueArrayIndexAdd idx' =
+            genStmt idx'
+        genFirstIndex RvalueArrayIndexSub idx' = do
+            IT.push (0 :: Int)
+            genStmt idx'
+            combineIndex RvalueArrayIndexSub
+
+        combineIndex direction' = do
+            IT.pop rdi
+            IT.pop rax
+            case direction' of
+                RvalueArrayIndexAdd -> IT.add rax rdi
+                RvalueArrayIndexSub -> IT.sub rax rdi
+            IT.push rax
+
+loadFromBaseOffset :: (Integral e, Ord i, IsOperand i, IT.BinaryInstruction i) => Register -> Natural -> CR.StorageClass i -> SI.Asm IT.TextLabelCtx e ()
+loadFromBaseOffset baseReg offset ty = do
+        IT.lea rax (Ref $ baseReg `oadd` offset')
+        IT.push rax
+        load ty
+    where
+        offset' = fromIntegral offset :: Integer
 
 nonLoadableDerefType :: CR.StorageClass i -> Bool
 nonLoadableDerefType ty =
@@ -158,12 +401,14 @@ nonLoadableDerefType ty =
             _             -> False
 
 store :: Ord i => CR.StorageClass i -> SI.Asm IT.TextLabelCtx e ()
-store t = do
-    IT.pop rdi
-    IT.pop rax
-    when (CR.toTypeKind t == CR.CTBool) $ IT.cmp rdi (0 :: Int) *> IT.setne dil *> IT.movzb rdi dil
-    IT.mov (Ref rax) storeReg
-    IT.push rdi
+store t
+    | isAggregateType t = storePackedObject t
+    | otherwise = do
+        IT.pop rdi
+        IT.pop rax
+        when (CR.toTypeKind t == CR.CTBool) $ IT.cmp rdi (0 :: Int) *> IT.setne dil *> IT.movzb rdi dil
+        IT.mov (Ref rax) storeReg
+        IT.push rdi
     where
         storeReg
             | CR.sizeof t == 1 = dil
@@ -464,6 +709,9 @@ genStmt (ATNode ATPostDec t lhs _) = do
     increment t
 genStmt (ATNode ATComma _ lhs rhs) = genStmt lhs >> IT.add rsp (8 :: Int) >> genStmt rhs
 genStmt (ATNode ATAddr _ lhs _) = genAddr lhs
+genStmt (ATNode ATDeref t ptr _)
+    | Just (base, offset, idxs) <- rvalueArrayElementPointerChain ptr =
+        loadRvalueArrayElement t base offset idxs
 genStmt (ATNode ATDeref t lhs _) = genStmt lhs >> unless (nonLoadableDerefType t) (load t)
 genStmt (ATNode ATNot _ lhs _) = do
     genStmt lhs
@@ -478,7 +726,11 @@ genStmt (ATNode (ATNum x) _ _ _)
 genStmt n@(ATNode (ATFuncPtr _) _ _ _) = genAddr n
 genStmt n@(ATNode (ATLVar _ _) t _ _) = genAddr n >> unless (CR.isCTArray t) (load t)
 genStmt n@(ATNode (ATGVar _ _) t _ _) = genAddr n >> unless (CR.isCTArray t) (load t)
-genStmt n@(ATNode (ATMemberAcc _) t _ _) = genAddr n >> unless (CR.isCTArray t) (load t)
+genStmt n@(ATNode (ATMemberAcc member) t lhs _)
+    | isAddressableExpr lhs = genAddr n >> unless (CR.isCTArray t) (load t)
+    | otherwise = case rvalueSubobjectBaseOffset n of
+        Just (base, offset) -> loadRvalueSubobject t base offset
+        Nothing             -> loadRvalueSubobject t lhs (CR.smOffset member)
 genStmt (ATNode ATAssign t lhs rhs) = genLVal lhs >> genStmt rhs >> store t
 genStmt (ATNode (ATNull _) _ _ _) = return ()
 genStmt (ATNode kd ty lhs rhs)
@@ -548,11 +800,18 @@ spillRegisterParam (ATNode (ATLVar t o) _ _ _) regs
             (SI.errCtx "internal compiler error: there is no full-width register for a _Bool parameter")
             (\fullReg -> IT.mov rax fullReg >> normalizeBoolAbiRax >> IT.mov (Ref $ rbp `osub` o) al)
             (find ((== 8) . byteWidth) regs)
+    | isAggregateType t =
+        maybe
+            (SI.errCtx "internal compiler error: there is no full-width register for an aggregate parameter")
+            (\fullReg -> storePackedRegisterObject (CR.sizeof t) fullReg localSlotAt)
+            (find ((== 8) . byteWidth) regs)
     | otherwise =
         maybe
             (SI.errCtx "internal compiler error: there is no register that fits the specified size")
             (IT.mov (Ref $ rbp `osub` o))
             (find ((== CR.sizeof t) . byteWidth) regs)
+    where
+        localSlotAt offset = Ref $ (rbp `osub` o) `oadd` (fromIntegral offset :: Integer)
 spillRegisterParam _ _ =
     SI.errCtx "internal compiler error: expected local variable parameter slot"
 
@@ -561,18 +820,22 @@ spillStackParam
     => Integer
     -> ATree i
     -> SI.Asm IT.TextLabelCtx e ()
-spillStackParam callerOffset (ATNode (ATLVar t o) _ _ _) = case CR.sizeof t of
-    1
-        | CR.toTypeKind t == CR.CTBool ->
-            loadCallerSlot >> normalizeBoolAbiRax >> IT.mov localSlot al
-        | otherwise ->
-            loadCallerSlot >> IT.mov localSlot al
-    2 -> loadCallerSlot >> IT.mov localSlot ax
-    4 -> loadCallerSlot >> IT.mov localSlot eax
-    8 -> loadCallerSlot >> IT.mov localSlot rax
-    _ -> SI.errCtx "internal compiler error: unsupported stack-passed parameter width"
+spillStackParam callerOffset (ATNode (ATLVar t o) _ _ _)
+    | isAggregateType t =
+        loadCallerSlot >> storePackedRegisterObject (CR.sizeof t) rax localSlotAt
+    | otherwise = case CR.sizeof t of
+        1
+            | CR.toTypeKind t == CR.CTBool ->
+                loadCallerSlot >> normalizeBoolAbiRax >> IT.mov localSlot al
+            | otherwise ->
+                loadCallerSlot >> IT.mov localSlot al
+        2 -> loadCallerSlot >> IT.mov localSlot ax
+        4 -> loadCallerSlot >> IT.mov localSlot eax
+        8 -> loadCallerSlot >> IT.mov localSlot rax
+        _ -> SI.errCtx "internal compiler error: unsupported stack-passed parameter width"
     where
         localSlot = Ref $ rbp `osub` o
+        localSlotAt offset = Ref $ (rbp `osub` o) `oadd` (fromIntegral offset :: Integer)
         callerSlot = Ref $ rbp `oadd` callerOffset
         loadCallerSlot = IT.mov rax callerSlot
 spillStackParam _ _ =

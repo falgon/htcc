@@ -127,7 +127,7 @@ funcParams ty = lparen *> do
 
         declIdentFuncParam = do
             ty' <- M.try declspec
-            param <- M.choice
+            M.choice
                 [ M.try $ (ty', Nothing) <$ M.lookAhead (comma <|> rparen)
                 , declarator ty' >>= \(t, mIdent) -> do
                     rejectVoidArrayParam t
@@ -139,7 +139,6 @@ funcParams ty = lparen *> do
                             void $ registerLVar paramTy ident
                     pure (paramTy, mIdent)
                 ]
-            pure param
             where
                 rejectVoidArrayParam paramTy
                     | containsVoidArrayType $ CT.toTypeKind paramTy =

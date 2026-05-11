@@ -1387,6 +1387,14 @@ scalarInitializerTest = TestLabel "Parser.Program.scalar-initializer" $
             assertProgramErrorContains
                 "invalid initializer for scalar object"
                 "int main(void) { char a[3]; char (*p)[3] = a; return 0; }"
+        , TestLabel "rejects small struct lvalues in local scalar initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "struct S { int a; }; int main(void) { struct S s; int x = s; return x; }"
+        , TestLabel "rejects small struct call results in local scalar initializers" $ TestCase $
+            assertProgramErrorContains
+                "invalid initializer for scalar object"
+                "struct S { int a; }; struct S make(void); int main(void) { int x = make(); return x; }"
         , TestLabel "rejects multidimensional array expressions in object-pointer assignments" $ TestCase $
             assertProgramErrorContains
                 "invalid operands to assignment"
@@ -1654,6 +1662,10 @@ functionCallTest = TestLabel "Parser.Program.function-call" $
             assertProgramErrorContains
                 "invalid argument type to function call"
                 "int use(char **p) { return p == 0; } int main(void) { int *x = 0; int **pp = &x; return use(pp); }"
+        , TestLabel "rejects incompatible by-value struct arguments" $ TestCase $
+            assertProgramErrorContains
+                "invalid argument type to function call"
+                "struct A { int a; }; struct B { int b; }; int use(struct A); int main(void) { struct B b; return use(b); }"
         , TestLabel "rejects too few arguments through typed function pointers" $ TestCase $
             assertProgramErrorContains
                 "too few arguments to function call"
@@ -1721,6 +1733,122 @@ conditionalPointerTypeTest = TestLabel "Parser.Program.conditional-pointer-type"
                 ~?= True
         ]
 
+conditionalAggregateTypeTest :: Test
+conditionalAggregateTypeTest = TestLabel "Parser.Program.conditional-aggregate-type" $
+    TestList
+        [ "accepts compatible small-struct conditional branches" ~:
+            isRight
+                (parseProgram "struct S { int a; }; int main(void) { struct S a; struct S b; return (1 ? a : b).a; }")
+                ~?= True
+        , TestLabel "rejects incompatible small-struct conditional branches" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands"
+                "struct A { int a; }; struct B { int b; }; int main(void) { struct A a; struct B b; int c = 1; return (c ? a : b).a; }"
+        , TestLabel "rejects incomplete-struct and scalar conditional branches before later completion" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands"
+                "struct S f(); int main(void) { return sizeof(1 ? f() : 0); } struct S { int a; };"
+        ]
+
+aggregateConditionTest :: Test
+aggregateConditionTest = TestLabel "Parser.Program.aggregate-condition" $
+    TestList
+        [ TestLabel "rejects small-struct if conditions" $ TestCase $
+            assertProgramErrorContains
+                "invalid condition type"
+                "struct S { int a; }; int main(void) { struct S s; if (s) return 1; return 0; }"
+        , TestLabel "rejects small-struct while conditions" $ TestCase $
+            assertProgramErrorContains
+                "invalid condition type"
+                "struct S { int a; }; int main(void) { struct S s; while (s) return 1; return 0; }"
+        , TestLabel "rejects small-struct for conditions" $ TestCase $
+            assertProgramErrorContains
+                "invalid condition type"
+                "struct S { int a; }; int main(void) { struct S s; for (; s; ) return 1; return 0; }"
+        , TestLabel "rejects small-struct switch conditions" $ TestCase $
+            assertProgramErrorContains
+                "invalid condition type"
+                "struct S { int a; }; int main(void) { struct S s; switch (s) { default: return 0; } }"
+        , TestLabel "rejects small-struct conditional-operator conditions" $ TestCase $
+            assertProgramErrorContains
+                "invalid condition type"
+                "struct S { int a; }; int main(void) { struct S s; return s ? 1 : 2; }"
+        ]
+
+aggregateScalarOperatorTest :: Test
+aggregateScalarOperatorTest = TestLabel "Parser.Program.aggregate-scalar-operator" $
+    TestList
+        [ TestLabel "rejects small-struct logical operands" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands"
+                "struct S { int a; }; int main(void) { struct S s; return s || 0; }"
+        , TestLabel "rejects small-struct equality operands" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands"
+                "struct S { int a; }; int main(void) { struct S s; return s == s; }"
+        , TestLabel "rejects small-struct relational operands" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands"
+                "struct S { int a; }; int main(void) { struct S s; return s < s; }"
+        , TestLabel "rejects unary logical not on small structs" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands"
+                "struct S { int a; }; int main(void) { struct S s; return !s; }"
+        , TestLabel "rejects unary plus on small structs" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands"
+                "struct S { int a; }; int main(void) { struct S s; return +s; }"
+        , TestLabel "rejects bitwise not on small structs" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands"
+                "struct S { int a; }; int main(void) { struct S s; return ~s; }"
+        , TestLabel "rejects multiplicative operators on small structs" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands"
+                "struct S { int a; }; int main(void) { struct S s; return s * 1; }"
+        , TestLabel "rejects pre-increment on small structs" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands"
+                "struct S { int a; }; int main(void) { struct S s; ++s; return 0; }"
+        , TestLabel "rejects post-increment on small structs" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands"
+                "struct S { int a; }; int main(void) { struct S s; s++; return 0; }"
+        , TestLabel "rejects compound assignments to small structs" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands to assignment"
+                "struct S { int a; }; int main(void) { struct S s; s += 1; return 0; }"
+        , TestLabel "rejects compound assignments from small structs" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands to assignment"
+                "struct S { int a; }; int main(void) { int x; struct S s; x += s; return x; }"
+        ]
+
+explicitAggregateCastTest :: Test
+explicitAggregateCastTest = TestLabel "Parser.Program.explicit-aggregate-cast" $
+    TestList
+        [ TestLabel "rejects scalar-to-struct casts before member access" $ TestCase $
+            assertProgramErrorContains
+                "invalid cast type"
+                "struct S { int a; }; int main(void) { return ((struct S)42).a; }"
+        , TestLabel "rejects struct casts that hide incompatible call arguments" $ TestCase $
+            assertProgramErrorContains
+                "invalid cast type"
+                "struct A { int a; }; struct B { int b; }; int use(struct A); int main(void) { struct B b; return use((struct A)b); }"
+        , TestLabel "rejects struct casts that hide incompatible return values" $ TestCase $
+            assertProgramErrorContains
+                "invalid cast type"
+                "struct A { int a; }; struct B { int b; }; struct A make(void) { struct B b; return (struct A)b; } int main(void) { return 0; }"
+        , TestLabel "rejects struct casts that hide incompatible assignments" $ TestCase $
+            assertProgramErrorContains
+                "invalid cast type"
+                "struct A { int a; }; struct B { int b; }; int main(void) { struct A a; struct B b; a = (struct A)b; return 0; }"
+        , TestLabel "rejects struct-to-scalar casts" $ TestCase $
+            assertProgramErrorContains
+                "invalid cast operand"
+                "struct S { int a; }; int main(void) { struct S s; return (int)s; }"
+        ]
+
 functionPointerAssignmentTest :: Test
 functionPointerAssignmentTest = TestLabel "Parser.Program.function-pointer-assignment" $
     TestList
@@ -1762,6 +1890,466 @@ functionPointerAssignmentTest = TestLabel "Parser.Program.function-pointer-assig
             assertProgramErrorContains
                 "invalid operands to assignment"
                 "int main(void) { int x; int *p = &x; int (*fp)(void) = 0; fp = p; return 0; }"
+        ]
+
+postfixMemberAccessTest :: Test
+postfixMemberAccessTest = TestLabel "Parser.Program.postfix-member-access" $
+    TestList
+        [ "accepts direct struct member access" ~:
+            isRight
+                (parseProgram "int main(void) { struct S { int a; int b; } x; x.a = 1; x.b = 2; return x.a + x.b; }")
+                ~?= True
+        , "accepts pointer struct member access" ~:
+            isRight
+                (parseProgram "int main(void) { struct S { int a; } x; struct S *p = &x; p->a = 42; return x.a; }")
+                ~?= True
+        , "accepts pointer member access on pointer rvalues" ~:
+            isRight
+                (parseProgram "struct S { int a; }; struct S *makep(void); int main(void) { return makep()->a; }")
+                ~?= True
+        , "accepts chained pointer member access" ~:
+            isRight
+                (parseProgram "int main(void) { struct Y { int a; }; struct X { struct Y *py; }; struct X x; struct Y y; y.a = 42; x.py = &y; return x.py->a; }")
+                ~?= True
+        , "accepts pointer member access through addressable array members" ~:
+            isRight
+                (parseProgram "int main(void) { struct T { int a; }; struct S { struct T arr[1]; }; struct S x; x.arr[0].a = 42; return x.arr->a; }")
+                ~?= True
+        , "accepts direct member access through explicit dereference of large struct pointers" ~:
+            isRight
+                (parseProgram "struct S { int a; int b; int c; }; struct S *p; int main(void) { return (*p).c; }")
+                ~?= True
+        , "continues postfix parsing after direct member access" ~:
+            isRight
+                (parseProgram "int main(void) { struct S { int a[2]; } x; x.a[1] = 42; return x.a[1]; }")
+                ~?= True
+        , "accepts direct member access on struct rvalues in unevaluated contexts" ~:
+            isRight
+                (parseProgram "struct S { int a; }; struct S make(void); int main(void) { return sizeof(make().a); }")
+                ~?= True
+        , "accepts direct member access on assignment rvalues in unevaluated contexts" ~:
+            isRight
+                (parseProgram "int main(void) { struct S { int a; } x; struct S y; return sizeof((x = y).a); }")
+                ~?= True
+        , "accepts direct member access on function-call struct rvalues" ~:
+            isRight
+                (parseProgram "struct S { int a; }; struct S make(void); int main(void) { return make().a; }")
+                ~?= True
+        , "accepts direct member access on assignment struct rvalues" ~:
+            isRight
+                (parseProgram "int main(void) { struct S { int a; } x; struct S y; return (x = y).a; }")
+                ~?= True
+        , "accepts array member access on function-call struct rvalues" ~:
+            isRight
+                (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return make().a[1]; }")
+                ~?= True
+        , "accepts unary dereference of array member access on function-call struct rvalues" ~:
+            isRight
+                (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return *make().a; }")
+                ~?= True
+        , "accepts unary dereference of array member pointer arithmetic on function-call struct rvalues" ~:
+            isRight
+                (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return *(make().a + 1); }")
+                ~?= True
+        , "accepts unary dereference of array member pointer subtraction on function-call struct rvalues" ~:
+            isRight
+                (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return *(make().a - 0); }")
+                ~?= True
+        , "accepts member access when a discarded comma operand reads a scalar array element on a struct rvalue" ~:
+            isRight
+                (parseProgram "struct S { int a[1]; int b; }; struct S make(void); int main(void) { return (make().a[0], make()).b; }")
+                ~?= True
+        , "accepts array member access on assignment struct rvalues" ~:
+            isRight
+                (parseProgram "int main(void) { struct S { int a[2]; } x; struct S y; return (x = y).a[1]; }")
+                ~?= True
+        , "accepts nested aggregate member access on function-call struct rvalues" ~:
+            isRight
+                (parseProgram "struct T { char a; char b; char c; }; struct S { char pad; struct T t; }; struct S make(void); int main(void) { return make().t.a; }")
+                ~?= True
+        , "accepts sizeof nested array member access on struct rvalues" ~:
+            isRight
+                (parseProgram "struct S { int a[2][2]; }; struct S make(void); int main(void) { return sizeof(make().a[1][0]); }")
+                ~?= True
+        , "accepts sizeof aggregate member access on large struct rvalues" ~:
+            isRight
+                (parseProgram "struct T { int a; int b; int c; }; struct S { struct T t; }; struct S make(void); int main(void) { return sizeof(make().t); }")
+                ~?= True
+        , "accepts sizeof member access on large assignment rvalues" ~:
+            isRight
+                (parseProgram "int main(void) { struct S { int a; int b; int c; } x; struct S y; return sizeof((x = y).a); }")
+                ~?= True
+        , "accepts sizeof calls with large by-value struct arguments" ~:
+            isRight
+                (parseProgram "struct S { int a; int b; int c; }; int sink(struct S x); int main(void) { struct S x; return sizeof(sink(x)); }")
+                ~?= True
+        , TestLabel "rejects sizeof calls with incompatible forward-declared struct arguments" $ TestCase $
+            assertProgramErrorContains
+                "invalid argument type to function call"
+                "struct A; struct B; extern struct B b; int sink(struct A); int main(void) { return sizeof(sink(b)); } struct A { int a; }; struct B { int b; };"
+        , "accepts address-of large struct lvalues" ~:
+            isRight
+                (parseProgram "int main(void) { struct S { int a; int b; int c; } x; struct S *p = &x; return 0; }")
+                ~?= True
+        , "accepts sizeof large struct lvalues" ~:
+            isRight
+                (parseProgram "int main(void) { struct S { int a; int b; int c; } x; return sizeof(x); }")
+                ~?= True
+        , "accepts address-of addressable array member elements" ~:
+            isRight
+                (parseProgram "int main(void) { struct S { int a[2]; } x; int *p = &x.a[1]; return 0; }")
+                ~?= True
+        , "accepts sizeof address-of array member elements on struct rvalues" ~:
+            isRight
+                (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return sizeof(&make().a[1]); }")
+                ~?= True
+        , "accepts _Alignof address-of array member elements on struct rvalues" ~:
+            isRight
+                (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return _Alignof(&make().a[1]); }")
+                ~?= True
+        , "accepts sizeof assignment through array member elements on struct rvalues" ~:
+            isRight
+                (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return sizeof(make().a[1] = 1); }")
+                ~?= True
+        , "accepts _Alignof assignment through array member elements on struct rvalues" ~:
+            isRight
+                (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return _Alignof(make().a[1] = 1); }")
+                ~?= True
+        , "accepts sizeof post-increment through array member elements on struct rvalues" ~:
+            isRight
+                (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return sizeof(make().a[1]++); }")
+                ~?= True
+        , "accepts _Alignof pre-decrement through array member elements on struct rvalues" ~:
+            isRight
+                (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return _Alignof(--make().a[1]); }")
+                ~?= True
+        , "accepts sizeof post-increment through chained array member pointer arithmetic on struct rvalues" ~:
+            isRight
+                (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return sizeof(((make().a + 1)[0])++); }")
+                ~?= True
+        , "accepts _Alignof compound assignment through chained array member pointer arithmetic on struct rvalues" ~:
+            isRight
+                (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return _Alignof(((make().a + 1)[0]) += 1); }")
+                ~?= True
+        , TestLabel "rejects sizeof assignment to array-typed rvalue array elements" $ TestCase $
+            assertProgramErrorContains
+                "lvalue required as left operand of assignment"
+                "struct S { int a[2][2]; }; struct S make(void); int main(void) { return sizeof(make().a[1] = make().a[0]); }"
+        , TestLabel "rejects _Alignof assignment to array-typed rvalue array elements" $ TestCase $
+            assertProgramErrorContains
+                "lvalue required as left operand of assignment"
+                "struct S { int a[2][2]; }; struct S make(void); int main(void) { return _Alignof(make().a[1] = make().a[0]); }"
+        , TestLabel "rejects sizeof increment of array-typed rvalue array elements" $ TestCase $
+            assertProgramErrorContains
+                "lvalue required as increment operand"
+                "struct S { int a[2][2]; }; struct S make(void); int main(void) { return sizeof(make().a[1]++); }"
+        , TestLabel "rejects _Alignof decrement of array-typed rvalue array elements" $ TestCase $
+            assertProgramErrorContains
+                "lvalue required as decrement operand"
+                "struct S { int a[2][2]; }; struct S make(void); int main(void) { return _Alignof(--make().a[1]); }"
+        , "rejects sizeof address-of scalar rvalues" ~:
+            isLeft (parseProgram "int main(void) { return sizeof(&1); }")
+                ~?= True
+        , "accepts address-of function designators" ~:
+            isRight
+                (parseProgram "int foo(void); int main(void) { int (*p)(void) = &foo; return 0; }")
+                ~?= True
+        , "accepts compatible small struct assignments and returns" ~:
+            isRight
+                (parseProgram "struct S { int a; }; struct S make(void) { struct S x; return x; } int main(void) { struct S x; struct S y; x = y; x = make(); return x.a; }")
+                ~?= True
+        , "rejects decaying array member access from struct rvalues in comma subscripts" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return (0, make().a)[1]; }")
+                ~?= True
+        , "rejects assigning array member decay from struct rvalues to pointers" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { int *p; return (p = make().a, p[1]); }")
+                ~?= True
+        , "rejects initializing pointers from array member decay on struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { int *p = make().a; return 0; }")
+                ~?= True
+        , "rejects pointer arithmetic on array member decay from struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { int *p = make().a + 1; return p[0]; }")
+                ~?= True
+        , "rejects nested array member subscripts on struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a[2][2]; }; struct S make(void); int main(void) { return make().a[1][0]; }")
+                ~?= True
+        , "rejects member access through aggregate array elements on struct rvalues" ~:
+            isLeft (parseProgram "struct T { int x; }; struct S { struct T a[2]; }; struct S make(void); int main(void) { return make().a[0].x; }")
+                ~?= True
+        , "rejects pointer member access through array member decay on struct rvalues" ~:
+            TestCase $
+                assertProgramErrorContains
+                    "unsupported non-addressable array member decay"
+                    "struct T { int a; }; struct S { struct T arr[1]; }; struct S make(void); int main(void) { return make().arr->a; }"
+        , TestLabel "rejects pointer member bases read from large struct rvalues" $ TestCase $
+            assertProgramErrorContains
+                "unsupported non-addressable array member decay"
+                "struct T { int a; }; struct S { int pad0; int pad1; struct T *p; }; struct S make(void); int main(void) { return make().p[0].a; }"
+        , TestLabel "rejects address-of paths requiring pointer reads from large struct rvalues" $ TestCase $
+            assertProgramErrorContains
+                "unsupported non-addressable array member decay"
+                "struct T { int a; }; struct S { int pad0; int pad1; struct T *p; }; struct S make(void); int main(void) { int *q = &make().p[0].a; return 0; }"
+        , TestLabel "rejects assignments through paths requiring pointer reads from large struct rvalues" $ TestCase $
+            assertProgramErrorContains
+                "unsupported non-addressable array member decay"
+                "struct T { int a; }; struct S { int pad0; int pad1; struct T *p; }; struct S make(void); int main(void) { make().p[0].a = 1; return 0; }"
+        , "rejects aggregate member values on struct rvalues" ~:
+            isLeft (parseProgram "struct T { int a; int b; int c; }; struct S { struct T t; }; struct S make(void); int main(void) { return make().t; }")
+                ~?= True
+        , "rejects scalar member access on large struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a; int b; int c; }; struct S make(void); int main(void) { return make().c; }")
+                ~?= True
+        , "rejects expression statements with large struct values" ~:
+            isLeft (parseProgram "int main(void) { struct S { int a; int b; int c; } x; x; return 0; }")
+                ~?= True
+        , "rejects assigning large struct values" ~:
+            isLeft (parseProgram "int main(void) { struct S { int a; int b; int c; } x; struct S y; x = y; return 0; }")
+                ~?= True
+        , TestLabel "rejects incompatible small struct assignments" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands to assignment"
+                "struct A { int a; }; struct B { int b; }; int main(void) { struct A a; struct B b; a = b; return 0; }"
+        , TestLabel "rejects assigning small structs to scalars" $ TestCase $
+            assertProgramErrorContains
+                "invalid operands to assignment"
+                "struct S { int a; }; int main(void) { int x; struct S s; x = s; return x; }"
+        , "rejects assigning large function-returned struct values" ~:
+            isLeft (parseProgram "struct S { int a; int b; int c; }; struct S make(void); int main(void) { struct S x; x = make(); return 0; }")
+                ~?= True
+        , "rejects returning large struct values" ~:
+            isLeft (parseProgram "struct S { int a; int b; int c; }; struct S make(void) { struct S x; return x; }")
+                ~?= True
+        , TestLabel "rejects large struct return definitions with empty returns" $ TestCase $
+            assertProgramErrorContains
+                "unsupported by-value function return type"
+                "struct S { int a; int b; int c; }; struct S make(void) { return; }"
+        , TestLabel "rejects delayed large struct return definitions with empty returns" $ TestCase $
+            assertProgramErrorContains
+                "unsupported by-value function return type"
+                "struct S make(void) { return; } struct S { int a; int b; int c; };"
+        , TestLabel "rejects large struct return definitions without returns" $ TestCase $
+            assertProgramErrorContains
+                "unsupported by-value function return type"
+                "struct S { int a; int b; int c; }; struct S make(void) {}"
+        , TestLabel "rejects cast-produced large struct return values" $ TestCase $
+            assertProgramErrorContains
+                "invalid cast type"
+                "struct S { int a; int b; int c; }; struct S make(void) { return (struct S)0; }"
+        , TestLabel "rejects incompatible small struct return values" $ TestCase $
+            assertProgramErrorContains
+                "invalid return type"
+                "struct A { int a; }; struct B { int b; }; struct A make(void) { struct B b; return b; } int main(void) { return 0; }"
+        , TestLabel "rejects returning small structs from scalar functions" $ TestCase $
+            assertProgramErrorContains
+                "invalid return type"
+                "struct S { int a; }; int make(void) { struct S s; return s; } int main(void) { return 0; }"
+        , TestLabel "rejects nested aggregate returns inside returned statement expressions" $ TestCase $
+            assertProgramErrorContains
+                "invalid return type"
+                "struct S { int a; }; int main(void) { return ({ struct S s; return s; 0; }); }"
+        , "accepts aggregate returns inside sizeof statement expressions" ~:
+            isRight
+                (parseProgram "struct S { int a; }; int main(void) { return sizeof(({ struct S s; return s; 0; })); }")
+                ~?= True
+        , "accepts aggregate returns inside _Alignof statement expressions" ~:
+            isRight
+                (parseProgram "struct S { int a; }; int main(void) { return _Alignof(({ struct S s; return s; 0; })); }")
+                ~?= True
+        , "rejects function call arguments with large struct values" ~:
+            isLeft (parseProgram "struct S { int a; int b; int c; }; int sink(struct S x); int main(void) { struct S x; return sink(x); }")
+                ~?= True
+        , TestLabel "rejects cast-produced large struct call arguments" $ TestCase $
+            assertProgramErrorContains
+                "invalid cast type"
+                "struct S { int a; int b; int c; }; int sink(struct S x); int main(void) { return sink((struct S)0); }"
+        , TestLabel "rejects cast-produced large struct old-style call arguments" $ TestCase $
+            assertProgramErrorContains
+                "invalid cast type"
+                "struct S { int a; int b; int c; }; int sink(); int main(void) { return sink((struct S)0); }"
+        , "rejects direct call arguments with escaping statement-expression control flow" ~:
+            TestCase $
+                assertProgramErrorContains
+                    "unsupported control flow in function call argument"
+                    "struct S { int a[2]; }; struct S make(void); int sink(int x); int main(void) { for (;;) { sink(make().a[({ continue; 0; })]); } return 0; }"
+        , "rejects indirect call arguments with escaping statement-expression control flow" ~:
+            TestCase $
+                assertProgramErrorContains
+                    "unsupported control flow in function call argument"
+                    "struct S { int a[2]; }; struct S make(void); int sink(int x); int main(void) { int (*fp)(int) = sink; for (;;) { fp(make().a[({ continue; 0; })]); } return 0; }"
+        , "rejects direct call arguments with statement-expression return control flow" ~:
+            TestCase $
+                assertProgramErrorContains
+                    "unsupported control flow in function call argument"
+                    "int sink(int x); int main(void) { return sink(({ return 2; 0; })); }"
+        , "rejects indirect call arguments with statement-expression return control flow" ~:
+            TestCase $
+                assertProgramErrorContains
+                    "unsupported control flow in function call argument"
+                    "int sink(int x); int main(void) { int (*fp)(int) = sink; return fp(({ return 2; 0; })); }"
+        , "rejects indirect call callees with escaping statement-expression control flow" ~:
+            TestCase $
+                assertProgramErrorContains
+                    "unsupported control flow in function call callee"
+                    "int sink(int x); int main(void) { int (*fp)(int) = sink; for (;;) { ({ continue; fp; })(1); } return 0; }"
+        , "rejects indirect call callees with statement-expression return control flow" ~:
+            TestCase $
+                assertProgramErrorContains
+                    "unsupported control flow in function call callee"
+                    "int sink(int x); int main(void) { int (*fp)(int) = sink; ({ return 2; fp; })(1); return 0; }"
+        , "accepts no-argument indirect callees with statement-expression return control flow" ~:
+            isRight (parseProgram "int sink(void); int main(void) { int (*fp)(void) = sink; ({ return 2; fp; })(); return 0; }")
+                ~?= True
+        , "rejects direct call arguments that jump into nested call argument labels" ~:
+            TestCase $
+                assertProgramErrorContains
+                    "unsupported control flow in function call argument"
+                    "int sink(int x); int main(void) { return sink(({ goto L; sink(({ L: 2; })); 3; })); }"
+        , "rejects indirect call arguments that jump into nested call argument labels" ~:
+            TestCase $
+                assertProgramErrorContains
+                    "unsupported control flow in function call argument"
+                    "int sink(int x); int main(void) { int (*fp)(int) = sink; return fp(({ goto L; fp(({ L: 2; })); 3; })); }"
+        , "rejects rvalue array member bases with escaping statement-expression control flow" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { for (;;) { ({ continue; make(); }).a[0]; } return 0; }")
+                ~?= True
+        , "accepts rvalue array member bases with statement-expression return control flow" ~:
+            isRight (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return ({ return 5; make(); }).a[0]; }")
+                ~?= True
+        , "accepts call arguments with statement-expression-local loop control flow" ~:
+            isRight (parseProgram "int sink(int x); int main(void) { return sink(({ while (1) { break; } 1; })); }")
+                ~?= True
+        , "accepts statement-expression return control flow" ~:
+            isRight (parseProgram "int main(void) { ({ 1; return 2; 3; }); return 4; }")
+                ~?= True
+        , "accepts direct call arguments with unevaluated statement-expression control flow" ~:
+            isRight (parseProgram "int sink(int x); int main(void) { for (;;) { return sink(sizeof(({ continue; 0; }))); } return 0; }")
+                ~?= True
+        , "accepts indirect call arguments with unevaluated statement-expression control flow" ~:
+            isRight (parseProgram "int sink(int x); int main(void) { int (*fp)(int) = sink; for (;;) { return fp(_Alignof(({ continue; 0; }))); } return 0; }")
+                ~?= True
+        , "accepts statement-expression call arguments with nested unevaluated control flow" ~:
+            isRight (parseProgram "int sink(int x); int main(void) { for (;;) { return sink(({ sizeof(({ continue; 0; })); 1; })); } return 0; }")
+                ~?= True
+        , "accepts unevaluated statement-expression-local cross-boundary goto" ~:
+            isRight (parseProgram "int main(void) { return sizeof(({ goto L; ({ L: 1; }); 0; })); }")
+                ~?= True
+        , "rejects goto into statement-expression labels" ~:
+            TestCase $
+                assertProgramErrorContains
+                    "unsupported control flow in statement expression"
+                    "int main(void) { goto L; int x; x = ({ L: 1; }); return x; }"
+        , "rejects goto into unevaluated statement-expression labels" ~:
+            TestCase $
+                assertProgramErrorContains
+                    "unsupported control flow in statement expression"
+                    "int main(void) { goto L; return sizeof(({ L: 3; })); }"
+        , "rejects case labels inside statement expressions entered by outer switches" ~:
+            TestCase $
+                assertProgramErrorContains
+                    "unsupported control flow in statement expression"
+                    "int main(void) { switch (1) { ({ case 1: 0; 1; }); } return 0; }"
+        , "rejects default labels inside statement expressions entered by outer switches" ~:
+            TestCase $
+                assertProgramErrorContains
+                    "unsupported control flow in statement expression"
+                    "int main(void) { switch (0) { ({ default: 0; 1; }); } return 0; }"
+        , "accepts unevaluated case labels inside statement expressions under outer switches" ~:
+            isRight (parseProgram "int main(void) { switch (1) { default: return sizeof(({ case 1: 0; 0; })); } return 0; }")
+                ~?= True
+        , "accepts unevaluated default labels inside statement expressions under outer switches" ~:
+            isRight (parseProgram "int main(void) { switch (0) { case 0: return _Alignof(({ default: 0; 0; })); } return 0; }")
+                ~?= True
+        , "accepts switch labels inside statement-expression-local switches" ~:
+            isRight (parseProgram "int main(void) { return ({ switch (1) { case 1: 2; default: 3; } 4; }); }")
+                ~?= True
+        , "accepts postfix subscript after array member pointer arithmetic on struct rvalues" ~:
+            isRight (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return (make().a + 1)[0]; }")
+                ~?= True
+        , TestLabel "rejects chained array member pointer arithmetic on large struct rvalues" $ TestCase $
+            assertProgramErrorContains
+                "unsupported non-addressable array member decay"
+                "struct S { int pad; int a[2]; }; struct S make(void); int main(void) { return (make().a + 1)[0]; }"
+        , TestLabel "rejects nested array member pointer arithmetic on large struct rvalues" $ TestCase $
+            assertProgramErrorContains
+                "unsupported non-addressable array member decay"
+                "struct S { int pad; int a[2]; }; struct S make(void); int main(void) { return *((make().a + 1) + 0); }"
+        , "rejects escaping array member pointer arithmetic on struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { int *p = make().a + 1; return 0; }")
+                ~?= True
+        , "rejects escaping statement-expression control flow in assignment operands" ~:
+            TestCase $
+                assertProgramErrorContains
+                    "unsupported control flow in statement expression"
+                    "int main(void) { int x; for (;;) { x = ({ continue; 1; }); } return 0; }"
+        , TestLabel "rejects evaluated statement-expression statements under unary dereference" $ TestCase $
+            assertProgramErrorContains
+                "lvalue required as left operand of assignment"
+                "struct S { int a[2]; }; struct S make(void); int g; int main(void) { return *({ make().a[1] = 1; &g; }); }"
+        , "rejects conditionals on array member decay from struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return make().a ? 1 : 2; }")
+                ~?= True
+        , "rejects logical operators on array member decay from struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return make().a || 0; }")
+                ~?= True
+        , "rejects equality operators on array member decay from struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return make().a == 0; }")
+                ~?= True
+        , "rejects unary scalar conversion on array member decay from struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return !make().a; }")
+                ~?= True
+        , "rejects multiplicative operators on array member decay from struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return make().a * 1; }")
+                ~?= True
+        , "rejects shifts on array member decay from struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { return make().a << 1; }")
+                ~?= True
+        , "rejects if conditions on array member decay from struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { if (make().a) return 1; return 0; }")
+                ~?= True
+        , "rejects while conditions on array member decay from struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { while (make().a) return 1; return 0; }")
+                ~?= True
+        , "rejects switch conditions on array member decay from struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { switch (make().a) { default: return 0; } }")
+                ~?= True
+        , "rejects for conditions on array member decay from struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { for (; make().a; ) return 1; return 0; }")
+                ~?= True
+        , "rejects address-of array members on struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { int *p = &make().a; return 0; }")
+                ~?= True
+        , "rejects address-of array member elements on struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { int *p = &make().a[1]; return 0; }")
+                ~?= True
+        , "rejects address-of members through aggregate array elements on struct rvalues" ~:
+            isLeft (parseProgram "struct T { int x; }; struct S { struct T a[2]; }; struct S make(void); int main(void) { int *p = &make().a[0].x; return 0; }")
+                ~?= True
+        , "rejects direct member access on non-struct expressions" ~:
+            isLeft (parseProgram "int main(void) { int x; return x.a; }")
+                ~?= True
+        , "rejects pointer member access on non-pointer expressions" ~:
+            isLeft (parseProgram "int main(void) { struct S { int a; } x; return x->a; }")
+                ~?= True
+        , "rejects assigning through direct member access on struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a; }; struct S make(void); int main(void) { make().a = 1; return 0; }")
+                ~?= True
+        , "rejects assigning through direct member access on assignment rvalues" ~:
+            isLeft (parseProgram "int main(void) { struct S { int a; } x; (x = x).a = 1; return 0; }")
+                ~?= True
+        , "rejects assigning through array member access on struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { make().a[1] = 1; return 0; }")
+                ~?= True
+        , "rejects incrementing through array member access on struct rvalues" ~:
+            isLeft (parseProgram "struct S { int a[2]; }; struct S make(void); int main(void) { make().a[1]++; return 0; }")
+                ~?= True
+        , TestLabel "rejects incrementing through chained array member pointer arithmetic on struct rvalues" $ TestCase $
+            assertProgramErrorContains
+                "lvalue required as increment operand"
+                "struct S { int a[2]; }; struct S make(void); int main(void) { ((make().a + 1)[0])++; return 0; }"
+        , TestLabel "rejects compound assignment through chained array member pointer arithmetic on struct rvalues" $ TestCase $
+            assertProgramErrorContains
+                "lvalue required as left operand of assignment"
+                "struct S { int a[2]; }; struct S make(void); int main(void) { ((make().a + 1)[0]) += 1; return 0; }"
         ]
 
 declarationSpecifierTest :: Test
@@ -1920,6 +2508,18 @@ declarationSpecifierTest = TestLabel "Parser.Program.declaration-specifier" $
             assertProgramErrorContains
                 "declaration of variable with incomplete type"
                 "int f(struct S s) { return 0; } int main(void) { return 0; }"
+        , TestLabel "rejects incomplete unnamed by-value function definition parameters" $ TestCase $
+            assertProgramErrorContains
+                "declaration of variable with incomplete type"
+                "int f(struct S) { return 0; } int main(void) { return 0; }"
+        , TestLabel "rejects unsupported large by-value function definition parameters" $ TestCase $
+            assertProgramErrorContains
+                "unsupported by-value function parameter type"
+                "struct S { int a; int b; int c; }; int f(struct S s) { return 0; } int main(void) { return 0; }"
+        , TestLabel "rejects unsupported large unnamed by-value function definition parameters" $ TestCase $
+            assertProgramErrorContains
+                "unsupported by-value function parameter type"
+                "struct S { int a; int b; int c; }; int f(struct S, int x) { return x; } int main(void) { return 0; }"
         , "rejects incomplete element types in struct members" ~:
             isLeft
                 (parseProgram "int main(void) { struct S; struct T { struct S a[1]; }; return 0; }")
@@ -2120,7 +2720,12 @@ test = TestLabel "Parser.Combinators.Core" $
       , functionDesignatorContextTest
       , functionCallTest
       , conditionalPointerTypeTest
+      , conditionalAggregateTypeTest
+      , aggregateConditionTest
+      , aggregateScalarOperatorTest
+      , explicitAggregateCastTest
       , functionPointerAssignmentTest
+      , postfixMemberAccessTest
       , declarationSpecifierTest
       , functionPointerArithmeticTest
       , emptyForBodyPreservationTest

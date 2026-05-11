@@ -89,6 +89,7 @@ module Tests.SubProcTests.AsmOutput (
     outputFileMultiInputFunctionPointerRedeclarationConflictTest,
     outputFileMultiInputAdjustedFunctionParamTypeTest,
     outputFileMultiInputCompatiblePrototypeMergeTest,
+    outputFileMultiInputLargeStructReturnMergeTest,
     outputFileMultiInputRepeatedPrototypeTest,
     outputFileMultiInputTaggedPrototypeScopeMergeTest,
     outputFileMultiInputPrototypeOnlyArityRetypeTest,
@@ -559,6 +560,9 @@ outputFileMultiInputAdjustedFunctionParamTypeMsg = "CLI -o accepts compatible ex
 
 outputFileMultiInputCompatiblePrototypeMergeMsg :: T.Text
 outputFileMultiInputCompatiblePrototypeMergeMsg = "CLI -o rejects extern function returns that only differ by pointee array bound inference"
+
+outputFileMultiInputLargeStructReturnMergeMsg :: T.Text
+outputFileMultiInputLargeStructReturnMergeMsg = "CLI -o rejects merged function definitions that resolve to unsupported large struct returns"
 
 outputFileMultiInputRepeatedPrototypeMsg :: T.Text
 outputFileMultiInputRepeatedPrototypeMsg = "CLI -o accepts repeated prototypes when another input provides the single function definition"
@@ -7665,6 +7669,47 @@ outputFileMultiInputCompatiblePrototypeMergeTest =
                 , "exitCode: " <> T.pack (show result)
                 ]
         return $ mkResult outputFileMultiInputCompatiblePrototypeMergeMsg ok details
+
+outputFileMultiInputLargeStructReturnMergeTest :: IO (Either T.Text T.Text, String)
+outputFileMultiInputLargeStructReturnMergeTest =
+    flip finally (clean ["tmp.out", "tmp.err", "tmp.s", "tmp-def.c", "tmp-decl.c"]) $ do
+        htccCmd <- htccCommand
+        let target = "tmp.s"
+            defPath = "tmp-def.c"
+            declPath = "tmp-decl.c"
+            expectedError = "unsupported by-value function return type"
+        clean ["tmp.out", "tmp.err", target, defPath, declPath]
+        T.writeFile defPath "struct S f(void) { return; }"
+        T.writeFile declPath $ T.unlines
+            [ "struct S { int a; int b; int c; };"
+            , "struct S f(void);"
+            ]
+        result <- exec $ mconcat
+            [ htccCmd
+            , " -o "
+            , T.pack target
+            , " "
+            , T.pack defPath
+            , " "
+            , T.pack declPath
+            , " > tmp.out 2> tmp.err"
+            ]
+        stdoutLeak <- T.readFile "tmp.out"
+        stderrOut <- T.readFile "tmp.err"
+        targetExists <- doesFileExist target
+        let failed = exitCode (const True) False result
+            hasExpectedError = expectedError `T.isInfixOf` stderrOut
+            ok = failed && T.null stdoutLeak && hasExpectedError && not targetExists
+            details = T.unlines
+                [ "stdout:"
+                , stdoutLeak
+                , "stderr:"
+                , stderrOut
+                , "hasExpectedError: " <> T.pack (show hasExpectedError)
+                , "targetExists: " <> T.pack (show targetExists)
+                , "exitCode: " <> T.pack (show result)
+                ]
+        return $ mkResult outputFileMultiInputLargeStructReturnMergeMsg ok details
 
 outputFileMultiInputRepeatedPrototypeTest :: IO (Either T.Text T.Text, String)
 outputFileMultiInputRepeatedPrototypeTest =

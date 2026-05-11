@@ -23,10 +23,11 @@ import                          Data.Functor.Identity
 import                qualified Data.Text                                   as T
 import                          Data.Void
 import                          Htcc.Parser.AST.Type                        (ASTs)
-import {-# SOURCE #-}           Htcc.Parser.ConstructionData.Core
+import {-# SOURCE #-}           Htcc.Parser.ConstructionData.Core           (ConstructionData (..),
+                                                                             Warnings,
+                                                                             initConstructionData)
 import                qualified Htcc.Parser.ConstructionData.Scope          as PS
 import                qualified Htcc.Parser.ConstructionData.Scope.Function as PF
-import                qualified Htcc.Parser.ConstructionData.Scope.Tag      as PST
 import                qualified Htcc.Parser.ConstructionData.Scope.Var      as PSV
 import                qualified Text.Megaparsec                             as M
 
@@ -113,4 +114,4 @@ runParserWithModeDetailed allowSameInputExternalCollisionsMode p fp input =
             runIdentity $
                 runStateT
                     (M.runParserT p fp input)
-                    (ConstructionData mempty PS.initScope PST.emptyTagHistory [] False allowSameInputExternalCollisionsMode)
+                    (initConstructionData { allowSameInputExternalCollisions = allowSameInputExternalCollisionsMode })

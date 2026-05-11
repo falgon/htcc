@@ -117,6 +117,7 @@ exec = runTestsEx
     , (StatementEqual.test "typedef struct S T; struct S { int a; }; T foo(void); int main(void) { return sizeof(foo()) - sizeof(int); }", 0)
     , (StatementEqual.test "typedef struct S T; struct S { int a; }; int main(void) { extern T arr[1]; return sizeof arr / sizeof arr[0] - 1; }", 0)
     , (StatementEqual.test "extern struct S (*p)[1]; struct S { int a; }; int main(void) { return sizeof(**p) - sizeof(int); }", 0)
+    , (StatementEqual.test "struct S { int a[2]; }; struct S make(void) { struct S x; x.a[0] = 3; x.a[1] = 7; return x; } int main(void) { return (make().a + 1)[0]; }", 7)
     , (StatementEqual.test "int id(int a) { return a; } int main() { int a; a = 1; return id(a-1) + id(1); }", 1)
     , (StatementEqual.test "int get1() { return 1; } int get2() { return 2; } int main() { int a; a = get1(); return a + get2(); }", 3)
     , (StatementEqual.test "int add(int a, int b) { return a + b; } int main() { return add(1, 2); }", 3)
@@ -177,6 +178,10 @@ exec = runTestsEx
     , (StatementEqual.test "int main() { int ar[3][5]; return sizeof ar; }", fromIntegral $ sizeof $ CT.CTArray 5 $ CT.CTArray 3 CT.CTInt)
     , (StatementEqual.test "int main() { int ar[3][5]; return sizeof *ar; }", fromIntegral $ sizeof $ CT.CTArray 5 CT.CTInt)
     , (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar; }", fromIntegral $ sizeof CT.CTInt)
+    , (StatementEqual.test "int main(void) { struct S { int a[3]; } s; return sizeof(s.a + 1); }", fromIntegral $ sizeof $ CT.CTPtr CT.CTInt)
+    , (StatementEqual.test "int main(void) { struct S { int a[3]; } s; return sizeof(s.a - 1); }", fromIntegral $ sizeof $ CT.CTPtr CT.CTInt)
+    , (StatementEqual.test "int main(void) { struct S { int a[3]; } s; return sizeof(s.a - s.a); }", fromIntegral $ sizeof $ CT.CTLong CT.CTInt)
+    , (StatementEqual.test "int main(void) { struct S { int a[3]; } s; return _Alignof(s.a + 1); }", fromIntegral $ alignof $ CT.CTPtr CT.CTInt)
     , (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar) + 1; }", succ $ fromIntegral $ sizeof CT.CTInt)
     , (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar + 1; }", succ $ fromIntegral $ sizeof CT.CTInt)
     , (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar + 1); }", fromIntegral $ sizeof $ CT.CTLong CT.CTInt)
@@ -329,6 +334,7 @@ exec = runTestsEx
     , (AsmOutput.outputFileMultiInputFunctionPointerRedeclarationConflictTest, Right "CLI -o rejects extern globals that only looked compatible via function-return equality")
     , (AsmOutput.outputFileMultiInputAdjustedFunctionParamTypeTest, Right "CLI -o accepts compatible extern declarations after array/function parameter adjustment")
     , (AsmOutput.outputFileMultiInputCompatiblePrototypeMergeTest, Right "CLI -o rejects extern function returns that only differ by pointee array bound inference")
+    , (AsmOutput.outputFileMultiInputLargeStructReturnMergeTest, Right "CLI -o rejects merged function definitions that resolve to unsupported large struct returns")
     , (AsmOutput.outputFileMultiInputRepeatedPrototypeTest, Right "CLI -o accepts repeated prototypes when another input provides the single function definition")
     , (AsmOutput.outputFileMultiInputTaggedPrototypeScopeMergeTest, Right "CLI -o ignores per-input tagged-struct scope ids when merging compatible extern prototypes")
     , (AsmOutput.outputFileMultiInputPrototypeOnlyArityRetypeTest, Right "CLI -o revalidates direct calls after merging later prototype-only declarations")
@@ -483,3 +489,4 @@ exec = runTestsEx
 
     where
         sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural
+        alignof = CT.alignof :: CT.TypeKind Integer -> Natural
