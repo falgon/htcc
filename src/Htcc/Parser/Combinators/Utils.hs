@@ -39,7 +39,7 @@ import           Control.Monad.State                             (gets, modify,
                                                                   put)
 import           Control.Natural                                 (type (~>))
 import           Data.Bits                                       (Bits (..))
-import qualified Data.ByteString.UTF8                            as BSU
+import qualified Data.ByteString                                 as B
 import           Data.Maybe                                      (isJust)
 import qualified Data.Set                                        as S
 import qualified Data.Text                                       as T
@@ -88,14 +88,15 @@ registerLVar :: (Bits i, Integral i)
 registerLVar = registerVar addLVar
 
 registerStringLiteral :: (Bits i, Integral i)
-    => String
+    => B.ByteString
     -> Parser i (ATree i)
-registerStringLiteral s = gets (addLiteral ty (HT.TokenLCNums 1 1, HT.TKString $ BSU.fromString s))
+registerStringLiteral s = gets (addLiteral ty (HT.TokenLCNums 1 1, HT.TKString bytes))
     >>= \case
         Right (n, scp) -> n <$ put scp
         Left err -> fail $ T.unpack $ fst err
     where
-        ty = CT.SCAuto $ CT.CTArray (fromIntegral $ length s) CT.CTChar
+        bytes = s
+        ty = CT.SCAuto $ CT.CTArray (fromIntegral $ B.length bytes) CT.CTChar
 
 registerGVar :: (Ord i, Bits i, Integral i)
     => CT.StorageClass i

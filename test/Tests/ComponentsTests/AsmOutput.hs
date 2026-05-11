@@ -159,6 +159,24 @@ assertOccursBefore label first second haystack =
                 | T.null restFirst || T.null restSecond -> False
                 | otherwise -> T.length restFirst > T.length restSecond
 
+stringLiteralByteEncodingTest :: Test
+stringLiteralByteEncodingTest = TestLabel "Asm.Output.string-literal-byte-encoding" $ TestCase $ do
+    asm <- renderAsm "int main(void) { return \"\\xff\"[1]; }"
+    assertContains
+        "string hex escapes should emit C bytes, not UTF-8 bytes"
+        [ ".byte 255, 0"
+        ]
+        asm
+    assertBool
+        "string hex escapes should not be UTF-8 encoded"
+        (not $ ".byte 195, 191, 0" `T.isInfixOf` asm)
+    utf8Asm <- renderAsm "int main(void) { return \"é\"[0]; }"
+    assertContains
+        "raw non-ASCII string characters should keep UTF-8 source bytes"
+        [ ".byte 195, 169, 0"
+        ]
+        utf8Asm
+
 replacementFailurePreservesWriteOnlyOutputTest :: ReplacementOutputMode -> T.Text -> FileMode -> Test
 replacementFailurePreservesWriteOnlyOutputTest modeStrategy label targetMode = TestLabel (T.unpack label) $ TestCase $ do
     tmpDir <- getTemporaryDirectory
@@ -875,6 +893,19 @@ blockScopeExternFunctionShadowsEnumeratorAsmTest = TestLabel "Asm.Output.block-s
         ]
         fSection
 
+blockScopeOrdinaryFunctionPrototypeAsmTest :: Test
+blockScopeOrdinaryFunctionPrototypeAsmTest = TestLabel "Asm.Output.block-scope-ordinary-function-prototype" $ TestCase $ do
+    asm <- renderAsm "int main(void) { int foo(void); return foo(); }"
+    let mainSection = extractFunctionSection "main" asm
+    assertContains
+        "block-scope ordinary function prototypes resolve to direct external calls"
+        [ "call foo"
+        ]
+        mainSection
+    assertBool
+        "block-scope function prototypes must not be lowered as indirect calls through local stack slots"
+        (not $ "call r11" `T.isInfixOf` mainSection)
+
 blockScopeExternStaticFunctionAsmTest :: Test
 blockScopeExternStaticFunctionAsmTest = TestLabel "Asm.Output.block-scope-extern-static-function" $ TestCase $ do
     asm <- renderAsm "static int foo(void) { return 3; } int main(void) { extern int foo(void); return foo(); }"
@@ -999,8 +1030,8 @@ indirectFunctionPointerArgAlignmentTest = TestLabel "Asm.Output.indirect-functio
         [ "mov rax, rsp"
         , "and rax, 15"
         , "jnz .L.call."
-        , "mov rdi, [rax+0]"
         , "mov r11, [rax+8]"
+        , "mov rdi, [rax+0]"
         , "mov rax, 0"
         , "call r11"
         ]
@@ -1015,16 +1046,40 @@ directFunctionStackArgAlignmentTest = TestLabel "Asm.Output.direct-function-stac
         , "sub rax, 8"
         , "and rax, 15"
         , "jnz .L.call."
-        , "push [rax+48]"
+        , "mov rdx, [rax+48]"
+        , "push rdx"
+        , "mov rdx, [rax+16]"
         , "call sum7"
         , ".L.call."
         , "sub rsp, 8"
-        , "push [rax+48]"
+        , "mov rdx, [rax+48]"
+        , "push rdx"
+        , "mov rdx, [rax+16]"
         , "call sum7"
         , "add rsp, 8"
         , "add rsp, 8"
         ]
         asm
+
+directFunctionMultipleStackArgRestoreTest :: Test
+directFunctionMultipleStackArgRestoreTest = TestLabel "Asm.Output.direct-function-multiple-stack-arg-restore" $ TestCase $ do
+    asm <- renderAsm "long pick9(long a, long b, long c, long d, long e, long f, long g, long h, long i) { return g * 100 + h * 10 + i; } int main(void) { return pick9(1, 2, 3, 4, 5, 6, 7, 8, 9) - 789; }"
+    let mainSection = extractFunctionSection "main" asm
+    assertContainsInOrder
+        "direct calls restore multiple stack arguments through a register before pushing, so padding pushes cannot overwrite unread slots"
+        [ "mov rdx, [rax+64]"
+        , "push rdx"
+        , "mov rdx, [rax+56]"
+        , "push rdx"
+        , "mov rdx, [rax+48]"
+        , "push rdx"
+        , "mov rdx, [rax+16]"
+        , "call pick9"
+        ]
+        mainSection
+    assertBool
+        "direct calls should not push stack arguments directly from the scratch area"
+        (not $ "push [rax+" `T.isInfixOf` mainSection)
 
 directFunctionLateStackArgCallOrderTest :: Test
 directFunctionLateStackArgCallOrderTest = TestLabel "Asm.Output.direct-function-late-stack-arg-call-order" $ TestCase $ do
@@ -1680,20 +1735,46 @@ indirectFunctionPointerStackArgAlignmentTest = TestLabel "Asm.Output.indirect-fu
         , "and rax, 15"
         , "jnz .L.call."
         , "mov r11, [rax+56]"
-        , "push [rax+48]"
+        , "mov rdx, [rax+48]"
+        , "push rdx"
+        , "mov rdx, [rax+16]"
         , "mov rax, 0"
         , "call r11"
         , "add rsp, 8"
         , ".L.call."
         , "sub rsp, 8"
         , "mov r11, [rax+56]"
-        , "push [rax+48]"
+        , "mov rdx, [rax+48]"
+        , "push rdx"
+        , "mov rdx, [rax+16]"
         , "mov rax, 0"
         , "call r11"
         , "add rsp, 8"
         , "add rsp, 8"
         ]
         asm
+
+indirectFunctionMultipleStackArgRestoreTest :: Test
+indirectFunctionMultipleStackArgRestoreTest = TestLabel "Asm.Output.indirect-function-multiple-stack-arg-restore" $ TestCase $ do
+    asm <- renderAsm "long pick9(long a, long b, long c, long d, long e, long f, long g, long h, long i) { return g * 100 + h * 10 + i; } int main(void) { long (*fp)(long, long, long, long, long, long, long, long, long); fp = pick9; return fp(1, 2, 3, 4, 5, 6, 7, 8, 9) - 789; }"
+    let mainSection = extractFunctionSection "main" asm
+    assertContainsInOrder
+        "indirect calls restore multiple stack arguments through a register after loading the callee"
+        [ "mov r11, [rax+72]"
+        , "mov rdx, [rax+64]"
+        , "push rdx"
+        , "mov rdx, [rax+56]"
+        , "push rdx"
+        , "mov rdx, [rax+48]"
+        , "push rdx"
+        , "mov rdx, [rax+16]"
+        , "mov rax, 0"
+        , "call r11"
+        ]
+        mainSection
+    assertBool
+        "indirect calls should not push stack arguments directly from the scratch area"
+        (not $ "push [rax+" `T.isInfixOf` mainSection)
 
 indirectFunctionLateStackArgCallOrderTest :: Test
 indirectFunctionLateStackArgCallOrderTest = TestLabel "Asm.Output.indirect-function-late-stack-arg-call-order" $ TestCase $ do
@@ -3021,6 +3102,7 @@ test = TestLabel "Asm.Output" $
         , globalInitializerNestedNullPointerCastTest
         , globalInitializerFunctionNullPointerCastTest
         , globalInitializerWideCastTruncationTest
+        , stringLiteralByteEncodingTest
         , normalizeAsmInputPreservesOperatorTypesTest
         , functionCallRefinementRevalidationTest
         , completedStructParamRevalidationTest
@@ -3083,6 +3165,7 @@ test = TestLabel "Asm.Output" $
         , blockScopeExternObjectShadowsOuterLocalAsmTest
         , blockScopeExternObjectShadowsEnumeratorAsmTest
         , blockScopeExternFunctionShadowsEnumeratorAsmTest
+        , blockScopeOrdinaryFunctionPrototypeAsmTest
         , blockScopeExternStaticFunctionAsmTest
         , blockScopeExternStaticObjectAsmTest
         , indirectBoolFunctionPointerCallNormalizationTest
@@ -3095,6 +3178,7 @@ test = TestLabel "Asm.Output" $
         , indirectOldStyleBoolFunctionPointerPromotionConflictTest
         , indirectFunctionPointerArgAlignmentTest
         , directFunctionStackArgAlignmentTest
+        , directFunctionMultipleStackArgRestoreTest
         , directFunctionLateStackArgCallOrderTest
         , stackPassedParameterSpillTest
         , stackPassedBoolParameterSpillTest
@@ -3122,6 +3206,7 @@ test = TestLabel "Asm.Output" $
         , incompleteWarningSuppressionFlushesRetainedPromptPrefixTest
         , incompleteWarningSuppressionKeepsLocatedWarningPrefixBufferedTest
         , indirectFunctionPointerStackArgAlignmentTest
+        , indirectFunctionMultipleStackArgRestoreTest
         , indirectFunctionLateStackArgCallOrderTest
         , objectPointerGlobalAddressMismatchRejectedTest
         , functionPointerGlobalObjectAddressRejectedTest

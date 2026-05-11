@@ -4,15 +4,19 @@ module Tests.ComponentsTests.Parser.Combinators (
 ) where
 import           Control.Monad                               (void)
 import           Control.Monad.Trans.State.Lazy              (runStateT)
-import           Data.Char                                   (chr)
+import qualified Data.ByteString                             as B
+import           Data.Char                                   (chr, ord)
 import           Data.Either                                 (isLeft, isRight)
 import           Data.Functor.Identity                       (runIdentity)
+import           Data.List                                   (isPrefixOf,
+                                                              isSuffixOf)
 import qualified Data.Map                                    as MP
 import           Data.Maybe                                  (fromMaybe,
                                                               listToMaybe,
                                                               mapMaybe)
 import qualified Data.Sequence                               as SQ
 import qualified Data.Text                                   as T
+import qualified Data.Text.Encoding                          as TE
 import           Data.Void                                   (Void)
 import qualified Htcc.CRules                                 as CR
 import qualified Htcc.CRules.Types                           as CT
@@ -42,6 +46,7 @@ import qualified Text.Parsec.Pos                             as PP
 type TestParser = M.Parsec Void T.Text
 
 charLiteralTest,
+    errorBundlePrettyTest,
     stringLiteralTest,
     hexadecimalTest,
     octalTest,
@@ -55,48 +60,128 @@ charLiteralTest = TestLabel "Parser.Combinators.Core.charLiteral" $
             TestList [
                 TestLabel "valid characters" $ TestList [
                     (show x <> " == " <> show x) ~:
-                        M.runParser charLiteral' "" (T.singleton '\'' <> T.singleton x <> T.singleton '\'') ~?= Right x
+                        M.runParser charLiteral' "" (T.singleton '\'' <> T.singleton x <> T.singleton '\'') ~?= Right (ord x)
                             | x <- charSets
+                ]
+              , TestLabel "multi-character constants" $ TestList [
+                    "\'ab\' == 0x6162" ~:
+                        M.runParser charLiteral' "" "\'ab\'" ~?= Right 0x6162
+                  , "\'abc\' == 0x616263" ~:
+                        M.runParser charLiteral' "" "\'abc\'" ~?= Right 0x616263
+                  , "\'abcd\' == 0x61626364" ~:
+                        M.runParser charLiteral' "" "\'abcd\'" ~?= Right 0x61626364
+                  , "\'\\x7f\\x7f\\x7f\\x7f\' == 0x7f7f7f7f" ~:
+                        M.runParser charLiteral' "" "'\\x7f\\x7f\\x7f\\x7f'" ~?= Right 0x7f7f7f7f
+                  , "\'\\xff\' == 0xff" ~:
+                        M.runParser charLiteral' "" "'\\xff'" ~?= Right 0xff
+                  , "\'\\x000\' == 0" ~:
+                        M.runParser charLiteral' "" "'\\x000'" ~?= Right 0
+                  , "\'\\x0ff\' == 0xff" ~:
+                        M.runParser charLiteral' "" "'\\x0ff'" ~?= Right 0xff
+                  , "\'\\\'\' == 0x27" ~:
+                        M.runParser charLiteral' "" "'\\''" ~?= Right (ord '\'')
+                  , "\'\\\\\' == 0x5c" ~:
+                        M.runParser charLiteral' "" "'\\\\'" ~?= Right (ord '\\')
+                  , "\'\\n\' == 0x0a" ~:
+                        M.runParser charLiteral' "" "'\\n'" ~?= Right (ord '\n')
+                  , "\'\\r\' == 0x0d" ~:
+                        M.runParser charLiteral' "" "'\\r'" ~?= Right (ord '\r')
                 ]
               , TestLabel "partial characters" $ TestList [
                     "\'a\'b == a" ~:
-                        M.runParser charLiteral' "" "\'a\'b" ~?= Right 'a'
+                        M.runParser charLiteral' "" "\'a\'b" ~?= Right (ord 'a')
                   , "\'!\'b == !" ~:
-                        M.runParser charLiteral' "" "\'!\'b" ~?= Right '!'
+                        M.runParser charLiteral' "" "\'!\'b" ~?= Right (ord '!')
                 ]
             ]
       , TestLabel "Parser.Combinators.Core.charLiteral fail patterns" $
             TestList [
                 "ab" ~: isLeft (M.runParser charLiteral' "" "ab") ~?= True
               , "123" ~: isLeft (M.runParser charLiteral' "" "123") ~?= True
+              , "\'\'" ~: isLeft (M.runParser charLiteral' "" "\'\'") ~?= True
+              , "\'\'\'" ~: isLeft (M.runParser charLiteral' "" "\'\'\'") ~?= True
+              , "raw newline" ~: isLeft (M.runParser charLiteral' "" "\'a\n\'") ~?= True
               , "\'a" ~: isLeft (M.runParser charLiteral' "" "\'a") ~?= True
+              , "\'\\x100\'" ~: isLeft (M.runParser charLiteral' "" "'\\x100'") ~?= True
+              , "\'\\x0000001\'" ~: isLeft (M.runParser charLiteral' "" "'\\x0000001'") ~?= True
+              , "oversized hex escape fails early" ~:
+                    isLeft (M.runParser charLiteral' "" $ T.pack ("'\\x" <> replicate 1000 '1' <> "'")) ~?= True
+              , "\'abcde\'" ~: isLeft (M.runParser charLiteral' "" "\'abcde\'") ~?= True
             ]
     ]
     where
-        charLiteral' = charLiteral :: TestParser Char
+        charLiteral' = charLiteral :: TestParser Int
         charSets =
             ['A'..'Z']
             <> ['a'..'z']
             <> ['0'..'9']
-            <> "!\"#%&\'()*+,-./:;<=>?[]^_{|}~\a\b\n\r\f\t\v\0"
+            <> "!\"#%&()*+,-./:;<=>?[]^_{|}~\a\b\f\t\v\0"
             <> [chr 27]
 
 stringLiteralTest = TestLabel "Parser.Combinators.Core.stringLiteral" $
     TestList [
         TestLabel "Parser.Combinators.Core.stringLiteral success patterns" $
             TestList [
-                "\"abc\" == abc" ~: M.runParser stringLiteral' "" "\"abc\"" ~?= Right "abc\0"
-              , "\"012\" == 012" ~: M.runParser stringLiteral' "" "\"012\"" ~?= Right "012\0"
-              , "\"012\"3 == 012" ~: M.runParser stringLiteral' "" "\"012\"3" ~?= Right "012\0"
+                "\"abc\" == abc" ~: M.runParser stringLiteral' "" "\"abc\"" ~?= Right (bytes "abc\0")
+              , "\"012\" == 012" ~: M.runParser stringLiteral' "" "\"012\"" ~?= Right (bytes "012\0")
+              , "\"012\"3 == 012" ~: M.runParser stringLiteral' "" "\"012\"3" ~?= Right (bytes "012\0")
+              , "\"\\xff\" == 0xff" ~: M.runParser stringLiteral' "" "\"\\xff\"" ~?= Right (B.pack [0xff, 0])
+              , "\"\\x000\" == 0" ~: M.runParser stringLiteral' "" "\"\\x000\"" ~?= Right (B.pack [0, 0])
+              , "\"\\x0ff\" == 0xff" ~: M.runParser stringLiteral' "" "\"\\x0ff\"" ~?= Right (B.pack [0xff, 0])
+              , "\"é\" keeps raw UTF-8 bytes" ~:
+                    M.runParser stringLiteral' "" "\"é\"" ~?= Right (TE.encodeUtf8 "é" <> B.singleton 0)
+              , "\"あ\" keeps raw UTF-8 bytes" ~:
+                    M.runParser stringLiteral' "" "\"あ\"" ~?= Right (TE.encodeUtf8 "あ" <> B.singleton 0)
             ]
       , TestLabel "Parser.Combinators.Core.stringLiteral fail patterns" $
             TestList [
                 "abc" ~: isLeft (M.runParser stringLiteral' "" "abc") ~?= True
               , "\"abc" ~: isLeft (M.runParser stringLiteral' "" "\"abc") ~?= True
+              , "\"\\x100\"" ~: isLeft (M.runParser stringLiteral' "" "\"\\x100\"") ~?= True
+              , "\"\\x0000001\"" ~: isLeft (M.runParser stringLiteral' "" "\"\\x0000001\"") ~?= True
+              , "raw newline" ~: isLeft (M.runParser stringLiteral' "" "\"a\nb\"") ~?= True
+              , "raw carriage return" ~: isLeft (M.runParser stringLiteral' "" "\"a\rb\"") ~?= True
+              , "oversized hex escape fails early" ~:
+                    isLeft (M.runParser stringLiteral' "" $ T.pack ("\"\\x" <> replicate 1000 '1' <> "\"")) ~?= True
             ]
     ]
     where
-        stringLiteral' = stringLiteral :: TestParser String
+        stringLiteral' = stringLiteral :: TestParser B.ByteString
+        bytes = B.pack . map (fromIntegral . ord)
+
+errorBundlePrettyTest = TestLabel "Parser.Combinators.Core.errorBundlePretty" $
+    TestList
+        [ TestLabel "truncates source lines when the caret is near the beginning" $ TestCase $
+            assertTruncatedSourceLine
+                identifier'
+                (T.cons '!' $ T.replicate 240 "a")
+                $ \srcLn caretLn -> do
+                    assertBool "source line should keep the beginning" $ "!" `isPrefixOf` srcLn
+                    assertBool "source line should show truncation suffix" $ " ..." `isSuffixOf` srcLn
+                    assertEqual "caret should stay at the first column" "^" caretLn
+        , TestLabel "truncates source lines around a middle caret" $ TestCase $
+            assertTruncatedSourceLine
+                (identifier' <* M.eof)
+                (T.replicate 180 "a" <> "!" <> T.replicate 200 "b")
+                $ \srcLn caretLn -> do
+                    assertBool "source line should show truncation prefix" $ "... " `isPrefixOf` srcLn
+                    assertBool "source line should show truncation suffix" $ " ..." `isSuffixOf` srcLn
+                    assertBool "caret should remain inside the shown source line" $
+                        length (takeWhile (/= '^') caretLn) < length srcLn
+        ]
+    where
+        identifier' = identifier :: TestParser T.Text
+        assertTruncatedSourceLine parserUnderTest input assertSource = case M.runParser parserUnderTest "" input of
+            Left err ->
+                case lines $ show err of
+                    _loc : srcLn : caretLn : _ -> do
+                        assertBool "source line should be capped" $ length srcLn <= 160
+                        assertBool "caret line should contain a caret" $ '^' `elem` caretLn
+                        assertSource srcLn caretLn
+                    _ ->
+                        assertFailure "expected pretty error with source and caret lines"
+            Right _ ->
+                assertFailure "expected parse failure"
 
 hexadecimalTest = TestLabel "Parser.Combinators.Core.hexadecimal" $
     TestList [
@@ -143,6 +228,7 @@ naturalTest = TestLabel "Parser.Combinators.Core.natural" $
                 "10 == 10" ~: M.runParser natural' "" "10" ~?= Right 10
               , "0010 == 0o10" ~: M.runParser natural' "" "0010" ~?= Right 0o10
               , "0x1 == 0x1" ~: M.runParser natural' "" "0x1" ~?= Right 0x1
+              , "0b101 == 5" ~: M.runParser natural' "" "0b101" ~?= Right 5
               , "0x == 0" ~: M.runParser natural' "" "0x" ~?= Right 0
               , "0xz == 0" ~: M.runParser natural' "" "0xz" ~?= Right 0
               , "00x0 == 0" ~: M.runParser natural' "" "00x0" ~?= Right 0
@@ -150,6 +236,8 @@ naturalTest = TestLabel "Parser.Combinators.Core.natural" $
       , TestLabel "Parser.Combinators.Core.natural fail patterns" $
             TestList [
                 "hoge" ~: isLeft (M.runParser natural' "" "hoge") ~?= True
+              , "binary literal over digit limit" ~:
+                    isLeft (M.runParser (natural' <* M.eof) "" ("0b" <> T.replicate 129 "1")) ~?= True
             ]
     ]
     where
@@ -168,12 +256,14 @@ integerTest = TestLabel "Parser.Combinators.Core.integer" $
               , "+10 == 10" ~: M.runParser integer' "" "+10" ~?= Right 10
               , "+0010 == 0o10" ~: M.runParser integer' "" "+0010" ~?= Right 0o10
               , "+0x1 == 0x1" ~: M.runParser integer' "" "+0x1" ~?= Right 0x1
+              , "+0b101 == 5" ~: M.runParser integer' "" "+0b101" ~?= Right 5
               , "+0x == 0" ~: M.runParser integer' "" "+0x" ~?= Right 0
               , "+0xz == 0" ~: M.runParser integer' "" "+0xz" ~?= Right 0
               , "+00x0 == 0" ~: M.runParser integer' "" "+00x0" ~?= Right 0
               , "-10 == -10" ~: M.runParser integer' "" "-10" ~?= Right (-10)
               , "-0010 == -0o10" ~: M.runParser integer' "" "-0010" ~?= Right (-0o10)
               , "-0x1 == -0x1" ~: M.runParser integer' "" "-0x1" ~?= Right (-0x1)
+              , "-0b101 == -5" ~: M.runParser integer' "" "-0b101" ~?= Right (-5)
               , "-0x == 0" ~: M.runParser integer' "" "-0x" ~?= Right 0
               , "-0xz == 0" ~: M.runParser integer' "" "-0xz" ~?= Right 0
               , "-00x0 == 0" ~: M.runParser integer' "" "-00x0" ~?= Right 0
@@ -2383,6 +2473,26 @@ declarationSpecifierTest = TestLabel "Parser.Program.declaration-specifier" $
             isRight
                 (parseProgram "extern int puts(); int main(void) { return 0; }")
                 ~?= True
+        , "accepts ignored include directives" ~:
+            isRight
+                (parseProgram "#include <stdio.h>\nint main(void) { return 0; }")
+                ~?= True
+        , "accepts long ignored include directives" ~:
+            isRight
+                (parseProgram $ "#include <" <> T.replicate 1000 "a" <> ">\nint main(void) { return 0; }")
+                ~?= True
+        , "accepts whitespace-prefixed ignored include directives" ~:
+            isRight
+                (parseProgram "  #include <stdio.h>\nint main(void) { return 0; }")
+                ~?= True
+        , "accepts whitespace-prefixed ignored include directives after code" ~:
+            isRight
+                (parseProgram "int x;\n  #include <stdio.h>\nint main(void) { return 0; }")
+                ~?= True
+        , "rejects include directives outside preprocessing-line position" ~:
+            isLeft
+                (parseProgram "int main(void) { return 0; #include <stdio.h>\n}")
+                ~?= True
         , "accepts extern declarations when the storage-class follows the type specifier" ~:
             isRight
                 (parseProgram "int extern x; int main(void) { return x; }")
@@ -2402,6 +2512,29 @@ declarationSpecifierTest = TestLabel "Parser.Program.declaration-specifier" $
         , "does not leak block-scope extern function declarations" ~:
             hasFunctionBinding "foo" "int main(void) { extern int foo(void); return 0; }"
                 ~?= Right False
+        , "accepts block-scope function prototypes without registering local function objects" ~:
+            isRight
+                (parseProgram "int main(void) { int foo(void); return foo(); }")
+                ~?= True
+        , "does not leak block-scope ordinary function declarations" ~:
+            hasFunctionBinding "foo" "int main(void) { int foo(void); return foo(); }"
+                ~?= Right False
+        , "accepts block-scope auto object declarations" ~:
+            isRight
+                (parseProgram "int main(void) { auto int x; x = 0; return x; }")
+                ~?= True
+        , "rejects block-scope auto function declarations" ~:
+            isLeft
+                (parseProgram "int main(void) { auto int foo(void); return 0; }")
+                ~?= True
+        , "rejects block-scope static function declarations" ~:
+            isLeft
+                (parseProgram "int main(void) { static int foo(void); return 0; }")
+                ~?= True
+        , "rejects block-scope register function declarations" ~:
+            isLeft
+                (parseProgram "int main(void) { register int foo(void); return 0; }")
+                ~?= True
         , "keeps extern object declarations as declaration-only globals" ~:
             inferGlobalInitWith "x" "extern int x; int main(void) { return 0; }"
                 ~?= Right PV.GVarInitWithExternDecl
@@ -2704,6 +2837,7 @@ test :: Test
 test = TestLabel "Parser.Combinators.Core" $
     TestList [
         charLiteralTest
+      , errorBundlePrettyTest
       , stringLiteralTest
       , hexadecimalTest
       , octalTest

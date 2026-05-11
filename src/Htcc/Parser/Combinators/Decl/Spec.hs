@@ -62,6 +62,7 @@ data DeclStorage
     = OrdinaryDecl
     | TypedefDecl
     | ExternDecl
+    | AutoDecl
     deriving (Eq, Show)
 
 declspec',
@@ -78,10 +79,17 @@ declarationSpec =
             ty <- declspecNoStorage
             pure (storage, ty)
 
-        ordinaryWithLeadingStorage = do
-            void $ M.lookAhead $ M.choice [kStatic, kRegister, kAuto]
-            ty <- declspec
-            pure (OrdinaryDecl, ty)
+        ordinaryWithLeadingStorage =
+            explicitAuto <|> explicitStaticOrRegister
+            where
+                explicitAuto = do
+                    void kAuto
+                    ty <- declspecNoStorage
+                    pure (AutoDecl, ty)
+                explicitStaticOrRegister = do
+                    void $ M.lookAhead $ M.choice [kStatic, kRegister]
+                    ty <- declspec
+                    pure (OrdinaryDecl, ty)
 
         ordinaryOrTrailingExternOrTypedef = do
             ty <- declspecNoStorage

@@ -150,8 +150,31 @@ errorBundlePretty bundle =
              in if lineNo < 0
                     then Nothing
                     else case drop lineNo inputLines of
-                        srcLn : _ -> Just (T.unpack srcLn, fromIntegral $ PP.sourceColumn pos)
-                        []        -> Nothing
+                            srcLn : _ -> Just $ truncateSourceLine srcLn (fromIntegral $ PP.sourceColumn pos)
+                            []        -> Nothing
+
+        truncateSourceLine srcLine caretCol
+            | T.length srcLine <= maxSourceLineWidth =
+                (T.unpack srcLine, caretCol)
+            | caretCol <= edgeContextWidth =
+                (T.unpack (T.take (maxSourceLineWidth - suffixWidth) srcLine) <> truncationSuffix, caretCol)
+            | otherwise =
+                let startCol = max 1 (caretCol - innerContextWidth)
+                    shown = T.take (maxSourceLineWidth - prefixWidth - suffixWidth) $ T.drop (pred startCol) srcLine
+                    suffix =
+                        if T.length srcLine > pred startCol + T.length shown
+                            then truncationSuffix
+                            else ""
+                    adjustedCaretCol = prefixWidth + caretCol - startCol + 1
+                 in (truncationPrefix <> T.unpack shown <> suffix, adjustedCaretCol)
+            where
+                maxSourceLineWidth = 160
+                edgeContextWidth = 120
+                innerContextWidth = 80
+                truncationPrefix = "... "
+                truncationSuffix = " ..."
+                prefixWidth = length truncationPrefix
+                suffixWidth = length truncationSuffix
 
 try :: ParsecT e T.Text m a -> ParsecT e T.Text m a
 try = ParsecT . P.try . unParsecT

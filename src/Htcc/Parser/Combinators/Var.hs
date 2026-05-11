@@ -23,7 +23,7 @@ import           Control.Monad.Trans.Reader             (ReaderT (..), asks,
 import           Control.Monad.Trans.State              (get, gets, put)
 import           Data.Bits                              (Bits)
 import           Data.Bool                              (bool)
-import           Data.Char                              (ord)
+import qualified Data.ByteString                        as B
 import           Data.Foldable                          (toList)
 import           Data.Functor                           ((<&>))
 import           Data.List                              (sortBy)
@@ -131,8 +131,8 @@ inferredArrayBoundElementType ty = fromMaybe (arrayElementType ty) logicalElemTy
             (\elemTy -> CT.mapTypeKind (const $ rebuild elemTy) ty)
                 <$> CT.fromIncompleteArray baseTy
 
-fixedCharArrayStringFits :: Integral i => i -> String -> Bool
-fixedCharArrayStringFits len s = toInteger (length s) <= toInteger len + 1
+fixedCharArrayStringFits :: Integral i => i -> B.ByteString -> Bool
+fixedCharArrayStringFits len s = toInteger (B.length s) <= toInteger len + 1
 
 isCharArrayType :: Ord i => CT.StorageClass i -> Bool
 isCharArrayType ty =
@@ -181,7 +181,7 @@ inferArrayBoundFromInitializer' ty = do
         bracedStringInitializerLength
             | isCharArrayType ty = do
                 lift $ lookInitializerStringFor ty
-                len <- length <$> lift stringLiteral
+                len <- B.length <$> lift stringLiteral
                 void $ lift $ M.option () (void comma)
                 void $ lift rbrace
                 pure $ InferArrayBoundLength len
@@ -517,7 +517,7 @@ initializerString :: (Integral i, Bits i, Read i, Show i, Ord i)
     -> DesignatorParser i (SQ.Seq (ATree i))
 initializerString allowStructBraceElision ty ai desg
     | CT.isIncompleteArray ty = do
-        len <- lift $ bracket M.getParserState M.setParserState (const $ length <$> stringLiteral)
+        len <- lift $ bracket M.getParserState M.setParserState (const $ B.length <$> stringLiteral)
         newt <- registerInferredArrayBound ty $ InferArrayBoundLength len
         desgInit allowStructBraceElision newt ai desg
     | otherwise = case CT.toTypeKind ty of
@@ -525,11 +525,11 @@ initializerString allowStructBraceElision ty ai desg
             s <- lift stringLiteral
             unless (fixedCharArrayStringFits n s) $
                 failCommitted "initializer-string for array of chars is too long"
-            let s' = s <> replicate (fromIntegral n - pred (length s)) (toEnum 0)
+            let s' = B.unpack $ s <> B.replicate (fromIntegral n - pred (B.length s)) 0
                 inds = sortBy (flip (.) reverse . compare . reverse) $ CT.accessibleIndices $ CT.toTypeKind ty
             fmap ((ai SQ.><) . SQ.fromList)
                 $ mapM (uncurry desgNode)
-                $ zipWith (flip (.) ((SQ.>< desg) . SQ.fromList) . (,) . atNumLit . fromIntegral . ord) s' inds
+                $ zipWith (flip (.) ((SQ.>< desg) . SQ.fromList) . (,) . atNumLit . fromIntegral) s' inds
         _ -> fail "internal compiler error"
 
 bracedInitializerString :: (Integral i, Bits i, Read i, Show i, Ord i)

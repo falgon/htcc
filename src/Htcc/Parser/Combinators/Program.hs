@@ -34,7 +34,6 @@ import           Data.Bits                                   (Bits, bit,
                                                               complement,
                                                               shiftL, shiftR,
                                                               xor, (.&.), (.|.))
-import           Data.Char                                   (ord)
 import           Data.Functor                                (($>), (<&>))
 import           Data.List                                   (find, sortBy)
 import           Data.Maybe                                  (fromJust,
@@ -1557,11 +1556,14 @@ stmt = choice
                                     requireNonVoidObjectType "variable declared void" ty'
                                         *> externDecl ty' ident
                             OrdinaryDecl ->
-                                requireNonVoidObjectType "variable declared void" ty'
-                                    *> M.choice
-                                        [ nonInit ty' ident
-                                        , withInit ty ty' ident
-                                        ]
+                                if isFunctionType ty'
+                                    then blockScopeFunctionDecl ty' ident
+                                    else
+                                        ordinaryObjectDecl ty ty' ident
+                            AutoDecl ->
+                                if isFunctionType ty'
+                                    then fail "invalid storage-class specifier for block-scope function declaration"
+                                    else ordinaryObjectDecl ty ty' ident
 
                 nonInit ty ident =
                     requireCompleteObjectType "declaration of variable with incomplete type" ty
@@ -1571,6 +1573,23 @@ stmt = choice
                     resolvedTy <-
                         requireInitializedObjectType "declaration of variable with incomplete type" baseTy ty
                     equal *> varInit assign resolvedTy ident <* semi
+                ordinaryObjectDecl baseTy ty ident =
+                    requireNonVoidObjectType "variable declared void" ty
+                        *> M.choice
+                            [ nonInit ty ident
+                            , withInit baseTy ty ident
+                            ]
+                blockScopeFunctionDecl ty ident = do
+                    rejectInvalidBlockScopeFunctionStorage ty
+                    resolvedTy <- gets (`normalizeCompletedStorageClass` ty)
+                    semi *> registerFunc False False resolvedTy ident $> ATEmpty
+                rejectInvalidBlockScopeFunctionStorage = \case
+                    CT.SCStatic _ ->
+                        fail "invalid storage-class specifier for block-scope function declaration"
+                    CT.SCRegister _ ->
+                        fail "invalid storage-class specifier for block-scope function declaration"
+                    _ ->
+                        pure ()
                 typedefDecl ty ident = do
                     resolvedTy <- requireTypedefDeclType "typedef declaration has invalid array element type" ty
                     semi *> registerTypedef resolvedTy ident $> ATEmpty
@@ -1925,7 +1944,7 @@ unary = choice
 
 factor = choice
     [ atNumLit <$> natural
-    , atNumLit . fromIntegral . ord <$> charLiteral
+    , atNumLit <$> charLiteral
     , sizeof
     , alignof
     , strLiteral

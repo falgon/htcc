@@ -474,10 +474,13 @@ prepareCallArgs args invoke = do
             genStmt expr
             IT.pop rdx
             IT.mov (slotRef base idx) rdx
+        pushSavedStackArg base idx = do
+            IT.mov rdx (slotRef base idx)
+            IT.push rdx
         restoreArgs base = do
             IT.mov rax base
+            mapM_ (pushSavedStackArg rax) $ reverse [nReg .. pred nArgs]
             zipWithM_ (\reg idx -> IT.mov reg (slotRef rax idx)) (reverse $ popRegs nReg) [0 .. pred nReg]
-            mapM_ (IT.push . slotRef rax) $ reverse [nReg .. pred nArgs]
     if nArgs == 0
         then callAligned 0 (pure ()) invoke
         else do
@@ -506,11 +509,14 @@ prepareIndirectCall callee args invoke = do
             genStmt expr
             IT.pop rdx
             IT.mov (slotRef base idx) rdx
+        pushSavedStackArg base idx = do
+            IT.mov rdx (slotRef base idx)
+            IT.push rdx
         restoreArgs base = do
             IT.mov rax base
-            zipWithM_ (\reg idx -> IT.mov reg (slotRef rax idx)) (reverse $ popRegs nReg) [0 .. pred nReg]
             IT.mov (rn 11) (slotRef rax calleeSlot)
-            mapM_ (IT.push . slotRef rax) $ reverse [nReg .. pred nArgs]
+            mapM_ (pushSavedStackArg rax) $ reverse [nReg .. pred nArgs]
+            zipWithM_ (\reg idx -> IT.mov reg (slotRef rax idx)) (reverse $ popRegs nReg) [0 .. pred nReg]
     IT.push rbx
     IT.sub rsp (8 * nSlots)
     IT.mov rbx rsp

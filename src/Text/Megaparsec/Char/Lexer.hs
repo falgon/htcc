@@ -13,7 +13,7 @@ module Text.Megaparsec.Char.Lexer (
 
 import           Control.Applicative  ((<|>))
 import           Control.Monad        (void)
-import           Data.Char            (chr, isHexDigit, isOctDigit)
+import           Data.Char            (chr, digitToInt, isHexDigit, isOctDigit)
 import qualified Data.Text            as T
 import           Numeric              (readHex, readOct)
 import qualified Text.Parsec          as P
@@ -27,11 +27,15 @@ space sp lineComment blockComment = ParsecT $
 
 skipLineComment :: Monad m => T.Text -> ParsecT e T.Text m ()
 skipLineComment prefix = ParsecT $
-    void $ P.try (unParsecT $ MC.string prefix) *> P.many (P.noneOf "\n")
+    P.try (unParsecT $ MC.string prefix) *> P.skipMany (P.noneOf "\n")
 
 skipBlockComment :: Monad m => T.Text -> T.Text -> ParsecT e T.Text m ()
-skipBlockComment start end = ParsecT $
-    void $ P.try (unParsecT $ MC.string start) *> P.manyTill P.anyChar (P.try $ unParsecT $ MC.string end)
+skipBlockComment start end = ParsecT $ do
+    void $ P.try $ unParsecT $ MC.string start
+    P.skipMany $ P.try $ P.notFollowedBy (P.try endParser) *> P.anyChar
+    void $ P.try endParser
+    where
+        endParser = unParsecT $ MC.string end
 
 lexeme :: Monad m => ParsecT e T.Text m () -> ParsecT e T.Text m a -> ParsecT e T.Text m a
 lexeme sc parser = ParsecT $ unParsecT parser <* unParsecT sc
@@ -66,27 +70,37 @@ charLiteral = ParsecT $ escaped <|> P.noneOf ['\\']
             ]
 
         hexEscape = do
-            digits <- P.char 'x' *> P.many1 (P.satisfy isHexDigit)
-            maybe invalidCodePoint pure $ decode readHex digits
+            void $ P.char 'x'
+            digits <- hexDigits
+            byteFromDigits 16 digits
 
         octalEscape = do
             digits <- octalDigits
-            maybe invalidCodePoint pure $ decode readOct digits
+            byteFromDigits 8 digits
+
+        hexDigits = do
+            first <- P.satisfy isHexDigit
+            if first == '0'
+                then do
+                    P.skipMany $ P.char '0'
+                    P.option "0" $ significantHexDigits =<< P.satisfy isHexDigit
+                else significantHexDigits first
+
+        significantHexDigits first = do
+            second <- P.option [] ((: []) <$> P.satisfy isHexDigit)
+            P.optionMaybe (P.lookAhead $ P.satisfy isHexDigit) >>= \next ->
+                case next of
+                    Just _  -> invalidCodePoint
+                    Nothing -> pure $ first : second
 
         octalDigits =
             (:) <$> P.satisfy isOctDigit <*> P.option [] (P.try $ P.count 2 (P.satisfy isOctDigit) <|> P.count 1 (P.satisfy isOctDigit))
 
-        decode :: (String -> [(Integer, String)]) -> String -> Maybe Char
-        decode reader digits = safeChr . fst =<< listToMaybe (reader digits)
-
-        listToMaybe []      = Nothing
-        listToMaybe (x : _) = Just x
-
-        safeChr n
-            | n < 0 = Nothing
-            | n > fromIntegral (fromEnum (maxBound :: Char)) = Nothing
-            | 0xD800 <= n && n <= 0xDFFF = Nothing
-            | otherwise = Just (chr $ fromIntegral n)
+        byteFromDigits base digits =
+            let n = foldl (\acc c -> acc * base + digitToInt c) 0 digits
+             in if n <= 0xff
+                    then pure $ chr n
+                    else invalidCodePoint
 
         invalidEscape =
             P.anyChar >>= \c -> fail ("invalid escape sequence \\" <> [c])
