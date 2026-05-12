@@ -1,18 +1,30 @@
 module Main (main) where
 
-import           Criterion.Main  (bench, bgroup, defaultConfig, defaultMainWith,
-                                  nf, whnf)
-import           Criterion.Types (reportFile)
+import           Criterion.Main                                  (bench, bgroup,
+                                                                  defaultConfig,
+                                                                  defaultMainWith,
+                                                                  nf, whnf)
+import           Criterion.Types                                 (reportFile)
 
-import           Data.Either     (fromRight)
-import qualified Data.Text       as T
+import qualified Data.Text                                       as T
+import           Data.Void                                       (Void)
 
-import           Htcc.Parser     (parse)
-import qualified Htcc.Tokenizer  as HT
-import           Htcc.Utils      (tshow)
+import qualified Htcc.MegaparsecCompat                           as M
+import           Htcc.Parser.AST                                 (ASTs)
+import           Htcc.Parser.Combinators                         (parser,
+                                                                  runParser)
+import           Htcc.Parser.ConstructionData.Core               (Warnings)
+import qualified Htcc.Parser.ConstructionData.Scope.Function     as PF
+import           Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
+import qualified Htcc.Parser.ConstructionData.Scope.Var          as PV
+import qualified Htcc.Tokenizer                                  as HT
+import           Htcc.Utils                                      (tshow)
 
-tknize :: T.Text -> Either (HT.TokenLCNums Int, T.Text) [HT.TokenLC Int]
+tknize :: T.Text -> Either (ASTError Int) [HT.TokenLC Int]
 tknize = HT.tokenize
+
+parseProgram :: T.Text -> Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, PV.GlobalVars Integer, PV.Literals Integer, PF.Functions Integer)
+parseProgram = runParser parser ""
 
 data CCodes =
     ReturningZero
@@ -43,8 +55,8 @@ main = defaultMainWith (defaultConfig { reportFile = Just "./bench_report.html" 
         , bench "Calculate fibonacci" $ nf tknize $ tshow CalculateFibonacci
         ]
     , bgroup "parse tokens (whnf)"
-        [ bench "ReturningZero" $ whnf parse $ fromRight [] $ tknize $ tshow ReturningZero
-        , bench "StrLiteral" $ whnf parse $ fromRight [] $ tknize $ tshow StrLiteral
-        , bench "Calculate fibonacci" $ whnf parse $ fromRight [] $ tknize $ tshow CalculateFibonacci
+        [ bench "ReturningZero" $ whnf parseProgram $ tshow ReturningZero
+        , bench "StrLiteral" $ whnf parseProgram $ tshow StrLiteral
+        , bench "Calculate fibonacci" $ whnf parseProgram $ tshow CalculateFibonacci
         ]
     ]
