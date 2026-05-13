@@ -7401,6 +7401,9 @@ outputFileMultiInputReadFailurePreservesWarningsTest =
                 all (`T.isInfixOf` stderrOut) [firstWarning, secondWarning]
             warningsInOrder = containsTextsInOrder [firstWarning, secondWarning] stderrOut
             mentionsMissingInput = T.pack missingPath `T.isInfixOf` stderrOut
+            hasMissingInputDiagnostic = "no such file" `T.isInfixOf` T.toLower stderrOut
+            hidesCallStack = not $ "HasCallStack" `T.isInfixOf` stderrOut
+            hidesWithFile = not $ "withFile" `T.isInfixOf` stderrOut
             ok =
                 failed
                     && T.null stdoutLeak
@@ -7409,6 +7412,9 @@ outputFileMultiInputReadFailurePreservesWarningsTest =
                     && hasExpectedWarnings
                     && warningsInOrder
                     && mentionsMissingInput
+                    && hasMissingInputDiagnostic
+                    && hidesCallStack
+                    && hidesWithFile
             details = T.unlines
                 [ "target: " <> T.pack target
                 , "stdout:"
@@ -7420,6 +7426,9 @@ outputFileMultiInputReadFailurePreservesWarningsTest =
                 , "hasExpectedWarnings: " <> T.pack (show hasExpectedWarnings)
                 , "warningsInOrder: " <> T.pack (show warningsInOrder)
                 , "mentionsMissingInput: " <> T.pack (show mentionsMissingInput)
+                , "hasMissingInputDiagnostic: " <> T.pack (show hasMissingInputDiagnostic)
+                , "hidesCallStack: " <> T.pack (show hidesCallStack)
+                , "hidesWithFile: " <> T.pack (show hidesWithFile)
                 , "exitCode: " <> T.pack (show result)
                 ]
         return $ mkResult outputFileMultiInputReadFailurePreservesWarningsMsg ok details
@@ -10528,11 +10537,17 @@ visualizeAstDefaultOutputMissingInputTest = do
         let failed = exitCode (const True) False result
             hasAliasError = aliasError `T.isInfixOf` stderrOut
             mentionsInputPath = "out.svg" `T.isInfixOf` stderrOut
+            hasMissingInputDiagnostic = "no such file" `T.isInfixOf` T.toLower stderrOut
+            hidesCallStack = not $ "HasCallStack" `T.isInfixOf` stderrOut
+            hidesWithFile = not $ "withFile" `T.isInfixOf` stderrOut
             ok =
                 failed
                     && T.null stdoutLeak
                     && not inputExists
                     && mentionsInputPath
+                    && hasMissingInputDiagnostic
+                    && hidesCallStack
+                    && hidesWithFile
                     && not hasAliasError
             details = T.unlines
                 [ "targetDir: " <> T.pack targetDir
@@ -10542,6 +10557,9 @@ visualizeAstDefaultOutputMissingInputTest = do
                 , stderrOut
                 , "inputExists: " <> T.pack (show inputExists)
                 , "mentionsInputPath: " <> T.pack (show mentionsInputPath)
+                , "hasMissingInputDiagnostic: " <> T.pack (show hasMissingInputDiagnostic)
+                , "hidesCallStack: " <> T.pack (show hidesCallStack)
+                , "hidesWithFile: " <> T.pack (show hidesWithFile)
                 , "hasAliasError: " <> T.pack (show hasAliasError)
                 , "exitCode: " <> T.pack (show result)
                 ]
@@ -10776,6 +10794,9 @@ outputFileReadFailurePreservesExistingOutputTest =
         targetContents <- if targetExists then T.readFile target else pure ""
         let failed = exitCode (const True) False result
             mentionsInput = T.pack inputPath `T.isInfixOf` stderrOut
+            hasMissingInputDiagnostic = "no such file" `T.isInfixOf` T.toLower stderrOut
+            hidesCallStack = not $ "HasCallStack" `T.isInfixOf` stderrOut
+            hidesWithFile = not $ "withFile" `T.isInfixOf` stderrOut
             ok =
                 failed
                     && T.null stdoutLeak
@@ -10783,6 +10804,9 @@ outputFileReadFailurePreservesExistingOutputTest =
                     && targetContents == "stale output"
                     && not inputExists
                     && mentionsInput
+                    && hasMissingInputDiagnostic
+                    && hidesCallStack
+                    && hidesWithFile
             details = T.unlines
                 [ "target: " <> T.pack target
                 , "stdout:"
@@ -10793,6 +10817,9 @@ outputFileReadFailurePreservesExistingOutputTest =
                 , "targetUnchanged: " <> T.pack (show (targetContents == "stale output"))
                 , "inputExists: " <> T.pack (show inputExists)
                 , "mentionsInput: " <> T.pack (show mentionsInput)
+                , "hasMissingInputDiagnostic: " <> T.pack (show hasMissingInputDiagnostic)
+                , "hidesCallStack: " <> T.pack (show hidesCallStack)
+                , "hidesWithFile: " <> T.pack (show hidesWithFile)
                 , "exitCode: " <> T.pack (show result)
                 ]
         return $ mkResult outputFileReadFailurePreservesExistingOutputMsg ok details

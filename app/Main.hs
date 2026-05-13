@@ -5145,8 +5145,8 @@ main = do
         readMergedInputRaw parsedInputs (fname:fnames) =
             catchIOError
                 ( do
-                    (inputName, txt) <- readInput fname
-                    case parseInputRawEither inputName txt of
+                    txt <- readInputContents fname
+                    case parseInputRawEither fname txt of
                         Left parseErr -> do
                             emitWarnings' $ collectedWarningsInInputOrder parsedInputs
                             hPutStr stderr (M.errorBundlePretty parseErr)
@@ -5156,7 +5156,11 @@ main = do
                                 ((warns, parsedInput) : parsedInputs)
                                 fnames
                 )
-                (\ioErr -> emitWarnings' (collectedWarningsInInputOrder parsedInputs) *> ioError ioErr)
+                (\ioErr -> do
+                    emitWarnings' $ collectedWarningsInInputOrder parsedInputs
+                    hPutStr stderr $ formatInputReadError fname ioErr
+                    exitFailure
+                )
         mergeParsedInputsEither parsedInputs =
             mergeOutputInputs $ shiftLiteralLabelsInInputs parsedInputs
         mergeVisualizableInputsEither parsedInputs =
@@ -5181,11 +5185,17 @@ main = do
                     pure parsedInput
         runParsed outputHandle (asts, gvars, _, lits, _, _) =
             runAsm outputHandle opts $ casmNormalized' asts gvars lits
+        formatInputReadError fname ioErr
+            | isDoesNotExistError ioErr = fname <> ": no such file or directory\n"
+            | otherwise = fname <> ": " <> ioeGetErrorString ioErr <> "\n"
+        readInputContents fname = withFile fname ReadMode $ \h -> do
+            txt' <- T.hGetContents h
+            _ <- evaluate $ T.foldl' (\n _ -> succ n) (0 :: Int) txt'
+            pure txt'
         readInput fname = do
-            txt <- withFile fname ReadMode $ \h -> do
-                txt' <- T.hGetContents h
-                _ <- evaluate $ T.foldl' (\n _ -> succ n) (0 :: Int) txt'
-                pure txt'
+            txt <- catchIOError
+                (readInputContents fname)
+                (\ioErr -> hPutStr stderr (formatInputReadError fname ioErr) *> exitFailure)
             pure (fname, txt)
         runVisualize fname = do
             (asts, _, _, _, _, _) <- readVisualizableInput fname
