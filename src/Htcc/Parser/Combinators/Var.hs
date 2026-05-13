@@ -101,8 +101,11 @@ withDesignatorCheckpoint p = ReaderT $ \ctx ->
             runReaderT p ctx
 
 tryDesignator :: DesignatorParser i a -> DesignatorParser i a
-tryDesignator p = ReaderT $ \ctx ->
-    M.try $ runReaderT p ctx
+tryDesignator p = ReaderT $ \ctx -> do
+    constructionData <- lift get
+    M.try $ M.withRecovery
+        (\err -> lift (put constructionData) *> M.parseError err)
+        (runReaderT p ctx)
 
 arrayElementType :: Ord i => CT.StorageClass i -> CT.StorageClass i
 arrayElementType ty = CT.mapTypeKind (const elemTy) ty
@@ -230,6 +233,7 @@ skipInitializer :: (Integral i, Bits i, Read i, Show i, Ord i)
 skipInitializer allowStructBraceElision ty = M.choice
     [ lift lookInitializerString *> void (lift stringLiteral)
     , lift lookInitializerList *> leadingBraceInitializer
+    , aggregateCopyFallback
     , braceElidedAggregateInit
     , rejectScalarFallback *> void (asks snd >>= lift >>= validateScalarInitializer ty)
     ]
@@ -237,6 +241,9 @@ skipInitializer allowStructBraceElision ty = M.choice
         lookInitializerString = lookInitializerStringFor ty
         lookInitializerList = bool M.empty (pure ()) =<< M.option False (True <$ M.lookAhead lbrace)
         leadingBraceInitializer = skipInitializerList ty
+        aggregateCopyFallback
+            | CT.isCTStruct ty = tryDesignator $ void (asks snd >>= lift >>= validateScalarInitializer ty)
+            | otherwise = M.empty
         braceElidedAggregateInit
             | allowStructBraceElision = case CT.toTypeKind ty of
                 CT.CTArray _ _ ->
@@ -665,12 +672,16 @@ desgInit :: (Integral i, Bits i, Read i, Show i, Ord i)
 desgInit allowStructBraceElision ty ai desg = M.choice
     [ lift (lookInitializerStringFor ty) *> initializerString allowStructBraceElision ty ai desg
     , lift lookInitializerList *> leadingBraceInitializer
+    , aggregateCopyFallback
     , braceElidedAggregateInit
     , rejectScalarFallback *> scalarFallback
     ]
     where
         lookInitializerList = bool M.empty (pure ()) =<< M.option False (True <$ M.lookAhead lbrace)
         leadingBraceInitializer = initializerList ty ai desg
+        aggregateCopyFallback
+            | CT.isCTStruct ty = tryDesignator scalarFallback
+            | otherwise = M.empty
         braceElidedAggregateInit
             | allowStructBraceElision = case CT.toTypeKind ty of
                 CT.CTArray _ _ ->

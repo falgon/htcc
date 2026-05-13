@@ -418,6 +418,11 @@ parseProgramAsts input =
     (\(_, asts, _, _, _) -> asts)
         <$> (runParser parser "" input :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, PV.GlobalVars Integer, PV.Literals Integer, PF.Functions Integer))
 
+parseProgramLiterals :: T.Text -> Either (M.ParseErrorBundle T.Text Void) (PV.Literals Integer)
+parseProgramLiterals input =
+    (\(_, _, _, literals, _) -> literals)
+        <$> (runParser parser "" input :: Either (M.ParseErrorBundle T.Text Void) (Warnings, ASTs Integer, PV.GlobalVars Integer, PV.Literals Integer, PF.Functions Integer))
+
 parseAssignExpr :: T.Text -> Either (M.ParseErrorBundle T.Text Void) (ATree Integer)
 parseAssignExpr =
     runInitializerParser . (spaceConsumer *>) . (<* M.eof) $ assign
@@ -650,6 +655,12 @@ structInitializerTest = TestLabel "Parser.Program.struct-initializer" $
             isLeft (parseInitializer boxTy [("y", pairTy)] "= { y, 3 };") ~?= True
         , "rejects braced nested struct copy expressions" ~:
             isLeft (parseInitializer boxTy [("y", pairTy)] "= { { y }, 3 };") ~?= True
+        , "accepts named nested struct copy expressions" ~:
+            isRight (parseProgram "struct A { int a; }; struct B { int c; struct A b; }; int main(void) { struct A st = {42}; struct B st2 = {12, st}; return st2.b.a; }") ~?= True
+        , "accepts omitted-bound arrays initialized from struct copy expressions" ~:
+            isRight (parseProgram "struct A { int a; }; int main(void) { struct A st = {42}; struct A arr[] = { st }; return arr[0].a; }") ~?= True
+        , "does not leak literals from failed speculative struct copy parsing" ~:
+            length <$> parseProgramLiterals "struct A { char text[3]; int value; }; struct B { struct A a; int tail; }; int main(void) { struct B b = { \"hi\", 7, 9 }; return b.a.value; }" ~?= Right 0
         , "rejects brace-elided array member copy expressions" ~:
             isLeft (parseInitializer arrayMemberTy [("y", CT.SCAuto intArrayTy)] "= { y, 3 };") ~?= True
         , "accepts brace-elided nested struct initializers" ~:
