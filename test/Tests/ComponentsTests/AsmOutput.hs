@@ -62,6 +62,7 @@ import           System.Posix.Files                          (createLink,
                                                               fileMode,
                                                               getFileStatus,
                                                               intersectFileModes,
+                                                              otherWriteMode,
                                                               ownerExecuteMode,
                                                               ownerReadMode,
                                                               ownerWriteMode,
@@ -1195,6 +1196,53 @@ unreadableStagedFallbackReplacementTest =
             replacedOutput <- T.readFile targetPath
             assertEqual
                 "fallback replacement should temporarily restore owner read on unreadable staged outputs"
+                existingMode
+                (intersectFileModes replacedMode 0o777)
+            assertEqual "fallback replacement should copy the staged output" replacementOutput replacedOutput
+    where
+        ignoreIOException = flip catchIOError $ const $ pure ()
+
+otherWritableFallbackReplacementSkipsPreemptiveChmodTest :: Test
+otherWritableFallbackReplacementSkipsPreemptiveChmodTest =
+    TestLabel "Asm.Output.other-writable-fallback-replacement-skips-preemptive-chmod" $ TestCase $ do
+        tmpDir <- getTemporaryDirectory
+        (targetPath, targetHandle) <- openTempFile tmpDir "htcc-output-target"
+        (stagedPath, stagedHandle) <- openTempFile tmpDir "htcc-output-staged"
+        let cleanup =
+                ignoreIOException (hClose targetHandle)
+                    >> ignoreIOException (hClose stagedHandle)
+                    >> ignoreIOException (removeFile targetPath)
+                    >> ignoreIOException (removeFile stagedPath)
+            existingMode = otherWriteMode
+            stagedMode = ownerReadMode
+            replacementOutput = "replacement output\n"
+            copyReplacementOutput src dst = do
+                modeBeforeCopy <- fileMode <$> getFileStatus dst
+                assertEqual
+                    "fallback replacement should attempt copy before adding owner write"
+                    existingMode
+                    (intersectFileModes modeBeforeCopy 0o777)
+                setFileMode dst $ modeBeforeCopy `unionFileModes` ownerWriteMode
+                B.readFile src >>= B.writeFile dst
+        flip finally cleanup $ do
+            hClose targetHandle
+            hClose stagedHandle
+            T.writeFile targetPath "stale output\n"
+            setFileMode targetPath existingMode
+            T.writeFile stagedPath replacementOutput
+            setFileMode stagedPath stagedMode
+            replaceExistingOutputFromPathWith
+                copyReplacementOutput
+                PreserveReplacementOutputMode
+                targetPath
+                existingMode
+                stagedMode
+                stagedPath
+            replacedMode <- fileMode <$> getFileStatus targetPath
+            setFileMode targetPath $ replacedMode `unionFileModes` ownerReadMode
+            replacedOutput <- T.readFile targetPath
+            assertEqual
+                "fallback replacement should restore the original mode"
                 existingMode
                 (intersectFileModes replacedMode 0o777)
             assertEqual "fallback replacement should copy the staged output" replacementOutput replacedOutput
@@ -3187,6 +3235,7 @@ test = TestLabel "Asm.Output" $
         , writeOnlyFallbackReplacementRestoreTest
         , writeOnlyExecutableFallbackReplacementRestoreTest
         , unreadableStagedFallbackReplacementTest
+        , otherWritableFallbackReplacementSkipsPreemptiveChmodTest
         , rollbackFailureSurfacedTest
         , executableOnlyFallbackReplacementPreservesModeTest
         , replacementExecutableBitsIgnoreReadBitsTest

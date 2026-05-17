@@ -190,9 +190,12 @@ withReadableSource path originalMode action
 withWritableDestination :: FilePath -> FileMode -> IO a -> IO a
 withWritableDestination path originalMode action
     | intersectFileModes originalMode ownerWriteMode /= 0 = action
-    | otherwise = do
-        setFileMode path writableMode
-        action `finally` setFileMode path originalMode
+    | otherwise = action `catchIOError` \ioErr ->
+        if isPermissionError ioErr
+            then do
+                setFileMode path writableMode
+                action `finally` setFileMode path originalMode
+            else ioError ioErr
     where
         writableMode = originalMode `unionFileModes` ownerWriteMode
 
