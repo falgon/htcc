@@ -1,0 +1,4 @@
+interface:
+  display_name: "HTCC Output Permission Workflow"
+  short_description: "Guide htcc output permission fixes"
+  default_prompt: "Use $htcc-output-permission-workflow to handle htcc output replacement and permission regressions safely."

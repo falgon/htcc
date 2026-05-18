@@ -1,0 +1,4 @@
+interface:
+  display_name: "HTCC Parser Regression Workflow"
+  short_description: "Fix htcc parser regressions safely"
+  default_prompt: "Use $htcc-parser-regression-workflow to fix htcc parser regressions with focused tests and malformed-input QA."

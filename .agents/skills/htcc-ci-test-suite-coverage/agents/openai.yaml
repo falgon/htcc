@@ -1,0 +1,4 @@
+interface:
+  display_name: "HTCC CI Test Suite Coverage"
+  short_description: "Keep htcc CI test suites aligned"
+  default_prompt: "Use $htcc-ci-test-suite-coverage to keep htcc CI test command lists aligned with the test runner."
