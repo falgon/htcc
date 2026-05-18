@@ -51,6 +51,7 @@ jobs:
     os: linux
     script:
     - stack test --test-arguments self
+    - stack test --test-arguments components
     - stack test --test-arguments subp
   - stage: Run compiling and executing example C codes
     os: linux

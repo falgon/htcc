@@ -50,6 +50,7 @@ jobs:
       - name: Test htcc on ${{ matrix.os }}
         run: |
           stack test --test-arguments self
+          stack test --test-arguments components
           stack test --test-arguments subp
       - name: Compile and execute example C codes on ${{ matrix.os }}
         run: |

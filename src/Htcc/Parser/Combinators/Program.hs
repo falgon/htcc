@@ -1856,7 +1856,7 @@ unary = choice
                     ]
 
                 callAcc fac = do
-                    rawParams <- lparen *> M.manyTill (M.try (assign <* comma) M.<|> assign) rparen
+                    rawParams <- callArgs
                     (callTy, formalParamTys) <- maybe
                         (fail "called object is not a function or function pointer")
                         pure
@@ -1942,6 +1942,15 @@ unary = choice
                 isPointerArithmeticNode (ATNode ATSubPtr _ _ _) = True
                 isPointerArithmeticNode _                       = False
 
+callArgs :: (Ord i, Bits i, Read i, Show i, Integral i) => Parser i [ATree i]
+callArgs =
+    lparen *> choice
+        [ [] <$ rparen
+        , (:) <$> arg <*> M.many (comma *> arg) <* rparen
+        ]
+    where
+        arg = M.notFollowedBy rparen *> assign
+
 factor = choice
     [ atNumLit <$> natural
     , atNumLit <$> charLiteral
@@ -1950,7 +1959,6 @@ factor = choice
     , strLiteral
     , identifier'
     , parensExprOrStmt
-    , ATEmpty <$ M.eof
     ]
     where
         parensExprOrStmt = do
@@ -2009,7 +2017,7 @@ factor = choice
                         M.<|> fail ("The '" <> T.unpack ident <> "' is not defined identifier")
             where
                 fnCall ident pos = do
-                    rawParams <- lparen *> M.manyTill (M.try (assign <* comma) M.<|> assign) rparen
+                    rawParams <- callArgs
                     gets (lookupFunction ident) >>= \case
                         -- TODO: set warning message
                         -- TODO: Infer the return type of a function

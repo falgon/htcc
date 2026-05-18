@@ -1791,6 +1791,16 @@ functionCallTest = TestLabel "Parser.Program.function-call" $
             assertProgramErrorContains
                 "too many arguments to function call"
                 "int zero(void) { return 0; } int main(void) { return zero(1); }"
+        , "rejects unterminated implicit function call at EOF" ~:
+            isLeft (parseProgram "int main(void) { return f(") ~?= True
+        , "rejects unterminated function call argument after comma at EOF" ~:
+            isLeft (parseProgram "int main(void) { return f(1,") ~?= True
+        , "rejects implicit function call trailing comma" ~:
+            isLeft (parseProgram "int main(void) { return f(1,); }") ~?= True
+        , "rejects declared function call trailing comma" ~:
+            isLeft (parseProgram "int inc(int x) { return x; } int main(void) { return inc(1,); }") ~?= True
+        , "rejects function-pointer call trailing comma" ~:
+            isLeft (parseProgram "int inc(int x) { return x; } int main(void) { int (*fp)(int) = inc; return fp(1,); }") ~?= True
         ]
 
 conditionalPointerTypeTest :: Test
