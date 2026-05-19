@@ -1,13 +1,10 @@
-<h1><p align="center">htcc</a></h1>
+<h1 align="center">htcc</h1>
 
 <p align="center">
 :baby_chick: A tiny C language compiler (x86-64) (WIP)
 </p>
 
 <div align="center">
-<a href="https://travis-ci.org/falgon/htcc">
-    <img src="https://travis-ci.org/falgon/htcc.svg?branch=master" alt="Build Status" />
-</a>
 <a href="https://github.com/falgon/htcc/actions?query=workflow%3ACI">
     <img alt="CI" src="https://github.com/falgon/htcc/workflows/CI/badge.svg" />
 </a>
