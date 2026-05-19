@@ -17,7 +17,8 @@ module Htcc.Parser.Combinators.Type.Core (
 ) where
 import                          Control.Applicative                     ((<|>))
 import                          Control.Monad                           (mfilter,
-                                                                         void)
+                                                                         void,
+                                                                         when)
 import                          Control.Monad.Combinators               (choice)
 import                          Control.Monad.State                     (get,
                                                                          gets,
@@ -52,15 +53,19 @@ import                qualified Text.Megaparsec                         as M
 arraySuffix :: (Show i, Read i, Bits i, Integral i)
     => CT.StorageClass i
     -> Parser i (CT.StorageClass i)
-arraySuffix ty = choice
-    [ withConstantExp
-    , nonConstantExp
+arraySuffix ty = lbracket *> choice
+    [ nonConstantExp
+    , withConstantExp
     ]
     where
         failWithTypeMaybe ty' = maybe (fail $ show ty') pure
 
         withConstantExp = do
-            arty <- flip id ty . CT.mapTypeKind . CT.CTArray . toNatural <$> M.try (brackets evalConstexpr)
+            len <- evalConstexpr
+            when (len < 0) $
+                fail "array bound is negative"
+            void rbracket
+            let arty = flip id ty . CT.mapTypeKind . CT.CTArray $ toNatural len
             M.option Nothing (Just <$> arraySuffix ty)
                 >>= \case
                     Nothing -> pure arty
@@ -72,8 +77,7 @@ arraySuffix ty = choice
                             >>= failWithTypeMaybe ty'
 
         nonConstantExp = let mtIncomplete ty' = MaybeT $ lift $ gets $ incomplete ty' in
-            symbol "["
-                *> symbol "]"
+            rbracket
                 *> M.option Nothing (Just <$> arraySuffix ty)
                 >>= \case
                     Nothing ->

@@ -1305,8 +1305,8 @@ evalConstexprTree = \case
         ATAnd -> binop (.&.)
         ATXor -> binop xor
         ATOr -> binop (.|.)
-        ATShl -> binop (\l r -> shiftL l (fromIntegral r))
-        ATShr -> binop (\l r -> shiftR l (fromIntegral r))
+        ATShl -> shiftBinop shiftL
+        ATShr -> shiftBinop shiftR
         ATEQ -> binop (fromBool .: (==))
         ATNEQ -> binop (fromBool .: (/=))
         ATLT -> binop (fromBool .: (<))
@@ -1334,6 +1334,19 @@ evalConstexprTree = \case
         _ -> Left "initializer element is not constant"
       where
         binop f = evalConstexprTree lhs >>= \lhs' -> f lhs' <$> evalConstexprTree rhs
+        shiftBinop f =
+            evalConstexprTree lhs >>= \lhs' ->
+                evalConstexprTree rhs >>= \rhs' ->
+                    case shiftCount rhs' of
+                        Nothing     -> Left "initializer element is not constant"
+                        Just count' -> pure $ f lhs' count'
+        shiftCount n
+            | n < 0 = Nothing
+            | toInteger n >= shiftWidth = Nothing
+            | toInteger n > toInteger (maxBound :: Int) = Nothing
+            | otherwise = Just $ fromIntegral n
+            where
+                shiftWidth = toInteger (CT.sizeof ty) * 8
         logicalAnd lhs'
             | not lhs' = pure $ fromBool False
             | otherwise = fromBool <$> evalGlobalInitCondition rhs

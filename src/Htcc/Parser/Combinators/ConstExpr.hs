@@ -13,15 +13,16 @@ C language parser Combinators
 module Htcc.Parser.Combinators.ConstExpr (
     evalConstexpr
 ) where
-import                          Data.Bits                       (Bits (..))
-import                          Data.Bool                       (bool)
-import                qualified Htcc.CRules.Types               as CT
-import                          Htcc.Parser.AST.Core            (ATKind (..),
-                                                                 ATree (..))
+import                          Data.Bits                         (Bits (..))
+import                          Data.Bool                         (bool)
+import                qualified Htcc.CRules.Types                 as CT
+import                          Htcc.Parser.AST.Core              (ATKind (..),
+                                                                   ATree (..))
 import                          Htcc.Parser.Combinators.Core
-import                          Htcc.Parser.ConstructionData.Core
-                                                                 (hasIncompleteObjectType)
-import {-# SOURCE #-}           Htcc.Parser.Combinators.Program (conditional)
+import {-# SOURCE #-}           Htcc.Parser.Combinators.Program   (conditional)
+import                          Htcc.Parser.Combinators.Utils     (applyConstexprCast,
+                                                                   isConstexprArithmeticCastType)
+import                          Htcc.Parser.ConstructionData.Core (hasIncompleteObjectType)
 
 evalConstexpr :: (Bits i, Integral i, Show i, Read i) => Parser i i
 evalConstexpr = conditional >>= constantExp'
@@ -29,7 +30,7 @@ evalConstexpr = conditional >>= constantExp'
         fromBool = fromIntegral . fromEnum :: Num i => Bool -> i
         toBool x | x == 0 = False | otherwise = True
 
-        constantExp' (ATNode k _ lhs rhs) = case k of
+        constantExp' (ATNode k ty lhs rhs) = case k of
             ATAdd -> binop (+)
             ATSub -> binop (-)
             ATMul -> binop (*)
@@ -38,8 +39,8 @@ evalConstexpr = conditional >>= constantExp'
             ATAnd -> binop (.&.)
             ATXor -> binop xor
             ATOr -> binop (.|.)
-            ATShl -> binop (flip (.) fromIntegral . shiftL)
-            ATShr -> binop (flip (.) fromIntegral . shiftR)
+            ATShl -> shiftBinop shiftL
+            ATShr -> shiftBinop shiftR
             ATEQ -> binop ((.) fromBool . (==))
             ATNEQ -> binop ((.) fromBool . (/=))
             ATLT -> binop ((.) fromBool . (<))
@@ -59,11 +60,27 @@ evalConstexpr = conditional >>= constantExp'
             ATLOr -> constantExp' lhs >>= logicalOr
             ATSizeof -> memOp "sizeof" CT.sizeof lhs
             ATAlignof -> memOp "_Alignof" CT.alignof lhs
+            ATCast
+                | isConstexprArithmeticCastType ty -> applyConstexprCast ty <$> constantExp' lhs
+                | otherwise -> fail "The expression is not constant-expression"
             ATNum v -> pure v
             _ -> fail "The expression is not constant-expression"
             where
                 binop f = constantExp' lhs
                     >>= \lhs' -> fromIntegral . f lhs' <$> constantExp' rhs
+                shiftBinop f =
+                    constantExp' lhs >>= \lhs' ->
+                        constantExp' rhs >>= \rhs' ->
+                            case shiftCount rhs' of
+                                Nothing     -> fail "The expression is not constant-expression"
+                                Just count' -> pure $ f lhs' count'
+                shiftCount n
+                    | n < 0 = Nothing
+                    | toInteger n >= shiftWidth = Nothing
+                    | toInteger n > toInteger (maxBound :: Int) = Nothing
+                    | otherwise = Just $ fromIntegral n
+                    where
+                        shiftWidth = toInteger (CT.sizeof ty) * 8
                 logicalAnd lhs'
                     | not (toBool lhs') = pure $ fromBool False
                     | otherwise = fromBool . toBool <$> constantExp' rhs

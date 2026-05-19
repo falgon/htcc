@@ -23,6 +23,7 @@ import           Data.Tuple.Extra                   (uncurry3)
 import qualified Htcc.CRules.Types                  as CT
 import           Htcc.Parser.Combinators.Core
 import           Htcc.Parser.Combinators.Decl.Spec  (declspec)
+import           Htcc.Parser.Combinators.Keywords   (kAuto, kRegister, kStatic)
 import           Htcc.Parser.Combinators.Type.Core  (typeSuffix)
 import           Htcc.Parser.Combinators.Type.Utils
 import           Htcc.Utils                         (dropFst3, swap)
@@ -70,14 +71,23 @@ declarator ty = do
 
 absDeclarator :: (Integral i, Show i, Read i, Bits i) => Parser i (CT.StorageClass i)
 absDeclarator = do
-    ty <- declspec
-    if CT.isSCStatic ty {- TODO: or register -} then fail "storage-class specifier is not allowed" else do
-        ty' <- starsToPtr ty
-        M.choice
-            [ M.try $ typeSuffix ty'
-            , snd <$> absDeclType' id ty'
-            ]
+    ty <- typeNameSpec
+    ty' <- starsToPtr ty
+    M.choice
+        [ M.try $ typeSuffix ty'
+        , snd <$> absDeclType' id ty'
+        ]
     where
+        typeNameSpec =
+            M.choice
+                [ kStatic *> storageClassError
+                , kRegister *> storageClassError
+                , kAuto *> storageClassError
+                , declspec
+                ]
+        storageClassError =
+            fail "storage-class specifier is not allowed"
+
         absDeclType' fn ty = do
             cpfn <- starsToPtrCtor
             M.option (cpfn, ty) $ do

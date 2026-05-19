@@ -33,6 +33,8 @@ module Htcc.Parser.Combinators.Utils (
   , captureFunctionParamScopes
   , bracket
   , getPosState
+  , isConstexprArithmeticCastType
+  , applyConstexprCast
 ) where
 import           Control.Applicative                             ((<|>))
 import           Control.Monad.State                             (gets, modify,
@@ -474,8 +476,8 @@ evalIntegerConstexprTree = \case
         ATAnd -> binop (.&.)
         ATXor -> binop xor
         ATOr -> binop (.|.)
-        ATShl -> binop (\l r -> shiftL l (fromIntegral r))
-        ATShr -> binop (\l r -> shiftR l (fromIntegral r))
+        ATShl -> shiftBinop shiftL
+        ATShr -> shiftBinop shiftR
         ATEQ -> binop (fromBool .: (==))
         ATNEQ -> binop (fromBool .: (/=))
         ATLT -> binop (fromBool .: (<))
@@ -503,6 +505,19 @@ evalIntegerConstexprTree = \case
         _ -> Left "not an integer constant expression"
       where
         binop f = evalIntegerConstexprTree lhs >>= \lhs' -> f lhs' <$> evalIntegerConstexprTree rhs
+        shiftBinop f =
+            evalIntegerConstexprTree lhs >>= \lhs' ->
+                evalIntegerConstexprTree rhs >>= \rhs' ->
+                    case shiftCount rhs' of
+                        Nothing     -> Left "not an integer constant expression"
+                        Just count' -> pure $ f lhs' count'
+        shiftCount n
+            | n < 0 = Nothing
+            | toInteger n >= shiftWidth = Nothing
+            | toInteger n > toInteger (maxBound :: Int) = Nothing
+            | otherwise = Just $ fromIntegral n
+            where
+                shiftWidth = toInteger (CT.sizeof ty) * 8
         logicalAnd lhs'
             | lhs' == 0 = pure 0
             | otherwise = fromBool . (/= 0) <$> evalIntegerConstexprTree rhs

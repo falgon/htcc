@@ -919,6 +919,32 @@ constantExpressionTest = TestLabel "Parser.Program.constant-expression" $
         , "short-circuits '&&' in case-label constant expressions" ~:
             isRight (parseProgram "int main(void) { switch (0) { case 0 && 1 % 0: return 1; default: return 0; } }")
                 ~?= True
+        , "accepts arithmetic casts in array-bound constant expressions" ~:
+            isRight (parseProgram "int a[(char)1 << 8]; int main(void) { return sizeof a / sizeof a[0] == 256; }")
+                ~?= True
+        , "accepts arithmetic casts in case-label constant expressions" ~:
+            isRight (parseProgram "int main(void) { switch (256) { case (char)1 << 8: return 0; default: return 1; } }")
+                ~?= True
+        , TestLabel "rejects negative left-shift counts in array-bound constant expressions" $ TestCase $
+            assertProgramErrorContains
+                "The expression is not constant-expression"
+                "int a[1 << -1]; int main(void) { return 0; }"
+        , TestLabel "rejects negative right-shift counts in case-label constant expressions" $ TestCase $
+            assertProgramErrorContains
+                "The expression is not constant-expression"
+                "int main(void) { switch (0) { case 1 >> -1: return 1; default: return 0; } }"
+        , TestLabel "rejects type-width-exceeding shift counts in array-bound constant expressions" $ TestCase $
+            assertProgramErrorContains
+                "The expression is not constant-expression"
+                "int a[1 << 1000000000]; int main(void) { return 0; }"
+        , TestLabel "rejects out-of-Int shift counts in array-bound constant expressions" $ TestCase $
+            assertProgramErrorContains
+                "The expression is not constant-expression"
+                "int a[1 << 9223372036854775808]; int main(void) { return 0; }"
+        , TestLabel "rejects negative array-bound constant expressions without crashing" $ TestCase $
+            assertProgramErrorContains
+                "array bound is negative"
+                "int a[-1]; int main(void) { return 0; }"
         , TestLabel "rejects sizeof of incomplete operands in case-label constant expressions" $ TestCase $
             assertProgramErrorContains
                 "invalid application of 'sizeof' to incomplete type"
@@ -1074,6 +1100,18 @@ globalInitializerTest = TestLabel "Parser.Program.global-initializer" $
         , "accepts short-circuited logical-or elements in aggregate file-scope initializers" ~:
             isRight (parseProgram "int g[] = {1 || 1/0};")
                 ~?= True
+        , TestLabel "rejects negative left-shift counts in file-scope initializers" $ TestCase $
+            assertProgramErrorContains
+                "initializer element is not constant"
+                "int g = 1 << -1; int main(void) { return g; }"
+        , TestLabel "rejects negative right-shift counts in file-scope initializers" $ TestCase $
+            assertProgramErrorContains
+                "initializer element is not constant"
+                "int g = 1 >> -1; int main(void) { return g; }"
+        , TestLabel "rejects type-width-exceeding shift counts in file-scope initializers" $ TestCase $
+            assertProgramErrorContains
+                "initializer element is not constant"
+                "int g = 1 << 1000000000; int main(void) { return g; }"
         , "accepts file-scope nested omitted-bound char arrays with initializers" ~:
             isRight
                 (parseProgram "char str[][4] = { \"abc\", \"def\" }; int main(void) { return str[1][2]; }")
@@ -2690,6 +2728,15 @@ declarationSpecifierTest = TestLabel "Parser.Program.declaration-specifier" $
             assertProgramErrorContains
                 "invalid storage-class specifier"
                 "struct S { auto int x; }; int main(void) { return 0; }"
+        , "rejects register in cast type names" ~:
+            isLeft (parseProgram "int main(void) { return (register int)1; }")
+                ~?= True
+        , "rejects auto in sizeof type names" ~:
+            isLeft (parseProgram "int main(void) { return sizeof(auto int); }")
+                ~?= True
+        , "rejects static in _Alignof type names" ~:
+            isLeft (parseProgram "int main(void) { return _Alignof(static int); }")
+                ~?= True
         , "rejects later file-scope object declarations incompatible with block-scope extern objects" ~:
             isLeft
                 (parseProgram "int main(void) { extern int x; return 0; } char x;")
