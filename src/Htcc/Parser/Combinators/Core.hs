@@ -9,7 +9,7 @@ Portability : POSIX
 
 C language lexer
 -}
-{-# LANGUAGE FlexibleContexts, OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts, LambdaCase, OverloadedStrings #-}
 module Htcc.Parser.Combinators.Core (
     runParser
   , ConstructionDataState
@@ -144,17 +144,16 @@ charLiteral = do
             first <- P.satisfy isHexDigit
             collectHexDigits 1 [first]
         collectHexDigits count revDigits =
-            P.optionMaybe (P.lookAhead $ P.satisfy isHexDigit) >>= \next ->
-                case next of
-                    Nothing -> pure $ reverse revDigits
-                    Just _
-                        | count >= maxHexEscapeDigits ->
-                            fail "character constant escape exceeds byte width"
-                        | otherwise -> do
-                            c <- P.satisfy isHexDigit
-                            let count' = succ count
-                                revDigits' = c : revDigits
-                            count' `seq` revDigits' `seq` collectHexDigits count' revDigits'
+            P.optionMaybe (P.lookAhead $ P.satisfy isHexDigit) >>= \case
+                Nothing -> pure $ reverse revDigits
+                Just _
+                    | count >= maxHexEscapeDigits ->
+                        fail "character constant escape exceeds byte width"
+                    | otherwise -> do
+                        c <- P.satisfy isHexDigit
+                        let count' = succ count
+                            revDigits' = c : revDigits
+                        count' `seq` revDigits' `seq` collectHexDigits count' revDigits'
         octalEscape = do
             first <- P.satisfy isOctDigit
             second <- P.optionMaybe $ P.satisfy isOctDigit
@@ -224,17 +223,16 @@ stringLiteral = do
             first <- P.satisfy isHexDigit
             collectHexDigits 1 [first]
         collectHexDigits count revDigits =
-            P.optionMaybe (P.lookAhead $ P.satisfy isHexDigit) >>= \next ->
-                case next of
-                    Nothing -> pure $ reverse revDigits
-                    Just _
-                        | count >= maxHexEscapeDigits ->
-                            fail "character code point out of range"
-                        | otherwise -> do
-                            c <- P.satisfy isHexDigit
-                            let count' = succ count
-                                revDigits' = c : revDigits
-                            count' `seq` revDigits' `seq` collectHexDigits count' revDigits'
+            P.optionMaybe (P.lookAhead $ P.satisfy isHexDigit) >>= \case
+                Nothing -> pure $ reverse revDigits
+                Just _
+                    | count >= maxHexEscapeDigits ->
+                        fail "character code point out of range"
+                    | otherwise -> do
+                        c <- P.satisfy isHexDigit
+                        let count' = succ count
+                            revDigits' = c : revDigits
+                        count' `seq` revDigits' `seq` collectHexDigits count' revDigits'
         byteFromDigits errMsg base digits =
             let n = foldl (\acc c -> acc * base + digitToInt c) 0 digits
              in if n <= 0xff
@@ -255,17 +253,16 @@ binary = do
         binaryDigit = MC.char '0' <|> MC.char '1'
         binaryDigitValue = fromIntegral . digitToInt
         consumeBinaryDigits count acc =
-            M.option Nothing (Just <$> M.lookAhead binaryDigit) >>= \next ->
-                case next of
-                    Nothing -> pure acc
-                    Just _
-                        | count >= maxBinaryLiteralDigits ->
-                            fail "binary integer literal is too long"
-                        | otherwise -> do
-                            c <- binaryDigit
-                            let count' = succ count
-                                acc' = acc * 2 + binaryDigitValue c
-                            count' `seq` acc' `seq` consumeBinaryDigits count' acc'
+            M.option Nothing (Just <$> M.lookAhead binaryDigit) >>= \case
+                Nothing -> pure acc
+                Just _
+                    | count >= maxBinaryLiteralDigits ->
+                        fail "binary integer literal is too long"
+                    | otherwise -> do
+                        c <- binaryDigit
+                        let count' = succ count
+                            acc' = acc * 2 + binaryDigitValue c
+                        count' `seq` acc' `seq` consumeBinaryDigits count' acc'
 octal = MC.char '0' >> ML.octal
 decimal = ML.decimal
 natural = M.try (lexeme hexadecimal) <|> M.try (lexeme binary) <|> M.try (lexeme octal) <|> lexeme decimal

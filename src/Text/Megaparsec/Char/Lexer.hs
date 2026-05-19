@@ -1,3 +1,5 @@
+{-# LANGUAGE LambdaCase #-}
+
 module Text.Megaparsec.Char.Lexer (
     space,
     skipLineComment,
@@ -88,10 +90,9 @@ charLiteral = ParsecT $ escaped <|> P.noneOf ['\\']
 
         significantHexDigits first = do
             second <- P.option [] ((: []) <$> P.satisfy isHexDigit)
-            P.optionMaybe (P.lookAhead $ P.satisfy isHexDigit) >>= \next ->
-                case next of
-                    Just _  -> invalidCodePoint
-                    Nothing -> pure $ first : second
+            P.optionMaybe (P.lookAhead $ P.satisfy isHexDigit) >>= \case
+                Just _  -> invalidCodePoint
+                Nothing -> pure $ first : second
 
         octalDigits =
             (:) <$> P.satisfy isOctDigit <*> P.option [] (P.try $ P.count 2 (P.satisfy isOctDigit) <|> P.count 1 (P.satisfy isOctDigit))
