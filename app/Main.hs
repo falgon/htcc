@@ -21,12 +21,16 @@ import           Control.Monad                               (foldM, forM_,
                                                               unless, when,
                                                               (>=>))
 import           Data.Bifunctor                              (first)
-import           Data.Bits                                   (Bits (shiftL, (.&.), (.|.)))
+import           Data.Bits                                   (Bits (shiftL, shiftR, (.&.), (.|.)),
+                                                              xor)
 import           Data.Bool                                   (bool)
 import qualified Data.ByteString                             as B
 import qualified Data.ByteString.Char8                       as BC
-import           Data.Char                                   (isAlpha,
+import           Data.Char                                   (digitToInt,
+                                                              isAlpha,
                                                               isAlphaNum,
+                                                              isDigit,
+                                                              isHexDigit,
                                                               isSpace, toLower)
 import           Data.Either                                 (fromRight)
 import           Data.Functor                                (($>), (<&>))
@@ -34,12 +38,12 @@ import           Data.IORef                                  (modifyIORef',
                                                               newIORef,
                                                               readIORef,
                                                               writeIORef)
-import           Data.List                                   (foldl',
-                                                              intercalate,
+import           Data.List                                   (intercalate,
                                                               isInfixOf,
                                                               isPrefixOf,
                                                               mapAccumL, sortOn,
                                                               stripPrefix)
+import qualified Data.List                                   as List
 import           Data.List.NonEmpty                          (NonEmpty (..))
 import           Data.Maybe                                  (catMaybes,
                                                               fromMaybe, isJust,
@@ -61,7 +65,8 @@ import           Diagrams.Prelude                            (V2)
 import           Diagrams.Size                               (SizeSpec)
 import           Diagrams.TwoD.Size                          (mkSizeSpec2D)
 import           GHC.Conc                                    (threadWaitReadSTM)
-import           GHC.IO.Exception                            (IOErrorType (NoSuchThing, PermissionDenied, ResourceExhausted))
+import           GHC.IO.Device                               (SeekMode (AbsoluteSeek))
+import           GHC.IO.Exception                            (IOErrorType (IllegalOperation, InappropriateType, InvalidArgument, NoSuchThing, PermissionDenied, ResourceExhausted, ResourceVanished))
 import           GHC.IO.Handle                               (hDuplicate)
 import           Htcc.Asm                                    (casmNormalized',
                                                               prepareAsmInput,
@@ -106,11 +111,13 @@ import           Htcc.WarningSuppression                     (CompilerOutputChun
                                                               splitCompleteCompilerOutputChunks)
 import           Numeric.Natural                             (Natural)
 import           System.Directory                            (canonicalizePath,
+                                                              doesDirectoryExist,
                                                               doesFileExist,
                                                               executable,
                                                               getCurrentDirectory,
                                                               getPermissions,
                                                               getTemporaryDirectory,
+                                                              listDirectory,
                                                               makeAbsolute,
                                                               removeFile)
 import           System.Environment                          (getEnvironment,
@@ -123,6 +130,7 @@ import           System.FilePath                             (isAbsolute,
                                                               takeFileName,
                                                               (</>))
 import           System.Info                                 (os)
+import qualified System.IO                                   as IO
 import           System.IO                                   (Handle,
                                                               IOMode (ReadMode, WriteMode),
                                                               hClose, hFlush,
@@ -136,32 +144,46 @@ import           System.IO.Error                             (catchIOError,
                                                               ioeGetErrorType,
                                                               isDoesNotExistError,
                                                               isEOFError)
-import           System.Posix.Files                          (deviceID, fileID,
+import           System.Posix.Files                          (FileStatus,
+                                                              deviceID, fileID,
                                                               fileMode,
                                                               fileSize,
+                                                              getFdStatus,
                                                               getFileStatus,
                                                               getSymbolicLinkStatus,
                                                               groupExecuteMode,
                                                               intersectFileModes,
+                                                              isCharacterDevice,
                                                               isRegularFile,
+                                                              linkCount,
+                                                              modificationTimeHiRes,
                                                               otherExecuteMode,
                                                               ownerExecuteMode,
                                                               ownerReadMode,
+                                                              setFdMode,
+                                                              setFdSize,
                                                               setFileMode,
+                                                              statusChangeTimeHiRes,
                                                               unionFileModes)
 import           System.Posix.IO                             (FdOption (NonBlockingRead),
+                                                              OpenFileFlags (..),
+                                                              OpenMode (ReadOnly, WriteOnly),
                                                               closeFd,
+                                                              defaultFileFlags,
+                                                              fdSeek,
                                                               handleToFd,
+                                                              openFd,
                                                               setFdOption)
 import qualified System.Posix.IO.ByteString                  as PB
-import           System.Posix.Signals                        (nullSignal,
+import           System.Posix.Signals                        (Signal,
+                                                              nullSignal,
+                                                              sigKILL, sigTERM,
                                                               signalProcessGroup)
-import           System.Posix.Types                          (FileMode,
+import           System.Posix.Types                          (Fd, FileMode,
                                                               ProcessGroupID)
 import           System.Process                              (CreateProcess (..),
                                                               ProcessHandle,
                                                               StdStream (CreatePipe, Inherit),
-                                                              createProcess,
                                                               getPid, proc,
                                                               readCreateProcessWithExitCode,
                                                               readProcessWithExitCode,
@@ -701,7 +723,7 @@ expandEnvironmentOverridesWithBaseEnvironment
     -> [(String, String)]
 expandEnvironmentOverridesWithBaseEnvironment baseEnvironment overrides maybeOverrideSpecs =
     reverse . snd $
-        foldl'
+        List.foldl'
             expandOverride
             (baseEnvironment, [])
             (zipOverrideSpecs overrides maybeOverrideSpecs)
@@ -958,10 +980,10 @@ expandShellWordChars tildeExpansionMode expansionEnvironment =
 
 splitExpandedShellWord :: [ExpandedShellWordFragment] -> [String]
 splitExpandedShellWord =
-    reverse . finalizeSplitState . foldl' splitFragment ([], [])
+    reverse . finalizeSplitState . List.foldl' splitFragment ([], [])
     where
         splitFragment splitState fragment =
-            foldl'
+            List.foldl'
                 (splitCharacter $ expandedShellWordFragmentAllowsPosixFieldSplitting fragment)
                 splitState
                 (expandedShellWordFragmentText fragment)
@@ -1671,10 +1693,10 @@ readCompilerProcessWithExitCodeChunks
     -> [String]
     -> IO (ExitCode, [CapturedCompilerOutputChunk])
 readCompilerProcessWithExitCodeChunks =
-    readCompilerProcessWithExitCodeChunksUntil (\_ -> pure False)
+    readCompilerProcessWithExitCodeChunksUntil (\_ _ -> pure False)
 
 readCompilerProcessWithExitCodeChunksUntil
-    :: (IO [CapturedCompilerOutputChunk] -> IO Bool)
+    :: (IO [CapturedCompilerOutputChunk] -> CompilerPostExitReadiness)
     -> StdStream
     -> CompilerCommand
     -> [String]
@@ -1702,10 +1724,10 @@ foldCompilerProcessWithExitCodeChunks
     -> (a -> CapturedCompilerOutputChunk -> IO a)
     -> IO (ExitCode, a)
 foldCompilerProcessWithExitCodeChunks =
-    foldCompilerProcessWithExitCodeChunksUntil (pure False)
+    foldCompilerProcessWithExitCodeChunksUntil compilerPostExitNotReady
 
 foldCompilerProcessWithExitCodeChunksUntil
-    :: IO Bool
+    :: CompilerPostExitReadiness
     -> StdStream
     -> CompilerCommand
     -> [String]
@@ -1721,6 +1743,7 @@ foldCompilerProcessWithExitCodeChunksUntil postExitDrainSatisfied stdinStream co
             , std_out = CreatePipe
             , std_err = CreatePipe
             , create_group = True
+            , close_fds = True
             } $ \maybeInputHandle maybeStdoutHandle maybeStderrHandle processHandle -> do
                 maybe (pure ()) hClose maybeInputHandle
                 stdoutHandle <- requireCapturedHandle "stdout" maybeStdoutHandle
@@ -1728,13 +1751,25 @@ foldCompilerProcessWithExitCodeChunksUntil postExitDrainSatisfied stdinStream co
                 hSetBinaryMode stdoutHandle True
                 hSetBinaryMode stderrHandle True
                 processExitVar <- newTVarIO False
+                failurePostExitDrainPendingVar <- newTVarIO False
+                forcePostExitDrainCompleteVar <- newTVarIO False
+                let postExitDrainSatisfied' processGroupId = do
+                        (failureDrainPending, forceComplete) <-
+                            atomically $
+                                (,)
+                                    <$> readTVar failurePostExitDrainPendingVar
+                                    <*> readTVar forcePostExitDrainCompleteVar
+                        if failureDrainPending
+                            then pure forceComplete
+                            else
+                                postExitDrainSatisfied processGroupId
                 processGroupId <- compilerProcessGroupIdForHandle processHandle
                 capturedChunksVar <- newEmptyMVar
                 _ <- forkIO $
                     putMVar capturedChunksVar =<< try
                         ( foldCompilerOutputChunks
                             processGroupId
-                            postExitDrainSatisfied
+                            postExitDrainSatisfied'
                             processExitVar
                             stdoutHandle
                             stderrHandle
@@ -1742,16 +1777,41 @@ foldCompilerProcessWithExitCodeChunksUntil postExitDrainSatisfied stdinStream co
                             accumulateChunk
                         )
                 exitCode <- waitForProcess processHandle
-                atomically $ writeTVar processExitVar True
-                capturedChunks <- takeCapturedResult capturedChunksVar
+                case exitCode of
+                    ExitSuccess ->
+                        atomically $ writeTVar processExitVar True
+                    ExitFailure _ -> do
+                        atomically $ writeTVar failurePostExitDrainPendingVar True
+                        _ <- forkIO $ do
+                            threadDelay compilerProcessFailureOutputDrainGraceMicros
+                            atomically $ do
+                                writeTVar forcePostExitDrainCompleteVar True
+                                writeTVar processExitVar True
+                        pure ()
+                capturedChunksResult <- try $ do
+                    when (exitCode == ExitSuccess) $
+                        waitForCompilerProcessPostExitCompletion
+                            processGroupId
+                            postExitDrainSatisfied'
+                    capturedChunks <- takeCapturedResultAfterProcessExit capturedChunksVar
+                    case exitCode of
+                        ExitSuccess   -> pure ()
+                        ExitFailure _ -> terminateCompilerProcessGroup processGroupId
+                    pure capturedChunks
+                capturedChunks <- case capturedChunksResult of
+                    Right capturedChunks' ->
+                        pure capturedChunks'
+                    Left capturedException -> do
+                        terminateCompilerProcessGroup processGroupId
+                        throwIO (capturedException :: SomeException)
                 pure (exitCode, capturedChunks)
 
 readCompilerProcessWithExitCodeBytes :: CompilerCommand -> [String] -> IO (ExitCode, B.ByteString, B.ByteString)
 readCompilerProcessWithExitCodeBytes =
-    readCompilerProcessWithExitCodeBytesUntil (\_ -> pure False)
+    readCompilerProcessWithExitCodeBytesUntil (\_ _ -> pure False)
 
 readCompilerProcessWithExitCodeBytesUntil
-    :: (IO [CapturedCompilerOutputChunk] -> IO Bool)
+    :: (IO [CapturedCompilerOutputChunk] -> CompilerPostExitReadiness)
     -> CompilerCommand
     -> [String]
     -> IO (ExitCode, B.ByteString, B.ByteString)
@@ -1795,24 +1855,68 @@ compilerProcessGroupAlive =
                 )
         )
 
-waitForCompilerProcessPostExitCompletion :: Maybe ProcessGroupID -> IO Bool -> IO ()
-waitForCompilerProcessPostExitCompletion processGroupId postExitSatisfied =
-    go
+terminateCompilerProcessGroup :: Maybe ProcessGroupID -> IO ()
+terminateCompilerProcessGroup processGroupId = do
+    processGroupStillAlive <- compilerProcessGroupAliveForTermination processGroupId
+    when processGroupStillAlive $ do
+        signalCompilerProcessGroupForTermination sigTERM processGroupId
+        waitForCompilerProcessGroupExitAfterTermination
+            processGroupId
+            compilerProcessFailureTerminationGraceMicros
+        processGroupStillAlive' <- compilerProcessGroupAliveForTermination processGroupId
+        when processGroupStillAlive' $
+            signalCompilerProcessGroupForTermination sigKILL processGroupId
+
+compilerProcessGroupAliveForTermination :: Maybe ProcessGroupID -> IO Bool
+compilerProcessGroupAliveForTermination processGroupId =
+    catchIOError
+        (compilerProcessGroupAlive processGroupId)
+        (const $ pure False)
+
+signalCompilerProcessGroupForTermination :: Signal -> Maybe ProcessGroupID -> IO ()
+signalCompilerProcessGroupForTermination signal =
+    maybe
+        (pure ())
+        (ignoreIOException . signalProcessGroup signal)
+
+waitForCompilerProcessGroupExitAfterTermination :: Maybe ProcessGroupID -> Int -> IO ()
+waitForCompilerProcessGroupExitAfterTermination processGroupId timeoutMicros =
+    timeout timeoutMicros go $> ()
     where
         go = do
-            postExitCompleted <- postExitSatisfied
+            processGroupStillAlive <- compilerProcessGroupAliveForTermination processGroupId
+            when processGroupStillAlive $ do
+                threadDelay compilerOutputDrainAfterExitPollMicros
+                go
+
+type CompilerPostExitReadiness = Maybe ProcessGroupID -> IO Bool
+
+compilerPostExitNotReady :: CompilerPostExitReadiness
+compilerPostExitNotReady _ = pure False
+
+waitForCompilerProcessPostExitCompletion :: Maybe ProcessGroupID -> CompilerPostExitReadiness -> IO ()
+waitForCompilerProcessPostExitCompletion processGroupId postExitSatisfied =
+    timeout compilerProcessPostExitCompletionTimeoutMicros go >>= \case
+        Just () -> pure ()
+        Nothing ->
+            ioError . userError $
+                "compiler wrapper did not finish delayed output after exit"
+    where
+        go = do
+            postExitCompleted <- postExitSatisfied processGroupId
             processGroupStillAlive <- compilerProcessGroupAlive processGroupId
             unless (postExitCompleted || not processGroupStillAlive) $ do
                 threadDelay compilerOutputDrainAfterExitPollMicros
                 go
 
-capturedCompilerTargetLineAvailableAfterExit :: IO [CapturedCompilerOutputChunk] -> IO Bool
-capturedCompilerTargetLineAvailableAfterExit =
+capturedCompilerTargetLineAvailableAfterExit :: IO [CapturedCompilerOutputChunk] -> CompilerPostExitReadiness
+capturedCompilerTargetLineAvailableAfterExit readCapturedChunks _ =
     fmap
         ( any isCompleteTargetLine
             . completeStdoutLines
             . compilerOutputBytesForStream CompilerStdout
         )
+        readCapturedChunks
     where
         completeStdoutLines bytes
             | B.null bytes = []
@@ -1831,24 +1935,24 @@ capturedCompilerTargetLineAvailableAfterExit =
         trimProbeLine =
             BC.reverse . BC.dropWhile isSpace . BC.reverse . BC.dropWhile isSpace
 
-waitForCompilerProcessGroupQuiescenceAfterExit :: IO Bool
+waitForCompilerProcessGroupQuiescenceAfterExit :: CompilerPostExitReadiness
 -- Fallback for compiler invocations that do not have a more specific readiness
 -- signal than process-group quiescence.
-waitForCompilerProcessGroupQuiescenceAfterExit = pure False
+waitForCompilerProcessGroupQuiescenceAfterExit = compilerPostExitNotReady
 
-stabilizePostExitPredicate :: IO Bool -> IO (IO Bool)
+stabilizePostExitPredicate :: IO Bool -> IO CompilerPostExitReadiness
 stabilizePostExitPredicate isReady = do
     wasReadyRef <- newIORef False
-    pure $ do
+    pure $ \_ -> do
         ready <- isReady
         wasReady <- readIORef wasReadyRef
         writeIORef wasReadyRef ready
         pure (ready && wasReady)
 
-stabilizePostExitFingerprint :: Eq a => IO (Maybe a) -> IO (IO Bool)
+stabilizePostExitFingerprint :: Eq a => IO (Maybe a) -> IO CompilerPostExitReadiness
 stabilizePostExitFingerprint readFingerprint = do
     previousFingerprintRef <- newIORef Nothing
-    pure $ do
+    pure $ \_ -> do
         fingerprint <- readFingerprint
         previousFingerprint <- readIORef previousFingerprintRef
         writeIORef previousFingerprintRef fingerprint
@@ -1857,32 +1961,590 @@ stabilizePostExitFingerprint readFingerprint = do
                 Just _  -> previousFingerprint == fingerprint
                 Nothing -> False
 
-compilerObjectOutputFingerprintAfterExit :: FilePath -> IO (Maybe (Integer, Integer, Integer))
+data CompilerObjectOutputFingerprint = CompilerObjectOutputFingerprint
+    !Integer
+    !Integer
+    !Integer
+    !String
+    !String
+    !CompilerObjectContentDigest
+    deriving (Eq)
+
+compilerObjectOutputFingerprint
+    :: FileStatus -> Word64 -> CompilerObjectContentDigest -> CompilerObjectOutputFingerprint
+compilerObjectOutputFingerprint status outputSize contentFingerprint =
+    CompilerObjectOutputFingerprint
+        (fromIntegral $ deviceID status)
+        (fromIntegral $ fileID status)
+        (fromIntegral outputSize)
+        (show $ modificationTimeHiRes status)
+        (show $ statusChangeTimeHiRes status)
+        contentFingerprint
+
+compilerObjectOutputFingerprintAfterExit :: FilePath -> IO (Maybe CompilerObjectOutputFingerprint)
 compilerObjectOutputFingerprintAfterExit path =
     catchIOError
-        (do
-            status <- getSymbolicLinkStatus path
-            let outputSize = fromIntegral (fileSize status) :: Integer
-            pure $
-                if isRegularFile status
-                    && outputSize > minimumStableCompilerObjectOutputBytes
-                    then
-                        Just
-                            ( fromIntegral (deviceID status)
-                            , fromIntegral (fileID status)
-                            , outputSize
-                            )
-                    else Nothing
-        )
-        (\ioErr -> if isDoesNotExistError ioErr then pure Nothing else ioError ioErr)
+        (bracket openObjectOutput closeFd readObjectOutputFingerprint)
+        handleObjectOutputReadinessError
+    where
+        openObjectOutput =
+            openFd path ReadOnly defaultFileFlags {nofollow = True, cloexec = True, nonBlock = True}
 
-stabilizeCompilerObjectOutputAfterExit :: FilePath -> IO (IO Bool)
+        readObjectOutputFingerprint fd = do
+            statusBefore <- getFdStatus fd
+            let maybeOutputSize = fileStatusSizeWord64 statusBefore
+            case maybeOutputSize of
+                Just outputSize
+                    | isRegularFile statusBefore
+                        && outputSize > fromInteger minimumStableCompilerObjectOutputBytes -> do
+                            maybeContentFingerprint <-
+                                relocatableElfObjectContentFingerprint fd outputSize
+                            statusAfter <- getFdStatus fd
+                            pure $
+                                if compilerObjectOutputStatusFingerprint statusBefore
+                                    == compilerObjectOutputStatusFingerprint statusAfter
+                                    && isRegularFile statusAfter
+                                    then
+                                        compilerObjectOutputFingerprint
+                                            statusBefore
+                                            outputSize
+                                            <$> maybeContentFingerprint
+                                    else Nothing
+                _ -> pure Nothing
+
+compilerProbeObjectTargetFingerprintAfterExit :: FilePath -> IO (Maybe CompilerObjectOutputFingerprint)
+compilerProbeObjectTargetFingerprintAfterExit path =
+    catchIOError
+        (bracket openObjectOutput closeFd readObjectOutputFingerprint)
+        handleObjectOutputReadinessError
+    where
+        openObjectOutput =
+            openFd path ReadOnly defaultFileFlags {nofollow = True, cloexec = True, nonBlock = True}
+
+        readObjectOutputFingerprint fd = do
+            statusBefore <- getFdStatus fd
+            let maybeOutputSize = fileStatusSizeWord64 statusBefore
+            case maybeOutputSize of
+                Just outputSize
+                    | isRegularFile statusBefore
+                        && outputSize >= minimumProbeObjectTargetBytes -> do
+                            let targetByteCount =
+                                    min outputSize maximumProbeObjectTargetBytes
+                            maybeTargetBytes <-
+                                readCompilerObjectBytesAt fd 0 targetByteCount
+                            statusAfter <- getFdStatus fd
+                            let maybeContentFingerprint = do
+                                    targetBytes <- maybeTargetBytes
+                                    if probeObjectTargetBytesCanBeClassified targetBytes
+                                        then
+                                            digestCompilerObjectLoadedBytes
+                                                emptyCompilerObjectContentDigest
+                                                0
+                                                targetByteCount
+                                                targetBytes
+                                        else Nothing
+                            pure $
+                                if compilerObjectOutputStatusFingerprint statusBefore
+                                    == compilerObjectOutputStatusFingerprint statusAfter
+                                    && isRegularFile statusAfter
+                                    then
+                                        compilerObjectOutputFingerprint
+                                            statusBefore
+                                            outputSize
+                                            <$> maybeContentFingerprint
+                                    else Nothing
+                _ -> pure Nothing
+
+probeObjectTargetBytesCanBeClassified :: B.ByteString -> Bool
+probeObjectTargetBytesCanBeClassified bytes =
+    B.length bytes >= 4
+        && (B.take 4 bytes /= elfMagic || B.length bytes >= minimumElfProbeObjectTargetBytes)
+
+handleObjectOutputReadinessError :: IOError -> IO (Maybe a)
+handleObjectOutputReadinessError ioErr
+    | objectOutputReadinessCanRetry ioErr = pure Nothing
+    | otherwise = ioError ioErr
+
+objectOutputReadinessCanRetry :: IOError -> Bool
+objectOutputReadinessCanRetry ioErr =
+    isDoesNotExistError ioErr
+        || isEOFError ioErr
+        || ioeGetErrorType ioErr
+            `elem` [ IllegalOperation
+                   , InappropriateType
+                   , InvalidArgument
+                   , NoSuchThing
+                   , PermissionDenied
+                   , ResourceVanished
+                   ]
+
+compilerObjectOutputStatusFingerprint
+    :: FileStatus -> (Integer, Integer, Integer, String, String)
+compilerObjectOutputStatusFingerprint status =
+    ( fromIntegral $ deviceID status
+    , fromIntegral $ fileID status
+    , fromIntegral $ fileSize status
+    , show $ modificationTimeHiRes status
+    , show $ statusChangeTimeHiRes status
+    )
+
+fileStatusSizeWord64 :: FileStatus -> Maybe Word64
+fileStatusSizeWord64 status =
+    let size = fromIntegral (fileSize status) :: Integer
+     in if size >= 0 && size <= fromIntegral (maxBound :: Word64)
+            then Just $ fromInteger size
+            else Nothing
+
+withCompilerObjectSnapshot :: FilePath -> (FilePath -> IO a) -> IO a
+withCompilerObjectSnapshot sourcePath action = do
+    tmpDir <- getTemporaryDirectory
+    (snapshotPath, snapshotHandle) <- openTempFile tmpDir "htcc-object-snapshot-.o"
+    hSetBinaryMode snapshotHandle True
+    finally
+        (snapshotCompilerObjectOutput sourcePath snapshotHandle *> action snapshotPath)
+        ( ignoreIOException (hClose snapshotHandle)
+            *> ignoreIOException (removeFile snapshotPath)
+        )
+
+snapshotCompilerObjectOutput :: FilePath -> Handle -> IO ()
+snapshotCompilerObjectOutput sourcePath snapshotHandle =
+    timeout compilerProcessPostExitCompletionTimeoutMicros go >>= \case
+        Just () -> pure ()
+        Nothing ->
+            ioError . userError $
+                "compiler wrapper did not finish stable object output snapshot after exit"
+    where
+        go = do
+            snapshotComplete <-
+                trySnapshotCompilerObjectOutput sourcePath snapshotHandle
+            unless snapshotComplete $ do
+                threadDelay compilerOutputDrainAfterExitPollMicros
+                go
+
+trySnapshotCompilerObjectOutput :: FilePath -> Handle -> IO Bool
+trySnapshotCompilerObjectOutput sourcePath snapshotHandle =
+    catchIOError
+        (bracket openObjectOutput closeFd copyObjectOutput)
+        handleSnapshotError
+    where
+        openObjectOutput =
+            openFd sourcePath ReadOnly defaultFileFlags {nofollow = True, cloexec = True, nonBlock = True}
+
+        copyObjectOutput fd = do
+            statusBefore <- getFdStatus fd
+            let maybeOutputSize = fileStatusSizeWord64 statusBefore
+            case maybeOutputSize of
+                Just outputSize
+                    | isRegularFile statusBefore
+                        && outputSize > fromInteger minimumStableCompilerObjectOutputBytes
+                        && outputSize <= maximumStableCompilerObjectOutputBytes -> do
+                            maybeContentFingerprintBefore <-
+                                relocatableElfObjectContentFingerprint fd outputSize
+                            case maybeContentFingerprintBefore of
+                                Just contentFingerprintBefore -> do
+                                    copied <- copyObjectOutputBytes fd outputSize
+                                    statusAfter <- getFdStatus fd
+                                    maybeContentFingerprintAfter <-
+                                        if copied
+                                            then relocatableElfObjectContentFingerprint fd outputSize
+                                            else pure Nothing
+                                    pure $
+                                        copied
+                                            && compilerObjectOutputStatusFingerprint statusBefore
+                                                == compilerObjectOutputStatusFingerprint statusAfter
+                                            && maybeContentFingerprintAfter
+                                                == Just contentFingerprintBefore
+                                Nothing -> pure False
+                _ -> pure False
+
+        copyObjectOutputBytes fd outputSize =
+            do
+                IO.hSeek snapshotHandle IO.AbsoluteSeek 0
+                IO.hSetFileSize snapshotHandle 0
+                _ <- fdSeek fd AbsoluteSeek 0
+                copied <- copyCompilerObjectSnapshotBytes fd snapshotHandle outputSize
+                hFlush snapshotHandle
+                pure copied
+
+        handleSnapshotError ioErr
+            | objectOutputSnapshotCanRetry ioErr = pure False
+            | otherwise = ioError ioErr
+
+        objectOutputSnapshotCanRetry ioErr =
+            isDoesNotExistError ioErr
+                || isEOFError ioErr
+                || ioeGetErrorType ioErr
+                    `elem` [ IllegalOperation
+                           , InappropriateType
+                           , InvalidArgument
+                           , NoSuchThing
+                           , PermissionDenied
+                           , ResourceVanished
+                           ]
+
+copyCompilerObjectSnapshotBytes :: Fd -> Handle -> Word64 -> IO Bool
+copyCompilerObjectSnapshotBytes fd snapshotHandle =
+    go
+    where
+        go remainingBytes
+            | remainingBytes == 0 = pure True
+            | otherwise =
+                case word64ToInt chunkSize of
+                    Just chunkSizeInt -> do
+                        bytes <- readCompilerObjectExactBytes fd chunkSizeInt
+                        if B.length bytes == chunkSizeInt
+                            then do
+                                B.hPut snapshotHandle bytes
+                                go $ remainingBytes - chunkSize
+                            else pure False
+                    Nothing -> pure False
+            where
+                chunkSize = min remainingBytes compilerObjectDigestChunkBytes
+
+stabilizeCompilerObjectOutputAfterExit :: FilePath -> IO CompilerPostExitReadiness
 stabilizeCompilerObjectOutputAfterExit =
-    stabilizePostExitFingerprint . compilerObjectOutputFingerprintAfterExit
+    stabilizeCompilerObjectOutputFingerprintAfterExit
+        . compilerObjectOutputFingerprintAfterExit
+
+stabilizeCompilerProbeObjectTargetAfterExit :: FilePath -> IO CompilerPostExitReadiness
+stabilizeCompilerProbeObjectTargetAfterExit =
+    stabilizeCompilerObjectOutputFingerprintAfterExit
+        . compilerProbeObjectTargetFingerprintAfterExit
+
+stabilizeCompilerObjectOutputFingerprintAfterExit
+    :: IO (Maybe CompilerObjectOutputFingerprint) -> IO CompilerPostExitReadiness
+stabilizeCompilerObjectOutputFingerprintAfterExit readFingerprint = do
+    previousFingerprintRef <- newIORef Nothing
+    pure $ \processGroupId -> do
+        fingerprint <- readFingerprint
+        previousFingerprint <- readIORef previousFingerprintRef
+        writeIORef previousFingerprintRef fingerprint
+        case fingerprint of
+            Just fingerprint'
+                | previousFingerprint == fingerprint ->
+                    compilerProcessGroupHasNoWritableObjectHandles
+                        processGroupId
+                        fingerprint'
+            _ -> pure False
+
+compilerProcessGroupHasNoWritableObjectHandles
+    :: Maybe ProcessGroupID -> CompilerObjectOutputFingerprint -> IO Bool
+compilerProcessGroupHasNoWritableObjectHandles Nothing _ = pure False
+compilerProcessGroupHasNoWritableObjectHandles (Just processGroupId) fingerprint = do
+    maybeProcessIds <- compilerProcessGroupMemberIds processGroupId
+    case maybeProcessIds of
+        Just [] -> pure False
+        Just processIds ->
+            not <$> anyM (compilerProcessHasWritableObjectHandle fingerprint) processIds
+        Nothing -> pure False
+
+compilerProcessGroupMemberIds :: ProcessGroupID -> IO (Maybe [Integer])
+compilerProcessGroupMemberIds processGroupId = do
+    procResult <- compilerProcessGroupMemberIdsViaProc processGroupId
+    case procResult of
+        Just processIds -> pure $ Just processIds
+        Nothing         -> compilerProcessGroupMemberIdsViaPs processGroupId
+
+compilerProcessGroupMemberIdsViaProc :: ProcessGroupID -> IO (Maybe [Integer])
+compilerProcessGroupMemberIdsViaProc processGroupId = do
+    procAvailable <- doesDirectoryExist "/proc"
+    if not procAvailable
+        then pure Nothing
+        else
+            catchIOError
+                ( do
+                    procEntries <- listDirectory "/proc"
+                    Just . reverse
+                        <$> foldM
+                            collectProcessGroupMember
+                            []
+                            (mapMaybe readMaybe procEntries)
+                )
+                (const $ pure Nothing)
+    where
+        targetProcessGroupId = fromIntegral processGroupId
+
+        collectProcessGroupMember processIds processId = do
+            maybeProcessGroupId <- procProcessGroupId processId
+            pure $
+                if maybeProcessGroupId == Just targetProcessGroupId
+                    then processId : processIds
+                    else processIds
+
+compilerProcessGroupMemberIdsViaPs :: ProcessGroupID -> IO (Maybe [Integer])
+compilerProcessGroupMemberIdsViaPs processGroupId =
+    catchIOError
+        ( do
+            psPath <- trustedSystemHelperPath "ps"
+            (exitCode, stdoutText, _) <-
+                maybe
+                    (pure (ExitFailure 127, "", ""))
+                    (\path -> readProcessWithExitCode path ["-axo", "pid=,pgid="] "")
+                    psPath
+            pure $
+                case exitCode of
+                    ExitSuccess ->
+                        let processIds =
+                                parseProcessGroupMemberIds
+                                    (fromIntegral processGroupId)
+                                    stdoutText
+                         in if null processIds
+                                then Nothing
+                                else Just processIds
+                    ExitFailure _ -> Nothing
+        )
+        (const $ pure Nothing)
+
+procProcessGroupId :: Integer -> IO (Maybe Integer)
+procProcessGroupId processId =
+    catchIOError
+        (parseProcStatProcessGroupId <$> readFile ("/proc" </> show processId </> "stat"))
+        ( \ioErr ->
+            if ioeGetErrorType ioErr == NoSuchThing
+                then pure Nothing
+                else ioError ioErr
+        )
+
+parseProcStatProcessGroupId :: String -> Maybe Integer
+parseProcStatProcessGroupId statText =
+    case break (== ')') $ reverse statText of
+        (reversedRest, ')':_) ->
+            let rest = reverse reversedRest
+             in case words rest of
+                    _state:_parentProcessId:processGroupId:_ -> readMaybe processGroupId
+                    _                                        -> Nothing
+        _ -> Nothing
+
+parseProcessGroupMemberIds :: Integer -> String -> [Integer]
+parseProcessGroupMemberIds targetProcessGroupId =
+    mapMaybe parseProcessLine . lines
+    where
+        parseProcessLine line =
+            case words line of
+                pidText:processGroupText:_
+                    | readMaybe processGroupText == Just targetProcessGroupId ->
+                        readMaybe pidText
+                _ -> Nothing
+
+compilerProcessHasWritableObjectHandle
+    :: CompilerObjectOutputFingerprint -> Integer -> IO Bool
+compilerProcessHasWritableObjectHandle fingerprint processId = do
+    maybeProcResult <- compilerProcessHasWritableObjectHandleViaProc fingerprint processId
+    case maybeProcResult of
+        Just hasWritableHandle -> pure hasWritableHandle
+        Nothing ->
+            fromMaybe True
+                <$> compilerProcessHasWritableObjectHandleViaLsof fingerprint processId
+
+compilerProcessHasWritableObjectHandleViaProc
+    :: CompilerObjectOutputFingerprint -> Integer -> IO (Maybe Bool)
+compilerProcessHasWritableObjectHandleViaProc fingerprint processId = do
+    procAvailable <- doesDirectoryExist "/proc"
+    if not procAvailable
+        then pure Nothing
+        else do
+            let processDir = "/proc" </> show processId
+            let processFdDir = "/proc" </> show processId </> "fd"
+            processDirExists <- doesDirectoryExist processDir
+            processFdDirExists <- doesDirectoryExist processFdDir
+            if not processFdDirExists
+                then pure $ Just processDirExists
+                else
+                    catchIOError
+                        (classifyProcFdObjectHandleChecks =<< mapM (procFdCanWriteObject fingerprint processId) =<< listDirectory processFdDir)
+                        (const $ pure Nothing)
+
+classifyProcFdObjectHandleChecks :: [Maybe Bool] -> IO (Maybe Bool)
+classifyProcFdObjectHandleChecks results
+    | any (== Just True) results = pure $ Just True
+    | any (== Nothing) results = pure Nothing
+    | otherwise = pure $ Just False
+
+procFdCanWriteObject :: CompilerObjectOutputFingerprint -> Integer -> FilePath -> IO (Maybe Bool)
+procFdCanWriteObject fingerprint processId fdName
+    | not (all isDigit fdName) = pure $ Just False
+    | otherwise =
+        catchIOError
+            ( do
+                let fdPath = "/proc" </> show processId </> "fd" </> fdName
+                fdStatus <- getFileStatus fdPath
+                if compilerObjectFingerprintMatchesStatus fingerprint fdStatus
+                    then do
+                        let fdInfoPath =
+                                "/proc" </> show processId </> "fdinfo" </> fdName
+                        maybeFlags <- readProcFdOpenFlags fdInfoPath
+                        pure $ compilerObjectOpenFlagsCanWrite <$> maybeFlags
+                    else pure $ Just False
+            )
+            ( \ioErr ->
+                if ioeGetErrorType ioErr == NoSuchThing
+                    then pure $ Just False
+                    else pure Nothing
+            )
+
+readProcFdOpenFlags :: FilePath -> IO (Maybe Integer)
+readProcFdOpenFlags fdInfoPath =
+    catchIOError
+        ( do
+            fdInfo <- readFile fdInfoPath
+            _ <- evaluate $ length fdInfo
+            pure $ do
+                flagsLine <- findProcFdFlagsLine $ lines fdInfo
+                parseOctalInteger flagsLine
+        )
+        (const $ pure Nothing)
+
+findProcFdFlagsLine :: [String] -> Maybe String
+findProcFdFlagsLine [] = Nothing
+findProcFdFlagsLine (line:rest) =
+    case words line of
+        "flags:":flagsText:_ -> Just flagsText
+        _                    -> findProcFdFlagsLine rest
+
+compilerObjectOpenFlagsCanWrite :: Integer -> Bool
+compilerObjectOpenFlagsCanWrite flags =
+    flags .&. 3 /= 0
+
+compilerProcessHasWritableObjectHandleViaLsof
+    :: CompilerObjectOutputFingerprint -> Integer -> IO (Maybe Bool)
+compilerProcessHasWritableObjectHandleViaLsof fingerprint processId =
+    catchIOError
+        ( do
+            lsofPath <- trustedSystemHelperPath "lsof"
+            (exitCode, stdoutText, _) <-
+                maybe
+                    (pure (ExitFailure 127, "", ""))
+                    ( \path ->
+                        readProcessWithExitCode
+                            path
+                            ["-nP", "-F", "fDina", "-p", show processId]
+                            ""
+                    )
+                    lsofPath
+            case exitCode of
+                ExitSuccess ->
+                    pure . Just $
+                        any
+                            (lsofFdRecordCanWriteObject fingerprint)
+                            (parseLsofFdRecords stdoutText)
+                ExitFailure _ -> pure Nothing
+        )
+        (const $ pure Nothing)
+
+trustedSystemHelperPath :: FilePath -> IO (Maybe FilePath)
+trustedSystemHelperPath helperName =
+    firstM doesFileExist $
+        map (</> helperName) trustedSystemHelperDirectories
+    where
+        firstM _ [] = pure Nothing
+        firstM predicate (candidate:candidates) = do
+            matched <- predicate candidate
+            if matched
+                then Just <$> canonicalizePath candidate
+                else firstM predicate candidates
+
+trustedSystemHelperDirectories :: [FilePath]
+trustedSystemHelperDirectories =
+    [ "/usr/bin"
+    , "/bin"
+    , "/usr/sbin"
+    , "/sbin"
+    ]
+
+data LsofFdRecord = LsofFdRecord
+    { lsofFdAccess :: Maybe String
+    , lsofFdDevice :: Maybe Integer
+    , lsofFdInode  :: Maybe Integer
+    }
+
+emptyLsofFdRecord :: LsofFdRecord
+emptyLsofFdRecord =
+    LsofFdRecord
+        { lsofFdAccess = Nothing
+        , lsofFdDevice = Nothing
+        , lsofFdInode = Nothing
+        }
+
+parseLsofFdRecords :: String -> [LsofFdRecord]
+parseLsofFdRecords =
+    reverse . flushCurrent . List.foldl' step ([], Nothing) . lines
+    where
+        flushCurrent (records, maybeRecord) =
+            case maybeRecord of
+                Just record -> record : records
+                Nothing     -> records
+
+        step (records, maybeRecord) line =
+            case line of
+                'f':_ ->
+                    ( flushCurrent (records, maybeRecord)
+                    , Just emptyLsofFdRecord
+                    )
+                'a':access ->
+                    ( records
+                    , (\record -> record {lsofFdAccess = Just access})
+                        <$> maybeRecord
+                    )
+                'D':deviceText ->
+                    ( records
+                    , (\record -> record {lsofFdDevice = parseUnsignedIntegerAutoBase deviceText})
+                        <$> maybeRecord
+                    )
+                'i':inodeText ->
+                    ( records
+                    , (\record -> record {lsofFdInode = parseUnsignedIntegerAutoBase inodeText})
+                        <$> maybeRecord
+                    )
+                _ -> (records, maybeRecord)
+
+lsofFdRecordCanWriteObject :: CompilerObjectOutputFingerprint -> LsofFdRecord -> Bool
+lsofFdRecordCanWriteObject fingerprint record =
+    case (lsofFdDevice record, lsofFdInode record) of
+        (Just deviceId, Just inode)
+            | compilerObjectFingerprintMatchesId fingerprint deviceId inode ->
+                maybe True lsofAccessCanWrite $ lsofFdAccess record
+        _ -> False
+
+lsofAccessCanWrite :: String -> Bool
+lsofAccessCanWrite access =
+    'w' `elem` access || 'u' `elem` access
+
+compilerObjectFingerprintMatchesStatus
+    :: CompilerObjectOutputFingerprint -> FileStatus -> Bool
+compilerObjectFingerprintMatchesStatus fingerprint status =
+    compilerObjectFingerprintMatchesId
+        fingerprint
+        (fromIntegral $ deviceID status)
+        (fromIntegral $ fileID status)
+
+compilerObjectFingerprintMatchesId
+    :: CompilerObjectOutputFingerprint -> Integer -> Integer -> Bool
+compilerObjectFingerprintMatchesId (CompilerObjectOutputFingerprint deviceId inode _ _ _ _) deviceId' inode' =
+    deviceId == deviceId' && inode == inode'
+
+parseOctalInteger :: String -> Maybe Integer
+parseOctalInteger digits
+    | null digits || any (`notElem` ['0' .. '7']) digits = Nothing
+    | otherwise =
+        Just $ List.foldl' (\acc digit -> acc * 8 + fromIntegral (digitToInt digit)) 0 digits
+
+parseUnsignedIntegerAutoBase :: String -> Maybe Integer
+parseUnsignedIntegerAutoBase value =
+    case stripPrefix "0x" value <|> stripPrefix "0X" value of
+        Just hexDigits -> parseHexInteger hexDigits
+        Nothing
+            | not (null value) && all isDigit value -> readMaybe value
+            | otherwise -> Nothing
+
+parseHexInteger :: String -> Maybe Integer
+parseHexInteger digits
+    | null digits || not (all isHexDigit digits) = Nothing
+    | otherwise =
+        Just $ List.foldl' (\acc digit -> acc * 16 + fromIntegral (digitToInt digit)) 0 digits
 
 foldCompilerOutputChunks
     :: Maybe ProcessGroupID
-    -> IO Bool
+    -> CompilerPostExitReadiness
     -> TVar Bool
     -> Handle
     -> Handle
@@ -2326,13 +2988,13 @@ foldCompilerOutputChunks processGroupId postExitDrainSatisfied processExitVar st
             -> IO (Maybe CompilerOutputStream)
         waitForNextOutputStreamOrExit processExitVar' preferredStream stdoutOpen stderrOpen stdoutReady stderrReady =
             atomically $
-                waitForNextOutputStreamStm
+                waitForProcessExit processExitVar'
+                    `orElse` waitForNextOutputStreamStm
                     preferredStream
                     stdoutOpen
                     stderrOpen
                     stdoutReady
                     stderrReady
-                    `orElse` waitForProcessExit processExitVar'
 
         waitForNextOutputStreamStm
             :: CompilerOutputStream
@@ -2416,103 +3078,43 @@ foldCompilerOutputChunks processGroupId postExitDrainSatisfied processExitVar st
             stdoutFd
             stderrFd
                 | not stdoutOpen && not stderrOpen =
-                    let (stdoutPendingChunks', stdoutIndex') =
-                            queuePendingCapturedCompilerOutputChunks
-                                CompilerStdout
-                                stdoutIndex
-                                (finalCompilerOutputChunk stdoutTrailingBytes)
-                                stdoutPendingChunks
-                        (stderrPendingChunks', stderrIndex') =
-                            queuePendingCapturedCompilerOutputChunks
-                                CompilerStderr
-                                stderrIndex
-                                (finalCompilerOutputChunk stderrTrailingBytes)
-                                stderrPendingChunks
-                     in pure
-                            ( acc
-                            , stdoutPendingChunks'
-                            , stderrPendingChunks'
-                            , stdoutIndex'
-                            , stderrIndex'
-                            )
+                    finishDrainedCompilerOutputAfterExit
+                        acc
+                        stdoutPendingChunks
+                        stderrPendingChunks
+                        stdoutTrailingBytes
+                        stderrTrailingBytes
+                        stdoutIndex
+                        stderrIndex
                 | otherwise =
                     case nextDrainOutputStream preferredStream stdoutOpen stderrOpen of
-                        Nothing ->
-                            let (stdoutPendingChunks', stdoutIndex') =
-                                    queuePendingCapturedCompilerOutputChunks
-                                        CompilerStdout
-                                        stdoutIndex
-                                        (finalCompilerOutputChunk stdoutTrailingBytes)
-                                        stdoutPendingChunks
-                                (stderrPendingChunks', stderrIndex') =
-                                    queuePendingCapturedCompilerOutputChunks
-                                        CompilerStderr
-                                        stderrIndex
-                                        (finalCompilerOutputChunk stderrTrailingBytes)
-                                        stderrPendingChunks
-                             in pure
-                                    ( acc
-                                    , stdoutPendingChunks'
-                                    , stderrPendingChunks'
-                                    , stdoutIndex'
-                                    , stderrIndex'
-                                    )
-                        Just outputStream -> do
-                            (acc', stdoutTrailingBytes', stderrTrailingBytes', stdoutIndex', stderrIndex') <-
-                                flushPendingTrailingOutputChunkBefore
-                                    outputStream
-                                    acc
-                                    stdoutTrailingBytes
-                                    stderrTrailingBytes
-                                    stdoutIndex
-                                    stderrIndex
-                            let (outputFd, trailingBytes) =
-                                    case outputStream of
-                                        CompilerStdout ->
-                                            (stdoutFd, stdoutTrailingBytes')
-                                        CompilerStderr ->
-                                            (stderrFd, stderrTrailingBytes')
-                            maybeBytes <- readDrainedCompilerOutputByte outputFd
-                            case maybeBytes of
                                 Nothing ->
-                                    closeDrainedCompilerOutputStreamAfterExit
-                                        outputStream
-                                        acc'
+                                    finishDrainedCompilerOutputAfterExit
+                                        acc
                                         stdoutPendingChunks
                                         stderrPendingChunks
-                                        stdoutTrailingBytes'
-                                        stderrTrailingBytes'
-                                        stdoutOpen
-                                        stderrOpen
-                                        stdoutIndex'
-                                        stderrIndex'
-                                        preferredStream
-                                        stdoutReady
-                                        stderrReady
-                                        stdoutFd
-                                        stderrFd
-                                Just CompilerOutputReadEOF ->
-                                    closeDrainedCompilerOutputStreamAfterExit
-                                        outputStream
-                                        acc'
-                                        stdoutPendingChunks
-                                        stderrPendingChunks
-                                        stdoutTrailingBytes'
-                                        stderrTrailingBytes'
-                                        stdoutOpen
-                                        stderrOpen
-                                        stdoutIndex'
-                                        stderrIndex'
-                                        preferredStream
-                                        stdoutReady
-                                        stderrReady
-                                        stdoutFd
-                                        stderrFd
-                                Just CompilerOutputReadWouldBlock -> do
-                                    postExitSatisfied <- postExitDrainSatisfied
-                                    processGroupStillAlive <- compilerProcessGroupAlive processGroupId
-                                    if postExitSatisfied || not processGroupStillAlive
-                                        then
+                                        stdoutTrailingBytes
+                                        stderrTrailingBytes
+                                        stdoutIndex
+                                        stderrIndex
+                                Just outputStream -> do
+                                    (acc', stdoutTrailingBytes', stderrTrailingBytes', stdoutIndex', stderrIndex') <-
+                                        flushPendingTrailingOutputChunkBefore
+                                            outputStream
+                                            acc
+                                            stdoutTrailingBytes
+                                            stderrTrailingBytes
+                                            stdoutIndex
+                                            stderrIndex
+                                    let (outputFd, trailingBytes) =
+                                            case outputStream of
+                                                CompilerStdout ->
+                                                    (stdoutFd, stdoutTrailingBytes')
+                                                CompilerStderr ->
+                                                    (stderrFd, stderrTrailingBytes')
+                                    maybeBytes <- readDrainedCompilerOutputByte outputFd
+                                    case maybeBytes of
+                                        Nothing ->
                                             closeDrainedCompilerOutputStreamAfterExit
                                                 outputStream
                                                 acc'
@@ -2529,33 +3131,30 @@ foldCompilerOutputChunks processGroupId postExitDrainSatisfied processExitVar st
                                                 stderrReady
                                                 stdoutFd
                                                 stderrFd
-                                        else do
-                                            maybeOutputStream <-
-                                                waitForDrainedCompilerOutputStreamAfterExit
-                                                    preferredStream
-                                                    stdoutOpen
-                                                    stderrOpen
-                                                    stdoutReady
-                                                    stderrReady
-                                            case maybeOutputStream of
-                                                Just preferredStream' ->
-                                                    drainCapturedCompilerOutputAfterExit
-                                                        acc'
-                                                        stdoutPendingChunks
-                                                        stderrPendingChunks
-                                                        stdoutTrailingBytes'
-                                                        stderrTrailingBytes'
-                                                        stdoutOpen
-                                                        stderrOpen
-                                                        stdoutIndex'
-                                                        stderrIndex'
-                                                        preferredStream'
-                                                        stdoutReady
-                                                        stderrReady
-                                                        stdoutFd
-                                                        stderrFd
-                                                Nothing ->
-                                                    drainCapturedCompilerOutputAfterExit
+                                        Just CompilerOutputReadEOF ->
+                                            closeDrainedCompilerOutputStreamAfterExit
+                                                outputStream
+                                                acc'
+                                                stdoutPendingChunks
+                                                stderrPendingChunks
+                                                stdoutTrailingBytes'
+                                                stderrTrailingBytes'
+                                                stdoutOpen
+                                                stderrOpen
+                                                stdoutIndex'
+                                                stderrIndex'
+                                                preferredStream
+                                                stdoutReady
+                                                stderrReady
+                                                stdoutFd
+                                                stderrFd
+                                        Just CompilerOutputReadWouldBlock -> do
+                                            postExitSatisfied <- postExitDrainSatisfied processGroupId
+                                            processGroupStillAlive <- compilerProcessGroupAlive processGroupId
+                                            if postExitSatisfied || not processGroupStillAlive
+                                                then
+                                                    closeDrainedCompilerOutputStreamAfterExit
+                                                        outputStream
                                                         acc'
                                                         stdoutPendingChunks
                                                         stderrPendingChunks
@@ -2570,64 +3169,157 @@ foldCompilerOutputChunks processGroupId postExitDrainSatisfied processExitVar st
                                                         stderrReady
                                                         stdoutFd
                                                         stderrFd
-                                Just (CompilerOutputReadBytes bytes) -> do
-                                    let (completedChunks, remainingTrailingBytes) =
-                                            splitCompleteCompilerOutputChunks (trailingBytes <> bytes)
-                                        readyChunks =
-                                            completedChunks
-                                                <> finalCompilerOutputChunk remainingTrailingBytes
-                                        readyChunkCount = length readyChunks
-                                    ( acc''
-                                        , stdoutPendingChunks'
-                                        , stderrPendingChunks'
-                                        , stdoutIndex''
-                                        , stderrIndex''
-                                        ) <-
-                                            captureCompletedCompilerOutputChunks
-                                                outputStream
-                                                readyChunks
-                                                acc'
-                                                stdoutPendingChunks
-                                                stderrPendingChunks
-                                                stdoutIndex'
-                                                stderrIndex'
-                                    let preferredStream'
-                                            | stdoutOpen && stderrOpen = flipCompilerOutputStream outputStream
-                                            | otherwise = preferredStream
-                                    if readyChunkCount > 0
-                                        then
-                                            drainCapturedCompilerOutputAfterExit
-                                                acc''
-                                                stdoutPendingChunks'
-                                                stderrPendingChunks'
-                                                B.empty
-                                                B.empty
-                                                stdoutOpen
-                                                stderrOpen
-                                                stdoutIndex''
-                                                stderrIndex''
-                                                preferredStream'
-                                                stdoutReady
-                                                stderrReady
-                                                stdoutFd
-                                                stderrFd
-                                        else
-                                            closeDrainedCompilerOutputStreamAfterExit
-                                                outputStream
-                                                acc''
-                                                stdoutPendingChunks'
-                                                stderrPendingChunks'
-                                                B.empty
-                                                B.empty
-                                                stdoutOpen
-                                                stderrOpen
-                                                stdoutIndex''
-                                                stderrIndex''
-                                                preferredStream'
-                                                stdoutReady
-                                                stderrReady
-                                                stdoutFd
-                                                stderrFd
+                                                else do
+                                                    maybeOutputStream <-
+                                                        waitForDrainedCompilerOutputStreamAfterExit
+                                                            preferredStream
+                                                            stdoutOpen
+                                                            stderrOpen
+                                                            stdoutReady
+                                                            stderrReady
+                                                    case maybeOutputStream of
+                                                        Just preferredStream' ->
+                                                            drainCapturedCompilerOutputAfterExit
+                                                                acc'
+                                                                stdoutPendingChunks
+                                                                stderrPendingChunks
+                                                                stdoutTrailingBytes'
+                                                                stderrTrailingBytes'
+                                                                stdoutOpen
+                                                                stderrOpen
+                                                                stdoutIndex'
+                                                                stderrIndex'
+                                                                preferredStream'
+                                                                stdoutReady
+                                                                stderrReady
+                                                                stdoutFd
+                                                                stderrFd
+                                                        Nothing ->
+                                                            drainCapturedCompilerOutputAfterExit
+                                                                acc'
+                                                                stdoutPendingChunks
+                                                                stderrPendingChunks
+                                                                stdoutTrailingBytes'
+                                                                stderrTrailingBytes'
+                                                                stdoutOpen
+                                                                stderrOpen
+                                                                stdoutIndex'
+                                                                stderrIndex'
+                                                                preferredStream
+                                                                stdoutReady
+                                                                stderrReady
+                                                                stdoutFd
+                                                                stderrFd
+                                        Just (CompilerOutputReadBytes bytes) -> do
+                                            postExitSatisfied <- postExitDrainSatisfied processGroupId
+                                            bytes' <-
+                                                if postExitSatisfied
+                                                    then readForcedDrainedCompilerOutputBytes outputFd bytes
+                                                    else pure bytes
+                                            let (completedChunks, remainingTrailingBytes) =
+                                                    splitCompleteCompilerOutputChunks (trailingBytes <> bytes')
+                                                readyChunks =
+                                                    completedChunks
+                                                        <> finalCompilerOutputChunk remainingTrailingBytes
+                                                readyChunkCount = length readyChunks
+                                            ( acc''
+                                                , stdoutPendingChunks'
+                                                , stderrPendingChunks'
+                                                , stdoutIndex''
+                                                , stderrIndex''
+                                                ) <-
+                                                    captureCompletedCompilerOutputChunks
+                                                        outputStream
+                                                        readyChunks
+                                                        acc'
+                                                        stdoutPendingChunks
+                                                        stderrPendingChunks
+                                                        stdoutIndex'
+                                                        stderrIndex'
+                                            let preferredStream'
+                                                    | stdoutOpen && stderrOpen = flipCompilerOutputStream outputStream
+                                                    | otherwise = preferredStream
+                                            if postExitSatisfied
+                                                then
+                                                    closeDrainedCompilerOutputStreamAfterExit
+                                                        outputStream
+                                                        acc''
+                                                        stdoutPendingChunks'
+                                                        stderrPendingChunks'
+                                                        B.empty
+                                                        B.empty
+                                                        stdoutOpen
+                                                        stderrOpen
+                                                        stdoutIndex''
+                                                        stderrIndex''
+                                                        preferredStream'
+                                                        stdoutReady
+                                                        stderrReady
+                                                        stdoutFd
+                                                        stderrFd
+                                                else
+                                                    if readyChunkCount > 0
+                                                        then
+                                                            drainCapturedCompilerOutputAfterExit
+                                                                acc''
+                                                                stdoutPendingChunks'
+                                                                stderrPendingChunks'
+                                                                B.empty
+                                                                B.empty
+                                                                stdoutOpen
+                                                                stderrOpen
+                                                                stdoutIndex''
+                                                                stderrIndex''
+                                                                preferredStream'
+                                                                stdoutReady
+                                                                stderrReady
+                                                                stdoutFd
+                                                                stderrFd
+                                                        else
+                                                            closeDrainedCompilerOutputStreamAfterExit
+                                                                outputStream
+                                                                acc''
+                                                                stdoutPendingChunks'
+                                                                stderrPendingChunks'
+                                                                B.empty
+                                                                B.empty
+                                                                stdoutOpen
+                                                                stderrOpen
+                                                                stdoutIndex''
+                                                                stderrIndex''
+                                                                preferredStream'
+                                                                stdoutReady
+                                                                stderrReady
+                                                                stdoutFd
+                                                                stderrFd
+
+        finishDrainedCompilerOutputAfterExit
+            acc
+            stdoutPendingChunks
+            stderrPendingChunks
+            stdoutTrailingBytes
+            stderrTrailingBytes
+            stdoutIndex
+            stderrIndex =
+                let (stdoutPendingChunks', stdoutIndex') =
+                        queuePendingCapturedCompilerOutputChunks
+                            CompilerStdout
+                            stdoutIndex
+                            (finalCompilerOutputChunk stdoutTrailingBytes)
+                            stdoutPendingChunks
+                    (stderrPendingChunks', stderrIndex') =
+                        queuePendingCapturedCompilerOutputChunks
+                            CompilerStderr
+                            stderrIndex
+                            (finalCompilerOutputChunk stderrTrailingBytes)
+                            stderrPendingChunks
+                 in pure
+                        ( acc
+                        , stdoutPendingChunks'
+                        , stderrPendingChunks'
+                        , stdoutIndex'
+                        , stderrIndex'
+                        )
 
         closeDrainedCompilerOutputStreamAfterExit
             outputStream
@@ -2748,8 +3440,21 @@ foldCompilerOutputChunks processGroupId postExitDrainSatisfied processExitVar st
                         else
                             if ioeGetErrorType ioErr == ResourceExhausted
                                 then pure $ Just CompilerOutputReadWouldBlock
-                                else ioError ioErr
-                )
+                                    else ioError ioErr
+                    )
+
+        readForcedDrainedCompilerOutputBytes fd initialBytes =
+            readLoop (B.length initialBytes) [initialBytes]
+            where
+                readLoop byteCount chunks
+                    | byteCount >= compilerOutputForcedDrainMaxBytes =
+                        pure $ B.concat $ reverse chunks
+                    | otherwise =
+                        readDrainedCompilerOutputByte fd >>= \case
+                            Just (CompilerOutputReadBytes bytes) ->
+                                readLoop (byteCount + B.length bytes) (bytes : chunks)
+                            _ ->
+                                pure $ B.concat $ reverse chunks
 
 compilerOutputReadChunkSize :: Int
 compilerOutputReadChunkSize = 4096
@@ -2757,8 +3462,26 @@ compilerOutputReadChunkSize = 4096
 compilerOutputDrainAfterExitPollMicros :: Int
 compilerOutputDrainAfterExitPollMicros = 50000
 
+compilerProcessFailureOutputDrainGraceMicros :: Int
+compilerProcessFailureOutputDrainGraceMicros = 500000
+
+compilerOutputForcedDrainMaxBytes :: Int
+compilerOutputForcedDrainMaxBytes = 65536
+
+compilerProcessFailureTerminationGraceMicros :: Int
+compilerProcessFailureTerminationGraceMicros = 200000
+
+compilerProcessPostExitCompletionTimeoutMicros :: Int
+compilerProcessPostExitCompletionTimeoutMicros = 3000000
+
 minimumStableCompilerObjectOutputBytes :: Integer
 minimumStableCompilerObjectOutputBytes = 20
+
+minimumProbeObjectTargetBytes :: Word64
+minimumProbeObjectTargetBytes = 4
+
+minimumElfProbeObjectTargetBytes :: Int
+minimumElfProbeObjectTargetBytes = 20
 
 data CompilerOutputReadResult
     = CompilerOutputReadEOF
@@ -2878,7 +3601,7 @@ finalizeIncrementalCompilerWarningSuppression stdoutHandle stderrHandle suppress
                     ]
                 )
         (chunkFilter', pendingChunkDecisions) =
-            foldl'
+            List.foldl'
                 feedPendingSuppressibleChunk
                 ( incrementalCompilerWarningChunkFilter suppressionState
                 , []
@@ -3005,7 +3728,7 @@ applyCompilerWarningFilterDecisions
 applyCompilerWarningFilterDecisions decisions suppressionState =
     suppressionState
         { incrementalCompilerWarningDecisions =
-            foldl'
+            List.foldl'
                 applyCompilerWarningFilterDecision
                 (incrementalCompilerWarningDecisions suppressionState)
                 decisions
@@ -3016,7 +3739,7 @@ applyCompilerWarningFilterDecision
     -> CompilerWarningFilterDecision SuppressibleCapturedCompilerOutputChunk
     -> Map.Map CapturedCompilerOutputKey CapturedCompilerOutputDecision
 applyCompilerWarningFilterDecision decisionMap decision =
-    foldl'
+    List.foldl'
         (\decisionMap' outputKey -> Map.insert outputKey capturedDecision decisionMap')
         decisionMap
         outputKeys
@@ -3067,9 +3790,23 @@ capturedCompilerOutputDestinationHandle stdoutHandle stderrHandle capturedChunk 
         CompilerStdout -> stdoutHandle
         CompilerStderr -> stderrHandle
 
+replayCapturedCompilerOutputChunk :: Handle -> Handle -> () -> CapturedCompilerOutputChunk -> IO ()
+replayCapturedCompilerOutputChunk stdoutHandle stderrHandle () capturedChunk =
+    replayCapturedCompilerOutputBytes
+        (capturedCompilerOutputDestinationHandle stdoutHandle stderrHandle capturedChunk)
+        (fst $ capturedCompilerOutputChunk capturedChunk)
+
 takeCapturedResult :: MVar (Either SomeException a) -> IO a
 takeCapturedResult outputVar =
     takeMVar outputVar >>= either throwIO pure
+
+takeCapturedResultAfterProcessExit :: MVar (Either SomeException a) -> IO a
+takeCapturedResultAfterProcessExit outputVar =
+    timeout compilerProcessPostExitCompletionTimeoutMicros (takeCapturedResult outputVar) >>= \case
+        Just result -> pure result
+        Nothing ->
+            ioError . userError $
+                "compiler wrapper did not finish delayed output after exit"
 
 compilerOutputBytesForStream
     :: CompilerOutputStream
@@ -3122,7 +3859,7 @@ groupCapturedCompilerOutputChunksForWarningSuppression capturedChunks =
     orderPendingSuppressibleChunks capturedChunks (completedChunks <> pendingChunks)
     where
         (incrementalStdoutPendingChunk, incrementalStderrPendingChunk, completedChunks) =
-            foldl'
+            List.foldl'
                 step
                 (Nothing, Nothing, [])
                 capturedChunks
@@ -3177,10 +3914,10 @@ readCompilerProcessWithExitCodeProbeSuppressingWarnings
     -> [String]
     -> IO (ExitCode, String, String)
 readCompilerProcessWithExitCodeProbeSuppressingWarnings =
-    readCompilerProcessWithExitCodeProbeSuppressingWarningsUntil (\_ -> pure False)
+    readCompilerProcessWithExitCodeProbeSuppressingWarningsUntil (\_ _ -> pure False)
 
 readCompilerProcessWithExitCodeProbeSuppressingWarningsUntil
-    :: (IO [CapturedCompilerOutputChunk] -> IO Bool)
+    :: (IO [CapturedCompilerOutputChunk] -> CompilerPostExitReadiness)
     -> CompilerCommand
     -> [String]
     -> IO (ExitCode, String, String)
@@ -3210,10 +3947,10 @@ readCompilerProcessWithExitCodeProbe
     -> [String]
     -> IO (ExitCode, String, String)
 readCompilerProcessWithExitCodeProbe =
-    readCompilerProcessWithExitCodeProbeUntil (\_ -> pure False)
+    readCompilerProcessWithExitCodeProbeUntil (\_ _ -> pure False)
 
 readCompilerProcessWithExitCodeProbeUntil
-    :: (IO [CapturedCompilerOutputChunk] -> IO Bool)
+    :: (IO [CapturedCompilerOutputChunk] -> CompilerPostExitReadiness)
     -> Bool
     -> CompilerCommand
     -> [String]
@@ -3234,9 +3971,9 @@ readCompilerProcessWithExitCodeProbeUntil postExitDrainSatisfied suppressWarnsOu
 
 callCompilerProcess :: Bool -> CompilerCommand -> [String] -> IO ()
 callCompilerProcess =
-    callCompilerProcessUntil (pure False)
+    callCompilerProcessUntil compilerPostExitNotReady
 
-callCompilerProcessUntil :: IO Bool -> Bool -> CompilerCommand -> [String] -> IO ()
+callCompilerProcessUntil :: CompilerPostExitReadiness -> Bool -> CompilerCommand -> [String] -> IO ()
 callCompilerProcessUntil postExitDrainSatisfied suppressWarnsOutput compiler extraArgs
     | suppressWarnsOutput = do
         (exitCode, _) <-
@@ -3260,16 +3997,18 @@ callCompilerProcessUntil postExitDrainSatisfied suppressWarnsOutput compiler ext
                     pure (exitCode', finalizedSuppressionState)
         handleCompilerProcessExit compiler extraArgs exitCode
     | otherwise = do
-        processEnv <- compilerProcessEnv compiler
-        (_, _, _, processHandle) <- createProcess
-            (proc (compilerExecutable compiler) (compilerInvocationArgs compiler extraArgs))
-                { env = processEnv
-                , create_group = True
-                }
-        processGroupId <- compilerProcessGroupIdForHandle processHandle
-        exitCode <- waitForProcess processHandle
-        when (exitCode == ExitSuccess) $
-            waitForCompilerProcessPostExitCompletion processGroupId postExitDrainSatisfied
+        (exitCode, _) <-
+            bracket (hDuplicate stdout) hClose $ \stdoutHandle ->
+                bracket (hDuplicate stderr) hClose $ \stderrHandle -> do
+                    hSetBinaryMode stdoutHandle True
+                    hSetBinaryMode stderrHandle True
+                    foldCompilerProcessWithExitCodeChunksUntil
+                        postExitDrainSatisfied
+                        Inherit
+                        compiler
+                        extraArgs
+                        ()
+                        (replayCapturedCompilerOutputChunk stdoutHandle stderrHandle)
         handleCompilerProcessExit compiler extraArgs exitCode
 
 handleCompilerProcessExit :: CompilerCommand -> [String] -> ExitCode -> IO ()
@@ -3300,8 +4039,25 @@ withReadableFile path originalMode action
 shouldValidateRunnableLinkedOutput :: FilePath -> IO Bool
 shouldValidateRunnableLinkedOutput path =
     catchIOError
-        (isRegularFile <$> getSymbolicLinkStatus path)
+        (do
+            status <- getSymbolicLinkStatus path
+            if isRegularFile status
+                then pure True
+                else
+                    if isAllowedDirectRunnableLinkedOutput path status
+                        then pure False
+                        else rejectUnsupportedRunnableLinkedOutputPath path
+        )
         (\ioErr -> if isDoesNotExistError ioErr then pure True else ioError ioErr)
+
+isAllowedDirectRunnableLinkedOutput :: FilePath -> FileStatus -> Bool
+isAllowedDirectRunnableLinkedOutput path status =
+    isCharacterDevice status && normalise path == "/dev/null"
+
+rejectUnsupportedRunnableLinkedOutputPath :: FilePath -> IO a
+rejectUnsupportedRunnableLinkedOutputPath path =
+    ioError . userError $
+        "unsupported -r output path type: " <> path
 
 validateRunnableLinkedOutput :: FilePath -> Maybe String -> IO Bool
 validateRunnableLinkedOutput path maybeProbeMarker =
@@ -3316,21 +4072,155 @@ validateRunnableLinkedOutput path maybeProbeMarker =
                     if not hasExecuteBits
                         then pure False
                         else do
-                            withReadableFile path originalMode $ do
-                                bytes <- B.readFile path
-                                let markerPresent = maybe
-                                        True
-                                        (`probeMarkerPresent` bytes)
-                                        maybeProbeMarker
-                                    linkedOutputOk =
-                                        maybe
-                                            False
-                                            hasRunnableLinkedElfProgramHeadersAndInterpreter
-                                            (parseLinkedOutputElf bytes)
-                                pure $ markerPresent && linkedOutputOk
+                            withReadableFile path originalMode $
+                                validateReadableRunnableLinkedOutput path maybeProbeMarker
                 else pure False
         )
-        (\ioErr -> if isDoesNotExistError ioErr then pure False else ioError ioErr)
+        ( \ioErr ->
+            if linkedOutputValidationCanFailClosed ioErr
+                then pure False
+                else ioError ioErr
+        )
+
+linkedOutputValidationCanFailClosed :: IOError -> Bool
+linkedOutputValidationCanFailClosed ioErr =
+    isDoesNotExistError ioErr
+        || isEOFError ioErr
+        || ioeGetErrorType ioErr
+            `elem` [ IllegalOperation
+                   , InappropriateType
+                   , InvalidArgument
+                   , NoSuchThing
+                   , PermissionDenied
+                   , ResourceExhausted
+                   , ResourceVanished
+                   ]
+
+validateReadableRunnableLinkedOutput :: FilePath -> Maybe String -> IO Bool
+validateReadableRunnableLinkedOutput path maybeProbeMarker =
+    bracket openLinkedOutput closeFd readLinkedOutput
+    where
+        openLinkedOutput =
+            openFd path ReadOnly defaultFileFlags {nofollow = True, cloexec = True, nonBlock = True}
+
+        readLinkedOutput fd =
+            isJust <$> readStableRunnableLinkedOutputBytes fd maybeProbeMarker
+
+copyValidatedRunnableLinkedOutput :: FilePath -> FilePath -> Maybe String -> IO Bool
+copyValidatedRunnableLinkedOutput sourcePath destinationPath maybeProbeMarker = do
+    maybeSnapshot <- readValidatedRunnableLinkedOutputSnapshot sourcePath maybeProbeMarker
+    case maybeSnapshot of
+        Just (bytes, sourceMode) -> writeLinkedOutputBytes destinationPath sourceMode bytes
+        Nothing                  -> pure False
+
+readValidatedRunnableLinkedOutputSnapshot :: FilePath -> Maybe String -> IO (Maybe (B.ByteString, FileMode))
+readValidatedRunnableLinkedOutputSnapshot sourcePath maybeProbeMarker =
+    catchIOError
+        (bracket openLinkedOutput closeFd readLinkedOutput)
+        ( \ioErr ->
+            if linkedOutputValidationCanFailClosed ioErr
+                then pure Nothing
+                else ioError ioErr
+        )
+    where
+        openLinkedOutput =
+            openFd sourcePath ReadOnly defaultFileFlags {nofollow = True, cloexec = True, nonBlock = True}
+
+        readLinkedOutput fd =
+            readStableRunnableLinkedOutputBytes fd maybeProbeMarker
+
+ensureRunnableLinkedOutputCopied :: FilePath -> FilePath -> Maybe String -> IO Bool
+ensureRunnableLinkedOutputCopied sourcePath destinationPath maybeProbeMarker = do
+    copied <- copyValidatedRunnableLinkedOutput sourcePath destinationPath maybeProbeMarker
+    if copied
+        then validateRunnableLinkedOutput destinationPath maybeProbeMarker
+        else pure False
+
+readStableRunnableLinkedOutputBytes :: Fd -> Maybe String -> IO (Maybe (B.ByteString, FileMode))
+readStableRunnableLinkedOutputBytes fd maybeProbeMarker = do
+    statusBefore <- getFdStatus fd
+    let maybeOutputSize = fileStatusSizeWord64 statusBefore
+        hasExecuteBits =
+            intersectFileModes (fileMode statusBefore) executableFileMode /= 0
+    case maybeOutputSize of
+        Just outputSize
+            | isRegularFile statusBefore
+                && hasExecuteBits
+                && outputSize <= maximumRunnableLinkedOutputValidationBytes -> do
+                    maybeBytes <- readCompilerObjectBytesAt fd 0 outputSize
+                    statusAfter <- getFdStatus fd
+                    pure $ do
+                        bytes <- maybeBytes
+                        if compilerObjectOutputStatusFingerprint statusBefore
+                            == compilerObjectOutputStatusFingerprint statusAfter
+                            && validRunnableLinkedOutputBytes maybeProbeMarker bytes
+                            then Just (bytes, fileMode statusBefore)
+                            else Nothing
+        _ -> pure Nothing
+
+validRunnableLinkedOutputBytes :: Maybe String -> B.ByteString -> Bool
+validRunnableLinkedOutputBytes maybeProbeMarker bytes =
+    let markerPresent = maybe
+            True
+            (`probeMarkerPresent` bytes)
+            maybeProbeMarker
+        linkedOutputOk =
+            maybe
+                False
+                hasRunnableLinkedElfProgramHeadersAndInterpreter
+                (parseLinkedOutputElf bytes)
+     in markerPresent && linkedOutputOk
+
+writeLinkedOutputBytes :: FilePath -> FileMode -> B.ByteString -> IO Bool
+writeLinkedOutputBytes destinationPath sourceMode bytes =
+    bracket openLinkedOutputDestination closeFd $ \destinationFd -> do
+        destinationStatus <- getFdStatus destinationFd
+        if isRegularFile destinationStatus && linkCount destinationStatus == 1
+            then do
+                setFdSize destinationFd 0
+                _ <- fdSeek destinationFd AbsoluteSeek 0
+                written <- writeLinkedOutputFdBytes destinationFd bytes
+                when written $
+                    setFdMode destinationFd $
+                        fileMode destinationStatus
+                            `unionFileModes` intersectFileModes sourceMode executableFileMode
+                pure written
+            else pure False
+    where
+        openLinkedOutputDestination =
+            openFd
+                destinationPath
+                WriteOnly
+                defaultFileFlags {nofollow = True, cloexec = True, nonBlock = True}
+
+writeLinkedOutputFdBytes :: Fd -> B.ByteString -> IO Bool
+writeLinkedOutputFdBytes destinationFd = go
+    where
+        go remainingBytes
+            | B.null remainingBytes = pure True
+            | otherwise = do
+                writtenBytes <- PB.fdWrite destinationFd remainingBytes
+                let writtenByteCount = fromIntegral writtenBytes
+                if writtenByteCount <= 0
+                    || writtenByteCount > B.length remainingBytes
+                    then pure False
+                    else go $ B.drop writtenByteCount remainingBytes
+
+withRunnableLinkOutputPath :: Bool -> FilePath -> (FilePath -> IO a) -> IO a
+withRunnableLinkOutputPath False outputPath action = action outputPath
+withRunnableLinkOutputPath True outputPath action = do
+    tmpDir <- getTemporaryDirectory
+    (linkOutputPath, linkOutputHandle) <- openTempFile tmpDir "htcc-link-output-.out"
+    hSetBinaryMode linkOutputHandle True
+    finally
+        (do
+            outputMode <- fileMode <$> getFileStatus outputPath
+            setFileMode linkOutputPath outputMode
+            hClose linkOutputHandle
+            action linkOutputPath)
+        ( ignoreIOException (hClose linkOutputHandle)
+            *> ignoreIOException (removeFile linkOutputPath)
+        )
 
 probeMarkerPresent :: String -> B.ByteString -> Bool
 probeMarkerPresent probeMarker =
@@ -3347,6 +4237,563 @@ data LinkedOutputElf = LinkedOutputElf
     , linkedOutputElfProgramHeaderEntrySize :: Int
     , linkedOutputElfProgramHeaderCount     :: Int
     }
+
+data RelocatableElfObjectHeader = RelocatableElfObjectHeader
+    { relocatableElfData                     :: !Word8
+    , relocatableElfProgramHeaderOffset      :: !Word64
+    , relocatableElfSectionHeaderOffset      :: !Word64
+    , relocatableElfProgramHeaderEntrySize   :: !Int
+    , relocatableElfProgramHeaderCount       :: !Word64
+    , relocatableElfSectionHeaderEntrySize   :: !Int
+    , relocatableElfSectionHeaderCount       :: !Word64
+    , relocatableElfSectionHeaderStringIndex :: !Word64
+    }
+
+data RelocatableElfSectionHeader = RelocatableElfSectionHeader
+    { relocatableElfSectionType   :: !Int
+    , relocatableElfSectionOffset :: !Word64
+    , relocatableElfSectionSize   :: !Word64
+    , relocatableElfSectionLink   :: !Word64
+    , relocatableElfSectionInfo   :: !Word64
+    }
+
+data CompilerObjectContentDigest = CompilerObjectContentDigest
+    !Word64
+    !Word64
+    !Word64
+    deriving (Eq)
+
+relocatableElfObjectContentFingerprint :: Fd -> Word64 -> IO (Maybe CompilerObjectContentDigest)
+relocatableElfObjectContentFingerprint fd objectFileSize = do
+    maybeHeaderBytes <- readCompilerObjectBytesAt fd 0 $ fromIntegral elfHeaderSize
+    case maybeHeaderBytes >>= parseRelocatableElfObjectHeader of
+        Nothing -> pure Nothing
+        Just header -> do
+            maybeSectionHeader0 <- readRelocatableElfSectionHeader0 fd objectFileSize header
+            let maybeSectionCount =
+                    resolvedRelocatableElfSectionHeaderCount
+                        header
+                        maybeSectionHeader0
+                maybeProgramHeaderCount =
+                    resolvedRelocatableElfProgramHeaderCount
+                        header
+                        maybeSectionHeader0
+                maybeSectionHeaderStringIndex =
+                    resolvedRelocatableElfSectionHeaderStringIndex
+                        header
+                        maybeSectionHeader0
+            case (maybeHeaderBytes, maybeSectionCount, maybeProgramHeaderCount, maybeSectionHeaderStringIndex) of
+                (Just headerBytes, Just sectionCount, Just programHeaderCount, Just sectionHeaderStringIndex)
+                    | relocatableElfObjectTablesFit
+                        objectFileSize
+                        header
+                        sectionCount
+                        programHeaderCount
+                        sectionHeaderStringIndex
+                        && relocatableElfObjectReadinessLimitsFit
+                            objectFileSize
+                            sectionCount
+                            programHeaderCount -> do
+                            let initialDigest =
+                                    digestCompilerObjectLoadedBytes
+                                        emptyCompilerObjectContentDigest
+                                        0
+                                        (fromIntegral elfHeaderSize)
+                                        headerBytes
+                            maybeProgramHeaderDigest <-
+                                case initialDigest of
+                                    Just digest
+                                        | programHeaderCount == 0 -> pure $ Just digest
+                                        | otherwise ->
+                                            case tableSizeWord64
+                                                (relocatableElfProgramHeaderEntrySize header)
+                                                programHeaderCount of
+                                                Just programHeaderTableSize ->
+                                                    digestCompilerObjectRangeAt
+                                                        fd
+                                                        digest
+                                                        (relocatableElfProgramHeaderOffset header)
+                                                        programHeaderTableSize
+                                                Nothing -> pure Nothing
+                                    Nothing -> pure Nothing
+                            case maybeProgramHeaderDigest of
+                                Just digest ->
+                                    digestRelocatableElfSectionTableAndContents
+                                        fd
+                                        objectFileSize
+                                        header
+                                        sectionCount
+                                        digest
+                                Nothing -> pure Nothing
+                _ -> pure Nothing
+
+parseRelocatableElfObjectHeader :: B.ByteString -> Maybe RelocatableElfObjectHeader
+parseRelocatableElfObjectHeader bytes
+    | B.length bytes /= elfHeaderSize = Nothing
+    | B.take 4 bytes /= elfMagic = Nothing
+    | elfClass /= elfClass64Bit = Nothing
+    | elfData `notElem` [elfDataLittleEndian, elfDataBigEndian] = Nothing
+    | elfIdentVersion /= elfCurrentVersion = Nothing
+    | elfType /= elfTypeRelocatable = Nothing
+    | elfMachine /= elfMachineX86_64 = Nothing
+    | elfVersion /= fromIntegral elfCurrentVersion = Nothing
+    | elfHeaderByteSize /= elfHeaderSize = Nothing
+    | otherwise =
+        Just RelocatableElfObjectHeader
+            { relocatableElfData = elfData
+            , relocatableElfProgramHeaderOffset = elfProgramHeaderOffset
+            , relocatableElfSectionHeaderOffset = elfSectionHeaderOffset
+            , relocatableElfProgramHeaderEntrySize = elfProgramHeaderEntrySize
+            , relocatableElfProgramHeaderCount = elfProgramHeaderCount
+            , relocatableElfSectionHeaderEntrySize = elfSectionHeaderEntrySize
+            , relocatableElfSectionHeaderCount = elfSectionHeaderCount
+            , relocatableElfSectionHeaderStringIndex = elfSectionHeaderStringIndex
+            }
+    where
+        elfClass = B.index bytes 4
+        elfData = B.index bytes 5
+        elfIdentVersion = B.index bytes 6
+        elfType = decodeElfHalfWord elfData (B.index bytes 16) (B.index bytes 17) :: Int
+        elfMachine = decodeElfHalfWord elfData (B.index bytes 18) (B.index bytes 19) :: Int
+        elfVersion =
+            decodeElfWord32
+                elfData
+                [ B.index bytes 20
+                , B.index bytes 21
+                , B.index bytes 22
+                , B.index bytes 23
+                ] ::
+                Int
+        elfProgramHeaderOffset =
+            decodeElfWord64
+                elfData
+                [ B.index bytes 32
+                , B.index bytes 33
+                , B.index bytes 34
+                , B.index bytes 35
+                , B.index bytes 36
+                , B.index bytes 37
+                , B.index bytes 38
+                , B.index bytes 39
+                ]
+        elfSectionHeaderOffset =
+            decodeElfWord64
+                elfData
+                [ B.index bytes 40
+                , B.index bytes 41
+                , B.index bytes 42
+                , B.index bytes 43
+                , B.index bytes 44
+                , B.index bytes 45
+                , B.index bytes 46
+                , B.index bytes 47
+                ]
+        elfHeaderByteSize = decodeElfHalfWord elfData (B.index bytes 52) (B.index bytes 53) :: Int
+        elfProgramHeaderEntrySize =
+            decodeElfHalfWord elfData (B.index bytes 54) (B.index bytes 55) :: Int
+        elfProgramHeaderCount =
+            decodeElfHalfWord elfData (B.index bytes 56) (B.index bytes 57) :: Word64
+        elfSectionHeaderEntrySize =
+            decodeElfHalfWord elfData (B.index bytes 58) (B.index bytes 59) :: Int
+        elfSectionHeaderCount =
+            decodeElfHalfWord elfData (B.index bytes 60) (B.index bytes 61) :: Word64
+        elfSectionHeaderStringIndex =
+            decodeElfHalfWord elfData (B.index bytes 62) (B.index bytes 63) :: Word64
+
+readRelocatableElfSectionHeader0
+    :: Fd
+    -> Word64
+    -> RelocatableElfObjectHeader
+    -> IO (Maybe RelocatableElfSectionHeader)
+readRelocatableElfSectionHeader0 fd objectFileSize header
+    | relocatableElfSectionHeaderEntrySize header < elfSectionHeaderSize = pure Nothing
+    | not $
+        rangeWithinFile
+            (relocatableElfSectionHeaderOffset header)
+            (fromIntegral elfSectionHeaderSize)
+            objectFileSize = pure Nothing
+    | otherwise = do
+        maybeSectionHeaderBytes <-
+            readCompilerObjectBytesAt
+                fd
+                (relocatableElfSectionHeaderOffset header)
+                (fromIntegral elfSectionHeaderSize)
+        pure $ maybeSectionHeaderBytes >>= parseRelocatableElfSectionHeader (relocatableElfData header)
+
+resolvedRelocatableElfSectionHeaderCount
+    :: RelocatableElfObjectHeader -> Maybe RelocatableElfSectionHeader -> Maybe Word64
+resolvedRelocatableElfSectionHeaderCount header maybeSectionHeader0 =
+    case relocatableElfSectionHeaderCount header of
+        0            -> relocatableElfSectionSize <$> maybeSectionHeader0
+        sectionCount -> Just sectionCount
+
+resolvedRelocatableElfProgramHeaderCount
+    :: RelocatableElfObjectHeader -> Maybe RelocatableElfSectionHeader -> Maybe Word64
+resolvedRelocatableElfProgramHeaderCount header maybeSectionHeader0 =
+    case relocatableElfProgramHeaderCount header of
+        count
+            | count == elfProgramHeaderCountExtended ->
+                relocatableElfSectionInfo <$> maybeSectionHeader0
+            | otherwise -> Just count
+
+resolvedRelocatableElfSectionHeaderStringIndex
+    :: RelocatableElfObjectHeader -> Maybe RelocatableElfSectionHeader -> Maybe Word64
+resolvedRelocatableElfSectionHeaderStringIndex header maybeSectionHeader0 =
+    case relocatableElfSectionHeaderStringIndex header of
+        index
+            | index == elfSectionHeaderIndexExtended -> do
+                sectionHeader0 <- maybeSectionHeader0
+                Just $ relocatableElfSectionLink sectionHeader0
+            | otherwise -> Just index
+
+relocatableElfObjectTablesFit
+    :: Word64
+    -> RelocatableElfObjectHeader
+    -> Word64
+    -> Word64
+    -> Word64
+    -> Bool
+relocatableElfObjectTablesFit objectFileSize header sectionCount programHeaderCount sectionHeaderStringIndex =
+    sectionCount > 0
+        && programHeaderTableFits
+        && sectionHeaderTableFits
+        && sectionHeaderStringIndexValid
+    where
+        programHeaderTableFits =
+            programHeaderCount == 0
+                || relocatableElfProgramHeaderEntrySize header >= elfProgramHeaderSize
+                    && maybe
+                        False
+                        ( \programHeaderTableSize ->
+                            rangeWithinFile
+                                (relocatableElfProgramHeaderOffset header)
+                                programHeaderTableSize
+                                objectFileSize
+                        )
+                        (tableSizeWord64 (relocatableElfProgramHeaderEntrySize header) programHeaderCount)
+        sectionHeaderTableFits =
+            relocatableElfSectionHeaderEntrySize header >= elfSectionHeaderSize
+                && maybe
+                    False
+                    ( \sectionHeaderTableSize ->
+                        rangeWithinFile
+                            (relocatableElfSectionHeaderOffset header)
+                            sectionHeaderTableSize
+                            objectFileSize
+                    )
+                    (tableSizeWord64 (relocatableElfSectionHeaderEntrySize header) sectionCount)
+        sectionHeaderStringIndexValid =
+            sectionHeaderStringIndex == elfSectionHeaderIndexUndefined
+                || sectionHeaderStringIndex < sectionCount
+
+tableSizeWord64 :: Int -> Word64 -> Maybe Word64
+tableSizeWord64 entrySize entryCount =
+    let tableSize = fromIntegral entrySize * fromIntegral entryCount :: Integer
+     in if entrySize >= 0 && tableSize <= fromIntegral (maxBound :: Word64)
+            then Just $ fromInteger tableSize
+            else Nothing
+
+relocatableElfObjectReadinessLimitsFit :: Word64 -> Word64 -> Word64 -> Bool
+relocatableElfObjectReadinessLimitsFit objectFileSize sectionCount programHeaderCount =
+    objectFileSize <= maximumStableCompilerObjectOutputBytes
+        && sectionCount <= maximumStableCompilerObjectSectionHeaderCount
+        && programHeaderCount <= maximumStableCompilerObjectProgramHeaderCount
+
+tableEntryOffsetWord64 :: Word64 -> Int -> Word64 -> Maybe Word64
+tableEntryOffsetWord64 tableOffset entrySize entryIndex =
+    let entryOffset =
+            fromIntegral tableOffset
+                + fromIntegral entrySize * fromIntegral entryIndex ::
+                Integer
+     in if entrySize >= 0 && entryOffset <= fromIntegral (maxBound :: Word64)
+            then Just $ fromInteger entryOffset
+            else Nothing
+
+digestRelocatableElfSectionTableAndContents
+    :: Fd
+    -> Word64
+    -> RelocatableElfObjectHeader
+    -> Word64
+    -> CompilerObjectContentDigest
+    -> IO (Maybe CompilerObjectContentDigest)
+digestRelocatableElfSectionTableAndContents fd objectFileSize header sectionCount =
+    go 0
+    where
+        go sectionIndex digest
+            | sectionIndex >= sectionCount = pure $ Just digest
+            | otherwise = do
+                maybeDigest <-
+                    digestRelocatableElfSectionHeaderEntry
+                        fd
+                        objectFileSize
+                        header
+                        sectionIndex
+                        digest
+                maybe (pure Nothing) (go $ sectionIndex + 1) maybeDigest
+
+digestRelocatableElfSectionHeaderEntry
+    :: Fd
+    -> Word64
+    -> RelocatableElfObjectHeader
+    -> Word64
+    -> CompilerObjectContentDigest
+    -> IO (Maybe CompilerObjectContentDigest)
+digestRelocatableElfSectionHeaderEntry fd objectFileSize header sectionIndex digest =
+    case tableEntryOffsetWord64
+        (relocatableElfSectionHeaderOffset header)
+        (relocatableElfSectionHeaderEntrySize header)
+        sectionIndex of
+        Just sectionHeaderOffset -> do
+            let sectionHeaderEntrySize =
+                    fromIntegral $ relocatableElfSectionHeaderEntrySize header
+            if compilerObjectDigestRangeFits digest sectionHeaderEntrySize
+                then do
+                    maybeSectionHeaderBytes <-
+                        readCompilerObjectBytesAt fd sectionHeaderOffset sectionHeaderEntrySize
+                    case maybeSectionHeaderBytes of
+                        Just sectionHeaderBytes -> do
+                            let maybeEntryDigest =
+                                    digestCompilerObjectLoadedBytes
+                                        digest
+                                        sectionHeaderOffset
+                                        sectionHeaderEntrySize
+                                        sectionHeaderBytes
+                                maybeSectionHeader =
+                                    parseRelocatableElfSectionHeader
+                                        (relocatableElfData header)
+                                        (B.take elfSectionHeaderSize sectionHeaderBytes)
+                            case (maybeEntryDigest, maybeSectionHeader) of
+                                (Just entryDigest, Just sectionHeader) ->
+                                    digestRelocatableElfSectionBytes
+                                        fd
+                                        objectFileSize
+                                        sectionIndex
+                                        sectionHeader
+                                        entryDigest
+                                _ -> pure Nothing
+                        Nothing -> pure Nothing
+                else pure Nothing
+        Nothing -> pure Nothing
+
+digestRelocatableElfSectionBytes
+    :: Fd
+    -> Word64
+    -> Word64
+    -> RelocatableElfSectionHeader
+    -> CompilerObjectContentDigest
+    -> IO (Maybe CompilerObjectContentDigest)
+digestRelocatableElfSectionBytes fd objectFileSize sectionIndex sectionHeader digest
+    | sectionIndex == elfSectionHeaderIndexUndefined =
+        pure $
+            if relocatableElfSectionType sectionHeader == elfSectionTypeNull
+                then Just digest
+                else Nothing
+    | relocatableElfSectionType sectionHeader == elfSectionTypeNoBits =
+        pure $ Just digest
+    | relocatableElfSectionSize sectionHeader == 0 =
+        pure $ Just digest
+    | not $
+        rangeWithinFile
+            (relocatableElfSectionOffset sectionHeader)
+            (relocatableElfSectionSize sectionHeader)
+            objectFileSize = pure Nothing
+    | otherwise =
+        digestCompilerObjectRangeAt
+            fd
+            digest
+            (relocatableElfSectionOffset sectionHeader)
+            (relocatableElfSectionSize sectionHeader)
+
+parseRelocatableElfSectionHeader :: Word8 -> B.ByteString -> Maybe RelocatableElfSectionHeader
+parseRelocatableElfSectionHeader elfData bytes
+    | B.length bytes /= elfSectionHeaderSize = Nothing
+    | otherwise =
+        Just RelocatableElfSectionHeader
+            { relocatableElfSectionType =
+                decodeElfWord32
+                    elfData
+                    [ B.index bytes 4
+                    , B.index bytes 5
+                    , B.index bytes 6
+                    , B.index bytes 7
+                    ]
+            , relocatableElfSectionOffset =
+                decodeElfWord64
+                    elfData
+                    [ B.index bytes 24
+                    , B.index bytes 25
+                    , B.index bytes 26
+                    , B.index bytes 27
+                    , B.index bytes 28
+                    , B.index bytes 29
+                    , B.index bytes 30
+                    , B.index bytes 31
+                    ]
+            , relocatableElfSectionSize =
+                decodeElfWord64
+                    elfData
+                    [ B.index bytes 32
+                    , B.index bytes 33
+                    , B.index bytes 34
+                    , B.index bytes 35
+                    , B.index bytes 36
+                    , B.index bytes 37
+                    , B.index bytes 38
+                    , B.index bytes 39
+                    ]
+            , relocatableElfSectionLink =
+                decodeElfWord32
+                    elfData
+                    [ B.index bytes 40
+                    , B.index bytes 41
+                    , B.index bytes 42
+                    , B.index bytes 43
+                    ]
+            , relocatableElfSectionInfo =
+                decodeElfWord32
+                    elfData
+                    [ B.index bytes 44
+                    , B.index bytes 45
+                    , B.index bytes 46
+                    , B.index bytes 47
+                    ]
+            }
+
+emptyCompilerObjectContentDigest :: CompilerObjectContentDigest
+emptyCompilerObjectContentDigest =
+    CompilerObjectContentDigest
+        0
+        compilerObjectDigestFnvOffset
+        compilerObjectDigestMixSeed
+
+digestCompilerObjectLoadedBytes
+    :: CompilerObjectContentDigest
+    -> Word64
+    -> Word64
+    -> B.ByteString
+    -> Maybe CompilerObjectContentDigest
+digestCompilerObjectLoadedBytes digest offset byteCount bytes
+    | fromIntegral (B.length bytes) == byteCount
+        && compilerObjectDigestRangeFits digest byteCount =
+        Just $
+            digestCompilerObjectBytes
+                (digestCompilerObjectRangeDescriptor digest offset byteCount)
+                bytes
+    | otherwise = Nothing
+
+digestCompilerObjectRangeAt
+    :: Fd
+    -> CompilerObjectContentDigest
+    -> Word64
+    -> Word64
+    -> IO (Maybe CompilerObjectContentDigest)
+digestCompilerObjectRangeAt fd digest offset byteCount =
+    if compilerObjectDigestRangeFits digest byteCount
+        then
+            case word64ToInt offset of
+                Just offsetInt -> do
+                    _ <- fdSeek fd AbsoluteSeek $ fromIntegral offsetInt
+                    go
+                        (digestCompilerObjectRangeDescriptor digest offset byteCount)
+                        byteCount
+                Nothing -> pure Nothing
+        else pure Nothing
+    where
+        go currentDigest remainingBytes
+            | remainingBytes == 0 = pure $ Just currentDigest
+            | otherwise = do
+                let chunkSize =
+                        min remainingBytes compilerObjectDigestChunkBytes
+                case word64ToInt chunkSize of
+                    Just chunkSizeInt -> do
+                        bytes <- readCompilerObjectExactBytes fd chunkSizeInt
+                        if B.length bytes == chunkSizeInt
+                            then
+                                go
+                                    (digestCompilerObjectBytes currentDigest bytes)
+                                    (remainingBytes - chunkSize)
+                            else pure Nothing
+                    Nothing -> pure Nothing
+
+digestCompilerObjectRangeDescriptor
+    :: CompilerObjectContentDigest -> Word64 -> Word64 -> CompilerObjectContentDigest
+digestCompilerObjectRangeDescriptor digest offset byteCount =
+    digestCompilerObjectWord64
+        (digestCompilerObjectWord64
+            (digestCompilerObjectBytes digest $ B.singleton compilerObjectDigestRangeMarker)
+            offset)
+        byteCount
+
+compilerObjectDigestRangeFits :: CompilerObjectContentDigest -> Word64 -> Bool
+compilerObjectDigestRangeFits digest byteCount =
+    requiredDigestBytes
+        <= fromIntegral maximumStableCompilerObjectDigestBytes
+    where
+        requiredDigestBytes =
+            fromIntegral (compilerObjectDigestByteCount digest)
+                + fromIntegral compilerObjectDigestRangeDescriptorBytes
+                + fromIntegral byteCount ::
+                Integer
+
+compilerObjectDigestByteCount :: CompilerObjectContentDigest -> Word64
+compilerObjectDigestByteCount (CompilerObjectContentDigest byteCount _ _) =
+    byteCount
+
+digestCompilerObjectWord64 :: CompilerObjectContentDigest -> Word64 -> CompilerObjectContentDigest
+digestCompilerObjectWord64 digest value =
+    digestCompilerObjectBytes
+        digest
+        $ B.pack
+            [ fromIntegral $ value `shiftR` 56
+            , fromIntegral $ value `shiftR` 48
+            , fromIntegral $ value `shiftR` 40
+            , fromIntegral $ value `shiftR` 32
+            , fromIntegral $ value `shiftR` 24
+            , fromIntegral $ value `shiftR` 16
+            , fromIntegral $ value `shiftR` 8
+            , fromIntegral value
+            ]
+
+digestCompilerObjectBytes :: CompilerObjectContentDigest -> B.ByteString -> CompilerObjectContentDigest
+digestCompilerObjectBytes =
+    B.foldl' digestCompilerObjectByte
+
+digestCompilerObjectByte :: CompilerObjectContentDigest -> Word8 -> CompilerObjectContentDigest
+digestCompilerObjectByte (CompilerObjectContentDigest byteCount fnvHash mixHash) byte =
+    let byteValue = fromIntegral byte
+     in CompilerObjectContentDigest
+            (byteCount + 1)
+            ((fnvHash `xor` byteValue) * compilerObjectDigestFnvPrime)
+            ((mixHash + byteValue + compilerObjectDigestMixIncrement)
+                * compilerObjectDigestMixPrime)
+
+readCompilerObjectBytesAt :: Fd -> Word64 -> Word64 -> IO (Maybe B.ByteString)
+readCompilerObjectBytesAt fd offset byteCount = do
+    case (word64ToInt offset, word64ToInt byteCount) of
+        (Just offsetInt, Just byteCountInt) -> do
+            _ <- fdSeek fd AbsoluteSeek $ fromIntegral offsetInt
+            bytes <- readCompilerObjectExactBytes fd byteCountInt
+            pure $
+                if B.length bytes == byteCountInt
+                    then Just bytes
+                    else Nothing
+        _ -> pure Nothing
+
+readCompilerObjectExactBytes :: Fd -> Int -> IO B.ByteString
+readCompilerObjectExactBytes fd = go []
+    where
+        go acc remainingBytes
+            | remainingBytes <= 0 = pure $ B.concat $ reverse acc
+            | otherwise = do
+                bytes <- PB.fdRead fd $ fromIntegral remainingBytes
+                if B.null bytes
+                    then pure $ B.concat $ reverse acc
+                    else go (bytes : acc) (remainingBytes - B.length bytes)
+
+word64ToInt :: Word64 -> Maybe Int
+word64ToInt value
+    | value <= fromIntegral (maxBound :: Int) = Just $ fromIntegral value
+    | otherwise = Nothing
 
 looksRunnableLinkedOutput :: B.ByteString -> Bool
 looksRunnableLinkedOutput bytes =
@@ -3739,7 +5186,7 @@ decodeElfWord64 = decodeElfUnsigned
 
 decodeElfUnsigned :: (Bits a, Num a) => Word8 -> [Word8] -> a
 decodeElfUnsigned elfData =
-    foldl'
+    List.foldl'
         (\acc nextByte -> acc `shiftL` 8 .|. fromIntegral nextByte)
         0
         . orderedBytes
@@ -3786,14 +5233,77 @@ elfTypeExecutable = 2
 elfTypeSharedObject :: Int
 elfTypeSharedObject = 3
 
+elfTypeRelocatable :: Int
+elfTypeRelocatable = 1
+
 elfMachineX86_64 :: Int
 elfMachineX86_64 = 62
 
 elfHeaderSize :: Int
 elfHeaderSize = 64
 
+elfSectionHeaderSize :: Int
+elfSectionHeaderSize = 64
+
+elfSectionTypeNull :: Int
+elfSectionTypeNull = 0
+
+elfSectionTypeNoBits :: Int
+elfSectionTypeNoBits = 8
+
+elfSectionHeaderIndexUndefined :: Word64
+elfSectionHeaderIndexUndefined = 0
+
+elfSectionHeaderIndexExtended :: Word64
+elfSectionHeaderIndexExtended = 0xffff
+
+elfProgramHeaderCountExtended :: Word64
+elfProgramHeaderCountExtended = 0xffff
+
 elfProgramHeaderSize :: Int
 elfProgramHeaderSize = 56
+
+compilerObjectDigestChunkBytes :: Word64
+compilerObjectDigestChunkBytes = 64 * 1024
+
+maximumStableCompilerObjectOutputBytes :: Word64
+maximumStableCompilerObjectOutputBytes = 512 * 1024 * 1024
+
+maximumStableCompilerObjectDigestBytes :: Word64
+maximumStableCompilerObjectDigestBytes = 128 * 1024 * 1024
+
+maximumRunnableLinkedOutputValidationBytes :: Word64
+maximumRunnableLinkedOutputValidationBytes = 128 * 1024 * 1024
+
+maximumStableCompilerObjectSectionHeaderCount :: Word64
+maximumStableCompilerObjectSectionHeaderCount = 8192
+
+maximumStableCompilerObjectProgramHeaderCount :: Word64
+maximumStableCompilerObjectProgramHeaderCount = 1024
+
+maximumProbeObjectTargetBytes :: Word64
+maximumProbeObjectTargetBytes = 64
+
+compilerObjectDigestRangeDescriptorBytes :: Word64
+compilerObjectDigestRangeDescriptorBytes = 17
+
+compilerObjectDigestFnvOffset :: Word64
+compilerObjectDigestFnvOffset = 14695981039346656037
+
+compilerObjectDigestFnvPrime :: Word64
+compilerObjectDigestFnvPrime = 1099511628211
+
+compilerObjectDigestMixSeed :: Word64
+compilerObjectDigestMixSeed = 7809847782465536322
+
+compilerObjectDigestMixPrime :: Word64
+compilerObjectDigestMixPrime = 14029467366897019727
+
+compilerObjectDigestMixIncrement :: Word64
+compilerObjectDigestMixIncrement = 11400714819323198485
+
+compilerObjectDigestRangeMarker :: Word8
+compilerObjectDigestRangeMarker = 0xff
 
 elfProgramHeaderTypeLoad :: Int
 elfProgramHeaderTypeLoad = 1
@@ -3962,7 +5472,7 @@ ensureX86_64ElfCompiler suppressWarnsOutput compilerSpec = do
                                 markerAssembleArgs =
                                     asmAssembleArgs markerObjPath markerAsmPath
                             assemblePostExitDrainSatisfied <-
-                                stabilizeCompilerObjectOutputAfterExit objPath
+                                stabilizeCompilerProbeObjectTargetAfterExit objPath
                             probeProcessResult <-
                                 probeCommandExitCode
                                     compilerSpec'
@@ -3973,29 +5483,33 @@ ensureX86_64ElfCompiler suppressWarnsOutput compilerSpec = do
                                     probeTarget <- detectProbeObjectTarget objPath
                                     case probeTarget of
                                         Just target
-                                            | isX86_64ElfTarget target -> do
-                                                markerAssemblePostExitDrainSatisfied <-
-                                                    stabilizeCompilerObjectOutputAfterExit
-                                                        markerObjPath
-                                                markerProbeProcessResult <-
-                                                    probeCommandExitCode
-                                                        compilerSpec'
-                                                        markerAssembleArgs
-                                                        markerAssemblePostExitDrainSatisfied
-                                                case markerProbeProcessResult of
-                                                    Just ExitSuccess -> do
-                                                        linkSucceeded <-
-                                                            probeCompilerLink
-                                                                compilerSpec'
-                                                                objPath
+                                            | isX86_64ElfTarget target ->
+                                                withCompilerObjectSnapshot objPath $ \objSnapshotPath -> do
+                                                    markerAssemblePostExitDrainSatisfied <-
+                                                        stabilizeCompilerObjectOutputAfterExit
+                                                            markerObjPath
+                                                    markerProbeProcessResult <-
+                                                        probeCommandExitCode
+                                                            compilerSpec'
+                                                            markerAssembleArgs
+                                                            markerAssemblePostExitDrainSatisfied
+                                                    case markerProbeProcessResult of
+                                                        Just ExitSuccess ->
+                                                            withCompilerObjectSnapshot
                                                                 markerObjPath
-                                                                probeMarker
-                                                        pure $
-                                                            if linkSucceeded
-                                                                then Right target
-                                                                else Left CompilerLinkProbeFailure
-                                                    _ ->
-                                                        pure $ Left CompilerLinkProbeFailure
+                                                                $ \markerObjSnapshotPath -> do
+                                                                    linkSucceeded <-
+                                                                        probeCompilerLink
+                                                                            compilerSpec'
+                                                                            objSnapshotPath
+                                                                            markerObjSnapshotPath
+                                                                            probeMarker
+                                                                    pure $
+                                                                        if linkSucceeded
+                                                                            then Right target
+                                                                            else Left CompilerLinkProbeFailure
+                                                        _ ->
+                                                            pure $ Left CompilerLinkProbeFailure
                                             | otherwise -> pure $ Right target
                                         Nothing ->
                                             pure $ Left CompilerAssemblyProbeFailure
@@ -4048,22 +5562,44 @@ ensureX86_64ElfCompiler suppressWarnsOutput compilerSpec = do
 
         detectProbeObjectTarget path =
             catchIOError
-                (do
-                    status <- getSymbolicLinkStatus path
-                    if isRegularFile status
-                        then describeProbeObject <$> B.readFile path
-                        else pure Nothing
-                )
+                (bracket openProbeObject closeFd readProbeObjectTarget)
                 (const $ pure Nothing)
+            where
+                openProbeObject =
+                    openFd path ReadOnly defaultFileFlags {nofollow = True, cloexec = True, nonBlock = True}
 
-        describeProbeObject bytes
-            | B.length bytes < 4 = Nothing
-            | B.take 4 bytes /= elfMagic = Just "non-ELF object file"
-            | B.length bytes < 20 = Just "truncated ELF object file"
+                readProbeObjectTarget fd = do
+                    status <- getFdStatus fd
+                    let maybeOutputSize = fileStatusSizeWord64 status
+                    case maybeOutputSize of
+                        Just outputSize
+                            | isRegularFile status -> do
+                                maybeBytes <-
+                                    readCompilerObjectBytesAt fd 0 (min outputSize maximumProbeObjectTargetBytes)
+                                case maybeBytes of
+                                    Just bytes -> describeProbeObject fd outputSize bytes
+                                    Nothing    -> pure Nothing
+                        _ -> pure Nothing
+
+        describeProbeObject fd outputSize bytes
+            | B.length bytes < 4 = pure Nothing
+            | B.take 4 bytes /= elfMagic = pure $ Just "non-ELF object file"
+            | B.length bytes < 20 = pure $ Just "truncated ELF object file"
+            | isX86_64RelocatableElfProbeObject =
+                if outputSize < fromIntegral elfHeaderSize
+                    then pure $ Just invalidX86_64RelocatableElfProbeObject
+                    else do
+                        maybeFingerprint <-
+                            catchIOError
+                                (relocatableElfObjectContentFingerprint fd outputSize)
+                                (const $ pure Nothing)
+                        pure . Just $
+                            if isJust maybeFingerprint
+                                then "x86_64-unknown-elf object"
+                                else invalidX86_64RelocatableElfProbeObject
             | otherwise =
-                Just $
-                    case (elfClass == 2, elfMachine == 62, elfType == 1) of
-                        (True, True, True)  -> "x86_64-unknown-elf object"
+                pure . Just $
+                    case (elfClass == elfClass64Bit, elfMachine == elfMachineX86_64, elfType == elfTypeRelocatable) of
                         (True, True, False) -> "non-relocatable x86_64-ELF file"
                         (_, _, True)        -> "ELF object file"
                         _                   -> "non-relocatable ELF file"
@@ -4072,6 +5608,12 @@ ensureX86_64ElfCompiler suppressWarnsOutput compilerSpec = do
                 elfData = B.index bytes 5
                 elfType = decodeElfHalfWord elfData (B.index bytes 16) (B.index bytes 17) :: Int
                 elfMachine = decodeElfHalfWord elfData (B.index bytes 18) (B.index bytes 19) :: Int
+                isX86_64RelocatableElfProbeObject =
+                    elfClass == elfClass64Bit
+                        && elfMachine == elfMachineX86_64
+                        && elfType == elfTypeRelocatable
+                invalidX86_64RelocatableElfProbeObject =
+                    "invalid x86_64-ELF relocatable object file"
 
         trim = reverse . dropWhile isSpace . reverse . dropWhile isSpace
 
@@ -5022,58 +6564,59 @@ runAsm outputHandle opts asm
                                                     hPutStr stderr $
                                                         showCompilerCommandForUser compilerSpec markerAssembleArgs
                                                             <> "\n"
-                                                markerAssemblePostExitDrainSatisfied <-
-                                                    stabilizeCompilerObjectOutputAfterExit
-                                                        markerObjPath
+                                                -- Snapshot paths are passed to the linker as ordinary pathnames.
+                                                -- Keep them unpublished until the producing wrapper group is gone.
                                                 callCompilerProcessUntil
-                                                    markerAssemblePostExitDrainSatisfied
+                                                    waitForCompilerProcessGroupQuiescenceAfterExit
                                                     (optSuppressWarns opts)
                                                     compilerSpec
                                                     markerAssembleArgs
-                                                setFileMode objPath temporaryWritableMode
-                                                hClose objHandle
-                                                let assembleArgs = asmAssembleArgs objPath asmPath
-                                                    linkArgs =
-                                                        asmRunnableLinkArgs tmpOutputPath objPath markerObjPath
-                                                result' <- SI.runAsmWithHandle tmpHandle asm
-                                                hClose tmpHandle
-                                                when (optIsVerbose opts) $
-                                                    hPutStr stderr $
-                                                        showCompilerCommandForUser compilerSpec assembleArgs <> "\n"
-                                                assemblePostExitDrainSatisfied <-
-                                                    stabilizeCompilerObjectOutputAfterExit
-                                                        objPath
-                                                callCompilerProcessUntil
-                                                    assemblePostExitDrainSatisfied
-                                                    (optSuppressWarns opts)
-                                                    compilerSpec
-                                                    assembleArgs
-                                                linkPostExitDrainSatisfied <-
-                                                    if shouldValidateOutput
-                                                        then
-                                                            stabilizePostExitPredicate $
-                                                                validateRunnableLinkedOutput
-                                                                    tmpOutputPath
-                                                                    (Just runnableOutputMarker)
-                                                        else pure waitForCompilerProcessGroupQuiescenceAfterExit
-                                                when (optIsVerbose opts) $
-                                                    hPutStr stderr $
-                                                        showCompilerCommandForUser compilerSpec linkArgs <> "\n"
-                                                callCompilerProcessUntil
-                                                    linkPostExitDrainSatisfied
-                                                    (optSuppressWarns opts)
-                                                    compilerSpec
-                                                    linkArgs
-                                                when shouldValidateOutput $ do
-                                                    linkedOutputOk <-
-                                                        validateRunnableLinkedOutput
-                                                            tmpOutputPath
-                                                            (Just runnableOutputMarker)
-                                                    unless linkedOutputOk $
-                                                        ioError . userError $
-                                                            "HTCC_ASSEMBLER produced a non-runnable final output for -r: "
-                                                                <> asmOutputPath opts
-                                                pure result'
+                                                withCompilerObjectSnapshot markerObjPath $ \markerObjSnapshotPath -> do
+                                                    setFileMode objPath temporaryWritableMode
+                                                    hClose objHandle
+                                                    let assembleArgs = asmAssembleArgs objPath asmPath
+                                                    result' <- SI.runAsmWithHandle tmpHandle asm
+                                                    hClose tmpHandle
+                                                    when (optIsVerbose opts) $
+                                                        hPutStr stderr $
+                                                            showCompilerCommandForUser compilerSpec assembleArgs
+                                                                <> "\n"
+                                                    -- Avoid exposing object snapshot pathnames while delayed
+                                                    -- assembler helpers can still replace them.
+                                                    callCompilerProcessUntil
+                                                        waitForCompilerProcessGroupQuiescenceAfterExit
+                                                        (optSuppressWarns opts)
+                                                        compilerSpec
+                                                        assembleArgs
+                                                    withCompilerObjectSnapshot objPath $ \objSnapshotPath -> do
+                                                        withRunnableLinkOutputPath shouldValidateOutput tmpOutputPath $ \linkOutputPath -> do
+                                                            let linkArgs =
+                                                                    asmRunnableLinkArgs
+                                                                        linkOutputPath
+                                                                        objSnapshotPath
+                                                                        markerObjSnapshotPath
+                                                            when (optIsVerbose opts) $
+                                                                hPutStr stderr $
+                                                                    showCompilerCommandForUser compilerSpec linkArgs
+                                                                        <> "\n"
+                                                            -- Copy to the replacement staging path only after
+                                                            -- the linker wrapper group can no longer mutate it.
+                                                            callCompilerProcessUntil
+                                                                waitForCompilerProcessGroupQuiescenceAfterExit
+                                                                (optSuppressWarns opts)
+                                                                compilerSpec
+                                                                linkArgs
+                                                            when shouldValidateOutput $ do
+                                                                linkedOutputOk <-
+                                                                    ensureRunnableLinkedOutputCopied
+                                                                        linkOutputPath
+                                                                        tmpOutputPath
+                                                                        (Just runnableOutputMarker)
+                                                                unless linkedOutputOk $
+                                                                    ioError . userError $
+                                                                        "HTCC_ASSEMBLER produced a non-runnable final output for -r: "
+                                                                            <> asmOutputPath opts
+                                                            pure result'
                                             )
                                             cleanupMarkerObj
                                     )
