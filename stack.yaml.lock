@@ -25,20 +25,6 @@ packages:
       size: 357
   original:
     hackage: transformers-abort-0.6.0.3@sha256:34de32cc6e852df10ad57df34e46404f841c6b0123526b7fd942c455f62a7a31,1236
-- completed:
-    hackage: dhall-json-1.7.12@sha256:9362f33db8a5228dfce25803d08f118a48681243f7d7a47de3eb9027ab9fbc73,4517
-    pantry-tree:
-      sha256: 3f42ed0a4c0f9cb3406df9e9add5476b47467fcb8f045cba0a42f6251f81fc31
-      size: 5485
-  original:
-    hackage: dhall-json-1.7.12@sha256:9362f33db8a5228dfce25803d08f118a48681243f7d7a47de3eb9027ab9fbc73,4517
-- completed:
-    hackage: dhall-yaml-1.2.12@sha256:e27d9fad5aaaeb30abd178aba2222fef7fc8ed6334d52d273879464d15eeead4,3388
-    pantry-tree:
-      sha256: 0cfc6458b565a84c94378629a93bc7682cbac76c7a876f63d333b15a09894af0
-      size: 2038
-  original:
-    hackage: dhall-yaml-1.2.12@sha256:e27d9fad5aaaeb30abd178aba2222fef7fc8ed6334d52d273879464d15eeead4,3388
 snapshots:
 - completed:
     sha256: abc790b571e0c70e929db74b329e3c18d7e76a6e173e8bdf94f1ba20770d4c24

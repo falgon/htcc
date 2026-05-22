@@ -192,8 +192,6 @@ tests:
     - hspec-core
     - hspec-contrib
     - filepath
-    - dhall-json
-    - dhall-yaml
     - process
     - unix
     - utf8-string

@@ -1,20 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import           Codec.Binary.UTF8.String  (decodeString)
-import           Control.Exception         (bracket, finally)
+import           Control.Exception         (bracket, finally, try)
 import           Control.Monad             (foldM, when)
 import           Control.Monad.Extra       (partitionM)
 import           Control.Monad.Trans       (lift)
 import           Control.Monad.Trans.State (StateT, evalStateT, gets, modify,
                                             put)
-import qualified Data.ByteString.Char8     as B
 import           Data.List                 (isSuffixOf)
 import qualified Data.Text                 as T
 import qualified Data.Text.IO              as T
-import           Dhall.JSON                (omitNull)
-import           Dhall.Yaml                (Options (..), defaultOptions,
-                                            dhallToYaml)
 import           Htcc.Utils                (tshow)
 import qualified Options.Applicative       as OA
 import           System.Directory          (createDirectoryIfMissing,
@@ -24,6 +19,7 @@ import           System.Exit               (ExitCode (..), exitFailure,
                                             exitWith)
 import           System.FilePath           ((</>))
 import           System.IO                 (hFlush, hPutStr, stderr, stdout)
+import           System.IO.Error           (isDoesNotExistError)
 import           System.Process            (proc, readCreateProcessWithExitCode)
 import           Tests.CommandSelection    (Command (..), autoHtccBinOverride,
                                             collectCommandExitCodes,
@@ -135,12 +131,11 @@ genTestBins = evalStateT genTestBins' 0
 createProcessDhallDocker :: FilePath -> [String] -> IO ()
 createProcessDhallDocker fp cmd = do
     dockerCompose <- dockerComposeCommand
+    dockerInput <- renderDhallYaml fp
     (dockerExitCode, dockerStdout, dockerStderr) <-
-        T.readFile fp
-            >>= dhallToYaml (defaultOptions { explain = True, omission = omitNull }) (Just fp)
-            >>= readCreateProcessWithExitCode (uncurry proc $ dockerComposeArgs dockerCompose cmd)
-                . decodeString
-                . B.unpack
+        readCreateProcessWithExitCode
+            (uncurry proc $ dockerComposeArgs dockerCompose cmd)
+            dockerInput
     putStr dockerStdout
     hFlush stdout
     hPutStr stderr dockerStderr
@@ -159,6 +154,27 @@ createProcessDhallDocker fp cmd = do
             dockerComposeArgs ["docker", "compose"] composeArgs
         dockerComposeArgs (exe:args) composeArgs =
             (exe, args <> ["-f", "-"] <> composeArgs)
+
+renderDhallYaml :: FilePath -> IO String
+renderDhallYaml fp = do
+    dhallToYaml <- maybe "dhall-to-yaml" id <$> lookupEnv "DHALL_TO_YAML"
+    result <- try $ readCreateProcessWithExitCode
+        (proc dhallToYaml ["--explain", "--file", fp])
+        ""
+    case result of
+        Left err
+            | isDoesNotExistError err -> do
+                hPutStr stderr $ unlines [
+                    "dhall-to-yaml executable not found: " <> dhallToYaml
+                  , "Run .travis/install-dhall-to-yaml.sh and ensure $HOME/.local/bin is on PATH, or set DHALL_TO_YAML."
+                  ]
+                exitFailure
+            | otherwise -> ioError err
+        Right (dhallExitCode, dhallStdout, dhallStderr) -> do
+            hPutStr stderr dhallStderr
+            when (dhallExitCode /= ExitSuccess) $
+                exitWith dhallExitCode
+            pure dhallStdout
 
 runDhallDocker :: [String] -> IO ()
 runDhallDocker = createProcessDhallDocker dockerComposePath

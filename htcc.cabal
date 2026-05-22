@@ -1,10 +1,10 @@
 cabal-version: 2.0
 
--- This file has been generated from package.yaml by hpack version 0.38.1.
+-- This file has been generated from package.yaml by hpack version 0.38.3.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5cfc5f9c6582f9417c1ee2a8e0cff1a7bb6b5a66a97a47ac4050e371a7ccdc22
+-- hash: 6898310968dcf001c66a93150d55c5e9f04e053e15793d6120855f7a339dca4b
 
 name:           htcc
 version:        0.0.0.1
@@ -130,13 +130,13 @@ library
     , directory
     , extra
     , filepath
+    , megaparsec
     , monad-finally
     , monad-loops
     , mono-traversable
     , mtl
     , natural-transformation
     , optparse-applicative
-    , megaparsec
     , parsec
     , parser-combinators
     , prettyprinter
@@ -172,13 +172,13 @@ executable htcc
     , extra
     , filepath
     , htcc
+    , megaparsec
     , monad-finally
     , monad-loops
     , mono-traversable
     , mtl
     , natural-transformation
     , optparse-applicative
-    , megaparsec
     , parsec
     , parser-combinators
     , prettyprinter
@@ -225,8 +225,6 @@ test-suite htcc-test
     , cond
     , containers
     , deepseq
-    , dhall-json
-    , dhall-yaml
     , diagrams-contrib
     , diagrams-lib
     , diagrams-svg
@@ -238,13 +236,13 @@ test-suite htcc-test
     , hspec-contrib
     , hspec-core
     , htcc
+    , megaparsec
     , monad-finally
     , monad-loops
     , mono-traversable
     , mtl
     , natural-transformation
     , optparse-applicative
-    , megaparsec
     , parsec
     , parser-combinators
     , prettyprinter
@@ -283,13 +281,13 @@ benchmark criterion
     , extra
     , filepath
     , htcc
+    , megaparsec
     , monad-finally
     , monad-loops
     , mono-traversable
     , mtl
     , natural-transformation
     , optparse-applicative
-    , megaparsec
     , parsec
     , parser-combinators
     , prettyprinter
