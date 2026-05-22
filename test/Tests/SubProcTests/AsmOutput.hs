@@ -1639,7 +1639,7 @@ permissionBits = intersectFileModes permissionFileModeMask
 
 runnableElfHex :: T.Text
 runnableElfHex =
-    "7f454c4602010100000000000000000002003e000100000078004000000000004000000000000000000000000000000000000000400038000100000000000000010000000500000000000000000000000000400000000000000040000000000079000000000000007900000000000000001000000000000090"
+    byteStringToHex $ linkedElfHeaderForProbe 2
 
 foreignElfOsAbiForHost :: Word8
 foreignElfOsAbiForHost
@@ -3610,7 +3610,7 @@ linkedElfHeaderWithInterpreterAndDynamicEntriesForProbe elfType interpreterBytes
             <> word64leForProbe 0x1000
             <> interpreterProgramHeader
             <> dynamicProgramHeader
-            <> [0x90]
+            <> runnableProbeCodeBytes
             <> interpreterBytes
             <> dynamicBytes
     where
@@ -3625,7 +3625,7 @@ linkedElfHeaderWithInterpreterAndDynamicEntriesForProbe elfType interpreterBytes
             | hasInterpreter || hasDynamic = 2
             | otherwise = 1
         codeOffset = 0x40 + programHeaderCount * 0x38
-        interpreterOffset = codeOffset + 1
+        interpreterOffset = codeOffset + length runnableProbeCodeBytes
         dynamicOffset = interpreterOffset + length interpreterBytes
         totalFileSize = fromIntegral $ dynamicOffset + length dynamicBytes
         interpreterProgramHeader
@@ -3640,6 +3640,7 @@ linkedElfHeaderWithInterpreterAndDynamicEntriesForProbe elfType interpreterBytes
                     <> word64leForProbe 0x1
             | otherwise =
                 []
+
         dynamicProgramHeader
             | hasDynamic =
                 word32leForProbe 0x2
@@ -3652,6 +3653,13 @@ linkedElfHeaderWithInterpreterAndDynamicEntriesForProbe elfType interpreterBytes
                     <> word64leForProbe 0x8
             | otherwise =
                 []
+
+runnableProbeCodeBytes :: [Word8]
+runnableProbeCodeBytes =
+    [ 0x31, 0xff -- xor edi, edi
+    , 0xb8, 0x3c, 0x00, 0x00, 0x00 -- mov eax, 60
+    , 0x0f, 0x05 -- syscall
+    ]
 
 defaultDynamicEntriesForProbe :: Int -> [Word8] -> [(Int, Int)]
 defaultDynamicEntriesForProbe elfType interpreterBytes
@@ -4300,6 +4308,7 @@ writeForeignAbiLinkProbeDriver driverPath logPath = do
             <> [ "      ;;"
                , "    *)"
                , "      write_foreign_abi_runnable_elf \"$out\""
+               , "      cat \"$input\" >> \"$out\""
                , "      ;;"
                , "  esac"
                , "fi"
@@ -4753,9 +4762,7 @@ writeMarkerStrippingFinalLinkDriver driverPath logPath = do
             <> probeLinkedOutputWriter
             <> [ "      ;;"
                , "    *)"
-               , "      test -n \"$input\""
                , "      write_runnable_elf \"$out\""
-               , "      cat \"$input\" >> \"$out\""
                , "      ;;"
                , "  esac"
                , "fi"
