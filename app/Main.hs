@@ -542,6 +542,7 @@ shellWords =
 data CompilerCommand = CompilerCommand
     { compilerEnvOverrides     :: [(String, String)]
     , compilerEnvOverrideSpecs :: Maybe [CompilerEnvOverrideSpec]
+    , compilerBaseEnvironment  :: Map.Map String String
     , compilerExecutable       :: FilePath
     , compilerArguments        :: [String]
     }
@@ -600,6 +601,7 @@ resolveCompilerCommandIn maybeWorkingDir compiler = do
                 CompilerCommand
                     { compilerEnvOverrides = envOverrides
                     , compilerEnvOverrideSpecs = Just envOverrideSpecs
+                    , compilerBaseEnvironment = baseEnvironment
                     , compilerExecutable = resolvedCompiler
                     , compilerArguments = drop compilerLen compilerParts
                     }
@@ -607,6 +609,7 @@ resolveCompilerCommandIn maybeWorkingDir compiler = do
                 CompilerCommand
                     { compilerEnvOverrides = envOverrides
                     , compilerEnvOverrideSpecs = Just envOverrideSpecs
+                    , compilerBaseEnvironment = baseEnvironment
                     , compilerExecutable = head compilerParts
                     , compilerArguments = tail compilerParts
                     }
@@ -1360,12 +1363,15 @@ compilerProcessEnv compiler
     | null (compilerEnvOverrides compiler) = pure Nothing
     | otherwise = do
         expandedOverrides <-
-            expandEnvironmentOverrides
-                Nothing
+            pure $
+                expandEnvironmentOverridesWithBaseEnvironment
+                (compilerBaseEnvironment compiler)
                 (compilerEnvOverrides compiler)
                 (compilerEnvOverrideSpecs compiler)
-        Just . Map.toList . Map.union (environmentFromList expandedOverrides)
-            <$> baseProcessEnvironment Nothing
+        pure . Just . Map.toList $
+            Map.union
+                (environmentFromList expandedOverrides)
+                (compilerBaseEnvironment compiler)
 
 showCompilerCommandForUser :: CompilerCommand -> [String] -> String
 showCompilerCommandForUser =
@@ -5349,6 +5355,7 @@ x86_64ElfRunnableLinkedOutputMarkerAsm runnableOutputMarker =
             , ".L.htcc_runnable_output_marker_ctor:"
             , "    lea rax, [rip + .L.htcc_runnable_output_marker_payload]"
             , "    ret"
+            , ".section .note.GNU-stack,\"\",@progbits"
             ]
 
 makeRunnableLinkedOutputMarker :: FilePath -> FilePath -> FilePath -> String
@@ -5370,6 +5377,7 @@ x86_64ElfProbeAsm probeMarker =
             , "    lea rdx, [rip + htcc_probe_marker]"
             , "    xor eax, eax"
             , "    ret"
+            , ".section .note.GNU-stack,\"\",@progbits"
             ]
 
 escapeAsmString :: String -> String

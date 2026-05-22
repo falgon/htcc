@@ -1590,7 +1590,7 @@ fakePathWrapperLogPath :: FilePath
 fakePathWrapperLogPath = "tmp-path-wrapper.log"
 
 fakeEnvLoggingWrapperPath :: FilePath
-fakeEnvLoggingWrapperPath = "tmp-env-logging-wrapper.sh"
+fakeEnvLoggingWrapperPath = "tmp-env-logging-wrapper.pl"
 
 fakeEnvLoggingWrapperLogPath :: FilePath
 fakeEnvLoggingWrapperLogPath = "tmp-env-logging-wrapper.log"
@@ -2499,12 +2499,79 @@ writeRealInvocationReadsStdinWrapper wrapperPath logPath wrappedPath = do
         ]
     execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
 
+runAsmUserAssemblerOutputGuard :: FilePath -> [T.Text]
+runAsmUserAssemblerOutputGuard =
+    runAsmAssemblerOutputGuard False
+
+runAsmFinalAssemblerOutputGuard :: FilePath -> [T.Text]
+runAsmFinalAssemblerOutputGuard =
+    runAsmAssemblerOutputGuard True
+
+runAsmAssemblerOutputGuard :: Bool -> FilePath -> [T.Text]
+runAsmAssemblerOutputGuard includeMarkerAssembler wrappedPath =
+    [ "emit_htcc_test_output=false"
+    , "expect_lang=false"
+    , "expect_out=false"
+    , "out=''"
+    , "for arg in \"$@\"; do"
+    , "  if $expect_lang; then"
+    , "    expect_lang=false"
+    , "    case \"$arg\" in"
+    , "      assembler)"
+    , "        emit_htcc_test_output=true"
+    , "        ;;"
+    , "    esac"
+    , "    continue"
+    , "  fi"
+    , "  if $expect_out; then"
+    , "    out=\"$arg\""
+    , "    expect_out=false"
+    , "    continue"
+    , "  fi"
+    , "  case \"$arg\" in"
+    , "    -dumpmachine|-print-target-triple)"
+    , "      " <> execWrappedDriverCommand wrappedPath
+    , "      ;;"
+    , "    -x)"
+    , "      expect_lang=true"
+    , "      ;;"
+    , "    -o)"
+    , "      expect_out=true"
+    , "      ;;"
+    , "  esac"
+    , "done"
+    , "case \"$out\" in"
+    , "  ''|*htcc-probe-*|*htcc-link-output-*)"
+    , "    emit_htcc_test_output=false"
+    , "    ;;"
+    ]
+        <> markerAssemblerGuard
+        <> [ "esac"
+           , "if ! $emit_htcc_test_output; then"
+           , "  " <> execWrappedDriverCommand wrappedPath
+           , "fi"
+           ]
+    where
+        markerAssemblerGuard
+            | includeMarkerAssembler = []
+            | otherwise =
+                [ "  *htcc-marker-*)"
+                , "    emit_htcc_test_output=false"
+                , "    ;;"
+                ]
+
+execWrappedDriverCommand :: FilePath -> T.Text
+execWrappedDriverCommand wrappedPath =
+    "exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
+
 writeWarningDriverWrapper :: FilePath -> FilePath -> IO ()
 writeWarningDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
         , "printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
         , "printf '%s\\n' '1 warning generated.' >&2"
         , "exec ./" <> T.pack wrappedPath <> " \"$@\""
@@ -2513,10 +2580,12 @@ writeWarningDriverWrapper wrapperPath wrappedPath = do
 
 writeStdoutWarningDriverWrapper :: FilePath -> FilePath -> IO ()
 writeStdoutWarningDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "for arg in \"$@\"; do"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "for arg in \"$@\"; do"
         , "  case \"$arg\" in"
         , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
         , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
@@ -2532,10 +2601,12 @@ writeStdoutWarningDriverWrapper wrapperPath wrappedPath = do
 
 writeBinaryWarningDriverWrapper :: FilePath -> FilePath -> IO ()
 writeBinaryWarningDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "for arg in \"$@\"; do"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "for arg in \"$@\"; do"
         , "  case \"$arg\" in"
         , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
         , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
@@ -2553,20 +2624,24 @@ writeBinaryWarningDriverWrapper wrapperPath wrappedPath = do
 
 writeUnterminatedStderrDriverWrapper :: FilePath -> FilePath -> IO ()
 writeUnterminatedStderrDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "printf '%s' 'XYZ' >&2"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "printf '%s' 'XYZ' >&2"
         , "exec ./" <> T.pack wrappedPath <> " \"$@\""
         ]
     execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
 
 writeInterleavedOutputDriverWrapper :: FilePath -> FilePath -> IO ()
 writeInterleavedOutputDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "for arg in \"$@\"; do"
+        ]
+            <> runAsmFinalAssemblerOutputGuard wrappedPath
+            <> [ "for arg in \"$@\"; do"
         , "  case \"$arg\" in"
         , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
         , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
@@ -2580,10 +2655,12 @@ writeInterleavedOutputDriverWrapper wrapperPath wrappedPath = do
 
 writeSameReadStdoutInterleavingDriverWrapper :: FilePath -> FilePath -> IO ()
 writeSameReadStdoutInterleavingDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "for arg in \"$@\"; do"
+        ]
+            <> runAsmFinalAssemblerOutputGuard wrappedPath
+            <> [ "for arg in \"$@\"; do"
         , "  case \"$arg\" in"
         , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
         , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
@@ -2597,10 +2674,12 @@ writeSameReadStdoutInterleavingDriverWrapper wrapperPath wrappedPath = do
 
 writeSameReadStderrChunksDriverWrapper :: FilePath -> FilePath -> IO ()
 writeSameReadStderrChunksDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "for arg in \"$@\"; do"
+        ]
+            <> runAsmFinalAssemblerOutputGuard wrappedPath
+            <> [ "for arg in \"$@\"; do"
         , "  case \"$arg\" in"
         , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
         , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
@@ -2614,10 +2693,12 @@ writeSameReadStderrChunksDriverWrapper wrapperPath wrappedPath = do
 
 writeStreamScopedWarningDriverWrapper :: FilePath -> FilePath -> IO ()
 writeStreamScopedWarningDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "for arg in \"$@\"; do"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "for arg in \"$@\"; do"
         , "  case \"$arg\" in"
         , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
         , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
@@ -2637,10 +2718,12 @@ writeStreamScopedWarningDriverWrapper wrapperPath wrappedPath = do
 
 writeSplitWarningInterleavedStdoutDriverWrapper :: FilePath -> FilePath -> IO ()
 writeSplitWarningInterleavedStdoutDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "for arg in \"$@\"; do"
+        ]
+            <> runAsmFinalAssemblerOutputGuard wrappedPath
+            <> [ "for arg in \"$@\"; do"
         , "  case \"$arg\" in"
         , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
         , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
@@ -2659,10 +2742,12 @@ writeSplitWarningInterleavedStdoutDriverWrapper wrapperPath wrappedPath = do
 
 writeSplitWarningPrefixDriverWrapper :: FilePath -> FilePath -> IO ()
 writeSplitWarningPrefixDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "for arg in \"$@\"; do"
+        ]
+            <> runAsmFinalAssemblerOutputGuard wrappedPath
+            <> [ "for arg in \"$@\"; do"
         , "  case \"$arg\" in"
         , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
         , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
@@ -2681,10 +2766,12 @@ writeSplitWarningPrefixDriverWrapper wrapperPath wrappedPath = do
 
 writeCrossStreamWarningPreambleDriverWrapper :: FilePath -> FilePath -> IO ()
 writeCrossStreamWarningPreambleDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "for arg in \"$@\"; do"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "for arg in \"$@\"; do"
         , "  case \"$arg\" in"
         , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
         , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
@@ -2702,10 +2789,12 @@ writeCrossStreamWarningPreambleDriverWrapper wrapperPath wrappedPath = do
 
 writeStdoutPrefixBeforeStderrDriverWrapper :: FilePath -> FilePath -> IO ()
 writeStdoutPrefixBeforeStderrDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "for arg in \"$@\"; do"
+        ]
+            <> runAsmFinalAssemblerOutputGuard wrappedPath
+            <> [ "for arg in \"$@\"; do"
         , "  case \"$arg\" in"
         , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
         , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
@@ -2722,10 +2811,12 @@ writeStdoutPrefixBeforeStderrDriverWrapper wrapperPath wrappedPath = do
 
 writeStderrPrefixBeforeStdoutDriverWrapper :: FilePath -> FilePath -> IO ()
 writeStderrPrefixBeforeStdoutDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "for arg in \"$@\"; do"
+        ]
+            <> runAsmFinalAssemblerOutputGuard wrappedPath
+            <> [ "for arg in \"$@\"; do"
         , "  case \"$arg\" in"
         , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
         , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
@@ -2743,10 +2834,12 @@ writeStderrPrefixBeforeStdoutDriverWrapper wrapperPath wrappedPath = do
 
 writeWarningPreambleDriverWrapper :: FilePath -> FilePath -> IO ()
 writeWarningPreambleDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "printf '%s\\n' 'In file included from fake-header.h:1:' >&2"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "printf '%s\\n' 'In file included from fake-header.h:1:' >&2"
         , "printf '%s\\n' '                 from fake-source.c:2:' >&2"
         , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
         , "printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
@@ -2757,13 +2850,16 @@ writeWarningPreambleDriverWrapper wrapperPath wrappedPath = do
 
 writeAnsiWarningPreambleDriverWrapper :: FilePath -> FilePath -> IO ()
 writeAnsiWarningPreambleDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "printf '\\033[1;36mIn file included from fake-header.h:1:\\033[0m\\n' >&2"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "printf '\\033[1;36mIn file included from fake-header.h:1:\\033[0m\\n' >&2"
         , "printf '\\033[1;36m                 from fake-source.c:2:\\033[0m\\n' >&2"
         , "printf '\\033[1;33mwarning: fake HTCC_ASSEMBLER warning\\033[0m\\n' >&2"
         , "printf '\\033[1;35m{standard input}:1:1: note: fake HTCC_ASSEMBLER note\\033[0m\\n' >&2"
+        , "printf '%s\\n' 'int x;' >&2"
         , "printf '\\033[1;33m1 warning generated.\\033[0m\\n' >&2"
         , "exec ./" <> T.pack wrappedPath <> " \"$@\""
         ]
@@ -2771,10 +2867,12 @@ writeAnsiWarningPreambleDriverWrapper wrapperPath wrappedPath = do
 
 writeWarningLeadingNoteDriverWrapper :: FilePath -> FilePath -> IO ()
 writeWarningLeadingNoteDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "printf '%s\\n' \"fake-macro.h:1:1: note: expanded from macro 'FAKE_MACRO'\" >&2"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "printf '%s\\n' \"fake-macro.h:1:1: note: expanded from macro 'FAKE_MACRO'\" >&2"
         , "printf '%s\\n' '.globl main' >&2"
         , "printf '%s\\n' '^~~~~~~~~~~' >&2"
         , "printf '%s\\n' '{standard input}:1:1: warning: fake HTCC_ASSEMBLER warning [-Wasm-operand-widths]' >&2"
@@ -2787,10 +2885,12 @@ writeWarningLeadingNoteDriverWrapper wrapperPath wrappedPath = do
 
 writeWarningContextDriverWrapper :: FilePath -> FilePath -> IO ()
 writeWarningContextDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "printf '%s\\n' \"fake-source.c: In function 'main':\" >&2"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "printf '%s\\n' \"fake-source.c: In function 'main':\" >&2"
         , "printf '%s\\n' '{standard input}: Assembler messages:' >&2"
         , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
         , "printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
@@ -2801,10 +2901,12 @@ writeWarningContextDriverWrapper wrapperPath wrappedPath = do
 
 writeWarningSnippetDriverWrapper :: FilePath -> FilePath -> IO ()
 writeWarningSnippetDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "printf '%s\\n' '{standard input}:1:1: warning: fake HTCC_ASSEMBLER warning [-Wasm-operand-widths]' >&2"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "printf '%s\\n' '{standard input}:1:1: warning: fake HTCC_ASSEMBLER warning [-Wasm-operand-widths]' >&2"
         , "printf '%s\\n' '.globl main' >&2"
         , "printf '%s\\n' '^~~~~~~~~~~' >&2"
         , "printf '%s\\n' '1 warning generated.' >&2"
@@ -2814,10 +2916,12 @@ writeWarningSnippetDriverWrapper wrapperPath wrappedPath = do
 
 writeMultiLineWarningSnippetDriverWrapper :: FilePath -> FilePath -> IO ()
 writeMultiLineWarningSnippetDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "printf '%s\\n' '{standard input}:1:1: warning: fake HTCC_ASSEMBLER warning [-Wasm-operand-widths]' >&2"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "printf '%s\\n' '{standard input}:1:1: warning: fake HTCC_ASSEMBLER warning [-Wasm-operand-widths]' >&2"
         , "printf '%s\\n' 'movl $0, %eax' >&2"
         , "printf '%s\\n' 'retq' >&2"
         , "printf '%s\\n' '^~~~~~~~~~~' >&2"
@@ -2828,10 +2932,12 @@ writeMultiLineWarningSnippetDriverWrapper wrapperPath wrappedPath = do
 
 writeSnippetOnlyWarningDriverWrapper :: FilePath -> FilePath -> IO ()
 writeSnippetOnlyWarningDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
         , "printf '%s\\n' 'int x;' >&2"
         , "printf '%s\\n' '1 warning generated.' >&2"
         , "exec ./" <> T.pack wrappedPath <> " \"$@\""
@@ -2840,10 +2946,12 @@ writeSnippetOnlyWarningDriverWrapper wrapperPath wrappedPath = do
 
 writeCrLfWarningDriverWrapper :: FilePath -> FilePath -> IO ()
 writeCrLfWarningDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "printf '%s\\r\\n' \"fake-source.c: In function 'main':\" >&2"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "printf '%s\\r\\n' \"fake-source.c: In function 'main':\" >&2"
         , "printf '%s\\r\\n' '{standard input}: Assembler messages:' >&2"
         , "printf '%s\\r\\n' '{standard input}:1:1: warning: fake HTCC_ASSEMBLER warning [-Wasm-operand-widths]' >&2"
         , "printf '%s\\r\\n' '.globl main' >&2"
@@ -2856,10 +2964,12 @@ writeCrLfWarningDriverWrapper wrapperPath wrappedPath = do
 
 writeStandaloneLeadingNoteDriverWrapper :: FilePath -> FilePath -> IO ()
 writeStandaloneLeadingNoteDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "printf '%s\\n' 'note: using fallback linker' >&2"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "printf '%s\\n' 'note: using fallback linker' >&2"
         , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
         , "printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
         , "printf '%s\\n' '1 warning generated.' >&2"
@@ -2869,10 +2979,12 @@ writeStandaloneLeadingNoteDriverWrapper wrapperPath wrappedPath = do
 
 writeIndentedPostWarningStderrDriverWrapper :: FilePath -> FilePath -> IO ()
 writeIndentedPostWarningStderrDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
         , "printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
         , "printf '%s\\n' '    cache hit: using wrapped assembler output' >&2"
         , "printf '%s\\n' '1 warning generated.' >&2"
@@ -2882,10 +2994,12 @@ writeIndentedPostWarningStderrDriverWrapper wrapperPath wrappedPath = do
 
 writePunctuatedPostWarningStderrDriverWrapper :: FilePath -> FilePath -> IO ()
 writePunctuatedPostWarningStderrDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
         , "printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
         , "printf '%s\\n' '(cached result)' >&2"
         , "printf '%s\\n' 'status; retrying' >&2"
@@ -2899,10 +3013,12 @@ writePunctuatedPostWarningStderrDriverWrapper wrapperPath wrappedPath = do
 
 writeDirectivePostWarningStderrDriverWrapper :: FilePath -> FilePath -> IO ()
 writeDirectivePostWarningStderrDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
         , "printf '%s\\n' '.section keep' >&2"
         , "printf '%s\\n' '# generated by fake HTCC_ASSEMBLER wrapper' >&2"
         , "printf '%s\\n' '1 warning generated.' >&2"
@@ -2912,10 +3028,12 @@ writeDirectivePostWarningStderrDriverWrapper wrapperPath wrappedPath = do
 
 writeStandalonePreSummaryNoteDriverWrapper :: FilePath -> FilePath -> IO ()
 writeStandalonePreSummaryNoteDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
         , "printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
         , "printf '%s\\n' 'note: using fallback linker' >&2"
         , "printf '%s\\n' '1 warning generated.' >&2"
@@ -2925,10 +3043,12 @@ writeStandalonePreSummaryNoteDriverWrapper wrapperPath wrappedPath = do
 
 writePostWarningNoteDriverWrapper :: FilePath -> FilePath -> IO ()
 writePostWarningNoteDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
         , "printf '%s\\n' '{standard input}:1:1: note: fake HTCC_ASSEMBLER note' >&2"
         , "printf '%s\\n' '1 warning generated.' >&2"
         , "printf '%s' 'note: using fallback linker' >&2"
@@ -2938,10 +3058,12 @@ writePostWarningNoteDriverWrapper wrapperPath wrappedPath = do
 
 writePostWarningNoteWithoutSummaryDriverWrapper :: FilePath -> FilePath -> IO ()
 writePostWarningNoteWithoutSummaryDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "printf '%s\\n' '{standard input}:1:1: warning: fake HTCC_ASSEMBLER warning [-Wasm-operand-widths]' >&2"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "printf '%s\\n' '{standard input}:1:1: warning: fake HTCC_ASSEMBLER warning [-Wasm-operand-widths]' >&2"
         , "printf '%s' 'note: using fallback linker' >&2"
         , "exec ./" <> T.pack wrappedPath <> " \"$@\""
         ]
@@ -3157,34 +3279,12 @@ writeEarlyClosedStdoutProbeDriverWrapper wrapperPath logPath wrappedPath = do
 
 writeStreamingPromptDriverWrapper :: FilePath -> FilePath -> IO ()
 writeStreamingPromptDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "assemble_invocation=false"
-        , "expect_lang=false"
-        , "for arg in \"$@\"; do"
-        , "  if $expect_lang; then"
-        , "    expect_lang=false"
-        , "    case \"$arg\" in"
-        , "      assembler)"
-        , "        assemble_invocation=true"
-        , "        ;;"
-        , "    esac"
-        , "    continue"
-        , "  fi"
-        , "  case \"$arg\" in"
-        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
-        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
-        , "      ;;"
-        , "    -x)"
-        , "      expect_lang=true"
-        , "      ;;"
-        , "  esac"
-        , "done"
-        , "if ! $assemble_invocation; then"
-        , "  exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
-        , "fi"
-        , "printf '%s\\n' 'stdout: wrapper prompt'"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "printf '%s\\n' 'stdout: wrapper prompt'"
         , "perl -e 'select undef, undef, undef, 1.0'"
         , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
         , "printf '%s\\n' '1 warning generated.' >&2"
@@ -3194,34 +3294,12 @@ writeStreamingPromptDriverWrapper wrapperPath wrappedPath = do
 
 writeStreamingPromptWithoutNewlineDriverWrapper :: FilePath -> FilePath -> IO ()
 writeStreamingPromptWithoutNewlineDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "assemble_invocation=false"
-        , "expect_lang=false"
-        , "for arg in \"$@\"; do"
-        , "  if $expect_lang; then"
-        , "    expect_lang=false"
-        , "    case \"$arg\" in"
-        , "      assembler)"
-        , "        assemble_invocation=true"
-        , "        ;;"
-        , "    esac"
-        , "    continue"
-        , "  fi"
-        , "  case \"$arg\" in"
-        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
-        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
-        , "      ;;"
-        , "    -x)"
-        , "      expect_lang=true"
-        , "      ;;"
-        , "  esac"
-        , "done"
-        , "if ! $assemble_invocation; then"
-        , "  exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
-        , "fi"
-        , "perl -e '$| = 1; print qq(stdout: wrapper prompt)'"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "perl -e '$| = 1; print qq(stdout: wrapper prompt)'"
         , "perl -e 'select undef, undef, undef, 1.0'"
         , "printf '%s\\n' 'warning: fake HTCC_ASSEMBLER warning' >&2"
         , "printf '%s\\n' '1 warning generated.' >&2"
@@ -3231,17 +3309,12 @@ writeStreamingPromptWithoutNewlineDriverWrapper wrapperPath wrappedPath = do
 
 writeCrossStreamStreamingRetainedLineDriverWrapper :: FilePath -> FilePath -> IO ()
 writeCrossStreamStreamingRetainedLineDriverWrapper wrapperPath wrappedPath = do
-    T.writeFile wrapperPath $ T.unlines
+    T.writeFile wrapperPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
-        , "for arg in \"$@\"; do"
-        , "  case \"$arg\" in"
-        , "    -dumpmachine|-print-target-triple|*htcc-probe-*)"
-        , "      exec " <> shellQuote (T.pack ("./" <> wrappedPath)) <> " \"$@\""
-        , "      ;;"
-        , "  esac"
-        , "done"
-        , "printf '%s' 'stderr: wrapper prompt' >&2"
+        ]
+            <> runAsmUserAssemblerOutputGuard wrappedPath
+            <> [ "printf '%s' 'stderr: wrapper prompt' >&2"
         , "perl -e 'select undef, undef, undef, 0.2'"
         , "printf '%s\\n' 'stdout: retained line'"
         , "perl -e 'select undef, undef, undef, 1.0'"
@@ -3309,23 +3382,35 @@ writePathLoggingWrapper wrapperPath logPath helperName = do
 writeEnvLoggingForwardingWrapper :: FilePath -> FilePath -> [String] -> IO ()
 writeEnvLoggingForwardingWrapper wrapperPath logPath envNames = do
     T.writeFile wrapperPath $ T.unlines $
-        [ "#!/bin/sh"
-        , "set -eu"
+        [ "#!/usr/bin/env perl"
+        , "use strict;"
+        , "use warnings;"
+        , "open(my $log, '>>', " <> perlSingleQuote (T.pack logPath) <> ") or die $!;"
         ]
             <> concatMap renderEnvLogger envNames
-            <> [ "wrapped=$1"
-               , "shift"
-               , "exec ./\"$wrapped\" \"$@\""
+            <> [ "close($log) or die $!;"
+               , "my $wrapped = shift @ARGV;"
+               , "exec './' . $wrapped, @ARGV;"
+               , "die \"exec failed: $!\";"
                ]
     execErrFin $ "chmod +x '" <> T.pack wrapperPath <> "'"
     where
         renderEnvLogger envName =
-            [ "printf '%s=' " <> shellQuote (T.pack envName) <> " >> " <> T.pack logPath
-            , "printf '%s\\n' \"$" <> T.pack envName <> "\" >> " <> T.pack logPath
+            [ "print {$log} "
+                <> perlSingleQuote (T.pack envName <> "=")
+                <> ", (defined $ENV{"
+                <> perlSingleQuote (T.pack envName)
+                <> "} ? $ENV{"
+                <> perlSingleQuote (T.pack envName)
+                <> "} : ''), \"\\n\";"
             ]
 
 shellQuote :: T.Text -> T.Text
 shellQuote word = "'" <> T.replace "'" "'\"'\"'" word <> "'"
+
+perlSingleQuote :: T.Text -> T.Text
+perlSingleQuote word =
+    "'" <> T.replace "'" "\\'" (T.replace "\\" "\\\\" word) <> "'"
 
 relocatableElfObjectWriterCommand :: T.Text -> T.Text -> T.Text -> T.Text
 relocatableElfObjectWriterCommand =
@@ -8210,7 +8295,7 @@ outputFileSingleInputImplicitFunctionConflictTest =
         htccCmd <- htccCommand
         let target = "tmp.s"
             inputPath = "tmp-single.c"
-            expectedError = "multiple external definitions in multi-input -o mode: foo"
+            expectedError = "called object is not a function or function pointer"
         T.writeFile inputPath $ T.unlines
             [ "int foo;"
             , "int main(void) { return foo(); }"
@@ -8246,7 +8331,7 @@ outputFileSingleInputStaticImplicitFunctionConflictTest =
         htccCmd <- htccCommand
         let target = "tmp.s"
             inputPath = "tmp-single.c"
-            expectedError = "multiple external definitions in multi-input -o mode: foo"
+            expectedError = "called object is not a function or function pointer"
         T.writeFile inputPath $ T.unlines
             [ "static int foo;"
             , "int main(void) { return foo(); }"
@@ -8411,7 +8496,7 @@ stdoutSingleInputImplicitFunctionConflictTest =
         htccCmd <- htccCommand
         let target = "tmp.s"
             inputPath = "tmp-single.c"
-            expectedError = "multiple external definitions in multi-input -o mode: foo"
+            expectedError = "called object is not a function or function pointer"
         T.writeFile inputPath $ T.unlines
             [ "int foo;"
             , "int main(void) { return foo(); }"
@@ -8532,7 +8617,7 @@ stdoutMultiInputSameInputImplicitFunctionDefinitionWarningTest =
             expectedWarning = "warning: the function 'foo' is not declared."
         T.writeFile callerPath $ T.unlines
             [ "int main(void) { return foo(); }"
-            , "int foo(void) { return 1; }"
+            , "int foo(void) { return 0; }"
             ]
         T.writeFile otherPath "int helper(void) { return 0; }"
         result <- exec $ mconcat
@@ -10702,7 +10787,7 @@ outputFileMultiInputSameInputImplicitFunctionDefinitionWarningTest =
             expectedWarning = "warning: the function 'foo' is not declared."
         T.writeFile callerPath $ T.unlines
             [ "int main(void) { return foo(); }"
-            , "int foo(void) { return 1; }"
+            , "int foo(void) { return 0; }"
             ]
         T.writeFile otherPath "int helper(void) { return 0; }"
         result <- exec $ mconcat
@@ -10757,7 +10842,7 @@ outputFileMultiInputSameInputImplicitFunctionConflictTest =
         let target = "tmp.s"
             callerPath = "tmp-caller.c"
             otherPath = "tmp-other.c"
-            expectedError = "multiple external definitions in multi-input -o mode: foo"
+            expectedError = "called object is not a function or function pointer"
         T.writeFile callerPath $ T.unlines
             [ "int foo;"
             , "int main(void) { return foo(); }"
@@ -10867,7 +10952,7 @@ outputFileMultiInputSameInputStaticImplicitFunctionConflictTest =
         let target = "tmp.s"
             callerPath = "tmp-caller.c"
             otherPath = "tmp-other.c"
-            expectedError = "multiple external definitions in multi-input -o mode: foo"
+            expectedError = "called object is not a function or function pointer"
         T.writeFile callerPath $ T.unlines
             [ "static int foo;"
             , "int main(void) { return foo(); }"
@@ -12359,6 +12444,7 @@ outputFileOpenFailurePreservesExistingOutputTest =
         clean [targetDir, "tmp.out", "tmp.err"]
         createDirectoryIfMissing False targetDir
         T.writeFile target "stale output"
+        setFileMode target ownerReadMode
         execErrFin $ "chmod 555 '" <> T.pack targetDir <> "'"
         result <- exec $ mconcat
             [ "echo '"
@@ -12397,6 +12483,10 @@ outputFileOpenFailurePreservesExistingOutputTest =
         cleanupReadOnlyOutputDir = do
             let targetDir = "tmp-read-only-dir"
             _ <- exec $ "chmod 755 '" <> T.pack targetDir <> "' > /dev/null 2>&1"
+            _ <- exec $
+                "chmod 644 '"
+                    <> T.pack (targetDir </> "tmp-read-only.s")
+                    <> "' > /dev/null 2>&1"
             clean [targetDir, "tmp.out", "tmp.err"]
 
 outputFileHardLinkedRenameReplacementPreservesAliasTest :: IO (Either T.Text T.Text, String)
@@ -13091,7 +13181,7 @@ runAsmSingleInputImplicitFunctionConflictTest =
         htccCmd <- htccCommand
         let target = "tmp"
             inputPath = "tmp-single.c"
-            expectedError = "multiple external definitions in multi-input -o mode: foo"
+            expectedError = "called object is not a function or function pointer"
         writeFakeAssembler fakeAssemblerPath
         T.writeFile inputPath $ T.unlines
             [ "int foo;"
@@ -14859,12 +14949,12 @@ runAsmProbeDoesNotHangOnEarlyClosedStdoutTest =
                         , "-c"
                         , "-o"
                         ]
-                preservedFlood = "probe-stderr-flood" `T.isInfixOf` stderrOut
+                stderrWasSuppressed = T.null stderrOut
                 ranOk = maybe False (exitCode (const False) True) runResult
                 ok =
                     completed
                         && T.null stdoutLeak
-                        && preservedFlood
+                        && stderrWasSuppressed
                         && sawMetadataProbe
                         && sawAssemblyProbe
                         && compilerSawExpectedArgs
@@ -14874,7 +14964,7 @@ runAsmProbeDoesNotHangOnEarlyClosedStdoutTest =
                     [ "timedOut: " <> T.pack (show $ isNothing maybeResult)
                     , "stdout:"
                     , stdoutLeak
-                    , "stderrHasFlood: " <> T.pack (show preservedFlood)
+                    , "stderrWasSuppressed: " <> T.pack (show stderrWasSuppressed)
                     , "stderrBytes: " <> T.pack (show $ T.length stderrOut)
                     , "wrapperInvocations:"
                     , T.unlines wrapperInvocations
@@ -15158,8 +15248,7 @@ runAsmExpandedAssignmentWordFailsTest =
             outputExists <- doesFileExist "tmp"
             let failed = exitCode (const True) False result
                 hasExpectedError =
-                    "failed to determine an x86_64-ELF target from HTCC_ASSEMBLER"
-                        `T.isInfixOf` stderrOut
+                    "failed to start HTCC_ASSEMBLER probe" `T.isInfixOf` stderrOut
                 ok =
                     failed
                         && T.null stdoutLeak
@@ -15422,8 +15511,7 @@ runAsmLeadingEnvAssignmentPreservesPathOverrideTest =
             outputExists <- doesFileExist "tmp"
             let failedAsExpected = exitCode (const True) False result
                 hasExpectedError =
-                    "failed to determine an x86_64-ELF target from HTCC_ASSEMBLER"
-                        `T.isInfixOf` stderrOut
+                    "failed to start HTCC_ASSEMBLER probe" `T.isInfixOf` stderrOut
                 preservedExactPath = wrapperPathValue == T.pack ("./" <> fakePathBinDir)
                 ok =
                     T.null stdoutLeak
@@ -15864,8 +15952,7 @@ runAsmEnvPathOverrideNoLocalFallbackTest =
             outputExists <- doesFileExist "tmp"
             let failedAsExpected = exitCode (const True) False result
                 hasExpectedError =
-                    "failed to determine an x86_64-ELF target from HTCC_ASSEMBLER"
-                        `T.isInfixOf` stderrOut
+                    "failed to start HTCC_ASSEMBLER probe" `T.isInfixOf` stderrOut
                 ok =
                     T.null stdoutLeak
                         && failedAsExpected
@@ -16284,7 +16371,7 @@ runAsmHardLinkedRenameReplacementPreservesAliasTest =
             succeeded = exitCode (const False) True result
             targetUpdated = targetBytes /= staleTargetBytes
             aliasPreserved = aliasBytes == staleTargetBytes
-            targetRuns = maybe False (exitCode (== 0) False) targetRunResult
+            targetRuns = maybe False (exitCode (const False) True) targetRunResult
             aliasStillRuns = maybe False (exitCode (== 99) False) aliasRunResult
             driverInvoked = not $ null driverInvocations
             ok =

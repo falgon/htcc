@@ -93,7 +93,9 @@ runAsmWithHandle h asm = do
     brk <- newIORef Nothing
     cnt <- newIORef Nothing
     fn <- newIORef Nothing
-    unAsm asm (AsmInfo False h c brk cnt fn)
+    result <- unAsm asm (AsmInfo False h c brk cnt fn)
+    T.hPutStrLn h ".section .note.GNU-stack,\"\",@progbits"
+    pure result
 
 -- | print a string with indentation, output is broken on a new line
 putStrLnWithIndent :: T.Text -> Asm ctx e ()

@@ -79,6 +79,7 @@ creationMaskedOutputMode = do
                 *> ignoreIOException (removeDirectory probeDir)
     finally
         ( do
+            setFileMode probeDir privateTemporaryDirectoryMode
             probeFd <- createFile probePath defaultOutputFileMode
             finally
                 ( do
