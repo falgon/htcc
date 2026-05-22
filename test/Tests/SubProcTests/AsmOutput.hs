@@ -274,7 +274,7 @@ import           Data.Word             (Word8)
 import           Numeric               (showHex)
 import           System.Directory      (createDirectoryIfMissing, doesFileExist,
                                         findExecutable, getCurrentDirectory,
-                                        listDirectory, removeFile)
+                                        listDirectory, makeAbsolute, removeFile)
 import           System.Exit           (ExitCode (ExitSuccess))
 import           System.FilePath       (takeFileName, (</>))
 import           System.Info           (os)
@@ -1671,36 +1671,60 @@ foreignAbiRunnableElfHex =
 
 runnableElfWriter :: [T.Text]
 runnableElfWriter =
+    runnableElfWriterWith "perl" "chmod"
+
+runnableElfWriterWithSupportTools :: [T.Text]
+runnableElfWriterWithSupportTools =
+    runnableElfWriterWith "\"$HTCC_TEST_PERL\"" "\"$HTCC_TEST_CHMOD\""
+
+runnableElfWriterWith :: T.Text -> T.Text -> [T.Text]
+runnableElfWriterWith perlCommand chmodCommand =
     [ "write_runnable_elf() {"
-    , "  LC_ALL=C LANG=C perl -e 'print pack(\"H*\", $ARGV[0])' '" <> runnableElfHex <> "' > \"$1\""
+    , "  LC_ALL=C LANG=C " <> perlCommand <> " -e 'print pack(\"H*\", $ARGV[0])' '" <> runnableElfHex <> "' > \"$1\""
     , "  if [ \"$1\" != /dev/null ]; then"
-    , "    chmod +x \"$1\""
+    , "    " <> chmodCommand <> " +x \"$1\""
     , "  fi"
     , "}"
     ]
 
 foreignAbiRunnableElfWriter :: [T.Text]
 foreignAbiRunnableElfWriter =
+    foreignAbiRunnableElfWriterWith "perl" "chmod"
+
+foreignAbiRunnableElfWriterWith :: T.Text -> T.Text -> [T.Text]
+foreignAbiRunnableElfWriterWith perlCommand chmodCommand =
     [ "write_foreign_abi_runnable_elf() {"
-    , "  LC_ALL=C LANG=C perl -e 'print pack(\"H*\", $ARGV[0])' '" <> foreignAbiRunnableElfHex <> "' > \"$1\""
+    , "  LC_ALL=C LANG=C " <> perlCommand <> " -e 'print pack(\"H*\", $ARGV[0])' '" <> foreignAbiRunnableElfHex <> "' > \"$1\""
     , "  if [ \"$1\" != /dev/null ]; then"
-    , "    chmod +x \"$1\""
+    , "    " <> chmodCommand <> " +x \"$1\""
     , "  fi"
     , "}"
     ]
 
 probeLinkedOutputWriter :: [T.Text]
 probeLinkedOutputWriter =
+    probeLinkedOutputWriterWith "cat"
+
+probeLinkedOutputWriterWithSupportTools :: [T.Text]
+probeLinkedOutputWriterWithSupportTools =
+    probeLinkedOutputWriterWith "\"$HTCC_TEST_CAT\""
+
+probeLinkedOutputWriterWith :: T.Text -> [T.Text]
+probeLinkedOutputWriterWith catCommand =
     [ "      test -n \"$input\""
     , "      write_runnable_elf \"$out\""
-    , "      cat \"$input\" >> \"$out\""
+    , "      " <> catCommand <> " \"$input\" >> \"$out\""
     ]
 
 foreignAbiProbeLinkedOutputWriter :: [T.Text]
 foreignAbiProbeLinkedOutputWriter =
+    foreignAbiProbeLinkedOutputWriterWith "cat"
+
+foreignAbiProbeLinkedOutputWriterWith :: T.Text -> [T.Text]
+foreignAbiProbeLinkedOutputWriterWith catCommand =
     [ "      test -n \"$input\""
     , "      write_foreign_abi_runnable_elf \"$out\""
-    , "      cat \"$input\" >> \"$out\""
+    , "      " <> catCommand <> " \"$input\" >> \"$out\""
     ]
 
 writeFakeAssembler :: FilePath -> IO ()
@@ -1719,11 +1743,13 @@ writeForwardingDriverWrapper wrapperPath = do
 
 writeLoggingDriver :: FilePath -> FilePath -> IO ()
 writeLoggingDriver driverPath logPath = do
+    supportToolAssignments <- fakeAssemblerSupportToolAssignments
     T.writeFile driverPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
         ]
-            <> runnableElfWriter
+            <> supportToolAssignments
+            <> runnableElfWriterWithSupportTools
             <> [ "for arg in \"$@\"; do"
         , "  case \"$arg\" in"
         , "    -dumpmachine|-print-target-triple)"
@@ -1760,17 +1786,17 @@ writeLoggingDriver driverPath logPath = do
         , "test -n \"$out\""
         , "if [ \"$mode\" = 'assemble' ]; then"
         , "  test -n \"$input\""
-        , "  " <> relocatableElfObjectWriterCommand "\"$out\"" "\"$input\"" "0"
+        , "  " <> relocatableElfObjectWriterCommandWithSupportTools "\"$out\"" "\"$input\"" "0"
         , "else"
         , "  case \"$out\" in"
         , "    *htcc-probe-*)"
         ]
-            <> probeLinkedOutputWriter
+            <> probeLinkedOutputWriterWithSupportTools
             <> [ "      ;;"
                , "    *)"
         , "      test -n \"$input\""
         , "      write_runnable_elf \"$out\""
-        , "      cat \"$input\" >> \"$out\""
+        , "      \"$HTCC_TEST_CAT\" \"$input\" >> \"$out\""
         , "      ;;"
         , "  esac"
         , "fi"
@@ -3302,11 +3328,19 @@ shellQuote :: T.Text -> T.Text
 shellQuote word = "'" <> T.replace "'" "'\"'\"'" word <> "'"
 
 relocatableElfObjectWriterCommand :: T.Text -> T.Text -> T.Text -> T.Text
-relocatableElfObjectWriterCommand outputExpr inputExpr delayExpr =
+relocatableElfObjectWriterCommand =
+    relocatableElfObjectWriterCommandWith "perl"
+
+relocatableElfObjectWriterCommandWithSupportTools :: T.Text -> T.Text -> T.Text -> T.Text
+relocatableElfObjectWriterCommandWithSupportTools =
+    relocatableElfObjectWriterCommandWith "\"$HTCC_TEST_PERL\""
+
+relocatableElfObjectWriterCommandWith :: T.Text -> T.Text -> T.Text -> T.Text -> T.Text
+relocatableElfObjectWriterCommandWith perlCommand outputExpr inputExpr delayExpr =
     T.unwords
         [ "LC_ALL=C"
         , "LANG=C"
-        , "perl"
+        , perlCommand
         , "-e"
         , shellQuote relocatableElfObjectWriterPerl
         , outputExpr
@@ -3686,16 +3720,35 @@ writeExecutableProxy proxyPath targetPath = do
         ]
     execErrFin $ "chmod +x '" <> T.pack proxyPath <> "'"
 
+fakeAssemblerSupportToolAssignments :: IO [T.Text]
+fakeAssemblerSupportToolAssignments =
+    mapM
+        renderSupportToolAssignment
+        [ ("HTCC_TEST_PERL", "perl")
+        , ("HTCC_TEST_CAT", "cat")
+        , ("HTCC_TEST_CHMOD", "chmod")
+        ]
+    where
+        renderSupportToolAssignment (envName, toolName) = do
+            toolPath <- maybe
+                (ioError . userError $ "missing " <> toolName <> " executable for test")
+                pure
+                =<< findExecutable toolName
+            absoluteToolPath <- makeAbsolute toolPath
+            pure $ "export " <> envName <> "=" <> shellQuote (T.pack absoluteToolPath)
+
 writeFakeAssemblerWithLogs :: FilePath -> FilePath -> FilePath -> IO ()
 writeFakeAssemblerWithLogs = writeFakeAssemblerWithTarget "x86_64-linux-gnu"
 
 writeFakeAssemblerWithTarget :: T.Text -> FilePath -> FilePath -> FilePath -> IO ()
 writeFakeAssemblerWithTarget targetTriple logPath asmPath assemblerPath = do
+    supportToolAssignments <- fakeAssemblerSupportToolAssignments
     T.writeFile assemblerPath $ T.unlines $
         [ "#!/bin/sh"
         , "set -eu"
         ]
-            <> runnableElfWriter
+            <> supportToolAssignments
+            <> runnableElfWriterWithSupportTools
             <> [ "copy_file() {"
         , "  src=$1"
         , "  dst=$2"
@@ -3777,12 +3830,12 @@ writeFakeAssemblerWithTarget targetTriple logPath asmPath assemblerPath = do
                , "  case \"$out\" in"
                , "    *htcc-probe-*)"
                ]
-            <> probeLinkedOutputWriter
+            <> probeLinkedOutputWriterWithSupportTools
             <> [ "      ;;"
                , "    *)"
         , "      test -n \"$input\""
         , "      write_runnable_elf \"$out\""
-        , "      cat \"$input\" >> \"$out\""
+        , "      \"$HTCC_TEST_CAT\" \"$input\" >> \"$out\""
         , "      ;;"
         , "  esac"
         , "fi"
@@ -3802,7 +3855,7 @@ writeFakeAssemblerWithTarget targetTriple logPath asmPath assemblerPath = do
 
         probeObjectWriter
             | emitsElfObject =
-                [ "  " <> relocatableElfObjectWriterCommand "\"$1\"" "\"$input\"" "0"
+                [ "  " <> relocatableElfObjectWriterCommandWithSupportTools "\"$1\"" "\"$input\"" "0"
                 ]
             | otherwise =
                 [ "  printf 'MZfake-object\\n' > \"$1\""
@@ -14997,12 +15050,6 @@ runAsmLeadingEnvAssignmentExpandsTildePathTest =
                         fakePathAssemblerLogPath
                         fakeAssemblerAsmPath
                         fakeHomeAssemblerPath
-                    catPath <- maybe (ioError $ userError "missing cat executable for test") pure
-                        =<< findExecutable "cat"
-                    writeExecutableProxy (fakeHomeBinDir </> "cat") catPath
-                    chmodPath <- maybe (ioError $ userError "missing chmod executable for test") pure
-                        =<< findExecutable "chmod"
-                    writeExecutableProxy (fakeHomeBinDir </> "chmod") chmodPath
                     result <- exec $ mconcat
                         [ "echo '"
                         , source
@@ -15256,12 +15303,6 @@ runAsmLeadingEnvAssignmentWithoutEnvPathTest =
             htccCmd <- htccCommand
             createDirectoryIfMissing False fakePathBinDir
             writeFakeAssemblerWithLogs fakePathAssemblerLogPath fakeAssemblerAsmPath fakePathAssemblerPath
-            catPath <- maybe (ioError $ userError "missing cat executable for test") pure
-                =<< findExecutable "cat"
-            writeExecutableProxy (fakePathBinDir </> "cat") catPath
-            chmodPath <- maybe (ioError $ userError "missing chmod executable for test") pure
-                =<< findExecutable "chmod"
-            writeExecutableProxy (fakePathBinDir </> "chmod") chmodPath
             when (htccCmd == "htcc") $ do
                 compilerPath <- maybe (ioError $ userError "missing htcc executable for test") pure
                     =<< findExecutable "htcc"
@@ -15307,7 +15348,8 @@ runAsmLeadingEnvAssignmentWithoutEnvPathTest =
                         , ".L.label.main.done:"
                         ]
                 ok =
-                    T.null stdoutLeak
+                    exitCode (const False) True result
+                        && T.null stdoutLeak
                         && T.null stderrOut
                         && compilerSawExpectedArgs
                         && not envAssignmentPassedAsArg
