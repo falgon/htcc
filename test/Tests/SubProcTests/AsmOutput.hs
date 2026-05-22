@@ -16265,13 +16265,14 @@ runAsmHardLinkedRenameReplacementPreservesAliasTest =
             if hasLog
                 then T.lines <$> T.readFile fakeAssemblerLogPath
                 else pure []
-        targetContents <- if targetExists then T.readFile target else pure ""
-        aliasContents <- if aliasExists then T.readFile alias else pure ""
+        targetBytes <- if targetExists then B.readFile target else pure B.empty
+        aliasBytes <- if aliasExists then B.readFile alias else pure B.empty
         targetRunResult <- if targetExists then Just <$> exec ("./" <> T.pack target) else pure Nothing
         aliasRunResult <- if aliasExists then Just <$> exec ("./" <> T.pack alias) else pure Nothing
-        let succeeded = exitCode (const False) True result
-            targetUpdated = targetContents /= staleTarget
-            aliasPreserved = aliasContents == staleTarget
+        let staleTargetBytes = BC.pack (T.unpack staleTarget)
+            succeeded = exitCode (const False) True result
+            targetUpdated = targetBytes /= staleTargetBytes
+            aliasPreserved = aliasBytes == staleTargetBytes
             targetRuns = maybe False (exitCode (== 0) False) targetRunResult
             aliasStillRuns = maybe False (exitCode (== 99) False) aliasRunResult
             driverInvoked = not $ null driverInvocations
@@ -16337,15 +16338,12 @@ runAsmReadOnlyParentWritableTargetTest =
             ]
         stdoutLeak <- T.readFile "tmp.out"
         stderrOut <- T.readFile "tmp.err"
-        targetContents <- T.readFile target
+        targetBytes <- B.readFile target
         runResult <- exec $ "./" <> T.pack target
-        let succeeded = exitCode (const False) True result
+        let staleTargetBytes = "#!/bin/sh\nexit 99\n" :: B.ByteString
+            succeeded = exitCode (const False) True result
             ranOk = exitCode (const False) True runResult
-            targetUpdated =
-                all (`T.isInfixOf` targetContents)
-                    [ "#!/bin/sh"
-                    , "exit 0"
-                    ]
+            targetUpdated = targetBytes /= staleTargetBytes
             ok =
                 succeeded
                     && T.null stdoutLeak
@@ -16401,16 +16399,13 @@ runAsmReadOnlyParentWriteOnlyTargetTest =
         execErrFin $ "chmod 755 '" <> T.pack targetDir <> "'"
         when targetExists $
             setFileMode target $ replacedMode `unionFileModes` ownerReadMode `unionFileModes` ownerExecuteMode
-        targetContents <- if targetExists then T.readFile target else pure ""
+        targetBytes <- if targetExists then B.readFile target else pure B.empty
         runResult <- if targetExists then Just <$> exec ("./" <> T.pack target) else pure Nothing
         let replacedPermissions = permissionBits replacedMode
+        let staleTargetBytes = "#!/bin/sh\nexit 99\n" :: B.ByteString
         let succeeded = exitCode (const False) True result
             ranOk = maybe False (exitCode (const False) True) runResult
-            targetUpdated =
-                all (`T.isInfixOf` targetContents)
-                    [ "#!/bin/sh"
-                    , "exit 0"
-                    ]
+            targetUpdated = targetBytes /= staleTargetBytes
             ok =
                 succeeded
                     && T.null stdoutLeak
@@ -16467,16 +16462,13 @@ runAsmReadOnlyParentExecutableOnlyTargetTest =
         stderrOut <- T.readFile "tmp.err"
         targetExists <- doesFileExist target
         replacedMode <- if targetExists then fileMode <$> getFileStatus target else pure 0
-        targetContents <- if targetExists then T.readFile target else pure ""
+        targetBytes <- if targetExists then B.readFile target else pure B.empty
         runResult <- if targetExists then Just <$> exec ("./" <> T.pack target) else pure Nothing
         let replacedPermissions = permissionBits replacedMode
+        let staleTargetBytes = "#!/bin/sh\nexit 99\n" :: B.ByteString
         let succeeded = exitCode (const False) True result
             ranOk = maybe False (exitCode (const False) True) runResult
-            targetUpdated =
-                all (`T.isInfixOf` targetContents)
-                    [ "#!/bin/sh"
-                    , "exit 0"
-                    ]
+            targetUpdated = targetBytes /= staleTargetBytes
             ok =
                 succeeded
                     && T.null stdoutLeak
@@ -16542,14 +16534,15 @@ runAsmReadOnlyParentHardLinkAliasPreservesExistingOutputTest =
                 then T.lines <$> T.readFile fakeAssemblerLogPath
                 else pure []
         execErrFin $ "chmod 755 '" <> T.pack targetDir <> "'"
-        targetContents <- if targetExists then T.readFile target else pure ""
-        aliasContents <- if aliasExists then T.readFile alias else pure ""
+        targetBytes <- if targetExists then B.readFile target else pure B.empty
+        aliasBytes <- if aliasExists then B.readFile alias else pure B.empty
         targetRunResult <- if targetExists then Just <$> exec ("./" <> T.pack target) else pure Nothing
         aliasRunResult <- if aliasExists then Just <$> exec ("./" <> T.pack alias) else pure Nothing
-        let failed = exitCode (const True) False result
+        let staleTargetBytes = BC.pack (T.unpack staleTarget)
+            failed = exitCode (const True) False result
             hasExpectedError = expectedError `T.isInfixOf` stderrOut
-            preservedTarget = targetContents == staleTarget
-            preservedAlias = aliasContents == staleTarget
+            preservedTarget = targetBytes == staleTargetBytes
+            preservedAlias = aliasBytes == staleTargetBytes
             targetStillRuns = maybe False (exitCode (== 99) False) targetRunResult
             aliasStillRuns = maybe False (exitCode (== 99) False) aliasRunResult
             driverInvoked = not $ null driverInvocations
@@ -16623,7 +16616,7 @@ runAsmReadOnlyParentLinkFailurePreservesExistingOutputTest =
         stdoutLeak <- T.readFile "tmp.out"
         stderrOut <- T.readFile "tmp.err"
         targetExists <- doesFileExist target
-        targetContents <- if targetExists then T.readFile target else pure ""
+        targetBytes <- if targetExists then B.readFile target else pure B.empty
         programResult <- if targetExists then Just <$> exec ("./" <> T.pack target) else pure Nothing
         driverInvocations <- do
             hasLog <- doesFileExist fakeFailingLinkDriverLogPath
@@ -16633,7 +16626,7 @@ runAsmReadOnlyParentLinkFailurePreservesExistingOutputTest =
         let failed = exitCode (const True) False result
             attemptedStagedLink =
                 any ("htcc-link-output-" `T.isInfixOf`) driverInvocations
-            preservedTarget = targetContents == "#!/bin/sh\nexit 99\n"
+            preservedTarget = targetBytes == ("#!/bin/sh\nexit 99\n" :: B.ByteString)
             staleTargetRan = maybe False (exitCode (== 99) False) programResult
             ok =
                 failed
