@@ -13672,9 +13672,9 @@ runAsmQuotedCompilerTest = flip finally (clean ["tmp", "tmp.out", fakeAssemblerQ
         [ "echo '"
         , source
         , "' | "
-        , "HTCC_ASSEMBLER='./"
+        , "HTCC_ASSEMBLER=\"'./"
         , T.pack fakeAssemblerQuotedPath
-        , "' "
+        , "'\" "
         , htccCmd
         , " -r -o tmp /dev/stdin > tmp.out"
         ]
