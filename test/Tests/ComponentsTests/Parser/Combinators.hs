@@ -10,6 +10,7 @@ import           Data.Either                                 (isLeft, isRight)
 import           Data.Functor.Identity                       (runIdentity)
 import           Data.List                                   (isPrefixOf,
                                                               isSuffixOf)
+import qualified Data.List.NonEmpty                          as NE
 import qualified Data.Map                                    as MP
 import           Data.Maybe                                  (fromMaybe,
                                                               listToMaybe,
@@ -41,7 +42,7 @@ import           Test.HUnit                                  (Test (..),
                                                               assertEqual,
                                                               assertFailure,
                                                               (~:), (~?=))
-import qualified Text.Parsec.Pos                             as PP
+import qualified Text.Megaparsec.Pos                         as MP
 
 type TestParser = M.Parsec Void T.Text
 
@@ -171,9 +172,10 @@ errorBundlePrettyTest = TestLabel "Parser.Combinators.Core.errorBundlePretty" $
         ]
     where
         identifier' = identifier :: TestParser T.Text
+        assertTruncatedSourceLine :: TestParser a -> T.Text -> (String -> String -> IO ()) -> IO ()
         assertTruncatedSourceLine parserUnderTest input assertSource = case M.runParser parserUnderTest "" input of
             Left err ->
-                case lines $ show err of
+                case lines $ M.errorBundlePretty err of
                     _loc : srcLn : caretLn : _ -> do
                         assertBool "source line should be capped" $ length srcLn <= 160
                         assertBool "caret line should contain a caret" $ '^' `elem` caretLn
@@ -501,16 +503,18 @@ assertProgramErrorContains :: T.Text -> T.Text -> IO ()
 assertProgramErrorContains errMsg input = case parseProgram input of
     Left err -> assertBool
         "unexpected error message"
-        (errMsg `T.isInfixOf` T.pack (show err))
+        (errMsg `T.isInfixOf` T.pack (M.errorBundlePretty err))
     Right _ -> assertFailure "expected parse failure"
 
 errorBundleLoc :: M.ParseErrorBundle T.Text Void -> (Int, Int)
 errorBundleLoc err =
-    ( fromIntegral $ PP.sourceLine pos
-    , fromIntegral $ PP.sourceColumn pos
+    ( MP.unPos $ MP.sourceLine pos
+    , MP.unPos $ MP.sourceColumn pos
     )
     where
-        pos = M.pstateSourcePos $ M.bundlePosState err
+        parseErr = NE.head $ M.bundleErrors err
+        (_, posState) = M.reachOffset (M.errorOffset parseErr) $ M.bundlePosState err
+        pos = M.pstateSourcePos posState
 
 pairMembers :: MP.Map T.Text (CT.StructMember Integer)
 pairMembers = MP.fromList
@@ -699,7 +703,7 @@ structInitializerTest = TestLabel "Parser.Program.struct-initializer" $
                 ~?= True
         , TestLabel "zero-fills only omitted struct storage after explicit initialization" $ TestCase $
             case parseInitializerAST paddedStructTy [] "= { 1 };" of
-                Left err -> assertFailure $ show err
+                Left err -> assertFailure $ M.errorBundlePretty err
                 Right ast -> do
                     assertEqual
                         "explicit member initialization should precede zero fill"
@@ -893,7 +897,7 @@ incompleteArrayInitializerTest = TestLabel "Parser.Program.incomplete-array-init
                     assertEqual "unexpected error location" (1, 17) (errorBundleLoc err)
                     assertBool
                         "unexpected error message"
-                        (T.isInfixOf "excess elements in array initializer" $ T.pack $ show err)
+                        (T.isInfixOf "excess elements in array initializer" $ T.pack $ M.errorBundlePretty err)
                 Right _ -> assertFailure "expected parse failure"
         ]
 
@@ -1057,7 +1061,7 @@ globalInitializerTest = TestLabel "Parser.Program.global-initializer" $
             case parseProgram "int x[]; int x[2][4];" of
                 Left err -> assertBool
                     "unexpected error message"
-                    (T.isInfixOf "redeclaration of 'x' with no linkage" $ T.pack $ show err)
+                    (T.isInfixOf "redeclaration of 'x' with no linkage" $ T.pack $ M.errorBundlePretty err)
                 Right _ -> assertFailure "expected parse failure"
         , "accepts file-scope static tentative incomplete arrays" ~:
             isRight (parseProgram "static int x[];") ~?= True
@@ -1228,7 +1232,7 @@ globalInitializerTest = TestLabel "Parser.Program.global-initializer" $
             case parseProgram "int *p; int (*p)(void);" of
                 Left err -> assertBool
                     "unexpected error message"
-                    (T.isInfixOf "redeclaration of 'p' with no linkage" $ T.pack $ show err)
+                    (T.isInfixOf "redeclaration of 'p' with no linkage" $ T.pack $ M.errorBundlePretty err)
                 Right _ -> assertFailure "expected parse failure"
         , TestLabel "rejects values returned from void function definitions after function-return equality changes" $ TestCase $
             assertProgramErrorContains
@@ -1237,7 +1241,7 @@ globalInitializerTest = TestLabel "Parser.Program.global-initializer" $
         , TestLabel "does not warn for empty returns in void function definitions after function-return equality changes" $ TestCase $
             case parseProgramWarnings "void f(void) { return; }" of
                 Left err ->
-                    assertFailure $ "unexpected parse error: " <> show err
+                    assertFailure $ "unexpected parse error: " <> M.errorBundlePretty err
                 Right warnings ->
                     assertBool
                         "unexpected warnings"
@@ -1500,13 +1504,13 @@ scalarInitializerTest = TestLabel "Parser.Program.scalar-initializer" $
             case parseProgram "void f(void) {} int main() { int x = f(); return 0; }" of
                 Left err -> assertBool
                     "unexpected error message"
-                    (T.isInfixOf "void value not ignored as it ought to be" $ T.pack $ show err)
+                    (T.isInfixOf "void value not ignored as it ought to be" $ T.pack $ M.errorBundlePretty err)
                 Right _ -> assertFailure "expected parse failure"
         , TestLabel "rejects braced void scalar initializers" $ TestCase $
             case parseProgram "void f(void) {} int main() { int x = { f() }; return 0; }" of
                 Left err -> assertBool
                     "unexpected error message"
-                    (T.isInfixOf "void value not ignored as it ought to be" $ T.pack $ show err)
+                    (T.isInfixOf "void value not ignored as it ought to be" $ T.pack $ M.errorBundlePretty err)
                 Right _ -> assertFailure "expected parse failure"
         , "rejects bare function designators in local scalar initializers" ~:
             isLeft (parseProgram "int foo(void) { return 1; } int main(void) { int x = foo; return x; }")
@@ -1687,7 +1691,7 @@ scalarInitializerTest = TestLabel "Parser.Program.scalar-initializer" $
                 Right ast ->
                     assertFailure $ "unexpected AST: " <> show ast
                 Left err ->
-                    assertFailure $ "unexpected parse error: " <> show err
+                    assertFailure $ "unexpected parse error: " <> M.errorBundlePretty err
         , TestLabel "folds _Alignof over indirect calls using the return type" $ TestCase $
             case parseInitializerAST (CT.SCAuto $ CT.CTLong CT.CTInt) [("fp", intFunctionPtrTy)] "= _Alignof fp();" of
                 Right
@@ -1702,7 +1706,7 @@ scalarInitializerTest = TestLabel "Parser.Program.scalar-initializer" $
                 Right ast ->
                     assertFailure $ "unexpected AST: " <> show ast
                 Left err ->
-                    assertFailure $ "unexpected parse error: " <> show err
+                    assertFailure $ "unexpected parse error: " <> M.errorBundlePretty err
         ]
 
 functionDesignatorContextTest :: Test
@@ -2859,7 +2863,7 @@ functionPointerArithmeticTest = TestLabel "Parser.Program.function-pointer-arith
 emptyForBodyPreservationTest :: Test
 emptyForBodyPreservationTest = TestLabel "Parser.Program.empty-for-body-preservation" $ TestCase $
     case parseProgramAsts "int main(void) { for(;;); }" of
-        Left err -> assertFailure $ show err
+        Left err -> assertFailure $ M.errorBundlePretty err
         Right
             [ ATNode
                 (ATDefFunc "main" _)

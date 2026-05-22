@@ -1972,14 +1972,13 @@ data CompilerObjectOutputFingerprint = CompilerObjectOutputFingerprint
 
 compilerObjectOutputFingerprint
     :: FileStatus -> Word64 -> CompilerObjectContentDigest -> CompilerObjectOutputFingerprint
-compilerObjectOutputFingerprint status outputSize contentFingerprint =
+compilerObjectOutputFingerprint status outputSize =
     CompilerObjectOutputFingerprint
         (fromIntegral $ deviceID status)
         (fromIntegral $ fileID status)
         (fromIntegral outputSize)
         (show $ modificationTimeHiRes status)
         (show $ statusChangeTimeHiRes status)
-        contentFingerprint
 
 compilerObjectOutputFingerprintAfterExit :: FilePath -> IO (Maybe CompilerObjectOutputFingerprint)
 compilerObjectOutputFingerprintAfterExit path =
@@ -2356,8 +2355,8 @@ compilerProcessHasWritableObjectHandleViaProc fingerprint processId = do
 
 classifyProcFdObjectHandleChecks :: [Maybe Bool] -> IO (Maybe Bool)
 classifyProcFdObjectHandleChecks results
-    | any (== Just True) results = pure $ Just True
-    | any (== Nothing) results = pure Nothing
+    | Just True `elem` results = pure $ Just True
+    | Nothing `elem` results = pure Nothing
     | otherwise = pure $ Just False
 
 procFdCanWriteObject :: CompilerObjectOutputFingerprint -> Integer -> FilePath -> IO (Maybe Bool)
@@ -4717,12 +4716,11 @@ digestCompilerObjectRangeAt fd digest offset byteCount =
 
 digestCompilerObjectRangeDescriptor
     :: CompilerObjectContentDigest -> Word64 -> Word64 -> CompilerObjectContentDigest
-digestCompilerObjectRangeDescriptor digest offset byteCount =
+digestCompilerObjectRangeDescriptor digest offset =
     digestCompilerObjectWord64
         (digestCompilerObjectWord64
             (digestCompilerObjectBytes digest $ B.singleton compilerObjectDigestRangeMarker)
             offset)
-        byteCount
 
 compilerObjectDigestRangeFits :: CompilerObjectContentDigest -> Word64 -> Bool
 compilerObjectDigestRangeFits digest byteCount =

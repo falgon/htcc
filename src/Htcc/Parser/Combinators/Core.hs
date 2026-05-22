@@ -57,7 +57,7 @@ module Htcc.Parser.Combinators.Core (
 
 import           Htcc.Parser.Combinators.ParserType
 
-import           Control.Applicative                (Alternative (..))
+import           Control.Applicative                (Alternative (..), optional)
 import           Control.Monad                      (void)
 import           Control.Monad.Combinators          (between)
 import qualified Data.ByteString                    as B
@@ -72,8 +72,7 @@ import           Htcc.Utils                         (lor)
 import qualified Text.Megaparsec                    as M
 import qualified Text.Megaparsec.Char               as MC
 import qualified Text.Megaparsec.Char.Lexer         as ML
-import qualified Text.Parsec                        as P
-import qualified Text.Parsec.Pos                    as PP
+import qualified Text.Megaparsec.Pos                as MP
 
 spaceConsumer :: (Monad m, Ord e) => M.ParsecT e T.Text m ()
 spaceConsumer = ML.space spaceOrInclude lineComment (ML.skipBlockComment "/*" "*/")
@@ -82,18 +81,18 @@ spaceConsumer = ML.space spaceOrInclude lineComment (ML.skipBlockComment "/*" "*
         lineComment = ML.skipLineComment "//"
         skipIncludeLine = do
             pos <- M.getSourcePos
-            if PP.sourceColumn pos == 1
-                then M.ParsecT $ P.try includeLine
+            if MP.unPos (MP.sourceColumn pos) == 1
+                then M.try includeLine
                 else M.empty
         includeLine = do
             horizontalSpace
-            void $ P.char '#'
+            void $ MC.char '#'
             horizontalSpace
-            void $ P.string "include"
-            P.notFollowedBy $ P.satisfy CR.isValidChar
-            P.skipMany $ P.noneOf "\n"
-        horizontalSpace = void $ P.many $ P.oneOf (" \t\r\f\v" :: String)
-        whiteSpaceChar = M.ParsecT $ void $ P.oneOf (" \t\r\f\v\n" :: String)
+            void $ MC.string "include"
+            M.notFollowedBy $ M.satisfy CR.isValidChar
+            void $ M.takeWhileP Nothing (/= '\n')
+        horizontalSpace = void $ M.takeWhileP Nothing (`elem` (" \t\r\f\v" :: String))
+        whiteSpaceChar = void $ M.satisfy (`elem` (" \t\r\f\v\n" :: String))
 
 lexeme :: (Monad m, Ord e) => M.ParsecT e T.Text m a -> M.ParsecT e T.Text m a
 lexeme = ML.lexeme spaceConsumer
@@ -114,50 +113,50 @@ charLiteral = do
     rest <- charLiteralTail 3
     charConstantValue (first : rest) <$ spaceConsumer
     where
-        charBody = M.ParsecT $ escapedByte <|> P.noneOf ['\\', '\'', '\n', '\r']
+        charBody = escapedByte <|> M.noneOf ['\\', '\'', '\n', '\r']
         escapedByte =
-            P.char '\\'
+            MC.char '\\'
                 *> (hexEscape
                     <|> octalEscape
                     <|> simpleEscape
                     <|> invalidEscape
                    )
-        simpleEscape = P.choice
-            [ '\a' <$ P.char 'a'
-            , '\b' <$ P.char 'b'
-            , '\t' <$ P.char 't'
-            , '\n' <$ P.char 'n'
-            , '\v' <$ P.char 'v'
-            , '\f' <$ P.char 'f'
-            , '\r' <$ P.char 'r'
-            , '\ESC' <$ P.char 'e'
-            , '\\' <$ P.char '\\'
-            , '\'' <$ P.char '\''
-            , '"' <$ P.char '"'
-            , '?' <$ P.char '?'
+        simpleEscape = M.choice
+            [ '\a' <$ MC.char 'a'
+            , '\b' <$ MC.char 'b'
+            , '\t' <$ MC.char 't'
+            , '\n' <$ MC.char 'n'
+            , '\v' <$ MC.char 'v'
+            , '\f' <$ MC.char 'f'
+            , '\r' <$ MC.char 'r'
+            , '\ESC' <$ MC.char 'e'
+            , '\\' <$ MC.char '\\'
+            , '\'' <$ MC.char '\''
+            , '"' <$ MC.char '"'
+            , '?' <$ MC.char '?'
             ]
         hexEscape = do
-            void $ P.char 'x'
+            void $ MC.char 'x'
             digits <- hexDigits
             byteFromDigits 16 digits
         hexDigits = do
-            first <- P.satisfy isHexDigit
+            first <- M.satisfy isHexDigit
             collectHexDigits 1 [first]
         collectHexDigits count revDigits =
-            P.optionMaybe (P.lookAhead $ P.satisfy isHexDigit) >>= \case
+            optional (M.lookAhead $ M.satisfy isHexDigit) >>= \case
                 Nothing -> pure $ reverse revDigits
                 Just _
                     | count >= maxHexEscapeDigits ->
                         fail "character constant escape exceeds byte width"
                     | otherwise -> do
-                        c <- P.satisfy isHexDigit
+                        c <- M.satisfy isHexDigit
                         let count' = succ count
                             revDigits' = c : revDigits
                         count' `seq` revDigits' `seq` collectHexDigits count' revDigits'
         octalEscape = do
-            first <- P.satisfy isOctDigit
-            second <- P.optionMaybe $ P.satisfy isOctDigit
-            third <- P.optionMaybe $ P.satisfy isOctDigit
+            first <- M.satisfy isOctDigit
+            second <- optional $ M.satisfy isOctDigit
+            third <- optional $ M.satisfy isOctDigit
             byteFromDigits 8 $ first : maybe [] (\d -> d : maybe [] pure third) second
         byteFromDigits base digits =
             let n = foldl (\acc c -> acc * base + digitToInt c) 0 digits
@@ -165,7 +164,7 @@ charLiteral = do
                     then pure $ chr n
                     else fail "character constant escape exceeds byte width"
         invalidEscape =
-            P.anyChar >>= \c -> fail ("invalid escape sequence \\" <> [c])
+            M.anySingle >>= \c -> fail ("invalid escape sequence \\" <> [c])
         byteCharBody = do
             c <- charBody
             if ord c <= 0xff
@@ -187,49 +186,49 @@ stringLiteral = do
     spaceConsumer
     pure $ B.concat chunks `B.snoc` 0
     where
-        stringByteChunk = M.ParsecT $ escapedByte <|> rawCharBytes
-        rawCharBytes = TE.encodeUtf8 . T.singleton <$> P.noneOf ['\\', '"', '\n', '\r']
+        stringByteChunk = escapedByte <|> rawCharBytes
+        rawCharBytes = TE.encodeUtf8 . T.singleton <$> M.noneOf ['\\', '"', '\n', '\r']
         escapedByte =
-            P.char '\\'
+            MC.char '\\'
                 *> (hexEscape
                     <|> octalEscape
                     <|> simpleEscape
                     <|> invalidEscape
                    )
-        simpleEscape = P.choice
-            [ byte '\a' <$ P.char 'a'
-            , byte '\b' <$ P.char 'b'
-            , byte '\t' <$ P.char 't'
-            , byte '\n' <$ P.char 'n'
-            , byte '\v' <$ P.char 'v'
-            , byte '\f' <$ P.char 'f'
-            , byte '\r' <$ P.char 'r'
-            , byte '\ESC' <$ P.char 'e'
-            , byte '\\' <$ P.char '\\'
-            , byte '\'' <$ P.char '\''
-            , byte '"' <$ P.char '"'
-            , byte '?' <$ P.char '?'
+        simpleEscape = M.choice
+            [ byte '\a' <$ MC.char 'a'
+            , byte '\b' <$ MC.char 'b'
+            , byte '\t' <$ MC.char 't'
+            , byte '\n' <$ MC.char 'n'
+            , byte '\v' <$ MC.char 'v'
+            , byte '\f' <$ MC.char 'f'
+            , byte '\r' <$ MC.char 'r'
+            , byte '\ESC' <$ MC.char 'e'
+            , byte '\\' <$ MC.char '\\'
+            , byte '\'' <$ MC.char '\''
+            , byte '"' <$ MC.char '"'
+            , byte '?' <$ MC.char '?'
             ]
         hexEscape = do
-            void $ P.char 'x'
+            void $ MC.char 'x'
             digits <- hexDigits
             byteFromDigits "character code point out of range" 16 digits
         octalEscape = do
-            first <- P.satisfy isOctDigit
-            second <- P.optionMaybe $ P.satisfy isOctDigit
-            third <- P.optionMaybe $ P.satisfy isOctDigit
+            first <- M.satisfy isOctDigit
+            second <- optional $ M.satisfy isOctDigit
+            third <- optional $ M.satisfy isOctDigit
             byteFromDigits "character code point out of range" 8 $ first : maybe [] (\d -> d : maybe [] pure third) second
         hexDigits = do
-            first <- P.satisfy isHexDigit
+            first <- M.satisfy isHexDigit
             collectHexDigits 1 [first]
         collectHexDigits count revDigits =
-            P.optionMaybe (P.lookAhead $ P.satisfy isHexDigit) >>= \case
+            optional (M.lookAhead $ M.satisfy isHexDigit) >>= \case
                 Nothing -> pure $ reverse revDigits
                 Just _
                     | count >= maxHexEscapeDigits ->
                         fail "character code point out of range"
                     | otherwise -> do
-                        c <- P.satisfy isHexDigit
+                        c <- M.satisfy isHexDigit
                         let count' = succ count
                             revDigits' = c : revDigits
                         count' `seq` revDigits' `seq` collectHexDigits count' revDigits'
@@ -240,7 +239,7 @@ stringLiteral = do
                     else fail errMsg
         byte = B.singleton . fromIntegral . ord
         invalidEscape =
-            P.anyChar >>= \c -> fail ("invalid escape sequence \\" <> [c])
+            M.anySingle >>= \c -> fail ("invalid escape sequence \\" <> [c])
 
 hexadecimal, binary, octal, decimal, natural, integer :: (Monad m, Ord e, Num i) => M.ParsecT e T.Text m i
 hexadecimal = MC.char '0' >> MC.char' 'x' >> ML.hexadecimal

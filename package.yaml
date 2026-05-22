@@ -48,6 +48,7 @@ dependencies:
 - diagrams-lib
 - natural-transformation
 - optparse-applicative
+- megaparsec
 - parsec
 - parser-combinators
 - prettyprinter
@@ -131,12 +132,6 @@ library:
   - Htcc.Utils.Tuple
   - Htcc.Visualizer
   - Htcc.Visualizer.Core
-  other-modules:
-  - Text.Megaparsec
-  - Text.Megaparsec.Char
-  - Text.Megaparsec.Char.Lexer
-  - Text.Megaparsec.Debug
-
 executables:
   htcc:
     main:                Main.hs

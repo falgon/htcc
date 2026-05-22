@@ -112,10 +112,6 @@ library
       Htcc.Visualizer
       Htcc.Visualizer.Core
   other-modules:
-      Text.Megaparsec
-      Text.Megaparsec.Char
-      Text.Megaparsec.Char.Lexer
-      Text.Megaparsec.Debug
       Paths_htcc
   autogen-modules:
       Paths_htcc
@@ -140,6 +136,7 @@ library
     , mtl
     , natural-transformation
     , optparse-applicative
+    , megaparsec
     , parsec
     , parser-combinators
     , prettyprinter
@@ -181,6 +178,7 @@ executable htcc
     , mtl
     , natural-transformation
     , optparse-applicative
+    , megaparsec
     , parsec
     , parser-combinators
     , prettyprinter
@@ -246,6 +244,7 @@ test-suite htcc-test
     , mtl
     , natural-transformation
     , optparse-applicative
+    , megaparsec
     , parsec
     , parser-combinators
     , prettyprinter
@@ -290,6 +289,7 @@ benchmark criterion
     , mtl
     , natural-transformation
     , optparse-applicative
+    , megaparsec
     , parsec
     , parser-combinators
     , prettyprinter

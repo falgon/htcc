@@ -112,8 +112,8 @@ declspec' = M.choice
 declspecNoStorage :: (Ord i, Bits i, Show i, Read i, Integral i) => Parser i (CT.StorageClass i)
 declspecNoStorage =
     M.choice
-        [ M.try structSpecifier
-        , M.try enumSpecifier
+        [ structSpecifier
+        , enumSpecifier
         , M.try typedefSpecifier
         , basicTypeSpecifier
         ]
@@ -253,15 +253,14 @@ structSpecifier = do
                         )
 
                 rejectMemberStorageClass =
-                    M.lookAhead $
-                        M.choice
-                            [ kAuto *> fail "invalid storage-class specifier"
-                            , kStatic *> fail "invalid storage-class specifier"
-                            , kRegister *> fail "invalid storage-class specifier"
-                            , kExtern *> fail "invalid storage-class specifier"
-                            , kTypedef *> fail "invalid storage-class specifier"
-                            , pure ()
-                            ]
+                    M.choice
+                        [ kAuto *> fail "invalid storage-class specifier"
+                        , kStatic *> fail "invalid storage-class specifier"
+                        , kRegister *> fail "invalid storage-class specifier"
+                        , kExtern *> fail "invalid storage-class specifier"
+                        , kTypedef *> fail "invalid storage-class specifier"
+                        , pure ()
+                        ]
 
         mkAnonymousStructTag = do
             pos <- M.getSourcePos

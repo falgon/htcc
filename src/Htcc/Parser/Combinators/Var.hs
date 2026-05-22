@@ -30,6 +30,7 @@ import           Data.List                              (sortBy)
 import qualified Data.Map                               as MP
 import           Data.Maybe                             (fromJust, fromMaybe)
 import qualified Data.Sequence                          as SQ
+import qualified Data.Set                               as S
 import qualified Data.Text                              as T
 import           Data.Tuple.Extra                       (second)
 import qualified Htcc.CRules.Types                      as CT
@@ -53,7 +54,6 @@ import           Htcc.Parser.ConstructionData.Scope.Var (Var (vtype))
 import           Htcc.Utils                             (tshow)
 import           Numeric.Natural                        (Natural)
 import qualified Text.Megaparsec                        as M
-import qualified Text.Parsec.Error                      as PE
 
 type DesignatorParser i r = ReaderT (T.Text, Parser i (ATree i)) (Parser i) r
 
@@ -152,9 +152,8 @@ lookInitializerStringFor ty = bool M.empty (pure ()) =<< andM
     ]
 
 failCommitted :: String -> DesignatorParser i a
-failCommitted msg = do
-    pos <- lift M.getSourcePos
-    lift $ M.parseError $ M.ParsecError True $ PE.newErrorMessage (PE.Message msg) pos
+failCommitted msg =
+    lift $ M.fancyFailure $ S.singleton $ M.ErrorFail msg
 
 data ArrayBoundInference i
     = InferArrayBoundLength Int
