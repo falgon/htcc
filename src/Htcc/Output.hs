@@ -10,7 +10,7 @@ module Htcc.Output (
 ) where
 
 import           Control.Exception  (SomeException, catch, displayException,
-                                     finally, throwIO)
+                                     finally, onException, throwIO)
 import           Control.Monad      (when)
 import           Data.Bits          (complement)
 import qualified Data.ByteString    as B
@@ -56,6 +56,18 @@ defaultOutputFileMode = foldr1 unionFileModes
 
 temporaryWritableMode :: FileMode
 temporaryWritableMode = ownerReadMode `unionFileModes` ownerWriteMode
+
+privateTemporaryDirectoryMode :: FileMode
+privateTemporaryDirectoryMode = foldr1 unionFileModes
+    [ ownerReadMode
+    , ownerWriteMode
+    , ownerExecuteMode
+    ]
+
+privateTemporaryDirectoryModePreserving :: FileMode -> FileMode
+privateTemporaryDirectoryModePreserving inheritedMode =
+    privateTemporaryDirectoryMode
+        `unionFileModes` intersectFileModes inheritedMode setGroupIDMode
 
 creationMaskedOutputMode :: IO FileMode
 creationMaskedOutputMode = do
@@ -287,23 +299,26 @@ withFreshOutputPath modeStrategy resolvedOutputPath action = do
         outputBaseName = takeFileName resolvedOutputPath
         outputDirTemplate = outputBaseName <> ".htcc-XXXXXX"
     tmpOutputDir <- mkdtemp (outputDir </> outputDirTemplate)
-    let tmpOutputPath = tmpOutputDir </> outputBaseName
-        cleanup =
-            ignoreIOException (removeFile tmpOutputPath)
-                *> ignoreIOException (removeDirectory tmpOutputDir)
-    finally
-        ( do
-            tmpOutputFd <- createFile tmpOutputPath defaultOutputFileMode
-            closeFd tmpOutputFd
-            baseMode <- intersectFileModes defaultOutputFileMode . fileMode <$> getFileStatus tmpOutputPath
-            setFileMode tmpOutputPath $ stagedOutputMode modeStrategy baseMode
-            result <- action tmpOutputPath
-            currentMode <- fileMode <$> getFileStatus tmpOutputPath
-            setFileMode tmpOutputPath $ freshOutputMode modeStrategy baseMode currentMode
-            renameFile tmpOutputPath resolvedOutputPath
-            pure result
-        )
-        cleanup
+    flip onException (ignoreIOException $ removeDirectory tmpOutputDir) $ do
+        inheritedMode <- fileMode <$> getFileStatus tmpOutputDir
+        setFileMode tmpOutputDir $ privateTemporaryDirectoryModePreserving inheritedMode
+        let tmpOutputPath = tmpOutputDir </> outputBaseName
+            cleanup =
+                ignoreIOException (removeFile tmpOutputPath)
+                    *> ignoreIOException (removeDirectory tmpOutputDir)
+        finally
+            ( do
+                tmpOutputFd <- createFile tmpOutputPath defaultOutputFileMode
+                closeFd tmpOutputFd
+                baseMode <- intersectFileModes defaultOutputFileMode . fileMode <$> getFileStatus tmpOutputPath
+                setFileMode tmpOutputPath $ stagedOutputMode modeStrategy baseMode
+                result <- action tmpOutputPath
+                currentMode <- fileMode <$> getFileStatus tmpOutputPath
+                setFileMode tmpOutputPath $ freshOutputMode modeStrategy baseMode currentMode
+                renameFile tmpOutputPath resolvedOutputPath
+                pure result
+            )
+            cleanup
 
 withReplacementOutputPathAndResolvedPath
     :: ReplacementOutputMode

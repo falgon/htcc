@@ -66,7 +66,9 @@ import           System.Posix.Files                          (createLink,
                                                               ownerExecuteMode,
                                                               ownerReadMode,
                                                               ownerWriteMode,
+                                                              setFileCreationMask,
                                                               setFileMode,
+                                                              setGroupIDMode,
                                                               unionFileModes)
 import           System.Posix.IO                             (closeFd,
                                                               createFile)
@@ -1480,6 +1482,68 @@ freshExecutableReplacementRestoresOwnerExecuteTest =
                 currentMode
                 (intersectFileModes replacedMode currentMode)
             assertEqual "fresh replacement should write the staged output" "#!/bin/sh\nexit 0\n" replacedOutput
+    where
+        ignoreIOException = flip catchIOError $ const $ pure ()
+
+freshReplacementRestrictiveUmaskCreatesWritableStagingTest :: Test
+freshReplacementRestrictiveUmaskCreatesWritableStagingTest =
+    TestLabel "Asm.Output.fresh-replacement-restrictive-umask-creates-writable-staging" $ TestCase $ do
+        tmpDir <- getTemporaryDirectory
+        (targetPath, targetHandle) <- openTempFile tmpDir "htcc-output-target"
+        let cleanup =
+                ignoreIOException (hClose targetHandle)
+                    >> ignoreIOException (removeFile targetPath)
+            replacementOutput = "#!/bin/sh\nexit 0\n"
+        flip finally cleanup $ do
+            hClose targetHandle
+            removeFile targetPath
+            originalMask <- setFileCreationMask 0o222
+            flip finally (setFileCreationMask originalMask) $
+                withReplacementOutputPath PreserveReplacementOutputModeKeepingExecutableBits targetPath $ \tmpOutputPath -> do
+                    T.writeFile tmpOutputPath replacementOutput
+                    setFileMode tmpOutputPath 0o755
+            replacedOutput <- T.readFile targetPath
+            assertEqual
+                "fresh replacement staging should remain writable under restrictive umask"
+                replacementOutput
+                replacedOutput
+    where
+        ignoreIOException = flip catchIOError $ const $ pure ()
+
+freshReplacementPreservesInheritedSetgidStagingDirectoryTest :: Test
+freshReplacementPreservesInheritedSetgidStagingDirectoryTest =
+    TestLabel "Asm.Output.fresh-replacement-preserves-inherited-setgid-staging-directory" $ TestCase $ do
+        tmpDir <- getTemporaryDirectory
+        targetDir <- mkdtemp (tmpDir </> "htcc-output-setgid-XXXXXX")
+        let targetPath = targetDir </> "target"
+            cleanup =
+                ignoreIOException (removeFile targetPath)
+                    >> ignoreIOException (removeDirectoryRecursive targetDir)
+            privateDirectoryMode =
+                foldr1 unionFileModes
+                    [ ownerReadMode
+                    , ownerWriteMode
+                    , ownerExecuteMode
+                    ]
+            expectedOutput = "setgid\n"
+        flip finally cleanup $ do
+            setFileMode targetDir $ privateDirectoryMode `unionFileModes` setGroupIDMode
+            let controlDir = targetDir </> "control"
+            createDirectory controlDir
+            controlMode <- fileMode <$> getFileStatus controlDir
+            removeDirectory controlDir
+            let childrenInheritSetgid = intersectFileModes controlMode setGroupIDMode /= 0
+            withReplacementOutputPath PreserveReplacementOutputMode targetPath $ \tmpOutputPath -> do
+                stagingMode <- fileMode <$> getFileStatus (takeDirectory tmpOutputPath)
+                if childrenInheritSetgid
+                    then
+                        assertBool
+                            "fresh replacement staging directory should preserve inherited setgid"
+                            (intersectFileModes stagingMode setGroupIDMode /= 0)
+                    else pure ()
+                T.writeFile tmpOutputPath expectedOutput
+            replacedOutput <- T.readFile targetPath
+            assertEqual "fresh replacement should write the staged output" expectedOutput replacedOutput
     where
         ignoreIOException = flip catchIOError $ const $ pure ()
 
@@ -3242,6 +3306,8 @@ test = TestLabel "Asm.Output" $
         , replacementExecutableBitsRestoreOwnerExecuteTest
         , freshExecutableReplacementPreservesExecuteBitsTest
         , freshExecutableReplacementRestoresOwnerExecuteTest
+        , freshReplacementRestrictiveUmaskCreatesWritableStagingTest
+        , freshReplacementPreservesInheritedSetgidStagingDirectoryTest
         , creationMaskedOutputModeMatchesActualCreationTest
         , hardLinkedFallbackReplacementRejectedTest
         , hardLinkedRenameReplacementPreservesAliasTest
