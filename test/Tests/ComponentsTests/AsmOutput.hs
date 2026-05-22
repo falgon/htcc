@@ -5,6 +5,7 @@ module Tests.ComponentsTests.AsmOutput (
 
 import           Control.Exception                           (IOException,
                                                               finally, try)
+import           Control.Monad                               (when)
 import qualified Data.ByteString                             as B
 import qualified Data.ByteString.Char8                       as BC
 import           Data.Either                                 (isLeft)
@@ -1535,12 +1536,10 @@ freshReplacementPreservesInheritedSetgidStagingDirectoryTest =
             let childrenInheritSetgid = intersectFileModes controlMode setGroupIDMode /= 0
             withReplacementOutputPath PreserveReplacementOutputMode targetPath $ \tmpOutputPath -> do
                 stagingMode <- fileMode <$> getFileStatus (takeDirectory tmpOutputPath)
-                if childrenInheritSetgid
-                    then
-                        assertBool
-                            "fresh replacement staging directory should preserve inherited setgid"
-                            (intersectFileModes stagingMode setGroupIDMode /= 0)
-                    else pure ()
+                when childrenInheritSetgid $
+                    assertBool
+                        "fresh replacement staging directory should preserve inherited setgid"
+                        (intersectFileModes stagingMode setGroupIDMode /= 0)
                 T.writeFile tmpOutputPath expectedOutput
             replacedOutput <- T.readFile targetPath
             assertEqual "fresh replacement should write the staged output" expectedOutput replacedOutput
