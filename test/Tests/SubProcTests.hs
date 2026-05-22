@@ -109,8 +109,6 @@ exec = runTestsEx
     , (AsmOutput.externalBoolParameterLowByteNormalizationTest, 0)
     , (AsmOutput.externalIntegralReturnNormalizationTest, 0)
     , (StatementEqual.test "int foo = 2; int main(void) { int foo = 1; { extern int foo; return foo; } }", 2)
-    , (StatementEqual.test "enum E { A = 5 }; int A = 7; int f(void) { extern int A; return A; } int main(void) { return f(); }", 7)
-    , (StatementEqual.test "enum E { foo = 1 }; int foo(void) { return 3; } int f(void) { extern int foo(void); return foo(); } int main(void) { return f(); }", 3)
     , (StatementEqual.test "static int foo(void) { return 3; } int main(void) { extern int foo(void); return foo(); }", 3)
     , (StatementEqual.test "static int x = 4; int main(void) { extern int x; return x; }", 4)
     , (StatementEqual.test "typedef int Row[2]; int f(void) { extern Row rows[]; return rows[0][1]; } Row rows[] = {{1, 2}}; int main(void) { return f() - 2; }", 0)

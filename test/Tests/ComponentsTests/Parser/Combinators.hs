@@ -2841,6 +2841,14 @@ declarationSpecifierTest = TestLabel "Parser.Program.declaration-specifier" $
             isLeft
                 (parseProgram "enum E { A }; int A;")
                 ~?= True
+        , "rejects initialized globals that collide with enum constants" ~:
+            isLeft
+                (parseProgram "enum E { A = 5 }; int A = 7;")
+                ~?= True
+        , "rejects file-scope functions that collide with enum constants" ~:
+            isLeft
+                (parseProgram "enum E { foo = 1 }; int foo(void) { return 3; }")
+                ~?= True
         , "rejects typedef names shadowed by local ordinary identifiers" ~:
             isLeft
                 (parseProgram "typedef int T; int main(void) { int T = 0; T x; return x; }")
