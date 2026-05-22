@@ -1062,11 +1062,17 @@ assemblerCommandAvailableHandlesLeadingEnvAssignmentsTest =
     TestLabel "TestRunner.assembler-command-available-handles-leading-env-assignments" $ TestCase $
         if os /= "linux" || arch /= "x86_64"
             then pure ()
-            else do
-                compiler <- assemblerCompilerCommand
+            else
                 withTempDirectory "htcc-test-assembler-bin-." $ \binDir -> do
                     let scriptPath = binDir <> "/htcc-test-assembler"
-                    writeExecutableScript scriptPath (assemblerWrapperScript compiler)
+                        relocatableObjectPath = binDir <> "/env-probe.o"
+                        cannedExecutablePath = binDir <> "/env-probe.out"
+                    B.writeFile relocatableObjectPath $ linkedElfHeader 1
+                    B.writeFile cannedExecutablePath $ linkedElfHeader 2
+                    setFileMode cannedExecutablePath ownerModes
+                    writeExecutableScript
+                        scriptPath
+                        (probeBypassingAssemblerScriptWithProbeMarker relocatableObjectPath cannedExecutablePath)
                     available <- assemblerCommandAvailableWith $ const $
                         resolveCompilerCommand $
                             "PATH=" <> binDir <> " " <> takeFileName scriptPath
@@ -3168,15 +3174,14 @@ assemblerCommandAvailableAcceptsLinkedOutputsWithoutExecutingThemTest =
             then pure ()
             else
                 withTempDirectory "htcc-test-unrunnable-probe-." $ \probeDir -> do
-                    let probeMarker = "htcc-probe-marker:unrunnable"
-                        relocatableObjectPath = probeDir <> "/unrunnable-probe.o"
+                    let relocatableObjectPath = probeDir <> "/unrunnable-probe.o"
                         cannedExecutablePath = probeDir <> "/unrunnable-probe.out"
                     B.writeFile relocatableObjectPath $ linkedElfHeader 1
-                    B.writeFile cannedExecutablePath $ linkedElfHeader 2 <> asciiBytes probeMarker
+                    B.writeFile cannedExecutablePath $ linkedElfHeader 2
                     setFileMode cannedExecutablePath ownerModes
                     withTempExecutableScript
                         "htcc-test-unrunnable-probe-.sh"
-                        (probeBypassingAssemblerScript relocatableObjectPath cannedExecutablePath)
+                        (probeBypassingAssemblerScriptWithProbeMarker relocatableObjectPath cannedExecutablePath)
                         $ \scriptPath -> do
                             available <- assemblerCommandAvailableInDirectoryWith probeDir $
                                 const (resolveCompilerCommand scriptPath)
@@ -3302,22 +3307,49 @@ ensureRepoRootMarker rootDir = do
     writeFile (rootDir <> "/htcc.cabal") "name: htcc\nversion: 0.0.0.1\n"
 
 probeBypassingAssemblerScript :: FilePath -> FilePath -> String
-probeBypassingAssemblerScript relocatableObjectPath cannedExecutablePath = unlines
+probeBypassingAssemblerScript =
+    probeBypassingAssemblerScriptWithMarker False
+
+probeBypassingAssemblerScriptWithProbeMarker :: FilePath -> FilePath -> String
+probeBypassingAssemblerScriptWithProbeMarker =
+    probeBypassingAssemblerScriptWithMarker True
+
+probeBypassingAssemblerScriptWithMarker :: Bool -> FilePath -> FilePath -> String
+probeBypassingAssemblerScriptWithMarker includeProbeMarker relocatableObjectPath cannedExecutablePath = unlines $
     [ "#!/bin/sh"
     , "set -eu"
     , "case \"$1\" in"
     , "  -x)"
-    , "    cat " <> shellQuote relocatableObjectPath <> " > \"$5\""
-    , "    ;;"
+    , "    /bin/cat " <> shellQuote relocatableObjectPath <> " > \"$5\""
+    ]
+        <> markerCaptureLines
+        <>
+    [ "    ;;"
     , "  -no-pie)"
-    , "    cat " <> shellQuote cannedExecutablePath <> " > \"$3\""
-    , "    chmod +x \"$3\""
+    , "    /bin/cat " <> shellQuote cannedExecutablePath <> " > \"$3\""
+    ]
+        <> markerAppendLines
+        <>
+    [ "    /bin/chmod +x \"$3\""
     , "    ;;"
     , "  *)"
     , "    exit 1"
     , "    ;;"
     , "esac"
     ]
+    where
+        markerCaptureLines
+            | includeProbeMarker =
+                [ "    asm_base=${6##*/}"
+                , "    obj_base=${5##*/}"
+                , "    printf '%s' \"htcc-probe-marker:${asm_base}:${obj_base}\" >> \"$5\""
+                ]
+            | otherwise = []
+
+        markerAppendLines
+            | includeProbeMarker =
+                ["    /bin/cat \"$4\" >> \"$3\""]
+            | otherwise = []
 
 linkedElfHeader :: Int -> B.ByteString
 linkedElfHeader elfType =
