@@ -12,7 +12,7 @@ test :: String -> [String] -> IO (Int, String)
 test x fnames = let obj = map (++".o") fnames in
     flip finally (clean $ ["tmp", "tmp.s"] ++ obj) $ do
         htccCmd <- htccCommand
-        linkCmd <- assemblerCommand $ obj ++ ["tmp.s", "-o", "tmp"]
+        linkCmd <- assemblerCommand $ obj ++ ["tmp.s", "-no-pie", "-o", "tmp"]
         execErrFin $ mconcat
             [ "echo \'"
             , T.pack x
