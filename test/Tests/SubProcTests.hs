@@ -220,7 +220,7 @@ exec = runTestsEx
     , (StatementEqual.test "int main() { return \"\\f\"[0]; }", ord '\f')
     , (StatementEqual.test "int main() { return \"\\r\"[0]; }", ord '\r')
     , (StatementEqual.test "int main() { return \"\\e\"[0]; }", ord '\ESC')
-    , (StatementEqual.test "int main() { return \"\\\\0\"[0]; }", ord '\0')
+    , (StatementEqual.test "int main() { return \"\\0\"[0]; }", ord '\0')
     , (StatementEqual.test "int main() { return !0; }", 1)
     , (StatementEqual.test "int main() { return !42; }", 0)
     , (StatementEqual.test "int main() { return !!!0; }", 1)
