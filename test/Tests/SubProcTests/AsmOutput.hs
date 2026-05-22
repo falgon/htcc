@@ -18744,6 +18744,8 @@ runAsmFreshOutputRestrictiveUmaskTest =
                 , groupReadMode
                 , otherReadMode
                 , ownerExecuteMode
+                , groupExecuteMode
+                , otherExecuteMode
                 ]
         writeFakeAssembler fakeAssemblerPath
         result <- exec $ mconcat
