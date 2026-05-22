@@ -8,6 +8,7 @@ import           Control.Monad.Trans       (lift)
 import           Control.Monad.Trans.State (StateT, evalStateT, gets, modify,
                                             put)
 import           Data.List                 (isSuffixOf)
+import           Data.Maybe                (fromMaybe)
 import qualified Data.Text                 as T
 import qualified Data.Text.IO              as T
 import           Htcc.Utils                (tshow)
@@ -157,7 +158,7 @@ createProcessDhallDocker fp cmd = do
 
 renderDhallYaml :: FilePath -> IO String
 renderDhallYaml fp = do
-    dhallToYaml <- maybe "dhall-to-yaml" id <$> lookupEnv "DHALL_TO_YAML"
+    dhallToYaml <- fromMaybe "dhall-to-yaml" <$> lookupEnv "DHALL_TO_YAML"
     result <- try $ readCreateProcessWithExitCode
         (proc dhallToYaml ["--explain", "--file", fp])
         ""
