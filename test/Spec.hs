@@ -2,7 +2,7 @@
 module Main where
 
 import           Codec.Binary.UTF8.String  (decodeString)
-import           Control.Exception         (bracket)
+import           Control.Exception         (bracket, finally)
 import           Control.Monad             (foldM, when)
 import           Control.Monad.Extra       (partitionM)
 import           Control.Monad.Trans       (lift)
@@ -187,21 +187,24 @@ runCommand opts autoCompilerCommand command = case command of
     WithDocker
         | optClean opts -> runDhallDocker ["down", "--rmi", "all"]
         | otherwise ->
-            clean [workDir]
+            ( clean [workDir]
                 *> genTestAsm
                 *> runDhallDocker ["up", "--build", "--exit-code-from", "htcc"]
-                *> clean [workDir]
+            ) `finally` clean [workDir]
     WithSelf ->
         maybe
-            (genTestBins >>= mapM_ execErrFin >> clean [workDir])
+            runGeneratedSelfTests
             (\compilerCommand ->
                 withEnvOverride
                     "HTCC_BIN"
                     (T.unpack compilerCommand)
-                    (genTestBins >>= mapM_ execErrFin >> clean [workDir])
+                    runGeneratedSelfTests
             )
             autoCompilerCommand
     WithComponents -> ComponentsTests.exec
+    where
+        runGeneratedSelfTests =
+            (genTestBins >>= mapM_ execErrFin) `finally` clean [workDir]
 
 withEnvOverride :: String -> String -> IO a -> IO a
 withEnvOverride name value =
