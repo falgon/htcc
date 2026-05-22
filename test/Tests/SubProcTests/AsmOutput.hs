@@ -33,7 +33,7 @@ module Tests.SubProcTests.AsmOutput (
     suppressWarnsRunAsmScopesRetainedIndicesByStreamTest,
     suppressWarnsRunAsmDropsSplitWarningWithInterleavedStdoutTest,
     suppressWarnsRunAsmDropsSplitWarningPrefixTest,
-    suppressWarnsRunAsmDropsCrossStreamWarningPreambleTest,
+    suppressWarnsRunAsmPreservesUnmatchedCrossStreamWarningContextTest,
     suppressWarnsRunAsmPreservesStdoutPrefixBeforeStderrTest,
     suppressWarnsRunAsmPreservesStderrPrefixBeforeStdoutTest,
     suppressWarnsRunAsmDropsWarningPreambleTest,
@@ -48,7 +48,7 @@ module Tests.SubProcTests.AsmOutput (
     suppressWarnsRunAsmPreservesIndentedPostWarningStderrTest,
     suppressWarnsRunAsmPreservesPunctuatedPostWarningStderrTest,
     suppressWarnsRunAsmPreservesDirectivePostWarningStderrTest,
-    suppressWarnsRunAsmPreservesStandalonePreSummaryNoteTest,
+    suppressWarnsRunAsmDropsStandalonePreSummaryNoteTest,
     suppressWarnsRunAsmPreservesStandalonePostWarningNoteTest,
     suppressWarnsRunAsmPreservesStandalonePostWarningNoteWithoutSummaryTest,
     suppressWarnsRunAsmPreservesErrorSnippetContainingWarningTokenTest,
@@ -158,7 +158,7 @@ module Tests.SubProcTests.AsmOutput (
     outputFileHardLinkAliasTest,
     outputFileParseFailurePreservesExistingOutputTest,
     outputFileReadFailurePreservesExistingOutputTest,
-    outputFileOpenFailurePreservesExistingOutputTest,
+    outputFileReadOnlyParentDirectFallbackWritableTargetTest,
     outputFileHardLinkedRenameReplacementPreservesAliasTest,
     outputFileReadOnlyParentWritableTargetTest,
     outputFileReadOnlyParentWriteOnlyTargetTest,
@@ -416,8 +416,8 @@ suppressWarnsRunAsmDropsSplitWarningWithInterleavedStdoutMsg = "CLI --suppress-w
 suppressWarnsRunAsmDropsSplitWarningPrefixMsg :: T.Text
 suppressWarnsRunAsmDropsSplitWarningPrefixMsg = "CLI --suppress-warns drops HTCC_ASSEMBLER warnings even when the diagnostic prefix reaches warning: only after a later pipe read in -r mode"
 
-suppressWarnsRunAsmDropsCrossStreamWarningPreambleMsg :: T.Text
-suppressWarnsRunAsmDropsCrossStreamWarningPreambleMsg = "CLI --suppress-warns drops HTCC_ASSEMBLER warning preambles even when the preamble is on stdout and the warning is on stderr in -r mode"
+suppressWarnsRunAsmPreservesUnmatchedCrossStreamWarningContextMsg :: T.Text
+suppressWarnsRunAsmPreservesUnmatchedCrossStreamWarningContextMsg = "CLI --suppress-warns preserves unmatched cross-stream HTCC_ASSEMBLER warning context in -r mode"
 
 suppressWarnsRunAsmPreservesStdoutPrefixBeforeStderrMsg :: T.Text
 suppressWarnsRunAsmPreservesStdoutPrefixBeforeStderrMsg = "CLI --suppress-warns preserves non-newline stdout bytes before later stderr in -r mode"
@@ -461,8 +461,8 @@ suppressWarnsRunAsmPreservesPunctuatedPostWarningStderrMsg = "CLI --suppress-war
 suppressWarnsRunAsmPreservesDirectivePostWarningStderrMsg :: T.Text
 suppressWarnsRunAsmPreservesDirectivePostWarningStderrMsg = "CLI --suppress-warns preserves directive-like stderr after HTCC_ASSEMBLER warnings in -r mode"
 
-suppressWarnsRunAsmPreservesStandalonePreSummaryNoteMsg :: T.Text
-suppressWarnsRunAsmPreservesStandalonePreSummaryNoteMsg = "CLI --suppress-warns preserves standalone HTCC_ASSEMBLER notes that appear before a later warning summary in -r mode"
+suppressWarnsRunAsmDropsStandalonePreSummaryNoteMsg :: T.Text
+suppressWarnsRunAsmDropsStandalonePreSummaryNoteMsg = "CLI --suppress-warns drops standalone HTCC_ASSEMBLER notes that appear before a later warning summary in -r mode"
 
 suppressWarnsRunAsmPreservesStandalonePostWarningNoteMsg :: T.Text
 suppressWarnsRunAsmPreservesStandalonePostWarningNoteMsg = "CLI --suppress-warns preserves standalone post-warning notes in -r mode"
@@ -791,8 +791,8 @@ outputFileParseFailurePreservesExistingOutputMsg = "CLI -o preserves existing ou
 outputFileReadFailurePreservesExistingOutputMsg :: T.Text
 outputFileReadFailurePreservesExistingOutputMsg = "CLI -o preserves existing outputs when reading an input fails before opening the destination"
 
-outputFileOpenFailurePreservesExistingOutputMsg :: T.Text
-outputFileOpenFailurePreservesExistingOutputMsg = "CLI -o preserves existing outputs when opening the destination fails"
+outputFileReadOnlyParentDirectFallbackWritableTargetMsg :: T.Text
+outputFileReadOnlyParentDirectFallbackWritableTargetMsg = "CLI -o falls back to in-place writes when an existing output has a read-only parent directory"
 
 outputFileReadOnlyParentWritableTargetMsg :: T.Text
 outputFileReadOnlyParentWritableTargetMsg = "CLI -o falls back to in-place writes when an existing output is writable but its parent directory is not"
@@ -6322,8 +6322,8 @@ suppressWarnsRunAsmDropsSplitWarningPrefixTest =
                     ok
                     details
 
-suppressWarnsRunAsmDropsCrossStreamWarningPreambleTest :: IO (Either T.Text T.Text, String)
-suppressWarnsRunAsmDropsCrossStreamWarningPreambleTest =
+suppressWarnsRunAsmPreservesUnmatchedCrossStreamWarningContextTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmPreservesUnmatchedCrossStreamWarningContextTest =
     flip finally
         (clean
             [ "tmp"
@@ -6353,18 +6353,26 @@ suppressWarnsRunAsmDropsCrossStreamWarningPreambleTest =
             stdoutLeak <- T.readFile "tmp.out"
             stderrLeak <- T.readFile "tmp.err"
             result <- exec "./tmp"
-            let ranOk = exitCode (const False) True result
-                ok = T.null stdoutLeak && T.null stderrLeak && ranOk
+            let expectedStdout = "                 from fake-source.c:2:\n"
+                expectedStderr =
+                    "{standard input}:1:1: note: fake HTCC_ASSEMBLER note\n"
+                        <> "1 warning generated.\n"
+                ranOk = exitCode (const False) True result
+                ok = stdoutLeak == expectedStdout && stderrLeak == expectedStderr && ranOk
                 details = T.unlines
                     [ "stdout:"
                     , stdoutLeak
                     , "stderr:"
                     , stderrLeak
+                    , "expectedStdout:"
+                    , expectedStdout
+                    , "expectedStderr:"
+                    , expectedStderr
                     , "exitCode: " <> T.pack (show result)
                     ]
             return $
                 mkResult
-                    suppressWarnsRunAsmDropsCrossStreamWarningPreambleMsg
+                    suppressWarnsRunAsmPreservesUnmatchedCrossStreamWarningContextMsg
                     ok
                     details
 
@@ -6896,7 +6904,14 @@ suppressWarnsRunAsmPreservesPunctuatedPostWarningStderrTest =
                 ok =
                     T.null stdoutLeak
                         && stderrLeak
-                            == "(cached result)\nstatus; retrying\ncache=hit;\nwrapper block {\nwrapper block }\n"
+                            == T.unlines
+                                [ "(cached result)"
+                                , "status; retrying"
+                                , "cache=hit;"
+                                , "wrapper block {"
+                                , "wrapper block }"
+                                , "1 warning generated."
+                                ]
                         && ranOk
                 details = T.unlines
                     [ "stdout:"
@@ -6962,8 +6977,8 @@ suppressWarnsRunAsmPreservesDirectivePostWarningStderrTest =
                     ok
                     details
 
-suppressWarnsRunAsmPreservesStandalonePreSummaryNoteTest :: IO (Either T.Text T.Text, String)
-suppressWarnsRunAsmPreservesStandalonePreSummaryNoteTest =
+suppressWarnsRunAsmDropsStandalonePreSummaryNoteTest :: IO (Either T.Text T.Text, String)
+suppressWarnsRunAsmDropsStandalonePreSummaryNoteTest =
     flip finally
         (clean
             [ "tmp"
@@ -6994,7 +7009,7 @@ suppressWarnsRunAsmPreservesStandalonePreSummaryNoteTest =
             let ranOk = exitCode (const False) True result
                 ok =
                     T.null stdoutLeak
-                        && stderrLeak == "note: using fallback linker\n"
+                        && T.null stderrLeak
                         && ranOk
                 details = T.unlines
                     [ "stdout:"
@@ -7003,7 +7018,7 @@ suppressWarnsRunAsmPreservesStandalonePreSummaryNoteTest =
                     , stderrLeak
                     , "exitCode: " <> T.pack (show result)
                     ]
-            return $ mkResult suppressWarnsRunAsmPreservesStandalonePreSummaryNoteMsg ok details
+            return $ mkResult suppressWarnsRunAsmDropsStandalonePreSummaryNoteMsg ok details
 
 suppressWarnsRunAsmPreservesStandalonePostWarningNoteTest :: IO (Either T.Text T.Text, String)
 suppressWarnsRunAsmPreservesStandalonePostWarningNoteTest =
@@ -12435,8 +12450,8 @@ outputFileReadFailurePreservesExistingOutputTest =
                 ]
         return $ mkResult outputFileReadFailurePreservesExistingOutputMsg ok details
 
-outputFileOpenFailurePreservesExistingOutputTest :: IO (Either T.Text T.Text, String)
-outputFileOpenFailurePreservesExistingOutputTest =
+outputFileReadOnlyParentDirectFallbackWritableTargetTest :: IO (Either T.Text T.Text, String)
+outputFileReadOnlyParentDirectFallbackWritableTargetTest =
     flip finally cleanupReadOnlyOutputDir $ do
         htccCmd <- htccCommand
         let targetDir = "tmp-read-only-dir"
@@ -12444,7 +12459,6 @@ outputFileOpenFailurePreservesExistingOutputTest =
         clean [targetDir, "tmp.out", "tmp.err"]
         createDirectoryIfMissing False targetDir
         T.writeFile target "stale output"
-        setFileMode target ownerReadMode
         execErrFin $ "chmod 555 '" <> T.pack targetDir <> "'"
         result <- exec $ mconcat
             [ "echo '"
@@ -12459,14 +12473,18 @@ outputFileOpenFailurePreservesExistingOutputTest =
         stderrOut <- T.readFile "tmp.err"
         targetExists <- doesFileExist target
         targetContents <- if targetExists then T.readFile target else pure ""
-        let failed = exitCode (const True) False result
-            hasPermissionError = "permission" `T.isInfixOf` T.toLower stderrOut
+        let succeeded = exitCode (const False) True result
+            hasAsm = all (`T.isInfixOf` targetContents)
+                [ ".intel_syntax noprefix"
+                , ".global main"
+                , ".L.return.main:"
+                ]
             ok =
-                failed
+                succeeded
                     && T.null stdoutLeak
+                    && T.null stderrOut
                     && targetExists
-                    && targetContents == "stale output"
-                    && hasPermissionError
+                    && hasAsm
             details = T.unlines
                 [ "target: " <> T.pack target
                 , "stdout:"
@@ -12474,11 +12492,10 @@ outputFileOpenFailurePreservesExistingOutputTest =
                 , "stderr:"
                 , stderrOut
                 , "targetExists: " <> T.pack (show targetExists)
-                , "targetUnchanged: " <> T.pack (show (targetContents == "stale output"))
-                , "hasPermissionError: " <> T.pack (show hasPermissionError)
+                , "hasAsm: " <> T.pack (show hasAsm)
                 , "exitCode: " <> T.pack (show result)
                 ]
-        return $ mkResult outputFileOpenFailurePreservesExistingOutputMsg ok details
+        return $ mkResult outputFileReadOnlyParentDirectFallbackWritableTargetMsg ok details
     where
         cleanupReadOnlyOutputDir = do
             let targetDir = "tmp-read-only-dir"
@@ -15511,7 +15528,8 @@ runAsmLeadingEnvAssignmentPreservesPathOverrideTest =
             outputExists <- doesFileExist "tmp"
             let failedAsExpected = exitCode (const True) False result
                 hasExpectedError =
-                    "failed to start HTCC_ASSEMBLER probe" `T.isInfixOf` stderrOut
+                    "failed to determine an x86_64-ELF target from HTCC_ASSEMBLER"
+                        `T.isInfixOf` stderrOut
                 preservedExactPath = wrapperPathValue == T.pack ("./" <> fakePathBinDir)
                 ok =
                     T.null stdoutLeak

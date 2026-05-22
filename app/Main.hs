@@ -1362,12 +1362,11 @@ compilerProcessEnv :: CompilerCommand -> IO (Maybe [(String, String)])
 compilerProcessEnv compiler
     | null (compilerEnvOverrides compiler) = pure Nothing
     | otherwise = do
-        expandedOverrides <-
-            pure $
+        let expandedOverrides =
                 expandEnvironmentOverridesWithBaseEnvironment
-                (compilerBaseEnvironment compiler)
-                (compilerEnvOverrides compiler)
-                (compilerEnvOverrideSpecs compiler)
+                    (compilerBaseEnvironment compiler)
+                    (compilerEnvOverrides compiler)
+                    (compilerEnvOverrideSpecs compiler)
         pure . Just . Map.toList $
             Map.union
                 (environmentFromList expandedOverrides)
@@ -2104,6 +2103,7 @@ withCompilerObjectSnapshot :: FilePath -> (FilePath -> IO a) -> IO a
 withCompilerObjectSnapshot sourcePath action = do
     tmpDir <- getTemporaryDirectory
     (snapshotPath, snapshotHandle) <- openTempFile tmpDir "htcc-object-snapshot-.o"
+    setFileMode snapshotPath temporaryWritableMode
     hSetBinaryMode snapshotHandle True
     finally
         (snapshotCompilerObjectOutput sourcePath snapshotHandle *> action snapshotPath)
@@ -5555,6 +5555,7 @@ ensureX86_64ElfCompiler suppressWarnsOutput compilerSpec = do
         withProbeFile prefix action = do
             tmpDir <- getTemporaryDirectory
             (path, handle) <- openTempFile tmpDir prefix
+            setFileMode path temporaryWritableMode
             finally
                 (action path handle)
                 ( ignoreIOException (hClose handle)
