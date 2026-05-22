@@ -3899,10 +3899,12 @@ writeFakeAssemblerWithTarget targetTriple logPath asmPath assemblerPath = do
                , "  esac"
                , "done"
                , "if $assemble; then"
-               , "  printf '%s\\n' \"$@\" > " <> T.pack logPath
+               , "  printf '%s\\n' \"$@\" > " <> shellQuote (T.pack logPath)
+               , "  \"$HTCC_TEST_CHMOD\" u+w " <> shellQuote (T.pack logPath)
                , "  test -n \"$out\""
                , "  test -n \"$input\""
-               , "  copy_file \"$input\" " <> T.pack asmPath
+               , "  copy_file \"$input\" " <> shellQuote (T.pack asmPath)
+               , "  \"$HTCC_TEST_CHMOD\" u+w " <> shellQuote (T.pack asmPath)
                , "  input_contents=$(read_file \"$input\")"
                , "  case \"$input_contents\" in"
                , "    *\".intel_syntax noprefix\"*) : ;;"
