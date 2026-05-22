@@ -8432,7 +8432,7 @@ stdoutMultiInputImplicitFunctionDefinitionWarningTest =
             , T.pack defPath
             , " > tmp.s 2> tmp.err"
             ]
-        linkCmd <- assemblerCommand ["tmp.s", "-o", "tmp"]
+        linkCmd <- assemblerCommand ["tmp.s", "-no-pie", "-o", "tmp"]
         execErrFin linkCmd
         stderrOut <- T.readFile "tmp.err"
         asm <- T.readFile "tmp.s"
@@ -8479,7 +8479,7 @@ stdoutMultiInputSameInputImplicitFunctionDefinitionWarningTest =
             , T.pack otherPath
             , " > tmp.s 2> tmp.err"
             ]
-        linkCmd <- assemblerCommand ["tmp.s", "-o", "tmp"]
+        linkCmd <- assemblerCommand ["tmp.s", "-no-pie", "-o", "tmp"]
         execErrFin linkCmd
         stderrOut <- T.readFile "tmp.err"
         asm <- T.readFile "tmp.s"
@@ -9321,7 +9321,7 @@ outputFileMultiInputSignedIntRedeclarationTest =
             , T.pack defPath
             , " > tmp.out"
             ]
-        linkCmd <- assemblerCommand ["tmp.s", "-o", "tmp"]
+        linkCmd <- assemblerCommand ["tmp.s", "-no-pie", "-o", "tmp"]
         execErrFin linkCmd
         stdoutLeak <- T.readFile "tmp.out"
         result <- exec "./tmp"
@@ -9369,7 +9369,7 @@ outputFileMultiInputOldStyleDeclarationTest =
             , T.pack defPath
             , " > tmp.out"
             ]
-        linkCmd <- assemblerCommand ["tmp.s", "-o", "tmp"]
+        linkCmd <- assemblerCommand ["tmp.s", "-no-pie", "-o", "tmp"]
         execErrFin linkCmd
         stdoutLeak <- T.readFile "tmp.out"
         result <- exec "./tmp"
@@ -9494,7 +9494,7 @@ outputFileMultiInputImplicitFunctionDefinitionWarningTest =
         stderrOut <- T.readFile "tmp.err"
         targetExists <- doesFileExist target
         asm <- if targetExists then T.readFile target else pure ""
-        linkCmd <- assemblerCommand [target, "-o", "tmp"]
+        linkCmd <- assemblerCommand [target, "-no-pie", "-o", "tmp"]
         execErrFin linkCmd
         runResult <- exec "./tmp"
         let succeeded = exitCode (const False) True result
@@ -9600,7 +9600,7 @@ outputFileMultiInputBlockScopeExternPrototypeWarningTest =
         stderrOut <- T.readFile "tmp.err"
         targetExists <- doesFileExist target
         asm <- if targetExists then T.readFile target else pure ""
-        linkCmd <- assemblerCommand [target, "-o", "tmp"]
+        linkCmd <- assemblerCommand [target, "-no-pie", "-o", "tmp"]
         execErrFin linkCmd
         runResult <- exec "./tmp"
         let succeeded = exitCode (const False) True result
@@ -9647,7 +9647,7 @@ outputFileMultiInputImplicitFunctionDefinitionTest =
             , T.pack defPath
             , " > tmp.out"
             ]
-        linkCmd <- assemblerCommand ["tmp.s", "-o", "tmp"]
+        linkCmd <- assemblerCommand ["tmp.s", "-no-pie", "-o", "tmp"]
         execErrFin linkCmd
         stdoutLeak <- T.readFile "tmp.out"
         result <- exec "./tmp"
@@ -9682,7 +9682,7 @@ outputFileMultiInputBlockScopeExternPrototypeDefinitionTest =
             , T.pack defPath
             , " > tmp.out 2> tmp.err"
             ]
-        linkCmd <- assemblerCommand ["tmp.s", "-o", "tmp"]
+        linkCmd <- assemblerCommand ["tmp.s", "-no-pie", "-o", "tmp"]
         execErrFin linkCmd
         stdoutLeak <- T.readFile "tmp.out"
         stderrOut <- T.readFile "tmp.err"
@@ -10605,7 +10605,7 @@ outputFileMultiInputAggregateFunctionDesignatorInitializerTest =
             , T.pack defPath
             , " > tmp.out 2> tmp.err"
             ]
-        linkCmd <- assemblerCommand ["tmp.s", "-o", "tmp"]
+        linkCmd <- assemblerCommand ["tmp.s", "-no-pie", "-o", "tmp"]
         execErrFin linkCmd
         stdoutLeak <- T.readFile "tmp.out"
         stderrOut <- T.readFile "tmp.err"
@@ -10655,7 +10655,7 @@ outputFileMultiInputSameInputImplicitFunctionDefinitionWarningTest =
         stderrOut <- T.readFile "tmp.err"
         targetExists <- doesFileExist target
         asm <- if targetExists then T.readFile target else pure ""
-        linkCmd <- assemblerCommand [target, "-o", "tmp"]
+        linkCmd <- assemblerCommand [target, "-no-pie", "-o", "tmp"]
         execErrFin linkCmd
         runResult <- exec "./tmp"
         let succeeded = exitCode (const False) True result
@@ -10987,7 +10987,7 @@ outputFileMultiInputExternGlobalDeclarationMergeTest =
                 , T.pack defPath
                 , " > tmp.out 2> tmp.err"
                 ]
-            linkCmd <- assemblerCommand ["tmp.s", "-o", "tmp"]
+            linkCmd <- assemblerCommand ["tmp.s", "-no-pie", "-o", "tmp"]
             execErrFin linkCmd
             stdoutLeak <- T.readFile "tmp.out"
             stderrOut <- T.readFile "tmp.err"
@@ -11007,7 +11007,7 @@ outputFileMultiInputExternGlobalDeclarationMergeTest =
                 , T.pack defPath
                 , " > tmp.out 2> tmp.err"
                 ]
-            linkCmd' <- assemblerCommand ["tmp.s", "-o", "tmp"]
+            linkCmd' <- assemblerCommand ["tmp.s", "-no-pie", "-o", "tmp"]
             execErrFin linkCmd'
             stdoutLeak' <- T.readFile "tmp.out"
             stderrOut' <- T.readFile "tmp.err"
@@ -11270,7 +11270,7 @@ outputFileMultiInputTentativeIncompleteArrayTest =
             [ htccCmd
             , " -o tmp.s tmp-foo.c tmp-bar.c > tmp.out"
             ]
-        linkCmd <- assemblerCommand ["tmp.s", "-o", "tmp"]
+        linkCmd <- assemblerCommand ["tmp.s", "-no-pie", "-o", "tmp"]
         execErrFin linkCmd
         stdoutLeak <- T.readFile "tmp.out"
         asm <- T.readFile "tmp.s"
@@ -11687,7 +11687,7 @@ outputFileMultiInputStaticFunctionPointerTest =
             [ htccCmd
             , " -o tmp.s tmp-foo.c tmp-bar.c > tmp.out"
             ]
-        linkCmd <- assemblerCommand ["tmp.s", "-o", "tmp"]
+        linkCmd <- assemblerCommand ["tmp.s", "-no-pie", "-o", "tmp"]
         execErrFin linkCmd
         stdoutLeak <- T.readFile "tmp.out"
         asm <- T.readFile "tmp.s"
