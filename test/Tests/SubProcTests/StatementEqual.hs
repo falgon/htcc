@@ -12,9 +12,9 @@ test x = flip finally (clean ["tmp"]) $ do
     htccCmd <- htccCommand
     asmCmd <- assemblerCommand ["-no-pie", "-x", "assembler", "-o", "tmp", "-"]
     execErrFin $ mconcat
-        [ "echo '"
-        , T.pack x
-        , "' | "
+        [ "printf '%s\\n' "
+        , shellQuoteString x
+        , " | "
         , htccCmd
         , " /dev/stdin | "
         , asmCmd
@@ -23,3 +23,6 @@ test x = flip finally (clean ["tmp"]) $ do
         >>= exitCode
             (\ec -> (ec, x) <$ (putStr x *> putStrLn " [Compiling]"))
             (return (0, x))
+
+shellQuoteString :: String -> T.Text
+shellQuoteString word = "'" <> T.replace "'" "'\"'\"'" (T.pack word) <> "'"
