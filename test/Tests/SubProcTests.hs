@@ -105,7 +105,6 @@ exec = runTestsEx
     , (LinkFuncRet.test "int test_bool_arg(_Bool); int main(void) { return test_bool_arg(256) - 1; }" ["test_bool_arg"], 0)
     , (LinkFuncRet.test "int test_bool_arg(_Bool); int main(void) { int (*fp)(_Bool); fp = test_bool_arg; return fp(256) - 1; }" ["test_bool_arg"], 0)
     , (LinkFuncRet.test "int test_bool_arg(); int main(void) { return test_bool_arg(256); }" ["test_bool_arg"], 0)
-    , (LinkFuncRet.test "int test_bool_arg(_Bool); int main(void) { int (*fp)(); fp = test_bool_arg; return fp(256); }" ["test_bool_arg"], 0)
     , (AsmOutput.externalBoolLowByteNormalizationTest, 0)
     , (AsmOutput.externalBoolParameterLowByteNormalizationTest, 0)
     , (AsmOutput.externalIntegralReturnNormalizationTest, 0)

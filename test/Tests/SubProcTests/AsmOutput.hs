@@ -11157,7 +11157,7 @@ externalBoolLowByteNormalizationTest =
             , " tmp-bool-main.c > tmp.s"
             ]
         assemblerCommand ["-x", "assembler", "-c", "-o", "tmp-bool-ext.o", "tmp-bool-ext.s"] >>= execErrFin
-        assemblerCommand ["tmp-bool-ext.o", "tmp.s", "-o", "tmp"] >>= execErrFin
+        assemblerCommand ["tmp-bool-ext.o", "tmp.s", "-no-pie", "-o", "tmp"] >>= execErrFin
         exitCode (, description) (0, description) <$> exec "./tmp"
 
 externalBoolParameterLowByteNormalizationTest :: IO (Int, String)
@@ -11203,7 +11203,7 @@ externalBoolParameterLowByteNormalizationTest =
             , " tmp-bool-param-main.c > tmp.s"
             ]
         assemblerCommand ["-x", "assembler", "-c", "-o", "tmp-bool-param-ext.o", "tmp-bool-param-ext.s"] >>= execErrFin
-        assemblerCommand ["tmp-bool-param-ext.o", "tmp.s", "-o", "tmp"] >>= execErrFin
+        assemblerCommand ["tmp-bool-param-ext.o", "tmp.s", "-no-pie", "-o", "tmp"] >>= execErrFin
         exitCode (, description) (0, description) <$> exec "./tmp"
 
 externalIntegralReturnNormalizationTest :: IO (Int, String)
@@ -11250,7 +11250,7 @@ externalIntegralReturnNormalizationTest =
             , " tmp-int-ret-main.c > tmp.s"
             ]
         assemblerCommand ["-x", "assembler", "-c", "-o", "tmp-int-ret-ext.o", "tmp-int-ret-ext.s"] >>= execErrFin
-        assemblerCommand ["tmp-int-ret-ext.o", "tmp.s", "-o", "tmp"] >>= execErrFin
+        assemblerCommand ["tmp-int-ret-ext.o", "tmp.s", "-no-pie", "-o", "tmp"] >>= execErrFin
         exitCode (, description) (0, description) <$> exec "./tmp"
 
 outputFileMultiInputTentativeIncompleteArrayTest :: IO (Either T.Text T.Text, String)
