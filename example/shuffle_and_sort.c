@@ -7,7 +7,7 @@
 
 typedef long time_t;
 
-void srand(unsigned);
+void srand(int);
 int rand(void);
 time_t time(time_t*);
 int printf();
@@ -53,22 +53,27 @@ int* med3(int* a, int* b, int* c)
     return max(min(a, b), min(max(a, b), c));
 }
 
-int quick_sort(int* first, int* last)
+void quick_sort(int* first, int* last)
 {
-    if (first == last) return;
-    swap(first, med3(first, first + ((last - first) >> 1), last));
+    int size = last - first;
+    if (size < 2) return;
 
-    int* l = first;
-    int* r = last - 1;
+    int pivot = *med3(first, first + (size >> 1), last - 1);
+    int l = 0;
+    int r = size - 1;
     
-    while (l < r) {
-        for (; *r > *first; --r);
-        for (; *l <= *first && l < r; ++l);
-        swap(l, r);
+    while (l <= r) {
+        for (; *(first + l) < pivot; ++l);
+        for (; *(first + r) > pivot; --r);
+        if (l <= r) {
+            swap(first + l, first + r);
+            ++l;
+            --r;
+        }
     }
-    swap(first, l);
-    quick_sort(first, l);
-    quick_sort(l + 1, last);
+
+    quick_sort(first, first + (r + 1));
+    quick_sort(first + l, last);
 }
 
 int main()
@@ -76,7 +81,7 @@ int main()
     int ar[10];
     int size = sizeof ar / sizeof *ar;
 
-    iota(ar, ar + size);
+    iota(ar, ar + size, 0);
     shuffle(ar, ar + size);
     
     printf("Before sorting: ");
