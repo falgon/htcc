@@ -9,9 +9,11 @@ Portability : POSIX
 
 Data types and type synonyms used during AST construction
 -}
+{-# LANGUAGE LambdaCase #-}
 module Htcc.Parser.ConstructionData.Core (
     -- * Main type
     ConstructionData (..),
+    FunctionParamScope (..),
     Warnings,
     -- * Adding funcitons
     addLVar,
@@ -36,38 +38,57 @@ module Htcc.Parser.ConstructionData.Core (
     initConstructionData,
     resetLocal,
     pushWarn,
-    incomplete
+    incomplete,
+    normalizeCompletedStorageClass,
+    hasIncompleteObjectType
 ) where
 
-import           Data.Bits                                       (Bits (..))
-import           Data.Maybe                                      (fromJust)
-import qualified Data.Sequence                                   as S
-import qualified Data.Text                                       as T
-import           Data.Tuple.Extra                                (second)
+import                          Data.Bits                                       (Bits (..))
+import                qualified Data.Sequence                                   as SQ
+import                qualified Data.Text                                       as T
+import                          Data.Tuple.Extra                                (second)
+import                          Numeric.Natural                                 (Natural)
 
-import qualified Htcc.CRules.Types                               as CT
-import           Htcc.Parser.AST.Core                            (ATree (..))
-import           Htcc.Parser.ConstructionData.Scope              (LookupVarResult (..))
-import qualified Htcc.Parser.ConstructionData.Scope              as AS
-import qualified Htcc.Parser.ConstructionData.Scope.Enumerator   as SE
-import qualified Htcc.Parser.ConstructionData.Scope.Function     as PF
-import           Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
-import qualified Htcc.Parser.ConstructionData.Scope.Tag          as PS
-import qualified Htcc.Parser.ConstructionData.Scope.Typedef      as PT
-import qualified Htcc.Parser.ConstructionData.Scope.Var          as PV
-import           Htcc.Tokenizer.Token                            (TokenLC)
-import qualified Htcc.Tokenizer.Token                            as HT
+import                qualified Htcc.CRules.Types                               as CT
+import                          Htcc.Parser.AST.Core                            (ATree (..))
+import                          Htcc.Parser.ConstructionData.Scope              (LookupVarResult (..))
+import                qualified Htcc.Parser.ConstructionData.Scope              as AS
+import                qualified Htcc.Parser.ConstructionData.Scope.Enumerator   as SE
+import                qualified Htcc.Parser.ConstructionData.Scope.Function     as PF
+import                          Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
+import                qualified Htcc.Parser.ConstructionData.Scope.Tag          as PS
+import                qualified Htcc.Parser.ConstructionData.Scope.Typedef      as PT
+import                qualified Htcc.Parser.ConstructionData.Scope.Var          as PV
+import                qualified Htcc.Tokenizer.Token                            as HT
+
+import                          Control.Monad.State                             (modify)
+import                          Data.List.NonEmpty                              (NonEmpty (..))
+import                qualified Data.Set                                        as S
+import                          Data.Void
+import {-# SOURCE #-}           Htcc.Parser.Combinators.ParserType
+import                qualified Text.Megaparsec                                 as M
 
 -- | The warning messages type
-type Warnings i = S.Seq (T.Text, TokenLC i)
+type Warnings = SQ.Seq (M.ParseErrorBundle T.Text Void)
+
+data FunctionParamScope i = FunctionParamScope
+    {
+        fpsScopeId     :: CT.ScopeId,
+        fpsTags        :: PS.Tags i,
+        fpsEnumerators :: SE.Enumerators i
+    } deriving Show
 
 -- | `ConstructionData` is a set of "things" used during the construction of the AST.
 -- Contains error messages and scope information.
 data ConstructionData i = ConstructionData -- ^ The constructor of ConstructionData
     {
-        warns        :: Warnings i, -- ^ The warning messages
-        scope        :: AS.Scoped i, -- ^ Scope type
-        isSwitchStmt :: Bool -- ^ When the statement is @switch@, this flag will be `True`, otherwise will be `False`.
+        warns                            :: Warnings, -- ^ The warning messages
+        scope                            :: AS.Scoped i, -- ^ Scope type
+        tagHistory                       :: PS.TagHistory i, -- ^ Historical tag bindings used for deferred struct completion.
+        functionParamScopes              :: [FunctionParamScope i], -- ^ Deferred outer function parameter scopes captured while parsing declarators.
+        isSwitchStmt                     :: Bool, -- ^ When the statement is @switch@, this flag will be `True`, otherwise will be `False`.
+        suppressUnsupportedValueChecks   :: Bool, -- ^ Skip codegen-only value checks while parsing unevaluated operands.
+        allowSameInputExternalCollisions :: Bool -- ^ When `True`, same-input globals and function declarations may coexist so multi-input `-o` merge can resolve them.
     } deriving Show
 
 {-# INLINE applyScope #-}
@@ -90,11 +111,22 @@ addLVar = addVar AS.addLVar
 --
 -- >>> second (\x -> y { scope = x }) <$> Htcc.Parser.AST.Scope.addGVar ty tkn (scope x)
 addGVar :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ATree i, ConstructionData i)
-addGVar = addVar AS.addGVar
+addGVar ty tkn cd =
+    addVar
+        (if allowSameInputExternalCollisions cd then AS.addGVarAllowFunctionConflict else AS.addGVar)
+        ty
+        tkn
+        cd
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.addGVarWith` for variable @x@ of tye `ConstructionData`.
 addGVarWith :: (Integral i, Bits i) => CT.StorageClass i -> HT.TokenLC i -> PV.GVarInitWith i -> ConstructionData i -> Either (ASTError i) (ATree i, ConstructionData i)
-addGVarWith ty tkn iw cd = applyScope cd <$> AS.addGVarWith ty tkn iw (scope cd)
+addGVarWith ty tkn iw cd =
+    applyScope cd <$>
+        (if allowSameInputExternalCollisions cd then AS.addGVarWithAllowFunctionConflict else AS.addGVarWith)
+            ty
+            tkn
+            iw
+            (scope cd)
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.addLiteral` for variable @x@ of type `ConstructionData`.
 -- This function is equivalent to
@@ -175,8 +207,18 @@ lookupEnumerator = lookupFromScope AS.lookupEnumerator
 -- This function is equivalent to
 --
 -- >>> (\y -> x { scope = y }) <$> Htcc.Parser.AST.Scope.addTag ty tkn (scope x)
-addTag :: Num i => CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ConstructionData i)
-addTag ty tkn cd = (\x -> cd { scope = x }) <$> AS.addTag ty tkn (scope cd)
+addTag :: Num i => PS.TagKind -> CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ConstructionData i)
+addTag kind ty tkn cd = do
+    scp <- AS.addTag kind ty tkn (scope cd)
+    pure $
+        cd
+            { scope = scp
+            , tagHistory = case tkn of
+                (_, HT.TKIdent ident) ->
+                    PS.remember (AS.curScopeId $ scope cd) (AS.curNestDepth $ scope cd) kind ty ident (tagHistory cd)
+                _ ->
+                    tagHistory cd
+            }
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.addTypedef` for variable @x@ of type `ConstructionData`.
 -- This function is equivalent to
@@ -189,8 +231,15 @@ addTypedef ty tkn cd = (\x -> cd { scope = x }) <$> AS.addTypedef ty tkn (scope 
 -- This function is equivalent to
 --
 -- >>> (\y -> x { scope = y }) <$> Htcc.Parser.AST.Scope.addFunction ty tkn (scope x)
-addFunction :: Num i => Bool -> CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ConstructionData i)
-addFunction fd ty tkn cd = (\x -> cd { scope = x }) <$> AS.addFunction fd ty tkn (scope cd)
+addFunction :: (Eq i, Num i) => Bool -> Bool -> CT.StorageClass i -> HT.TokenLC i -> ConstructionData i -> Either (ASTError i) (ConstructionData i)
+addFunction fd isImplicit ty tkn cd =
+    (\x -> cd { scope = x }) <$>
+        (if allowSameInputExternalCollisions cd then AS.addFunctionAllowGlobalConflict else AS.addFunction)
+            fd
+            isImplicit
+            ty
+            tkn
+            (scope cd)
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.addEnumerator` for variable @x@ of type `ConstructionData`.
 -- This function is equivalent to
@@ -202,7 +251,7 @@ addEnumerator ty tkn n cd = (\x -> cd { scope = x }) <$> AS.addEnumerator ty tkn
 -- | Shortcut to the initial state of `ConstructionData`.
 {-# INLINE initConstructionData #-}
 initConstructionData :: ConstructionData i
-initConstructionData = ConstructionData S.empty AS.initScope False
+initConstructionData = ConstructionData SQ.empty AS.initScope PS.emptyTagHistory [] False False False
 
 -- | Shortcut to function `Htcc.Parser.AST.Scope.resetLocal` for variable @x@ of type `ConstructionData`.
 -- This function is equivalent to
@@ -212,14 +261,100 @@ resetLocal :: ConstructionData i -> ConstructionData i
 resetLocal cd = cd { scope = AS.resetLocal (scope cd) }
 
 -- | Function to add warning text.
-pushWarn :: T.Text -> TokenLC i -> ConstructionData i -> ConstructionData i
-pushWarn t tkn cd = cd { warns = warns cd S.|> (t, tkn) }
+pushWarn :: M.PosState T.Text -> String -> Parser i ()
+pushWarn posState warnMsg = do
+    let peb = M.ParseErrorBundle {
+          M.bundleErrors = M.FancyError 0 (S.singleton $ M.ErrorFail $ "warning: " <> warnMsg) :| []
+        , M.bundlePosState = posState
+        }
+    modify (\s -> s { warns = warns s SQ.|> peb })
 
 -- | Returns `Nothing` if incomplete, otherwise `Htcc.CRules.Types.StorageClass`.
 {-# INLINE incomplete #-}
 incomplete :: CT.StorageClass i -> ConstructionData i -> Maybe (CT.StorageClass i)
 incomplete ty scp
     | not (CT.isCTIncomplete ty) = Just ty
-    | CT.isIncompleteStruct ty = (>>=) (lookupTag (fromJust $ CT.fromIncompleteStruct ty) scp) $ \tag ->
-        if CT.isCTIncomplete (PS.sttype tag) then Nothing else Just (PS.sttype tag)
-    | otherwise = Nothing
+    | otherwise = case CT.toTypeKind ty of
+        CT.CTIncomplete (CT.IncompleteStruct tag scopeId) ->
+            completedStructTagType scp tag scopeId
+        _ ->
+            Nothing
+
+completedStructTagType :: ConstructionData i -> T.Text -> CT.ScopeId -> Maybe (CT.StorageClass i)
+completedStructTagType cd tag scopeId =
+    case PS.lookupAtScope tag scopeId (tagHistory cd) of
+        Just tagInfo
+            | PS.stKind tagInfo == PS.StructTag
+            , not (CT.isCTIncomplete $ PS.sttype tagInfo) ->
+                Just $ PS.sttype tagInfo
+        _ ->
+            Nothing
+
+normalizeCompletedStorageClass :: ConstructionData i -> CT.StorageClass i -> CT.StorageClass i
+normalizeCompletedStorageClass cd =
+    CT.mapTypeKind (normalizeCompletedTypeKind S.empty)
+    where
+        normalizeCompletedTypeKind seen = \case
+            CT.CTPtr innerTy ->
+                CT.CTPtr $ normalizeCompletedTypeKind seen innerTy
+            CT.CTArray n innerTy ->
+                CT.CTArray n $ normalizeCompletedTypeKind seen innerTy
+            CT.CTFunc retTy params ->
+                CT.CTFunc
+                    (normalizeCompletedTypeKind seen retTy)
+                    (map (secondParam seen) params)
+            CT.CTEnum baseTy members ->
+                CT.CTEnum (normalizeCompletedTypeKind seen baseTy) members
+            CT.CTStruct members ->
+                CT.CTStruct $ fmap (normalizeStructMember seen) members
+            CT.CTNamedStruct tag scopeId members ->
+                CT.CTNamedStruct tag scopeId $
+                    fmap (normalizeStructMemberForTag seen (tag, scopeId)) members
+            CT.CTIncomplete (CT.IncompleteArray innerTy) ->
+                CT.CTIncomplete $
+                    CT.IncompleteArray $ normalizeCompletedTypeKind seen innerTy
+            CT.CTIncomplete (CT.IncompleteStruct tag scopeId) ->
+                case completedStructTagType cd tag scopeId of
+                    Just completedTy
+                        | S.member (tag, scopeId) seen ->
+                            CT.toTypeKind completedTy
+                        | otherwise ->
+                            normalizeCompletedTypeKind
+                                (S.insert (tag, scopeId) seen)
+                                (CT.toTypeKind completedTy)
+                    Nothing ->
+                        CT.CTIncomplete $ CT.IncompleteStruct tag scopeId
+            tyKind ->
+                tyKind
+
+        secondParam seen' (paramTy, ident) =
+            (normalizeCompletedTypeKind seen' paramTy, ident)
+
+        normalizeStructMember seen member =
+            member {
+                CT.smType = normalizeCompletedTypeKind seen (CT.smType member)
+            }
+
+        normalizeStructMemberForTag seen tagKey member =
+            member {
+                CT.smType =
+                    normalizeCompletedTypeKind
+                        (S.insert tagKey seen)
+                        (CT.smType member)
+            }
+
+hasIncompleteObjectType :: CT.StorageClass i -> Bool
+hasIncompleteObjectType = go . CT.toTypeKind
+    where
+        go = \case
+            CT.CTLong innerTy   -> go innerTy
+            CT.CTShort innerTy  -> go innerTy
+            CT.CTSigned innerTy -> go innerTy
+            CT.CTArray _ innerTy -> go innerTy
+            CT.CTEnum baseTy _  -> go baseTy
+            CT.CTStruct members ->
+                any (go . CT.smType) members
+            CT.CTNamedStruct _ _ members ->
+                any (go . CT.smType) members
+            CT.CTIncomplete _   -> True
+            _                   -> False

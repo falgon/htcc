@@ -1,10 +1,10 @@
-cabal-version: 1.12
+cabal-version: 2.0
 
--- This file has been generated from package.yaml by hpack version 0.33.0.
+-- This file has been generated from package.yaml by hpack version 0.38.3.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 22bacaccc5bc8617817eb1c982386f1b7ce9a77e1928a9f47181e1dcd7a27d2a
+-- hash: 6898310968dcf001c66a93150d55c5e9f04e053e15793d6120855f7a339dca4b
 
 name:           htcc
 version:        0.0.0.1
@@ -63,14 +63,30 @@ library
       Htcc.CRules.Types.CType
       Htcc.CRules.Types.StorageClass
       Htcc.CRules.Types.TypeKind
+      Htcc.MegaparsecCompat
+      Htcc.Output
+      Htcc.WarningSuppression
       Htcc.Parser
       Htcc.Parser.AST
       Htcc.Parser.AST.Core
       Htcc.Parser.AST.DeduceKind
       Htcc.Parser.AST.Type
-      Htcc.Parser.AST.Var
-      Htcc.Parser.AST.Var.Init
-      Htcc.Parser.ConstructionData
+      Htcc.Parser.Combinators
+      Htcc.Parser.Combinators.BasicOperator
+      Htcc.Parser.Combinators.ConstExpr
+      Htcc.Parser.Combinators.Core
+      Htcc.Parser.Combinators.Decl
+      Htcc.Parser.Combinators.Decl.Declarator
+      Htcc.Parser.Combinators.Decl.Spec
+      Htcc.Parser.Combinators.GNUExtensions
+      Htcc.Parser.Combinators.Keywords
+      Htcc.Parser.Combinators.ParserType
+      Htcc.Parser.Combinators.Program
+      Htcc.Parser.Combinators.Type
+      Htcc.Parser.Combinators.Type.Core
+      Htcc.Parser.Combinators.Type.Utils
+      Htcc.Parser.Combinators.Utils
+      Htcc.Parser.Combinators.Var
       Htcc.Parser.ConstructionData.Core
       Htcc.Parser.ConstructionData.Scope
       Htcc.Parser.ConstructionData.Scope.Enumerator
@@ -80,14 +96,6 @@ library
       Htcc.Parser.ConstructionData.Scope.Typedef
       Htcc.Parser.ConstructionData.Scope.Utils
       Htcc.Parser.ConstructionData.Scope.Var
-      Htcc.Parser.Parsing
-      Htcc.Parser.Parsing.Core
-      Htcc.Parser.Parsing.Global
-      Htcc.Parser.Parsing.Global.Function
-      Htcc.Parser.Parsing.Global.Var
-      Htcc.Parser.Parsing.StmtExpr
-      Htcc.Parser.Parsing.Type
-      Htcc.Parser.Parsing.Typedef
       Htcc.Parser.Utils
       Htcc.Parser.Utils.Core
       Htcc.Tokenizer
@@ -105,6 +113,8 @@ library
       Htcc.Visualizer.Core
   other-modules:
       Paths_htcc
+  autogen-modules:
+      Paths_htcc
   hs-source-dirs:
       src
   build-depends:
@@ -117,26 +127,37 @@ library
     , diagrams-contrib
     , diagrams-lib
     , diagrams-svg
+    , directory
     , extra
+    , filepath
+    , megaparsec
     , monad-finally
     , monad-loops
     , mono-traversable
     , mtl
     , natural-transformation
     , optparse-applicative
+    , parsec
+    , parser-combinators
+    , prettyprinter
+    , prettyprinter-ansi-terminal
     , safe
     , split
     , text
     , transformers
+    , unix
+    , utf8-string
   default-language: Haskell2010
 
 executable htcc
   main-is: Main.hs
   other-modules:
       Paths_htcc
+  autogen-modules:
+      Paths_htcc
   hs-source-dirs:
       app
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall -Werror -O2
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall -O2
   build-depends:
       ansi-wl-pprint
     , base >=4.7 && <5
@@ -149,28 +170,49 @@ executable htcc
     , diagrams-svg
     , directory
     , extra
+    , filepath
     , htcc
+    , megaparsec
     , monad-finally
     , monad-loops
     , mono-traversable
     , mtl
     , natural-transformation
     , optparse-applicative
+    , parsec
+    , parser-combinators
+    , prettyprinter
+    , prettyprinter-ansi-terminal
+    , process
     , safe
     , split
+    , stm
+    , template-haskell
     , text
     , transformers
+    , unix
+    , utf8-string
   default-language: Haskell2010
 
 test-suite htcc-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
+  build-tool-depends:
+      htcc:htcc
   other-modules:
+      Tests.CommandSelection
+      Tests.ComponentsTests
+      Tests.ComponentsTests.AsmOutput
+      Tests.ComponentsTests.CommandSelection
+      Tests.ComponentsTests.Parser.Combinators
       Tests.SubProcTests
-      Tests.Test1
-      Tests.Test2
-      Tests.Test3
+      Tests.SubProcTests.AsmOutput
+      Tests.SubProcTests.LinkFuncRet
+      Tests.SubProcTests.LinkFuncStdOut
+      Tests.SubProcTests.StatementEqual
       Tests.Utils
+      Paths_htcc
+  autogen-modules:
       Paths_htcc
   hs-source-dirs:
       test
@@ -183,8 +225,6 @@ test-suite htcc-test
     , cond
     , containers
     , deepseq
-    , dhall-json
-    , dhall-yaml
     , diagrams-contrib
     , diagrams-lib
     , diagrams-svg
@@ -196,12 +236,17 @@ test-suite htcc-test
     , hspec-contrib
     , hspec-core
     , htcc
+    , megaparsec
     , monad-finally
     , monad-loops
     , mono-traversable
     , mtl
     , natural-transformation
     , optparse-applicative
+    , parsec
+    , parser-combinators
+    , prettyprinter
+    , prettyprinter-ansi-terminal
     , process
     , safe
     , split
@@ -209,6 +254,7 @@ test-suite htcc-test
     , time
     , transformers
     , turtle
+    , unix
     , utf8-string
   default-language: Haskell2010
 
@@ -216,6 +262,8 @@ benchmark criterion
   type: exitcode-stdio-1.0
   main-is: bench/Criterion.hs
   other-modules:
+      Paths_htcc
+  autogen-modules:
       Paths_htcc
   ghc-options: -O2
   build-depends:
@@ -229,16 +277,25 @@ benchmark criterion
     , diagrams-contrib
     , diagrams-lib
     , diagrams-svg
+    , directory
     , extra
+    , filepath
     , htcc
+    , megaparsec
     , monad-finally
     , monad-loops
     , mono-traversable
     , mtl
     , natural-transformation
     , optparse-applicative
+    , parsec
+    , parser-combinators
+    , prettyprinter
+    , prettyprinter-ansi-terminal
     , safe
     , split
     , text
     , transformers
+    , unix
+    , utf8-string
   default-language: Haskell2010

@@ -49,7 +49,7 @@ data ATKindFor a = ATForkw -- ^ The @for@ keyword
     | ATForCond (ATree a) -- ^ The conditional section of @for@ statement
     | ATForIncr (ATree a) -- ^ The incremental section of @for@ statement
     | ATForStmt (ATree a) -- ^ The statement section of @for@ statement
-    deriving Show
+    deriving (Eq, Show)
 
 {-# INLINE isATForInit #-}
 -- | An utility of `ATForInit`. When an argument is `ATForInit`, return `True` otherwise `False`
@@ -130,6 +130,8 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATConditional (ATree a) (ATree a) (ATree a) -- ^ conditional operator: @a ? x : y;@. It has three AST (cond, then and else)
     | ATComma -- ^ comma operator: @x,b@
     | ATCast -- ^ the cast operation: @(type) x@
+    | ATSizeof -- ^ the @sizeof@ operator for expression operands.
+    | ATAlignof -- ^ the @_Alignof@ operator for expression operands.
     | ATMemberAcc (CT.StructMember a) -- ^ accessing the member of the @struct@
     | ATReturn -- ^ the @return@ keyword
     | ATIf -- ^ the @if@ keyword
@@ -147,11 +149,13 @@ data ATKind a = ATAdd -- ^ \(x+y\): @x + y@
     | ATLVar (CT.StorageClass a) a -- ^ the local variable. It has a type information (as `CT.StorageClass`) and an offset value
     | ATGVar (CT.StorageClass a) T.Text -- ^ the global variable. It has a type information (as `CT.StorageClass`) and an name
     | ATDefFunc T.Text (Maybe [ATree a]) -- ^ the function definition
-    | ATCallFunc T.Text (Maybe [ATree a]) -- ^ the function call. It has a offset value and arguments (`Maybe`)
+    | ATCallFunc T.Text (Maybe [ATree a]) -- ^ the direct function call. It has the target function name and arguments (`Maybe`)
+    | ATCallPtr (Maybe [ATree a]) -- ^ the indirect function call. The callee expression is stored in the lhs of `ATNode`.
+    | ATFuncPtr T.Text -- ^ the function designator / pointer. It has the target function name.
     | ATExprStmt -- ^ the expression of a statement
     | ATStmtExpr [ATree a] -- ^ the statement of a expression (GNU extension)
     | ATNull (ATree a) -- ^ indicates nothing to do
-    deriving Show
+    deriving (Eq, Show)
 
 {-# INLINE fromATVar #-}
 -- | Take its type when it is ATIVar or ATIVar.
@@ -192,7 +196,7 @@ data ATree a = ATEmpty -- ^ The empty node
     atL    :: ATree a, -- ^ The left hand side abstract tree
     atR    :: ATree a -- ^ The right hand side abstract tree
     } -- ^ `ATKind` representing the kind of node and the two branches `ATree` it has
-    deriving Show
+    deriving (Eq, Show)
 
 -- | A class whose type can be converted to ATree
 class Treealizable a where

@@ -3,181 +3,512 @@ module Tests.SubProcTests (
     exec
 ) where
 
-import           Data.Char         (ord)
+import           Data.Char                         (ord)
+import qualified Htcc.CRules.Types                 as CT
 import           Numeric.Natural
-
-import qualified Tests.Test1       as StatementEqual
-import qualified Tests.Test2       as LinkFuncRet
-import qualified Tests.Test3       as LinkFuncStdOut
-import           Tests.Utils       hiding (exec)
-
-import qualified Htcc.CRules.Types as CT
+import qualified Tests.SubProcTests.AsmOutput      as AsmOutput
+import qualified Tests.SubProcTests.LinkFuncRet    as LinkFuncRet
+import qualified Tests.SubProcTests.LinkFuncStdOut as LinkFuncStdOut
+import qualified Tests.SubProcTests.StatementEqual as StatementEqual
+import           Tests.Utils                       hiding (exec)
 
 exec :: IO ()
-exec = let sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural in runTestsEx [
-    (StatementEqual.test "int main() { return 42; }", 42),
-    (StatementEqual.test "int main() { return 1+2; }", 3),
-    (StatementEqual.test "int main() { return 1+2+4; }", 7),
-    (StatementEqual.test "int main() { return 10-7+3; }", 6),
-    (StatementEqual.test "int main() { return 42+23-30; }", 35),
-    (StatementEqual.test "int main() { return 42/2+2-5; }", 18),
-    (StatementEqual.test "int main() { return (3+5)/2; }", 4),
-    (StatementEqual.test "int main() { return (4-2)*8+20/4; }",21),
-    (StatementEqual.test "int main() { return -(-3*+5); }", 15),
-    (StatementEqual.test "int main() { return -25+30; }", 5),
-    (StatementEqual.test "int main() { return 42 == 42; }", 1),
-    (StatementEqual.test "int main() { return 42 != 53; }", 1),
-    (StatementEqual.test "int main() { return 42 < 53; }", 1),
-    (StatementEqual.test "int main() { return 53 > 42; }", 1),
-    (StatementEqual.test "int main() { return 42 <= 42; }", 1),
-    (StatementEqual.test "int main() { return 32 <= 42; }", 1),
-    (StatementEqual.test "int main() { return 42 >= 42; }", 1),
-    (StatementEqual.test "int main() { return 53 >= 42; }", 1),
-    (StatementEqual.test "int main() { return (1 + 1) == 2; }", 1),
-    (StatementEqual.test "int main() { return (2 * 3) != 2; }", 1),
-    (StatementEqual.test "int main() { int a=42; int b=20; return a+b; }", 62),
-    (StatementEqual.test "int main() { int a=42; int b=20; int c=32; return (a - c) * b / 10; }", 20),
-    (StatementEqual.test "int main() { int hoge=42; int foo=20; return hoge - foo; }", 22),
-    (StatementEqual.test "int main() { int returnx = 42; return returnx; return 53; }", 42),
-    (StatementEqual.test "int main() { int a = 3; int b = 5 * 6 - 8; return a + b / 2; }", 14),
-    (StatementEqual.test "int main() { if (1) return 42; return 53; }", 42),
-    (StatementEqual.test "int main() { if (20*3-60) return 42; return 53; }", 53),
-    (StatementEqual.test "int main() { int a = 1; int b = 2; if (a) return b; return 42; }", 2),
-    (StatementEqual.test "int main() { if (1) return 42; else return 53; }", 42),
-    (StatementEqual.test "int main() { if (0) return 42; else return 53; }", 53),
-    (StatementEqual.test "int main() { int a = 0; int b = 2; if (a) return b; else return b * 2; }", 4),
-    (StatementEqual.test "int main() { int a = 1; int b = 0; if (b) return 42; if (0) return 42; else return a; }", 1),
-    (StatementEqual.test "int main() { int a = 1; int b = 2; if (a) if (b) return b; else return 53; else return 24; }", 2),
-    (StatementEqual.test "int main() { if (1) if (1) if (1) if (1) if (1) if (0) return 1; else return 2; else return 3; else return 4; else return 5; else return 6; else return 7; }", 2),
-    (StatementEqual.test "int main() { if(1)if(1)return 42;return 53; }", 42),
-    (StatementEqual.test "int main() { if(0); return 0; }", 0),
-    (StatementEqual.test "int main() { int a = 1; while (a < 10) a = a + 1; return a; }", 10),
-    (StatementEqual.test "int main() { int a = 1; while (a < 10) a = a + 1; int b = 1; while (b < 20) b = b + 2; return a + b; }", 31),
-    (StatementEqual.test "int main() { int a = 0; while (a); return 0; }", 0),
-    (StatementEqual.test "int main() { int a = 0; int i = 0; for (i = 1; i <= 10; i = i + 1) a = a + i * 2; return a; }", 110),
-    (StatementEqual.test "int main() { int i = 0; for (; i <= 10;) i = i + 2; return i; }", 12),
-    (StatementEqual.test "int main() { int i = 0; for (; i <= 10; i = i + 2);  return i; }", 12),
-    (StatementEqual.test "int main() { int a = 0; int i = 0; for (i = 0; i < 10; i = i + 1) if (a) a = 0; else a = 1; return a; }", 0),
-    (StatementEqual.test "int main() { { int a = 42; int b = 2; return a / b; } }", 21),
-    (StatementEqual.test "int main() { int a = 0; int i = 0; for (i = 0; i < 10; i = i + 1) { a = a + i; a = a - i; } return a; }", 0),
-    (StatementEqual.test "int main() { int a = 10; if (a) { a = a * a; a = a / 10; } return a; }", 10),
-    (StatementEqual.test "int main() { int a = 0; while (1) { if (a < 10) a = a + 1; else return a; } }", 10),
-    (StatementEqual.test "int main() { int a = 0; for (;;) { a = 42; return a; } return a; }", 42),
-    (StatementEqual.test "int main() { int a = 0; for (;;) { if (a < 10) a = a + 1; else return a; } }", 10),
-    (LinkFuncRet.test "int test_func1(); int main() { int a = test_func1(); test_func1(); return a; }" ["test_func1"], 0),
-    (StatementEqual.test "int main() { int a = 1; int b = 1; return a & b; }", 1),
-    (StatementEqual.test "int main() { int a = 42; int b = 53; a = a ^ b; b = b ^ a; a = a ^ b; if (a == 53) if (b == 42) return 1; return 0; }", 1),
-    (StatementEqual.test "int main() { return 1 | 0; }", 1),
-    (StatementEqual.test "int main() { int a = 1; int b = 0; return a & b ^ a | b; }", 1), -- Xor swap
-    (StatementEqual.test "int main() { int a = 0; int i = 0; for (i = 0; i < 10; i = i + 1) if (i % 2 == 0) a = a + i; return a; }", 20),
-    (StatementEqual.test "int main() { return !0; }", 1),
-    (StatementEqual.test "int main() { return !42; }", 0),
-    (StatementEqual.test "int main() { return !!!0; }", 1),
-    (StatementEqual.test "int main() { return ~(-42); }", 41),
-    (StatementEqual.test "int main() { return ~~~~42; }", 42),
-    (StatementEqual.test "int main() { return (2 * 4) == (2 << 2); }", 1),
-    (StatementEqual.test "int main() { return (8 / 4) == (8 >> 2); }", 1),
-    (StatementEqual.test "int main() { int a = 2 << 4; return (a & (a - 1)) == 0; }", 1), -- Determining if an integer is a power of 2
-    (StatementEqual.test "int main() { 1; {2;} return 3; }", 3),
-    -- (LinkFuncRet.test "int main() { return sum7(1, 1, 1, 1, 1, 1, 1); }" ["test_func3"], 7),
-    (LinkFuncRet.test "int test_func2(); int main() { return test_func2(40); }" ["test_func2"], 0),
-    -- (LinkFuncRet.test "int main() { return test_func2(sum7(1, 2, 3, 4, 5, 6, 7)); }" ["test_func2", "test_func3"], 0),
-    -- (LinkFuncRet.test "int main() { return sum16(1,1,1,1,1,1,11,10,9,8,7,6,5,4,3,2); }" ["test_func3"], 11),
-    (StatementEqual.test "int f() { return 42; } int main() { return f(); }", 42),
-    (StatementEqual.test "int g() { return 42; } int f() { return g(); } int main() { return f(); }", 42),
-    (StatementEqual.test "int id(int a) { return a; } int main() { int a = 1; return id(a-1) + id(1); }", 1),
-    (StatementEqual.test "int get1() { return 1; } int get2() { return 2; } int main() { int a = get1(); return a + get2(); }", 3),
-    (StatementEqual.test "int add(int a, int b) { return a + b; } int main() { return add(1, 2); }", 3),
-    (StatementEqual.test "int rec(int a) { if (a == 0) return 42; return rec(a - 1); } int main() { int b = rec(2); return 1 + 2; }", 3),
-    (StatementEqual.test "int fib(int n) { if (n == 0) return 1; else if (n == 1) return 1; else if (n >= 2) return fib(n - 1) + fib(n - 2); else return 0; } int main() { return fib(5); }", 8), -- fibonacci number
-    (StatementEqual.test "int main() { int a = 42; int* b = &a; return *b; }", 42),
-    (StatementEqual.test "int main() { int a = 42; return *&a; }", 42),
-    (StatementEqual.test "int main() { int a = 42; int* b = &a; int** c = &b; return **c; }", 42),
-    (StatementEqual.test "int main() { int a = 42; int* b = &a; *b = a * 2; return a; }", 84),
-    (StatementEqual.test "int main() { int a = 42; int b = 5; return *(&b+1); }", 42),
-    (StatementEqual.test "int main() { int a = 42; int b = 5; *(&a-1) = 53; return b; }", 53),
-    (StatementEqual.test "int main() { int a = 42; int b = 5; *(&b+1) = 53; return a; }", 53),
-    (StatementEqual.test "int main() { int sum = 0; int i = 1; for (; i < 4; i = i + 1) sum = sum + i; return sum; }", 6),
-    (StatementEqual.test "int main() { int ar[2]; int* p = ar; *p = 3; return *ar; }", 3),
-    (StatementEqual.test "int main() { int ar[2]; int* p = ar; *(p + 1) = 3; return *(ar + 1); }", 3),
-    (StatementEqual.test "int main() { int ar[2]; int* p = ar; *p = 2; *(p + 1) = 3; return *ar + *(ar + 1); }", 5),
-    (StatementEqual.test "int main() { int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; return *ar; }", 1),
-    (StatementEqual.test "int main() { int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; return *(ar + 1); }", 2),
-    (StatementEqual.test "int main() { int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; return *(ar + 2); }", 3),
-    (StatementEqual.test "int f(int* p) { *p = 42; return 0; } int main() { int a = 0; f(&a); return a; }", 42),
-    (StatementEqual.test "int main() { int ar[10]; int i = 0; for (; i < 10; i = i + 1) { *(ar + i) = i; } int sum = 0; for (i = 0; i < 10; i = i + 1) { sum = sum + *(ar + i); } return sum; }", 45),
-    (StatementEqual.test "int sum(int* p, int n) { int sum = 0; int i = 0; for (; i < n; i = i + 1) sum = sum + *(p + i); return sum; } int main() { int ar[10]; int i = 0; for (; i < 10; i = i + 1) *(ar + i) = i; return sum(ar, 10); }", 45),
-    (StatementEqual.test "int main() { int ar[2][3]; int sum = 0; int i = 0; for (; i < 2; i = i + 1) { int j = 0; for (; j < 3; j = j + 1) { *(*(ar + i) + j) = i + j; sum = sum + *(*(ar + i) + j); } } return sum; } ", 9),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; *p = 42; return **ar; }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; *(p + 1) = 42; return *(*ar + 1); }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; *(p + 2) = 42; return *(*ar + 2); }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; *(p + 3) = 42; return **(ar + 1); }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; *(p + 4) = 42; return *(*(ar + 1) + 1); }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; *(p + 5) = 42; return *(*(ar + 1) + 2); }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; *(p + 6) = 42; return **(ar + 2); }", 42),
-    (StatementEqual.test "int main() { int ar[3]; int i = 0; for (; i < 3; i = i + 1) ar[i] = i; return ar[0]; }", 0),
-    (StatementEqual.test "int main() { int ar[3]; int i = 0; for (; i < 3; i = i + 1) ar[i] = i; return ar[1]; }", 1),
-    (StatementEqual.test "int main() { int ar[3]; int i = 0; for (; i < 3; i = i + 1) ar[i] = i; return ar[2]; }", 2),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[0] = 42; return ar[0][0]; }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[1] = 42; return ar[0][1]; }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[2] = 42; return ar[0][2]; }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[3] = 42; return ar[1][0]; }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[4] = 42; return ar[1][1]; }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[5] = 42; return ar[1][2]; }", 42),
-    (StatementEqual.test "int main() { int ar[2][3]; int* p = ar; p[6] = 42; return ar[2][0]; }", 42),
-    (StatementEqual.test "int main() { int a; return sizeof(a); }", fromIntegral $ sizeof CT.CTInt),
-    (StatementEqual.test "int main() { int a; return sizeof a; }", fromIntegral $ sizeof CT.CTInt),
-    (StatementEqual.test "int main() { int* p; return sizeof p; }", fromIntegral $ sizeof $ CT.CTPtr CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3]; return sizeof ar; }", fromIntegral $ sizeof $ CT.CTArray 3 CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof ar; }", fromIntegral $ sizeof $ CT.CTArray 5 $ CT.CTArray 3 CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof *ar; }", fromIntegral $ sizeof $ CT.CTArray 5 CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar; }", fromIntegral $ sizeof CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar) + 1; }", succ $ fromIntegral $ sizeof CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar + 1; }", succ $ fromIntegral $ sizeof CT.CTInt),
-    (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar + 1); }", fromIntegral $ sizeof $ CT.CTLong CT.CTInt),
-    (StatementEqual.test "int main() { int ar[2]; 2[ar] = 42; return ar[2]; }", 42),
-    (StatementEqual.test "int g; int main() { return g; }", 0),
-    (StatementEqual.test "int g; int main() { g = 42; return g; }", 42),
-    (StatementEqual.test "int gr[3]; int main() { int i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; return gr[0]; }", 1),
-    (StatementEqual.test "int gr[3]; int main() { int i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; return gr[1]; }", 2),
-    (StatementEqual.test "int gr[3]; int main() { int i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; return gr[2]; }", 3),
-    (StatementEqual.test "int main() { char c = 1; return c; }", 1),
-    (StatementEqual.test "int main() { char c1 = 1; char c2 = 2; return c1; }", 1),
-    (StatementEqual.test "int main() { char c1 = 1; char c2 = 2; return c2; }", 2),
-    (StatementEqual.test "int main() { char x; return sizeof x; }", 1),
-    (StatementEqual.test "int main() { char ar[10]; return sizeof ar; }", fromIntegral $ sizeof $ CT.CTArray 10 CT.CTChar),
-    (StatementEqual.test "int f(char a, char b, char c) { return a - b - c; } int main() { return f(7, 3, 3); }", 1),
-    (StatementEqual.test "int f(char a, int b, char c) { return a - b - c; } int main() { return f(7, 3, 3); }", 1),
-    (StatementEqual.test "int main() { return \"abc\"[0]; }", ord 'a'),
-    (StatementEqual.test "int main() { return \"abc\"[1]; }", ord 'b'),
-    (StatementEqual.test "int main() { return \"abc\"[2]; }", ord 'c'),
-    (StatementEqual.test "int main() { return \"abc\"[3]; }", 0),
-    (StatementEqual.test "int main() { char* p = \"abc\"; return p[2]; }", ord 'c'),
-    (StatementEqual.test "int main() { return sizeof \"abc\"; }", 4),
-    (StatementEqual.test "int main() { return \"\\a\"[0]; }", ord '\a'),
-    (StatementEqual.test "int main() { return \"\\b\"[0]; }", ord '\b'),
-    (StatementEqual.test "int main() { return \"\\t\"[0]; }", ord '\t'),
-    (StatementEqual.test "int main() { return \"\\n\"[0]; }", ord '\n'),
-    (StatementEqual.test "int main() { return \"\\v\"[0]; }", ord '\v'),
-    (StatementEqual.test "int main() { return \"\\f\"[0]; }", ord '\f'),
-    (StatementEqual.test "int main() { return \"\\r\"[0]; }", ord '\r'),
-    (StatementEqual.test "int main() { return \"\\e\"[0]; }", ord '\ESC'),
-    (StatementEqual.test "int main() { return \"\\\\0\"[0]; }", ord '\0'),
-    (StatementEqual.test "int main() { return \"\\j\"[0]; }", ord 'j'),
-    (StatementEqual.test "int main() { return \"\\k\"[0]; }", ord 'k'),
-    (StatementEqual.test "int main() { return \"\\l\"[0]; }", ord 'l'),
-    (StatementEqual.test "int main() { return ({ 42; }); }", 42),
-    (StatementEqual.test "int main() { return ({ 1; 2; 3; }); }", 3),
-    (StatementEqual.test "int main() { ({ 1; return 2; 3; }); return 4; }", 2),
-    (StatementEqual.test "int main() { return ({ int a = 42; a; }); }", 42),
-    (StatementEqual.test "int main() { /* return 0; */ return 42; }", 42),
-    (StatementEqual.test "int main() { // hoge\nreturn 42; }", 42),
-    (StatementEqual.test "int main() { int a = 42; { int a = 32; } return a; }", 42),
-    (StatementEqual.test "int main() { int a = 42; { int a = 32; } { int a = 53; return a; } return 42; }", 53),
-    (StatementEqual.test "int main() { int a = 42; { a = 32; } return a; }", 32),
-    (StatementEqual.test "int main() { int* ar[3]; int x; ar[0] = &x; x = 42; ar[0][0]; }", 42)
-    ] >> runTestsEx [
-    (LinkFuncStdOut.test "int test_func1(); int main() { return test_func1(); }" ["test_func1"], Right "test/Tests/csrc/test_func1.c::test_func1(): [OK]"),
-    (LinkFuncStdOut.test "int test_func2(); int main() { return test_func2(40); }" ["test_func2"], Right "test/Tests/csrc/test_func2.c::test_func2(40) outputs: \"2 3 5 7 11 13 17 19 23 29 31 37 \": [OK]") --,
-    -- (LinkFuncStdOut.test "int main() { return test_func2(sum7(1, 2, 3, 4, 5, 6, 7)); }" ["test_func2", "test_func3"], Right "test/Tests/csrc/test_func2.c::test_func2(28) outputs: \"2 3 5 7 11 13 17 19 23 \": [OK]")
+exec = runTestsEx
+    [ (StatementEqual.test "int main() { return 1+2; }", 3)
+    , (StatementEqual.test "int main() { return 1+2+4; }", 7)
+    , (StatementEqual.test "int main() { return 10-7+3; }", 6)
+    , (StatementEqual.test "int main() { return 42+23-30; }", 35)
+    , (StatementEqual.test "int main() { return 42/2+2-5; }", 18)
+    , (StatementEqual.test "int main() { return (3+5)/2; }", 4)
+    , (StatementEqual.test "int main() { return (4-2)*8+20/4; }",21)
+    , (StatementEqual.test "int main() { return -(-3*+5); }", 15)
+    , (StatementEqual.test "int main() { return -25+30; }", 5)
+    , (StatementEqual.test "int main() { return 42 == 42; }", 1)
+    , (StatementEqual.test "int main() { return 42 != 53; }", 1)
+    , (StatementEqual.test "int main() { return 42 < 53; }", 1)
+    , (StatementEqual.test "int main() { return 53 > 42; }", 1)
+    , (StatementEqual.test "int main() { return 42 <= 42; }", 1)
+    , (StatementEqual.test "int main() { return 32 <= 42; }", 1)
+    , (StatementEqual.test "int main() { return 42 >= 42; }", 1)
+    , (StatementEqual.test "int main() { return 53 >= 42; }", 1)
+    , (StatementEqual.test "int main() { return (1 + 1) == 2; }", 1)
+    , (StatementEqual.test "int main() { return (2 * 3) != 2; }", 1)
+    , (StatementEqual.test "int main() { return 1 || 0; }", 1)
+    , (StatementEqual.test "int main() { return (1 + 1) || 0 || 0; }", 1)
+    , (StatementEqual.test "int main() { return 0 || 0; }", 0)
+    , (StatementEqual.test "int main() { return 0 || (1 - 1); }", 0)
+    , (StatementEqual.test "int main() { return 2 || 1; }", 1)
+    , (StatementEqual.test "int main() { return 1 && 2; }", 1)
+    , (StatementEqual.test "int main() { return 2 && 3 && 4 && 0; }", 0)
+    , (StatementEqual.test "int main() { int a; a = 1; return a; }", 1)
+    , (StatementEqual.test "int main() { int a; int b; a = 42; b = 20; return a + b; }", 62)
+    , (StatementEqual.test "int main() { int a; int b; int c; a = 42; b = 20; c = 32; return (a - c) * b / 10; }", 20)
+    , (StatementEqual.test "int main() { int a; int b; a = 42; b = 20; return a - b; }", 22)
+    , (StatementEqual.test "int main() { int a; int returnb; a = 3; returnb = 5 * 6 - 8; return a + returnb / 2; }", 14)
+    , (StatementEqual.test "int main() { int a; int return_; a = 3; return_ = 5 * 6 - 8; return a + return_ / 2; }", 14)
+    , (StatementEqual.test "int main() { int a; int b; a /* comment */ = 3; b = 5 */*comment*/ 6 - 8; return a + b / 2; }", 14)
+    , (StatementEqual.test "int main() { if (1) return 42; return 53; }", 42)
+    , (StatementEqual.test "int main() { if (20*3-60) return 42; return 53; }", 53)
+    , (StatementEqual.test "int main() { int a; int b; a = 1; b = 2; if (a) return b; return 42; }", 2)
+    , (StatementEqual.test "int main() { if (1) return 42; else return 53; }", 42)
+    , (StatementEqual.test "int main() { if (0) return 42; else return 53; }", 53)
+    , (StatementEqual.test "int main() { int a; int b; a = 0; b = 2; if (a) return b; else return b * 2; }", 4)
+    , (StatementEqual.test "int main() { int a; int b; a = 1; b = 0; if (b) return 42; if (0) return 42; else return a; }", 1)
+    , (StatementEqual.test "int main() { int a; int b; a = 1; b = 2; if (a) if (b) return b; else return 53; else return 24; }", 2)
+    , (StatementEqual.test "int main() { if (1) if (1) if (1) if (1) if (1) if (0) return 1; else return 2; else return 3; else return 4; else return 5; else return 6; else return 7; }", 2)
+    , (StatementEqual.test "int main() { if(1)if(1)return 42;return 53; }", 42)
+    , (StatementEqual.test "int main() { if(0); return 0; }", 0)
+    , (StatementEqual.test "int main() { int a; a = 1; while (a < 10) a = a + 1; return a; }", 10)
+    , (StatementEqual.test "int main() { int a; int b; a = 1; while (a < 10) a = a + 1; b = 1; while (b < 20) b = b + 2; return a + b; }", 31)
+    , (StatementEqual.test "int main() { int a; a = 0; while (a); return 0; }", 0)
+    , (StatementEqual.test "int main() { int a; int i; a = 0; i = 0; for (i = 1; i <= 10; i = i + 1) a = a + i * 2; return a; }", 110)
+    , (StatementEqual.test "int main() { int i; i = 0; for (; i <= 10;) i = i + 2; return i; }", 12)
+    , (StatementEqual.test "int main() { int i; i = 0; for (; i <= 10; i = i + 2);  return i; }", 12)
+    , (StatementEqual.test "int main() { int a; int i; a = 0; i = 0; for (i = 0; i < 10; i = i + 1) if (a) a = 0; else a = 1; return a; }", 0)
+    , (StatementEqual.test "int main() { int a; int b; a = 1; b = 1; return a & b; }", 1)
+    , (StatementEqual.test "int main() { int a; int b; a = 42; b = 53; a = a ^ b; b = b ^ a; a = a ^ b; if (a == 53) if (b == 42) return 1; return 0; }", 1)
+    , (StatementEqual.test "int main() { return 1 | 0; }", 1)
+    , (StatementEqual.test "int main() { int a; int b; a = 1; b = 0; return a & b ^ a | b; }", 1) -- Xor swap
+    , (StatementEqual.test "int main() { int a; int i; a = 0; i = 0; for (i = 0; i < 10; i = i + 1) if (i % 2 == 0) a = a + i; return a; }", 20)
+    , (StatementEqual.test "int main() { int a; int i; a = 0; i = 0; for (i = 0; i < 10; i = i + 1) { a = a + i; a = a - i; } return a; }", 0)
+    , (StatementEqual.test "int main() { int a; a = 10; if (a) { a = a * a; a = a / 10; } return a; }", 10)
+    , (StatementEqual.test "int main() { int a; a = 0; while (1) { if (a < 10) a = a + 1; else return a; } }", 10)
+    , (StatementEqual.test "int main() { int a; a = 0; for (;;) { a = 42; return a; } return a; }", 42)
+    , (StatementEqual.test "int main() { int a; a = 0; for (;;) { if (a < 10) a = a + 1; else return a; } }", 10)
+    , (LinkFuncRet.test "int main() { int a; a = test_func1(); test_func1(); return a; }" ["test_func1"], 0)
+    , (LinkFuncRet.test "int main() { return test_func2(40); }" ["test_func2"], 0)
+    , (LinkFuncRet.test "int main() { return test_func5(1, 2); }" ["test_func5"], 3)
+    , (StatementEqual.test "long sum7(long a, long b, long c, long d, long e, long f, long g) { return a + b + c + d + e + f + g; } int main(void) { return sum7(1, 2, 3, 4, 5, 6, 7) - 28; }", 0)
+    , (StatementEqual.test "long last7(long a, long b, long c, long d, long e, long f, long g) { return g; } int main(void) { return last7(1, 2, 3, 4, 5, 6, 7) - 7; }", 0)
+    , (StatementEqual.test "long g(void) { return 7; } long sum8(long a, long b, long c, long d, long e, long f, long g_, long h) { return g_ + h; } int main(void) { return sum8(1, 2, 3, 4, 5, 6, g(), 8) - 15; }", 0)
+    , (StatementEqual.test "long pick9(long a, long b, long c, long d, long e, long f, long g, long h, long i) { return g * 100 + h * 10 + i; } int main(void) { return pick9(1, 2, 3, 4, 5, 6, 7, 8, 9) - 789; }", 0)
+    , (LinkFuncRet.test "long sum7(long, long, long, long, long, long, long); int main(void) { long (*fp)(long, long, long, long, long, long, long); fp = sum7; return fp(1, 2, 3, 4, 5, 6, 7) - 28; }" ["test_func3"], 0)
+    , (StatementEqual.test "long sum7(long a, long b, long c, long d, long e, long f, long g) { return a + b + c + d + e + f + g; } int main(void) { long (*fp)(long, long, long, long, long, long, long); fp = sum7; return fp(1, 2, 3, 4, 5, 6, 7) - 28; }", 0)
+    , (StatementEqual.test "long last7(long a, long b, long c, long d, long e, long f, long g) { return g; } int main(void) { long (*fp)(long, long, long, long, long, long, long); fp = last7; return fp(1, 2, 3, 4, 5, 6, 7) - 7; }", 0)
+    , (StatementEqual.test "long g(void) { return 7; } long sum8(long a, long b, long c, long d, long e, long f, long g_, long h) { return g_ + h; } int main(void) { long (*fp)(long, long, long, long, long, long, long, long); fp = sum8; return fp(1, 2, 3, 4, 5, 6, g(), 8) - 15; }", 0)
+    , (StatementEqual.test "long pick9(long a, long b, long c, long d, long e, long f, long g, long h, long i) { return g * 100 + h * 10 + i; } int main(void) { long (*fp)(long, long, long, long, long, long, long, long, long); fp = pick9; return fp(1, 2, 3, 4, 5, 6, 7, 8, 9) - 789; }", 0)
+    , (StatementEqual.test "int helper(void) { return 7; } int main(void) { int (*fp)(void) = helper; int (*gp)(void); gp = *fp; return gp != helper; }", 0)
+    , (StatementEqual.test "int helper(void) { return 7; } int main(void) { int (*fp)(void) = helper; return *fp != helper; }", 0)
+    , (StatementEqual.test "int helper(void) { return 42; } int main(void) { int a[4]; return sizeof(0, a) != sizeof(int*) || (0, helper)() != 42; }", 0)
+    , (StatementEqual.test "int main(void) { int x; x = 0; x = (1, 2); return x - 2; }", 0)
+    , (StatementEqual.test "int x[]; int *f(void) { return x; } int main(void) { x[0] = 1; return f() != x || x[0] != 1; }", 0)
+    , (StatementEqual.test "int f() { return 42; } int main() { return f(); }", 42)
+    , (StatementEqual.test "int g() { return 42; } int f() { return g(); } int main() { return f(); }", 42)
+    , (StatementEqual.test "int main(void) { int f(void); return f(); } int f(void) { return 42; }", 42)
+    , (StatementEqual.test "_Bool f(void) { return 2; } int main(void) { return f() != 1; }", 0)
+    , (StatementEqual.test "_Bool f(int x) { return x; } int main(void) { return f(256) != 1; }", 0)
+    , (StatementEqual.test "_Bool f(void) { return 2; } int main(void) { _Bool (*fp)(void); fp = f; return fp() != 1; }", 0)
+    , (StatementEqual.test "_Bool f(int x) { return x; } int main(void) { _Bool (*fp)(int); fp = f; return fp(256) != 1; }", 0)
+    , (StatementEqual.test "int main(void) { _Bool b; _Bool c; b = 1; c = 1; return sizeof(b + c) - 4; }", 0)
+    , (StatementEqual.test "int main(void) { _Bool b; b = 1; return sizeof(+b) - 4; }", 0)
+    , (StatementEqual.test "int main(void) { _Bool b; b = 1; return sizeof(-b) - 4; }", 0)
+    , (LinkFuncRet.test "int test_bool_arg(_Bool); int main(void) { return test_bool_arg(256) - 1; }" ["test_bool_arg"], 0)
+    , (LinkFuncRet.test "int test_bool_arg(_Bool); int main(void) { int (*fp)(_Bool); fp = test_bool_arg; return fp(256) - 1; }" ["test_bool_arg"], 0)
+    , (LinkFuncRet.test "int test_bool_arg(); int main(void) { return test_bool_arg(256); }" ["test_bool_arg"], 0)
+    , (AsmOutput.externalBoolLowByteNormalizationTest, 0)
+    , (AsmOutput.externalBoolParameterLowByteNormalizationTest, 0)
+    , (AsmOutput.externalIntegralReturnNormalizationTest, 0)
+    , (StatementEqual.test "int foo = 2; int main(void) { int foo = 1; { extern int foo; return foo; } }", 2)
+    , (StatementEqual.test "static int foo(void) { return 3; } int main(void) { extern int foo(void); return foo(); }", 3)
+    , (StatementEqual.test "static int x = 4; int main(void) { extern int x; return x; }", 4)
+    , (StatementEqual.test "typedef int Row[2]; int f(void) { extern Row rows[]; return rows[0][1]; } Row rows[] = {{1, 2}}; int main(void) { return f() - 2; }", 0)
+    , (StatementEqual.test "typedef int Row[2]; Row rows[] = {{1, 2}}; int f(void) { extern Row rows[]; return rows[0][0] + rows[0][1]; } int main(void) { return f() - 3; }", 0)
+    , (StatementEqual.test "struct S { int a; }; typedef struct S T; int main(void) { T; return sizeof(struct S) - sizeof(int); }", 0)
+    , (StatementEqual.test "typedef struct S T; struct S { int a; }; T foo(void); int main(void) { return sizeof(foo()) - sizeof(int); }", 0)
+    , (StatementEqual.test "typedef struct S T; struct S { int a; }; int main(void) { extern T arr[1]; return sizeof arr / sizeof arr[0] - 1; }", 0)
+    , (StatementEqual.test "extern struct S (*p)[1]; struct S { int a; }; int main(void) { return sizeof(**p) - sizeof(int); }", 0)
+    , (StatementEqual.test "struct S { int a[2]; }; struct S make(void) { struct S x; x.a[0] = 3; x.a[1] = 7; return x; } int main(void) { return (make().a + 1)[0]; }", 7)
+    , (StatementEqual.test "int id(int a) { return a; } int main() { int a; a = 1; return id(a-1) + id(1); }", 1)
+    , (StatementEqual.test "int get1() { return 1; } int get2() { return 2; } int main() { int a; a = get1(); return a + get2(); }", 3)
+    , (StatementEqual.test "int add(int a, int b) { return a + b; } int main() { return add(1, 2); }", 3)
+    , (StatementEqual.test "int rec(int a) { if (a == 0) return 42; return rec(a - 1); } int main() { int b; b = rec(2); return 1 + 2; }", 3)
+    , (StatementEqual.test "int fib(int n) { if (n == 0) return 1; else if (n == 1) return 1; else if (n >= 2) return fib(n - 1) + fib(n - 2); else return 0; } int main() { return fib(5); }", 8) -- fibonacci number
+    , (StatementEqual.test "int main() { int a; int* b; a = 42; b = &a; return a; }", 42)
+    , (StatementEqual.test "int main() { int a; a = 42; return *&a; }", 42)
+    , (StatementEqual.test "int f(int) { return 42; } int main() { int; int a; a = f(0); return a; }", 42)
+    , (StatementEqual.test "int main() { int a; a = 42; int* b; b = &a; int** c; c = &b; return **c; }", 42)
+    , (StatementEqual.test "int main() { int a; a = 42; int* b; b = &a; *b = a * 2; return a; }", 84)
+    , (StatementEqual.test "int main() { int a; a = 42; int b; b = 5; return *(&b+1); }", 42)
+    , (StatementEqual.test "int main() { int a; a = 42; int b; b = 5; *(&a-1) = 53; return b; }", 53)
+    , (StatementEqual.test "int main() { int a; a = 42; int b; b = 5; *(&b+1) = 53; return a; }", 53)
+    , (StatementEqual.test "int main() { int sum; sum = 0; int i; i = 1; for (; i < 4; i = i + 1) sum = sum + i; return sum; }", 6)
+    , (StatementEqual.test "int main() { int a; return sizeof(a); }", fromIntegral $ sizeof CT.CTInt)
+    , (StatementEqual.test "int main() { int a; return sizeof a; }", fromIntegral $ sizeof CT.CTInt)
+    , (StatementEqual.test "int main() { int* p; return sizeof p; }", fromIntegral $ sizeof $ CT.CTPtr CT.CTInt)
+    , (StatementEqual.test "int main() { return sizeof(int); }", fromIntegral $ sizeof CT.CTInt)
+    , (StatementEqual.test "int main() { int ar[10]; return 0; }", 0)
+    , (StatementEqual.test "int main() { int ar[1+2/1]; return 0; }", 0)
+    , (StatementEqual.test "int main() { int ar[10][1+2/1]; return 0; }", 0)
+    , (StatementEqual.test "int f(int[10]) { return 42; } int main() { int ar[10]; return f(ar); }", 42)
+    , (StatementEqual.test "int f(int ar[10]) { return 42; } int main() { int ar[10]; return f(ar); }", 42)
+    , (StatementEqual.test "int main() { int ar[2]; int* p; p = ar; *p = 3; return *ar; }", 3)
+    , (StatementEqual.test "int main() { int ar[2]; int* p; p = ar; *(p + 1) = 3; return *(ar + 1); }", 3)
+    , (StatementEqual.test "int main() { int ar[2]; int* p; p = ar; *p = 2; *(p + 1) = 3; return *ar + *(ar + 1); }", 5)
+    , (StatementEqual.test "int main() { int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; return *ar; }", 1)
+    , (StatementEqual.test "int main() { int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; return *(ar + 1); }", 2)
+    , (StatementEqual.test "int main() { int ar[3]; *ar = 1; *(ar + 1) = 2; *(ar + 2) = 3; return *(ar + 2); }", 3)
+    , (StatementEqual.test "int f(int* p) { *p = 42; return 0; } int main() { int a; a = 0; f(&a); return a; }", 42)
+    , (StatementEqual.test "int main() { int ar[10]; int i; i = 0; for (; i < 10; i = i + 1) { *(ar + i) = i; } int sum; sum = 0; for (i = 0; i < 10; i = i + 1) { sum = sum + *(ar + i); } return sum; }", 45)
+    , (StatementEqual.test "int sum(int* p, int n) { int sum; sum = 0; int i; i = 0; for (; i < n; i = i + 1) sum = sum + *(p + i); return sum; } int main() { int ar[10]; int i; i = 0; for (; i < 10; i = i + 1) *(ar + i) = i; return sum(ar, 10); }", 45)
+    , (StatementEqual.test "int main() { int ar[2][3]; int sum; sum = 0; int i; i = 0; for (; i < 2; i = i + 1) { int j; j = 0; for (; j < 3; j = j + 1) { *(*(ar + i) + j) = i + j; sum = sum + *(*(ar + i) + j); } } return sum; } ", 9)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = (int*)ar; *p = 42; return **ar; }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = (int*)ar; *(p + 1) = 42; return *(*ar + 1); }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = (int*)ar; *(p + 2) = 42; return *(*ar + 2); }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = (int*)ar; *(p + 3) = 42; return **(ar + 1); }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = (int*)ar; *(p + 4) = 42; return *(*(ar + 1) + 1); }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = (int*)ar; *(p + 5) = 42; return *(*(ar + 1) + 2); }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = (int*)ar; *(p + 6) = 42; return **(ar + 2); }", 42)
+    , (StatementEqual.test "int main() { int ar[3]; int i; i = 0; for (; i < 3; i = i + 1) ar[i] = i; return ar[0]; }", 0)
+    , (StatementEqual.test "int main() { int ar[3]; int i; i = 0; for (; i < 3; i = i + 1) ar[i] = i; return ar[1]; }", 1)
+    , (StatementEqual.test "int main() { int ar[3]; int i; i = 0; for (; i < 3; i = i + 1) ar[i] = i; return ar[2]; }", 2)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = (int*)ar; p[0] = 42; return ar[0][0]; }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = (int*)ar; p[1] = 42; return ar[0][1]; }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = (int*)ar; p[2] = 42; return ar[0][2]; }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = (int*)ar; p[3] = 42; return ar[1][0]; }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = (int*)ar; p[4] = 42; return ar[1][1]; }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = (int*)ar; p[5] = 42; return ar[1][2]; }", 42)
+    , (StatementEqual.test "int main() { int ar[2][3]; int* p; p = (int*)ar; p[6] = 42; return ar[2][0]; }", 42)
+    , (StatementEqual.test "int main() { char x[3]; char (*y)[3] = &x; y[0][0] = 4; return y[0][0]; }", 4)
+    , (StatementEqual.test "int main() { int a[][2] = {1, 2, 3, 4}; return sizeof a / sizeof a[0]; }", 2)
+    , (StatementEqual.test "int main(void) { int x[4]; int (*p)[] = (int (*)[])&x; int *q = *p; q[1] = 7; return (*p)[1]; }", 7)
+    , (StatementEqual.test "int main() { int a; return sizeof(a); }", fromIntegral $ sizeof CT.CTInt)
+    , (StatementEqual.test "int main() { int a; return sizeof a; }", fromIntegral $ sizeof CT.CTInt)
+    , (StatementEqual.test "int main() { int* p; return sizeof p; }", fromIntegral $ sizeof $ CT.CTPtr CT.CTInt)
+    , (StatementEqual.test "int main() { int ar[3]; return sizeof ar; }", fromIntegral $ sizeof $ CT.CTArray 3 CT.CTInt)
+    , (StatementEqual.test "int main() { int ar[3][5]; return sizeof ar; }", fromIntegral $ sizeof $ CT.CTArray 5 $ CT.CTArray 3 CT.CTInt)
+    , (StatementEqual.test "int main() { int ar[3][5]; return sizeof *ar; }", fromIntegral $ sizeof $ CT.CTArray 5 CT.CTInt)
+    , (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar; }", fromIntegral $ sizeof CT.CTInt)
+    , (StatementEqual.test "int main(void) { struct S { int a[3]; } s; return sizeof(s.a + 1); }", fromIntegral $ sizeof $ CT.CTPtr CT.CTInt)
+    , (StatementEqual.test "int main(void) { struct S { int a[3]; } s; return sizeof(s.a - 1); }", fromIntegral $ sizeof $ CT.CTPtr CT.CTInt)
+    , (StatementEqual.test "int main(void) { struct S { int a[3]; } s; return sizeof(s.a - s.a); }", fromIntegral $ sizeof $ CT.CTLong CT.CTInt)
+    , (StatementEqual.test "int main(void) { struct S { int a[3]; } s; return _Alignof(s.a + 1); }", fromIntegral $ alignof $ CT.CTPtr CT.CTInt)
+    , (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar) + 1; }", succ $ fromIntegral $ sizeof CT.CTInt)
+    , (StatementEqual.test "int main() { int ar[3][5]; return sizeof **ar + 1; }", succ $ fromIntegral $ sizeof CT.CTInt)
+    , (StatementEqual.test "int main() { int ar[3][5]; return sizeof(**ar + 1); }", fromIntegral $ sizeof $ CT.CTLong CT.CTInt)
+    , (StatementEqual.test "int main() { int ar[2]; 2[ar] = 42; return ar[2]; }", 42)
+    , (StatementEqual.test "int g; int main() { return g; }", 0)
+    , (StatementEqual.test "int g; int main() { g = 42; return g; }", 42)
+    , (StatementEqual.test "int g = 42; int main() { return g; }", 42)
+    , (StatementEqual.test "int g = (char)0x1234; int main() { return g; }", 52)
+    , (StatementEqual.test "int g = (char)0xff; int main() { return g == -1; }", 1)
+    , (StatementEqual.test "int g[] = {1, 2}; int main() { return sizeof g / sizeof g[0] + g[1]; }", 4)
+    , (StatementEqual.test "typedef int Row[2]; extern Row rows[]; Row rows[] = {{1, 2}}; int main(void) { return sizeof rows / sizeof rows[0] != 1 || rows[0][0] != 1 || rows[0][1] != 2; }", 0)
+    , (StatementEqual.test "char s[] = \"x\"; int main() { return s[0] + s[1]; }", ord 'x')
+    --, (StatementEqual.test "int g = 42; int h = g; int main() { return h; }", 42)
+    , (StatementEqual.test "int g = 42; int* h = &g; int main() { return *h; }", 42)
+    , (StatementEqual.test "int gr[3]; int main() { int i; i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; return gr[0]; }", 1)
+    , (StatementEqual.test "int gr[3]; int main() { int i; i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; return gr[1]; }", 2)
+    , (StatementEqual.test "int gr[3]; int main() { int i; i = 0; for (; i < sizeof gr / sizeof gr[0]; i = i + 1) gr[i] = i + 1; return gr[2]; }", 3)
+    , (StatementEqual.test "int main() { char c; c = 1; return c; }", 1)
+    , (StatementEqual.test "int main() { char c1; c1 = 1; char c2; c2 = 2; return c1; }", 1)
+    , (StatementEqual.test "int main() { char c1; c1 = 1; char c2; c2 = 2; return c2; }", 2)
+    , (StatementEqual.test "int main() { char x; return sizeof x; }", 1)
+    , (StatementEqual.test "int main() { char ar[10]; return sizeof ar; }", fromIntegral $ sizeof $ CT.CTArray 10 CT.CTChar)
+    , (StatementEqual.test "int f(char a, char b, char c) { return a - b - c; } int main() { return f(7, 3, 3); }", 1)
+    , (StatementEqual.test "int f(char a, int b, char c) { return a - b - c; } int main() { return f(7, 3, 3); }", 1)
+    , (StatementEqual.test "int main() { return \"abc\"[0]; }", ord 'a')
+    , (StatementEqual.test "int main() { return \"abc\"[1]; }", ord 'b')
+    , (StatementEqual.test "int main() { return \"abc\"[2]; }", ord 'c')
+    , (StatementEqual.test "int main() { return \"abc\"[3]; }", 0)
+    , (StatementEqual.test "int main() { char* p; p = \"abc\"; return p[2]; }", ord 'c')
+    , (StatementEqual.test "int main() { return sizeof \"abc\"; }", 4)
+    , (StatementEqual.test "int main() { return \"\\a\"[0]; }", ord '\a')
+    , (StatementEqual.test "int main() { return \"\\b\"[0]; }", ord '\b')
+    , (StatementEqual.test "int main() { return \"\\t\"[0]; }", ord '\t')
+    , (StatementEqual.test "int main() { return \"\\n\"[0]; }", ord '\n')
+    , (StatementEqual.test "int main() { return \"\\v\"[0]; }", ord '\v')
+    , (StatementEqual.test "int main() { return \"\\f\"[0]; }", ord '\f')
+    , (StatementEqual.test "int main() { return \"\\r\"[0]; }", ord '\r')
+    , (StatementEqual.test "int main() { return \"\\e\"[0]; }", ord '\ESC')
+    , (StatementEqual.test "int main() { return \"\\0\"[0]; }", ord '\0')
+    , (StatementEqual.test "int main() { return !0; }", 1)
+    , (StatementEqual.test "int main() { return !42; }", 0)
+    , (StatementEqual.test "int main() { return !!!0; }", 1)
+    , (StatementEqual.test "int main() { return ~(-42); }", 41)
+    , (StatementEqual.test "int main() { return ~~~~42; }", 42)
+    , (StatementEqual.test "int main() { return (2 * 4) == (2 << 2); }", 1)
+    , (StatementEqual.test "int main() { return (8 / 4) == (8 >> 2); }", 1)
+    , (StatementEqual.test "int main() { int a; a = 2 << 4; return (a & (a - 1)) == 0; }", 1) -- Determining if an integer is a power of 2
+    , (StatementEqual.test "int main() { int a; a = 1; { int a; a = 42; } return a; }", 1)
+    , (StatementEqual.test "int main() { int a; a = 1; if (1) { int a; a = 42; } return a; }", 1)
+    , (StatementEqual.test "int main() { 1; {2;} return 3; }", 3)
+    , (StatementEqual.test "int main() { return ({ 42; }); }", 42)
+    , (StatementEqual.test "int main() { return ({ 1; 2; 3; }); }", 3)
+    , (StatementEqual.test "int main() { ({ 1; return 2; 3; }); return 4; }", 2)
+    , (StatementEqual.test "int main() { return ({ int a; a = 42; a; }); }", 42)
+    , (StatementEqual.test "int main() { /* return 0; */ return 42; }", 42)
+    , (StatementEqual.test "int main() { // hoge\nreturn 42; }", 42)
+    , (StatementEqual.test "#include <stdio.h>\nint main(void) { return 42; }", 42)
+    , (StatementEqual.test "int main(void) { return 0b101; }", 5)
+    , (StatementEqual.test "int main(void) { return 'ab' == 0x6162; }", 1)
+    , (StatementEqual.test "int main() { int a; a = 42; { int a; a = 32; } return a; }", 42)
+    , (StatementEqual.test "int main() { int a; a = 42; { int a; a = 32; } { int a; a = 53; return a; } return 42; }", 53)
+    , (StatementEqual.test "int main() { int a; a = 42; { a = 32; } return a; }", 32)
+    , (StatementEqual.test "int main() { int* ar[3]; int x; ar[0] = &x; x = 42; ar[0][0]; }", 42)
+    , (StatementEqual.test "int main() { int a = 42; return ({ a; }); }", 42)
+    , (StatementEqual.test "int main() { return ({ int a = 42; int b = 1; a + b; }); }", 43)
+    , (StatementEqual.test "int main() { int x = {1}; return x; }", 1)
+    , (StatementEqual.test "int main() { char* p = {\"x\"}; return p[0]; }", ord 'x')
+    ] *> runTestsEx
+    [ (LinkFuncStdOut.test "int test_func1(); int main() { return test_func1(); }" ["test_func1"], Right "test/Tests/csrc/externals/test_func1.c::test_func1(): [OK]")
+    , (LinkFuncStdOut.test "int test_func2(); int main() { return test_func2(40); }" ["test_func2"], Right "test/Tests/csrc/externals/test_func2.c::test_func2(40) outputs: \"2 3 5 7 11 13 17 19 23 29 31 37 \": [OK]")
+    , (AsmOutput.outputFileTest, Right "CLI -o writes complete asm to the requested file")
+    , (AsmOutput.outputFileLegacyLongAliasTest, Right "CLI --out remains accepted as a legacy alias for --output")
+    , (AsmOutput.visualizeAstLegacyFlagsTest, Right "CLI --visualize-ast with --img-resolution still renders SVG output")
+    , (AsmOutput.visualizeAstPreservesParsedForSectionsTest, Right "CLI --visualize-ast renders the parsed AST for omitted for-loop sections")
+    , (AsmOutput.visualizeAstAcceptsAsmNormalizationFailureTest, Right "CLI --visualize-ast still renders parseable inputs even when asm normalization would fail")
+    , (AsmOutput.visualizeAstRejectsNonFiniteResolutionTest, Right "CLI --visualize-ast rejects non-finite --img-resolution values and falls back to the default size")
+    , (AsmOutput.visualizeAstRejectsNonPositiveResolutionTest, Right "CLI --visualize-ast rejects non-positive --img-resolution values and falls back to the default size")
+    , (AsmOutput.visualizeAstRejectsDeclarationOnlyInputTest, Right "CLI --visualize-ast rejects declaration-only inputs that produce no renderable AST")
+    , (AsmOutput.visualizeAstRejectsNonSvgOutputTest, Right "CLI --visualize-ast rejects non-SVG output paths before rendering")
+    , (AsmOutput.visualizeAstAcceptsSymlinkAliasToSvgTargetTest, Right "CLI --visualize-ast accepts symlink aliases that resolve to SVG targets")
+    , (AsmOutput.visualizeAstRejectsSymlinkedNonSvgOutputTest, Right "CLI --visualize-ast rejects symlinked outputs whose resolved target is not SVG")
+    , (AsmOutput.imgResolutionRequiresVisualizeAstTest, Right "CLI rejects --img-resolution unless --visualize-ast is also enabled")
+    , (AsmOutput.visualizeAstDefaultOutputSamePathTest, Right "CLI --visualize-ast rejects the default out.svg path when it aliases the input")
+    , (AsmOutput.visualizeAstDefaultOutputMissingInputTest, Right "CLI --visualize-ast reports missing out.svg inputs instead of misclassifying them as output collisions")
+    , (AsmOutput.visualizeAstSingleInputImplicitFunctionDefinitionWarningTest, Right "CLI --visualize-ast keeps same-file implicit-function warnings even when a later definition resolves the call")
+    , (AsmOutput.visualizeAstSingleInputPrototypeRetypeTest, Right "CLI --visualize-ast revalidates same-file direct calls after later prototype refinements")
+    , (AsmOutput.visualizeAstUsesMergedTentativeArrayTypeTest, Right "CLI --visualize-ast renders merge-refined tentative array types instead of stale parsed nodes")
+    , (AsmOutput.suppressWarnsCanonicalFlagTest, Right "CLI --suppress-warns suppresses parser warnings with the canonical spelling")
+    , (AsmOutput.suppressWarnsLegacyFlagTest, Right "CLI --supress-warns still suppresses parser warnings")
+    , (AsmOutput.suppressWarnsRunAsmTest, Right "CLI --suppress-warns suppresses HTCC_ASSEMBLER warnings in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmSuppressesStdoutWarningsTest, Right "CLI --suppress-warns suppresses HTCC_ASSEMBLER warnings emitted on stdout in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmPreservesBinaryOutputTest, Right "CLI --suppress-warns preserves non-UTF-8 HTCC_ASSEMBLER output in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmPreservesUnterminatedStderrTest, Right "CLI --suppress-warns preserves unterminated HTCC_ASSEMBLER stderr when no warning matches in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmPreservesStdoutStderrInterleavingTest, Right "CLI --suppress-warns preserves HTCC_ASSEMBLER stdout/stderr interleaving when no warnings are removed in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmPreservesSameReadStdoutInterleavingTest, Right "CLI --suppress-warns preserves stderr between same-read stdout lines in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmPreservesSameReadStderrChunksTest, Right "CLI --suppress-warns preserves same-read stderr lines before later stdout in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmScopesRetainedIndicesByStreamTest, Right "CLI --suppress-warns keeps retained chunk indices scoped by stream in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmDropsSplitWarningWithInterleavedStdoutTest, Right "CLI --suppress-warns drops HTCC_ASSEMBLER warnings even when stderr warning lines are split around interleaved stdout in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmDropsSplitWarningPrefixTest, Right "CLI --suppress-warns drops HTCC_ASSEMBLER warnings even when the diagnostic prefix reaches warning: only after a later pipe read in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmPreservesUnmatchedCrossStreamWarningContextTest, Right "CLI --suppress-warns preserves unmatched cross-stream HTCC_ASSEMBLER warning context in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmPreservesStdoutPrefixBeforeStderrTest, Right "CLI --suppress-warns preserves non-newline stdout bytes before later stderr in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmPreservesStderrPrefixBeforeStdoutTest, Right "CLI --suppress-warns preserves non-newline stderr bytes before later stdout in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmDropsWarningPreambleTest, Right "CLI --suppress-warns drops HTCC_ASSEMBLER include-stack warning preambles in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmDropsAnsiWarningPreambleTest, Right "CLI --suppress-warns drops ANSI-colored HTCC_ASSEMBLER warning preambles in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmDropsLeadingNoteTest, Right "CLI --suppress-warns drops leading HTCC_ASSEMBLER note lines that precede warnings in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmDropsDriverContextTest, Right "CLI --suppress-warns drops GCC/as warning context lines in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmDropsClangSnippetTest, Right "CLI --suppress-warns drops clang-style warning snippets in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmDropsMultiLineClangSnippetTest, Right "CLI --suppress-warns drops multi-line clang-style warning snippets in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmDropsSnippetOnlyContextTest, Right "CLI --suppress-warns preserves snippet-like HTCC_ASSEMBLER stderr when no annotation follows in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmDropsCrLfWarningBlockTest, Right "CLI --suppress-warns drops CRLF-terminated HTCC_ASSEMBLER warning blocks in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmPreservesStandaloneLeadingNoteTest, Right "CLI --suppress-warns preserves standalone HTCC_ASSEMBLER notes that precede later warnings in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmPreservesIndentedPostWarningStderrTest, Right "CLI --suppress-warns preserves unrelated indented stderr after HTCC_ASSEMBLER warnings in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmPreservesPunctuatedPostWarningStderrTest, Right "CLI --suppress-warns preserves unrelated stderr containing punctuation or brace terminators after HTCC_ASSEMBLER warnings in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmPreservesDirectivePostWarningStderrTest, Right "CLI --suppress-warns preserves directive-like stderr after HTCC_ASSEMBLER warnings in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmDropsStandalonePreSummaryNoteTest, Right "CLI --suppress-warns drops standalone HTCC_ASSEMBLER notes that appear before a later warning summary in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmPreservesStandalonePostWarningNoteTest, Right "CLI --suppress-warns preserves standalone post-warning notes in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmPreservesStandalonePostWarningNoteWithoutSummaryTest, Right "CLI --suppress-warns preserves standalone post-warning notes after GCC-style warnings without a trailing summary in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmPreservesErrorSnippetContainingWarningTokenTest, Right "CLI --suppress-warns keeps real error snippets even when source lines contain the token warning:")
+    , (AsmOutput.suppressWarnsRunAsmPreservesWarningLabelErrorSnippetTest, Right "CLI --suppress-warns keeps real error snippets even when source lines begin with warning:")
+    , (AsmOutput.suppressWarnsRunAsmPreservesFailingDiagnosticsTest, Right "CLI --suppress-warns preserves HTCC_ASSEMBLER diagnostics when -r fails")
+    , (AsmOutput.suppressWarnsRunAsmPreservesFailingDiagnosticsWithInheritedPipeHandlesTest, Right "CLI --suppress-warns preserves failing HTCC_ASSEMBLER diagnostics when inherited pipe holders remain open")
+    , (AsmOutput.runAsmFailureTerminatesInheritedPipeHoldersTest, Right "CLI -r terminates failing HTCC_ASSEMBLER inherited pipe holders after preserving delayed diagnostics")
+    , (AsmOutput.runAsmFailureIgnoresEscapedInheritedPipeHoldersTest, Right "CLI -r bounds failing HTCC_ASSEMBLER pipe holders that escape the process group")
+    , (AsmOutput.suppressWarnsRunAsmPreservesErrorPreambleAfterWarningTest, Right "CLI --suppress-warns preserves error preambles that follow suppressed HTCC_ASSEMBLER warnings in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmDoesNotHangOnInheritedPipeHandlesTest, Right "CLI --suppress-warns -r returns even when an HTCC_ASSEMBLER wrapper leaves inherited pipe handles open after exit")
+    , (AsmOutput.suppressWarnsRunAsmTerminatesFailureInheritedPipeHoldersTest, Right "CLI --suppress-warns -r terminates failing HTCC_ASSEMBLER inherited pipe holders after draining diagnostics")
+    , (AsmOutput.suppressWarnsRunAsmWaitsForClosedStdioFinalMutationTest, Right "CLI --suppress-warns -r waits for closed-stdio HTCC_ASSEMBLER helpers before publishing final output")
+    , (AsmOutput.suppressWarnsRunAsmStreamsRetainedStdoutPromptTest, Right "CLI --suppress-warns streams retained HTCC_ASSEMBLER stdout before the wrapped assembler exits in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmStreamsRetainedStdoutPromptWithoutNewlineTest, Right "CLI --suppress-warns streams retained HTCC_ASSEMBLER stdout without a trailing newline before the wrapped assembler exits in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmStreamsRetainedStdoutAcrossPendingStderrTest, Right "CLI --suppress-warns streams retained HTCC_ASSEMBLER stdout even while earlier unterminated stderr remains pending in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmSuppressesProbeCrossStreamWarningPreambleTest, Right "CLI --suppress-warns keeps HTCC_ASSEMBLER target probes working when warning preambles are split across stdout and stderr")
+    , (AsmOutput.suppressWarnsRunAsmSuppressesProbePartialCrossStreamWarningPreambleTest, Right "CLI --suppress-warns keeps HTCC_ASSEMBLER target probes working when an earlier partial warning preamble completes on another stream only at EOF")
+    , (AsmOutput.suppressWarnsRunAsmProbeClosesStdinTest, Right "CLI --suppress-warns closes stdin for HTCC_ASSEMBLER metadata probes in -r mode")
+    , (AsmOutput.suppressWarnsRunAsmPreservesStdinForRealInvocationsTest, Right "CLI --suppress-warns preserves stdin for real HTCC_ASSEMBLER invocations in -r mode")
+    , (AsmOutput.outputFileSingleInputStaticTest, Right "CLI -o preserves internal-linkage symbols for single-input outputs")
+    , (AsmOutput.outputFileSingleInputImplicitFunctionTest, Right "CLI -o keeps single-input implicit function calls on the standalone code path")
+    , (AsmOutput.outputFileSingleInputImplicitFunctionConflictTest, Right "CLI -o rejects single-input implicit-function/global collisions on the standalone code path")
+    , (AsmOutput.outputFileSingleInputStaticImplicitFunctionConflictTest, Right "CLI -o rejects single-input implicit-function/static-global collisions on the standalone code path")
+    , (AsmOutput.outputFileSingleInputImplicitFunctionDefinitionWarningTest, Right "CLI -o keeps same-file implicit-function warnings even when a later definition resolves the call")
+    , (AsmOutput.outputFileSingleInputImplicitFunctionPrototypeWarningTest, Right "CLI -o keeps same-file implicit-function warnings when only a later prototype appears")
+    , (AsmOutput.outputFileSingleInputPrototypeRetypeTest, Right "CLI -o revalidates same-file direct calls after later prototype refinements")
+    , (AsmOutput.stdoutSingleInputImplicitFunctionConflictTest, Right "CLI stdout rejects single-input implicit-function/global collisions on the standalone code path")
+    , (AsmOutput.stdoutMultiInputStaticFunctionTest, Right "CLI stdout namespaces internal-linkage functions across multiple inputs")
+    , (AsmOutput.stdoutMultiInputImplicitFunctionDefinitionWarningTest, Right "CLI stdout suppresses cross-input implicit-function warnings once another input defines the function")
+    , (AsmOutput.stdoutMultiInputSameInputImplicitFunctionDefinitionWarningTest, Right "CLI stdout keeps same-input implicit-function warnings even when another input enables multi-input merging")
+    , (AsmOutput.stdoutMultiInputImplicitFunctionUnresolvedWarningTest, Right "CLI stdout keeps implicit-function warnings when other inputs do not provide a real declaration")
+    , (AsmOutput.stdoutMultiInputParseFailurePreservesWarningsTest, Right "CLI stdout flushes earlier warnings before aborting on a later multi-input parse failure")
+    , (AsmOutput.stdoutMultiInputPrototypeOnlyArityRetypeTest, Right "CLI stdout revalidates direct calls after merging later prototype-only declarations")
+    , (AsmOutput.stdoutMultiInputParameterIndirectFunctionPointerArityRetypeTest, Right "CLI stdout revalidates indirect calls inside definitions after merged parameter-type refinements")
+    , (AsmOutput.outputFileMultiInputTest, Right "CLI -o combines asm from multiple inputs into one file")
+    , (AsmOutput.outputFileMultiInputFunctionDeclarationConflictTest, Right "CLI -o rejects function declarations that conflict with globals across multiple inputs")
+    , (AsmOutput.outputFileMultiInputImplicitFunctionConflictTest, Right "CLI -o rejects implicit function references that conflict with globals across multiple inputs")
+    , (AsmOutput.outputFileMultiInputConflictPreservesWarningsTest, Right "CLI -o preserves earlier warnings even when multi-input merge later fails")
+    , (AsmOutput.outputFileMultiInputReadFailurePreservesWarningsTest, Right "CLI -o flushes earlier warnings before aborting on a later multi-input read failure")
+    , (AsmOutput.outputFileMultiInputImplicitFunctionTypeConflictTest, Right "CLI -o rejects implicit function references that conflict with later function declarations across multiple inputs")
+    , (AsmOutput.outputFileMultiInputImplicitFunctionTypeConflictReverseOrderTest, Right "CLI -o rejects implicit function references that conflict with earlier function declarations across multiple inputs")
+    , (AsmOutput.outputFileMultiInputFunctionTypeConflictTest, Right "CLI -o rejects incompatible extern function declarations across multiple inputs")
+    , (AsmOutput.outputFileMultiInputFunctionPointerRedeclarationConflictTest, Right "CLI -o rejects extern globals that only looked compatible via function-return equality")
+    , (AsmOutput.outputFileMultiInputAdjustedFunctionParamTypeTest, Right "CLI -o accepts compatible extern declarations after array/function parameter adjustment")
+    , (AsmOutput.outputFileMultiInputCompatiblePrototypeMergeTest, Right "CLI -o rejects extern function returns that only differ by pointee array bound inference")
+    , (AsmOutput.outputFileMultiInputLargeStructReturnMergeTest, Right "CLI -o rejects merged function definitions that resolve to unsupported large struct returns")
+    , (AsmOutput.outputFileMultiInputRepeatedPrototypeTest, Right "CLI -o accepts repeated prototypes when another input provides the single function definition")
+    , (AsmOutput.outputFileMultiInputTaggedPrototypeScopeMergeTest, Right "CLI -o ignores per-input tagged-struct scope ids when merging compatible extern prototypes")
+    , (AsmOutput.outputFileMultiInputPrototypeOnlyArityRetypeTest, Right "CLI -o revalidates direct calls after merging later prototype-only declarations")
+    , (AsmOutput.outputFileMultiInputSignedIntRedeclarationTest, Right "CLI -o accepts compatible int/signed redeclarations across multiple inputs")
+    , (AsmOutput.outputFileMultiInputOldStyleDeclarationTest, Right "CLI -o accepts old-style declarations when another input provides the function definition")
+    , (AsmOutput.outputFileMultiInputOldStylePromotionConflictTest, Right "CLI -o rejects old-style declarations that only match after default promotions")
+    , (AsmOutput.outputFileMultiInputVoidPrototypeConflictTest, Right "CLI -o rejects void prototypes that conflict with later parameterized declarations")
+    , (AsmOutput.outputFileMultiInputImplicitFunctionDefinitionWarningTest, Right "CLI -o suppresses cross-input implicit-function warnings once another input defines the function")
+    , (AsmOutput.outputFileMultiInputImplicitFunctionPrototypeWarningTest, Right "CLI -o suppresses cross-input implicit-function warnings once another input declares the function")
+    , (AsmOutput.outputFileMultiInputBlockScopeExternPrototypeWarningTest, Right "CLI -o keeps implicit-function warnings when only a same-input block-scope extern prototype exists")
+    , (AsmOutput.outputFileMultiInputImplicitFunctionDefinitionTest, Right "CLI -o accepts implicit function calls when another input provides the function definition")
+    , (AsmOutput.outputFileMultiInputBlockScopeExternPrototypeDefinitionTest, Right "CLI -o keeps block-scope extern prototypes available for cross-input function merges")
+    , (AsmOutput.outputFileMultiInputDeferredIncompletePointeeUseTest, Right "CLI -o rejects cross-input function returns that only differ by pointee array bound inference")
+    , (AsmOutput.outputFileMultiInputDeferredIncompletePointerAddSubAssignRejectTest, Right "CLI -o rejects deferred +=/-= on incomplete pointers before emitting asm")
+    , (AsmOutput.outputFileMultiInputDeferredIncompletePointerIncDecRejectTest, Right "CLI -o rejects deferred ++/-- on incomplete pointers before emitting asm")
+    , (AsmOutput.outputFileMultiInputImplicitFunctionArityRetypeTest, Right "CLI -o revalidates implicit calls against later merged function arity")
+    , (AsmOutput.outputFileMultiInputImplicitFunctionObjectPointerRetypeTest, Right "CLI -o rejects implicit calls that later resolve to object-pointer parameters")
+    , (AsmOutput.outputFileMultiInputImplicitFunctionObjectPointerMismatchRetypeTest, Right "CLI -o rejects implicit calls whose merged object-pointer parameters are incompatible")
+    , (AsmOutput.outputFileMultiInputIndirectFunctionPointerArityRetypeTest, Right "CLI -o revalidates indirect calls after merged extern function-pointer declarations")
+    , (AsmOutput.outputFileMultiInputParameterSizeofRetypeTest, Right "CLI -o rejects cross-input parameter declarations that only differ by pointer-to-array bounds")
+    , (AsmOutput.outputFileMultiInputIndirectFunctionPointerVoidRetypeTest, Right "CLI -o preserves void prototypes when merged extern function-pointer declarations refine empty parameter lists")
+    , (AsmOutput.outputFileMultiInputImplicitFunctionVoidRetypeTest, Right "CLI -o rejects implicit calls whose merged target later resolves to a void prototype")
+    , (AsmOutput.outputFileMultiInputFunctionDesignatorAssignmentRetypeTest, Right "CLI -o rechecks function-designator assignments after merged prototypes")
+    , (AsmOutput.outputFileMultiInputFunctionDesignatorReturnRetypeTest, Right "CLI -o rechecks function-pointer returns after merged prototypes")
+    , (AsmOutput.outputFileMultiInputObjectPointerReturnRetypeTest, Right "CLI -o rechecks object-pointer returns after merged tentative-array completion")
+    , (AsmOutput.outputFileMultiInputFunctionDesignatorInitializerRetypeTest, Right "CLI -o rechecks function-pointer initializers after merged prototypes")
+    , (AsmOutput.outputFileMultiInputFunctionDesignatorInitializerParamRefinementRetypeTest, Right "CLI -o rejects merged function-pointer initializers when parameter declarations conflict on pointer-to-array bounds")
+    , (AsmOutput.outputFileMultiInputObjectPointerAssignmentRetypeTest, Right "CLI -o rechecks object-pointer assignments after merged tentative-array completion")
+    , (AsmOutput.outputFileMultiInputObjectPointerInitializerRetypeTest, Right "CLI -o rechecks object-pointer initializers after merged tentative-array completion")
+    , (AsmOutput.outputFileMultiInputPointerPointeeArrayConflictTest, Right "CLI -o rejects extern pointer-to-array declarations that disagree on pointee bounds")
+    , (AsmOutput.outputFileMultiInputAggregateFunctionDesignatorInitializerTest, Right "CLI -o accepts aggregate function-pointer initializers during merged global revalidation")
+    , (AsmOutput.outputFileMultiInputBlockScopeExternObjectConflictTest, Right "CLI -o rejects block-scope extern objects that conflict with later object definitions")
+    , (AsmOutput.outputFileMultiInputBlockScopeExternObjectFunctionConflictTest, Right "CLI -o rejects block-scope extern objects that collide with later function definitions")
+    , (AsmOutput.outputFileMultiInputBlockScopeExternPrototypeVisibilityTest, Right "CLI -o keeps block-scope extern prototype refinements from escaping into later file-scope call checking")
+    , (AsmOutput.outputFileMultiInputSameInputImplicitFunctionDefinitionWarningTest, Right "CLI -o keeps same-input implicit-function warnings even when another input enables multi-input merging")
+    , (AsmOutput.outputFileMultiInputSameInputImplicitFunctionConflictTest, Right "CLI -o rejects same-input implicit-function/global collisions even when another input is present")
+    , (AsmOutput.outputFileMultiInputSameInputFunctionDeclarationConflictTest, Right "CLI -o rejects same-input prototype/global collisions even when another input is present")
+    , (AsmOutput.outputFileMultiInputSameInputStaticImplicitFunctionConflictTest, Right "CLI -o rejects same-input implicit-function/static-global collisions even when another input is present")
+    , (AsmOutput.outputFileMultiInputSameInputInternalLinkageConflictTest, Right "CLI -o rejects same-input object/function collisions involving internal linkage even when another input is present")
+    , (AsmOutput.outputFileMultiInputTentativeGlobalTest, Right "CLI -o coalesces tentative globals across multiple inputs")
+    , (AsmOutput.outputFileMultiInputExternGlobalDeclarationMergeTest, Right "CLI -o treats extern-only globals as declarations during multi-input merges")
+    , (AsmOutput.outputFileMultiInputTentativeArrayTest, Right "CLI -o coalesces tentative array declarations across multiple inputs")
+    , (AsmOutput.outputFileMultiInputTentativeArrayDecayRetypeTest, Right "CLI -o retypes earlier array-decay uses after cross-input tentative-array completion")
+    , (AsmOutput.outputFileMultiInputTentativeIncompleteArrayTest, Right "CLI -o materializes merged tentative incomplete arrays as one element")
+    , (AsmOutput.outputFileMultiInputTentativeNestedIncompleteArrayTest, Right "CLI -o rejects address arithmetic on tentative nested arrays before any cross-input merge")
+    , (AsmOutput.outputFileMultiInputTentativeNestedArrayExtentInferenceTest, Right "CLI -o keeps each input bound to its own incomplete tentative nested-array use sites")
+    , (AsmOutput.outputFileMultiInputTentativeArrayRankConflictTest, Right "CLI -o rejects tentative array merges that change array rank across multiple inputs")
+    , (AsmOutput.outputFileMultiInputTentativeArrayInnerExtentConflictTest, Right "CLI -o rejects tentative array merges that disagree on inner extents across multiple inputs")
+    , (AsmOutput.outputFileMultiInputTentativeArrayUseSiteTest, Right "CLI -o rejects sizeof on tentative arrays before cross-input completion")
+    , (AsmOutput.outputFileMultiInputTentativeArrayAddressUseSiteTest, Right "CLI -o rejects address-based pointer arithmetic on tentative arrays before cross-input completion")
+    , (AsmOutput.outputFileMultiInputTentativeArrayInitializerRetypeTest, Right "CLI -o rejects global initializers that depend on later cross-input tentative-array completion")
+    , (AsmOutput.outputFileMultiInputStaticTest, Right "CLI -o namespaces internal-linkage symbols across multiple inputs")
+    , (AsmOutput.outputFileMultiInputStaticFunctionTest, Right "CLI -o namespaces internal-linkage functions across multiple inputs")
+    , (AsmOutput.outputFileMultiInputStaticFunctionPointerTest, Right "CLI -o namespaces internal-linkage function designators across multiple inputs")
+    , (AsmOutput.outputFilePreservesExistingModeTest, Right "CLI -o preserves the existing output file mode when replacing it")
+    , (AsmOutput.outputFileClearsSpecialBitsTest, Right "CLI -o clears setuid/setgid/sticky bits when replacing an existing output")
+    , (AsmOutput.outputFileFollowsSymlinkTargetTest, Right "CLI -o updates symlink targets without replacing the symlink itself")
+    , (AsmOutput.outputFileSpecialPathDevNullTest, Right "CLI -o writes directly to special output paths such as /dev/null")
+    , (AsmOutput.outputFileSamePathTest, Right "CLI -o rejects same-path input/output aliases before overwriting source files")
+    , (AsmOutput.outputFileMissingInputMatchingOutputPathTest, Right "CLI -o reports missing same-path inputs instead of misclassifying them as output collisions")
+    , (AsmOutput.outputFileHardLinkAliasTest, Right "CLI -o rejects hard-linked input/output aliases before overwriting source files")
+    , (AsmOutput.outputFileParseFailurePreservesExistingOutputTest, Right "CLI -o preserves existing outputs when parsing fails before opening the destination")
+    , (AsmOutput.outputFileReadFailurePreservesExistingOutputTest, Right "CLI -o preserves existing outputs when reading an input fails before opening the destination")
+    , (AsmOutput.outputFileReadOnlyParentDirectFallbackWritableTargetTest, Right "CLI -o falls back to in-place writes when an existing output has a read-only parent directory")
+    , (AsmOutput.outputFileHardLinkedRenameReplacementPreservesAliasTest, Right "CLI -o replaces hard-linked outputs via rename without rewriting sibling aliases")
+    , (AsmOutput.outputFileReadOnlyParentWritableTargetTest, Right "CLI -o falls back to in-place writes when an existing output is writable but its parent directory is not")
+    , (AsmOutput.outputFileReadOnlyParentWriteOnlyTargetTest, Right "CLI -o falls back to in-place writes when an existing write-only output has a read-only parent directory")
+    , (AsmOutput.outputFileReadOnlyParentHardLinkAliasPreservesExistingOutputTest, Right "CLI -o refuses read-only-parent fallback writes that would overwrite hard-linked aliases")
+    , (AsmOutput.outputFileReadOnlyParentWriteFailurePreservesExistingOutputTest, Right "CLI -o preserves existing outputs when fallback writes fail under a read-only parent directory")
+    , (AsmOutput.outputFileWriteFailurePreservesExistingOutputTest, Right "CLI -o preserves existing outputs when asm emission fails after opening the replacement file")
+    , (AsmOutput.visualizeAstWriteFailurePreservesExistingOutputTest, Right "CLI --visualize-ast preserves existing outputs when SVG rendering fails after opening the replacement file")
+    , (AsmOutput.outputFileFreshOutputRestrictiveUmaskTest, Right "CLI -o creates fresh outputs under restrictive umasks and applies the final mode after writing")
+    , (AsmOutput.runAsmTest, Right "CLI -r keeps asm off stdout and still produces a runnable binary")
+    , (AsmOutput.runAsmDoesNotInjectValidationMarkerIntoFinalAsmTest, Right "CLI -r keeps validation markers out of the final assembly it passes to HTCC_ASSEMBLER")
+    , (AsmOutput.runAsmAcceptsUserDefinedValidationMarkerSymbolTest, Right "CLI -r accepts user globals named htcc_runnable_output_marker")
+    , (AsmOutput.runAsmAcceptsGcSectionsLinkerTest, Right "CLI -r keeps the validation marker reachable when HTCC_ASSEMBLER enables linker section garbage collection")
+    , (AsmOutput.runAsmSingleInputImplicitFunctionConflictTest, Right "CLI -r rejects single-input implicit-function/global collisions before invoking the assembler")
+    , (AsmOutput.runAsmSpecialPathDevNullTest, Right "CLI -r links directly to special output paths such as /dev/null")
+    , (AsmOutput.runAsmRejectsNamedPipeOutputPathTest, Right "CLI -r rejects blocking special output paths such as FIFOs before invoking HTCC_ASSEMBLER")
+    , (AsmOutput.runAsmSpecialPathDevNullSkipsPostLinkValidationWaitTest, Right "CLI -r still waits for delayed HTCC_ASSEMBLER linker children on special outputs such as /dev/null")
+    , (AsmOutput.runAsmPreservesExecutableBitsTest, Right "CLI -r preserves execute bits when replacing a non-executable output")
+    , (AsmOutput.runAsmPreservesExistingExecuteMaskTest, Right "CLI -r preserves the existing execute mask when replacing a private executable")
+    , (AsmOutput.runAsmRestoresOwnerExecuteBitTest, Right "CLI -r restores owner execute when replacing outputs that were executable only for group/other")
+    , (AsmOutput.runAsmFreshOutputInPlaceLinkDriverTest, Right "CLI -r preserves execute bits for fresh outputs when the link driver rewrites -o in place")
+    , (AsmOutput.runAsmProbePreservesPrecreatedOutputTest, Right "CLI -r probes link drivers against a pre-created output file")
+    , (AsmOutput.runAsmClearsSpecialBitsTest, Right "CLI -r clears setuid/setgid/sticky bits when replacing an existing output")
+    , (AsmOutput.runAsmLinkUsesResolvedDriverTest, Right "CLI -r reuses the resolved HTCC_ASSEMBLER driver when linking")
+    , (AsmOutput.runAsmBareLocalAssemblerPathTest, Right "CLI -r prefers PATH bare HTCC_ASSEMBLER drivers over ./<name>")
+    , (AsmOutput.runAsmQuotedCompilerTest, Right "CLI -r quotes assembler paths selected from HTCC_ASSEMBLER")
+    , (AsmOutput.runAsmWrappedAssemblerTest, Right "CLI -r preserves wrapper args selected from HTCC_ASSEMBLER")
+    , (AsmOutput.runAsmWrappedAssemblerFirstWordDriverTest, Right "CLI -r resolves only the first HTCC_ASSEMBLER shell word as the driver executable")
+    , (AsmOutput.runAsmWrappedAssemblerProbeFallbackTest, Right "CLI -r accepts wrapper commands whose probe flags fail when assemble/link forwarding still works")
+    , (AsmOutput.runAsmWrappedAssemblerHostMetadataFallbackTest, Right "CLI -r accepts wrapped drivers whose metadata probes report the host target while assemble/link forwarding stays x86_64-ELF")
+    , (AsmOutput.runAsmWrappedAssemblerDelayedChildHostMetadataTest, Right "CLI -r preserves delayed HTCC_ASSEMBLER probe metadata emitted by a wrapper child after the wrapper exits")
+    , (AsmOutput.runAsmWrappedAssemblerDelayedChildFinalOutputTest, Right "CLI -r waits for delayed HTCC_ASSEMBLER wrapper children before validating the final output")
+    , (AsmOutput.runAsmDelayedFinalOutputMutationUsesPrivateLinkOutputTest, Right "CLI -r publishes a private validated link output after wrappers mutate staging later")
+    , (AsmOutput.runAsmRejectsDelayedObjectMutationBeforeSnapshotTest, Right "CLI -r rejects HTCC_ASSEMBLER objects mutated before snapshotting")
+    , (AsmOutput.runAsmPreallocatedAssemblerObjectReadinessFallsBackTest, Right "CLI -r waits for preallocated HTCC_ASSEMBLER object writers before snapshotting")
+    , (AsmOutput.runAsmSparseAssemblerObjectReadinessFallsBackTest, Right "CLI -r does not reject sparse HTCC_ASSEMBLER objects solely from allocated block counts")
+    , (AsmOutput.runAsmOversizedAssemblerObjectReadinessFallsBackTest, Right "CLI -r bounds oversized HTCC_ASSEMBLER object readiness checks before waiting on the wrapper child")
+    , (AsmOutput.runAsmUntrustedAssemblerObjectReadinessTimeoutTest, Right "CLI -r bounds untrusted HTCC_ASSEMBLER object readiness when wrapper helpers stay alive")
+    , (AsmOutput.runAsmRejectsBackgroundProcessGroupHelpersBeforeSnapshotTest, Right "CLI -r rejects lingering HTCC_ASSEMBLER process-group helpers before snapshotting")
+    , (AsmOutput.runAsmProbeDoesNotHangOnInheritedPipeHandlesTest, Right "CLI -r returns even when HTCC_ASSEMBLER probe wrappers leave inherited pipe handles open after exit")
+    , (AsmOutput.runAsmProbeDoesNotHangOnEarlyClosedStdoutTest, Right "CLI -r keeps HTCC_ASSEMBLER probes draining stderr after wrappers close stdout early")
+    , (AsmOutput.runAsmTildeExpandedAssemblerPathTest, Right "CLI -r expands leading ~ in HTCC_ASSEMBLER executable words on POSIX hosts")
+    , (AsmOutput.runAsmLeadingEnvAssignmentTest, Right "CLI -r applies leading PATH env assignments in HTCC_ASSEMBLER before resolving the driver")
+    , (AsmOutput.runAsmLeadingEnvAssignmentExpandsTildePathTest, Right "CLI -r expands leading ~ inside HTCC_ASSEMBLER PATH overrides on POSIX hosts")
+    , (AsmOutput.runAsmExpandedAssignmentWordFailsTest, Right "CLI -r does not reinterpret assignment-like fields produced by HTCC_ASSEMBLER expansion as env overrides")
+    , (AsmOutput.runAsmQuotedAssignmentLikeExecutableTest, Right "CLI -r treats quoted assignment-looking HTCC_ASSEMBLER executables as literal argv[0] values")
+    , (AsmOutput.runAsmEscapedAssignmentLikeExecutableTest, Right "CLI -r treats escaped assignment-looking HTCC_ASSEMBLER executables as literal argv[0] values")
+    , (AsmOutput.runAsmLeadingEnvAssignmentWithoutEnvPathTest, Right "CLI -r executes PATH-assigned HTCC_ASSEMBLER drivers without depending on env in the parent PATH")
+    , (AsmOutput.runAsmLeadingEnvAssignmentPreservesPathOverrideTest, Right "CLI -r preserves leading PATH env assignments in HTCC_ASSEMBLER exactly during invocation")
+    , (AsmOutput.runAsmLeadingEnvAssignmentPreservesLiteralPercentAndBangTest, Right "CLI -r keeps literal %...% and !...! env override values unchanged on POSIX hosts")
+    , (AsmOutput.runAsmLeadingEnvAssignmentPreservesSinglePassPosixExpansionTest, Right "CLI -r performs only a single round of POSIX env expansion for HTCC_ASSEMBLER overrides")
+    , (AsmOutput.runAsmLeadingEnvAssignmentPreservesInheritedPwdTest, Right "CLI -r preserves caller-provided PWD during HTCC_ASSEMBLER expansion and invocation")
+    , (AsmOutput.runAsmLeadingEnvAssignmentPreservesEscapedPosixLiteralTest, Right "CLI -r keeps escaped POSIX variable references literal in HTCC_ASSEMBLER env overrides")
+    , (AsmOutput.runAsmEnvPathOverrideEmptyEntryTest, Right "CLI -r keeps empty PATH entries in HTCC_ASSEMBLER overrides when resolving bare drivers")
+    , (AsmOutput.runAsmEnvPathOverrideNoLocalFallbackTest, Right "CLI -r does not fall back to ./<name> when HTCC_ASSEMBLER overrides PATH")
+    , (AsmOutput.runAsmQuotedBackslashArgTest, Right "CLI -r preserves backslashes in quoted HTCC_ASSEMBLER args")
+    , (AsmOutput.runAsmIgnoresCcTest, Right "CLI -r ignores inherited CC and falls back to gcc")
+    , (AsmOutput.runAsmGccPrefersPathTest, Right "CLI -r prefers PATH gcc over ./gcc when HTCC_ASSEMBLER is unset")
+    , (AsmOutput.runAsmFailurePreservesExistingOutputTest, Right "CLI -r preserves existing outputs when the assembler command fails before linking")
+    , (AsmOutput.runAsmParseFailurePreservesExistingOutputTest, Right "CLI -r preserves existing outputs when parsing fails before assembler invocation")
+    , (AsmOutput.runAsmReadFailurePreservesExistingOutputTest, Right "CLI -r preserves existing outputs when reading an input fails before assembler invocation")
+    , (AsmOutput.runAsmHardLinkedRenameReplacementPreservesAliasTest, Right "CLI -r replaces hard-linked outputs via rename without rewriting sibling aliases")
+    , (AsmOutput.runAsmReadOnlyParentWritableTargetTest, Right "CLI -r falls back to in-place linking when an existing output is writable but its parent directory is not")
+    , (AsmOutput.runAsmReadOnlyParentWriteOnlyTargetTest, Right "CLI -r falls back to in-place linking when an existing write-only output has a read-only parent directory")
+    , (AsmOutput.runAsmReadOnlyParentExecutableOnlyTargetTest, Right "CLI -r falls back to in-place linking when an existing executable-only output has a read-only parent directory")
+    , (AsmOutput.runAsmReadOnlyParentHardLinkAliasPreservesExistingOutputTest, Right "CLI -r refuses read-only-parent fallback linking that would overwrite hard-linked aliases")
+    , (AsmOutput.runAsmReadOnlyParentLinkFailurePreservesExistingOutputTest, Right "CLI -r preserves existing outputs when fallback linking fails under a read-only parent directory")
+    , (AsmOutput.runAsmFailurePreservesInputOutputAliasTest, Right "CLI -r rejects input/output aliasing before invoking the assembler and preserves input files")
+    , (AsmOutput.runAsmMissingInputMatchingOutputPathTest, Right "CLI -r reports missing same-path inputs instead of misclassifying them as output collisions")
+    , (AsmOutput.runAsmFailurePreservesHardLinkInputOutputAliasTest, Right "CLI -r rejects hard-linked input/output aliases before invoking the assembler")
+    , (AsmOutput.runAsmMalformedAssemblerPreservesExistingOutputTest, Right "CLI -r preserves existing outputs when HTCC_ASSEMBLER is malformed")
+    , (AsmOutput.runAsmMalformedAssemblerTest, Right "CLI -r does not leak temp asm files when HTCC_ASSEMBLER is malformed")
+    , (AsmOutput.runAsmAcceptsFreeBsdElfTargetDriverTest, Right "CLI -r accepts x86_64 FreeBSD targets reported by HTCC_ASSEMBLER drivers")
+    , (AsmOutput.runAsmRejectsMissingAssemblerDriverTest, Right "CLI -r reports a user-facing error when HTCC_ASSEMBLER names a missing command")
+    , (AsmOutput.runAsmRejectsNonExecutableAssemblerDriverTest, Right "CLI -r reports a user-facing error when HTCC_ASSEMBLER names a non-executable command")
+    , (AsmOutput.runAsmRejectsAssemblerWithoutLinkDriverTest, Right "CLI -r rejects HTCC_ASSEMBLER commands that can assemble but cannot link")
+    , (AsmOutput.runAsmRejectsSingleObjectOnlyLinkDriverTest, Right "CLI -r rejects HTCC_ASSEMBLER commands whose link support only works for single-object inputs")
+    , (AsmOutput.runAsmRejectsScriptLinkProbeDriverTest, Right "CLI -r rejects HTCC_ASSEMBLER commands whose link probe only emits executable scripts")
+    , (AsmOutput.runAsmRejectsSharedLinkProbeDriverTest, Right "CLI -r rejects HTCC_ASSEMBLER commands whose link probe emits ET_DYN shared-library outputs")
+    , (AsmOutput.runAsmRejectsForeignAbiLinkProbeDriverTest, Right "CLI -r accepts HTCC_ASSEMBLER commands whose x86_64-ELF link probe emits a foreign ELF ABI")
+    , (AsmOutput.runAsmRejectsBlobLinkProbeDriverTest, Right "CLI -r rejects HTCC_ASSEMBLER commands whose link probe copies an unrelated x86_64 ELF blob")
+    , (AsmOutput.runAsmRejectsSymlinkLinkProbeDriverTest, Right "CLI -r rejects HTCC_ASSEMBLER commands whose link probe leaves the requested output as a symlink")
+    , (AsmOutput.runAsmRejectsSymlinkSpecialLinkProbeDriverTest, Right "CLI -r rejects HTCC_ASSEMBLER commands whose link probe leaves the requested output as a symlink to a non-regular special file")
+    , (AsmOutput.runAsmRejectsNonExecutableLinkProbeDriverTest, Right "CLI -r rejects HTCC_ASSEMBLER commands whose link probe emits a structurally valid ELF without execute bits")
+    , (AsmOutput.runAsmRejectsMarkerlessFinalOutputTest, Right "CLI -r rejects structurally valid final outputs that do not carry the authenticated link marker")
+    , (AsmOutput.runAsmRejectsBogusFinalLinkOutputTest, Right "CLI -r revalidates the final linked output even when the HTCC_ASSEMBLER probe succeeded")
+    , (AsmOutput.runAsmRejectsOversizedFinalLinkOutputTest, Right "CLI -r bounds final linked output validation before reading oversized sparse files")
+    , (AsmOutput.runAsmRejectsNamedPipeFinalLinkOutputTest, Right "CLI -r rejects HTCC_ASSEMBLER commands that replace the staged final output with a FIFO")
+    , (AsmOutput.runAsmRejectsReplacedFinalStagingOutputTest, Right "CLI -r rejects HTCC_ASSEMBLER wrappers that replace final staging before publication")
+    , (AsmOutput.runAsmRejectsExecutableObjectProbeDriverTest, Right "CLI -r rejects HTCC_ASSEMBLER commands whose assembly probe emits non-relocatable x86_64 ELF files")
+    , (AsmOutput.runAsmRejectsDelayedNonElfObjectProbeDriverTest, Right "CLI -r classifies non-ELF assembly probe outputs while wrapper helpers remain alive")
+    , (AsmOutput.runAsmRejectsDelayedExecutableObjectProbeDriverTest, Right "CLI -r classifies non-relocatable x86_64 ELF assembly probe outputs while wrapper helpers remain alive")
+    , (AsmOutput.runAsmRejectsDelayedForeignObjectProbeDriverTest, Right "CLI -r classifies foreign ELF assembly probe outputs while wrapper helpers remain alive")
+    , (AsmOutput.runAsmRejectsDelayedInvalidX86RelocatableObjectProbeDriverTest, Right "CLI -r classifies structurally invalid x86_64 ELF assembly probe outputs while wrapper helpers remain alive")
+    , (AsmOutput.runAsmAcceptsDelayedPartialElfObjectProbeDriverTest, Right "CLI -r waits for delayed partial ELF assembly probe outputs before classification")
+    , (AsmOutput.runAsmRejectsSymlinkObjectProbeDriverTest, Right "CLI -r rejects HTCC_ASSEMBLER commands whose assembly probe emits the object file as a symlink")
+    , (AsmOutput.runAsmRejectsTouchingLinkDriverTest, Right "CLI -r rejects HTCC_ASSEMBLER commands whose link probe only touches the requested output")
+    , (AsmOutput.runAsmRejectsIncompatibleTargetDriverTest, Right "CLI -r rejects HTCC_ASSEMBLER drivers that do not target x86_64-ELF")
+    , (AsmOutput.runAsmRejectsMetadataSpoofingDriverTest, Right "CLI -r rejects HTCC_ASSEMBLER drivers whose metadata target is x86_64-ELF but whose effective assembly probe is not")
+    , (AsmOutput.runAsmRejectsWrappedNonElfDriverTest, Right "CLI -r rejects probe-hiding HTCC_ASSEMBLER wrappers around non-ELF x86_64 drivers")
+    , (AsmOutput.runAsmFreshOutputRestrictiveUmaskTest, Right "CLI -r creates fresh outputs under restrictive umasks and applies the final mode after linking")
     ]
+
+    where
+        sizeof = CT.sizeof :: CT.TypeKind Integer -> Natural
+        alignof = CT.alignof :: CT.TypeKind Integer -> Natural

@@ -37,12 +37,13 @@ module Htcc.Utils.Tuple (
     uncurry4,
 ) where
 
+import           Data.Bifunctor   (bimap)
 import           Data.Tuple.Extra (dupe, first, second)
 
 {-# INLINE swap #-}
 -- | Swap a first element and second element
 swap :: (a, b) -> (b, a)
-swap = first snd . second fst . dupe
+swap = bimap snd fst . dupe
 
 {-# INLINE first3 #-}
 -- | Update the first component of triple.

@@ -8,7 +8,6 @@ cache:
   apt: true
   directories:
   - "$HOME/.stack/"
-  - "$HOME/.local/bin/"
   - ".stack-work/"
 addons:
   apt:
@@ -29,14 +28,11 @@ before_install:
 - |
   if [ "$TRAVIS_OS_NAME" == "linux" ] || [ "$TRAVIS_OS_NAME" == "osx" ]; then
       mkdir -p ~/.local/bin
+      rm -f ~/.local/bin/bash
       export PATH=$HOME/.local/bin:$PATH
       ./.travis/install-stack.sh
       ./.travis/install-dhall-to-yaml.sh
   fi
-  echo -e "Host github.com\n\tStrictHostKeyChecking no\nIdentityFile ~/.ssh/deploy.key\n" >> ~/.ssh/config
-  openssl aes-256-cbc -pass "pass:$SERVER_KEY" -pbkdf2 -in .travis/deploy_key.enc -d -a -out deploy.key
-  mv deploy.key ~/.ssh/
-  chmod 600 ~/.ssh/deploy.key
   git config --global user.email "falgon53@yahoo.co.jp"
   git config --global user.name "falgon"
   git config --global core.autocrlf "input"
@@ -55,6 +51,7 @@ jobs:
     os: linux
     script:
     - stack test --test-arguments self
+    - stack test --test-arguments components
     - stack test --test-arguments subp
   - stage: Run compiling and executing example C codes
     os: linux
@@ -73,21 +70,41 @@ jobs:
     os: linux
     services: docker
     script:
-    - stack test --test-arguments docker
-    - stack test --test-arguments docker --test-arguments --clean
+    - docker-compose --version
+    - DOCKER_COMPOSE=docker-compose stack test --test-arguments docker
+    - DOCKER_COMPOSE=docker-compose stack test --test-arguments docker --test-arguments --clean
   - stage: Run compiling and executing example C codes on Docker
     os: linux
     services: docker
     script:
-    - cd example && make docker && make clean_docker
-  - if: branch = master
+    - docker-compose --version
+    - cd example && make DOCKER_COMPOSE=docker-compose docker && make DOCKER_COMPOSE=docker-compose clean_docker
+  - if: branch = master AND type = push
     stage: Deploy gh-pages
     os: linux
     script:
-        - stack clean
-        - stack haddock --fast 
-        - ghp-import -m "by Travis CI (JOB $TRAVIS_JOB_NUMBER)" -n docs
-        - git push -qf git@github.com:falgon/htcc.git gh-pages
+    - test "$TRAVIS_PULL_REQUEST" = "false"
+    - test "$TRAVIS_BRANCH" = "master"
+    - |
+      mkdir -p ~/.ssh
+      printf '%s\n' \
+        'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+        'github.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEmKSENjQEezOmxkZMy7opKgwFB9nkt5YRrYMjNuG5N87uRgg6CLrbo5wAdT/y6v0mKV0U2w0WZ2YB/++Tpockg=' \
+        'github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCj7ndNxQowgcQnjshcLrqPEiiphnt+VTTvDP6mHBL9j1aNUkY4Ue1gvwnGLVlOhGeYrnZaMgRK6+PKCUXaDbC7qtbW8gIkhL7aGCsOr/C56SJMy/BCZfxd1nWzAOxSDPgVsmerOBYfNqltV9/hWCqBywINIR+5dIg6JTJ72pcEpEjcYgXkE2YEFXV1JHnsKgbLWNlhScqb2UmyRkQyytRLtL+38TGxkxCflmO+5Z8CSSNY7GidjMIZ7Q4zMjA2n1nGrlTDkzwDCsw+wqFPGQA179cnfGWOWRVruj16z6XyvxvjJwbz0wQZ75XK5tKSb7FNyeIEs4TT4jk+S4dhPeAUC5y+bDYirYgM4GC7uEnztnZyaVWQ7B381AK4Qdrwt51ZqExKbQpTUNn+EjqoTwvqNj4kqx5QUCI0ThS/YkOxJCXmPUWZbhjpCg56i+2aB6CmK2JGhn57K5mj0MNdBXA4/WnwH6XoPWJzK5Nyu2zB3nAZp+S5hpQs+p1vN1/wsjk=' \
+        > ~/.ssh/known_hosts
+      printf '%s\n' \
+        'Host github.com' \
+        '  StrictHostKeyChecking yes' \
+        '  UserKnownHostsFile ~/.ssh/known_hosts' \
+        '  IdentityFile ~/.ssh/deploy.key' \
+        >> ~/.ssh/config
+    - openssl aes-256-cbc -pass "pass:$SERVER_KEY" -pbkdf2 -in .travis/deploy_key.enc -d -a -out deploy.key
+    - mv deploy.key ~/.ssh/
+    - chmod 600 ~/.ssh/deploy.key
+    - stack clean
+    - stack haddock --fast
+    - ghp-import -m "by Travis CI (JOB $TRAVIS_JOB_NUMBER)" -n docs
+    - git push -qf git@github.com:falgon/htcc.git gh-pages
 branches:
     except:
         - gh-pages

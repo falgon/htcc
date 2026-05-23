@@ -12,14 +12,16 @@ The storage-class of C language
 {-# LANGUAGE DeriveGeneric #-}
 module Htcc.CRules.Types.StorageClass (
     -- * StorageClass data type and class
-    StorageClass (..),
-    StorageClassBase (..)
+    StorageClass (..)
+  , StorageClassBase (..)
+  , wrapCTFunc
 ) where
 
 import           Control.DeepSeq            (NFData (..))
-import           Data.Tuple.Extra           (first, second)
+import           Data.Bifunctor             (bimap, first)
 import           GHC.Generics               (Generic)
 
+import qualified Data.Text                  as T
 import           Htcc.CRules.Types.CType
 import           Htcc.CRules.Types.TypeKind
 
@@ -81,8 +83,8 @@ instance Ord i => CType (StorageClass i) where
     alignof = alignof . toTypeKind
     deref x = picksc x <$> deref (toTypeKind x)
     ctorPtr n = mapTypeKind (ctorPtr n)
-    dctorPtr x = first (picksc x) $ second (\f y -> picksc y $ f $ toTypeKind y) $ dctorPtr $ toTypeKind x
-    dctorArray x = first (picksc x) $ second (\f y -> picksc y $ f $ toTypeKind y) $ dctorArray $ toTypeKind x
+    dctorPtr x = bimap (picksc x) (\f y -> picksc y $ f $ toTypeKind y) $ dctorPtr $ toTypeKind x
+    dctorArray x = bimap (picksc x) (\f y -> picksc y $ f $ toTypeKind y) $ dctorArray $ toTypeKind x
     removeAllExtents = mapTypeKind removeAllExtents
     conversion x y = SCAuto $ conversion (toTypeKind x) (toTypeKind y)
     implicitInt = mapTypeKind implicitInt
@@ -93,6 +95,9 @@ instance TypeKindBase StorageClass where
 
     {-# INLINE isArray #-}
     isArray = isArray . toTypeKind
+
+    {-# INLINE isIntegral #-}
+    isIntegral = isIntegral . toTypeKind
 
     {-# INLINE isCTStruct #-}
     isCTStruct = isCTStruct . toTypeKind
@@ -134,3 +139,6 @@ instance StorageClassBase StorageClass where
     isSCStatic _            = False
 
 instance NFData i => NFData (StorageClass i)
+
+wrapCTFunc :: StorageClass i -> [(StorageClass i, Maybe T.Text)] -> StorageClass i
+wrapCTFunc ty params = picksc ty $ CTFunc (toTypeKind ty) $ map (first fromsc) params

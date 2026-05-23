@@ -17,13 +17,14 @@ module Htcc.Parser.AST.Type (
     ASTState
 ) where
 
-import           Htcc.Parser.AST.Core                            (ATree (..))
-import           Htcc.Parser.ConstructionData.Core               (ConstructionData,
-                                                                  Warnings)
-import           Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
-import qualified Htcc.Parser.ConstructionData.Scope.Var          as PV
-import qualified Htcc.Tokenizer                                  as HT
-import           Htcc.Utils.CompilationState                     (CompilationState)
+import                          Htcc.Parser.AST.Core                            (ATree (..))
+import {-# SOURCE #-}           Htcc.Parser.ConstructionData.Core               (ConstructionData,
+                                                                                 Warnings)
+import                qualified Htcc.Parser.ConstructionData.Scope.Function     as PF
+import                          Htcc.Parser.ConstructionData.Scope.ManagedScope (ASTError)
+import                qualified Htcc.Parser.ConstructionData.Scope.Var          as PV
+import                qualified Htcc.Tokenizer                                  as HT
+import                          Htcc.Utils.CompilationState                     (CompilationState)
 
 -- | The type to be used when the AST construction is successful
 type ASTSuccess i = ([HT.TokenLC i], ATree i, ConstructionData i)
@@ -34,8 +35,9 @@ type ASTConstruction i = Either (ASTError i) (ASTSuccess i)
 -- | The type of AST list
 type ASTs i = [ATree i]
 
--- | A type that represents the result after AST construction. Quadraple of warning list, constructed abstract syntax tree list, global variable map, literal list.
-type ASTResult i = Either (ASTError i) (Warnings i, ASTs i, PV.GlobalVars i, PV.Literals i)
+-- | A type that represents the result after AST construction. Quintuple of warning list,
+-- constructed abstract syntax tree list, global variable map, literal list, and function map.
+type ASTResult i = Either (ASTError i) (Warnings, ASTs i, PV.GlobalVars i, PV.Literals i, PF.Functions i)
 
 -- | The type synonym of ASTState
 type ASTState i r = CompilationState (ConstructionData i) [HT.TokenLC i] i r

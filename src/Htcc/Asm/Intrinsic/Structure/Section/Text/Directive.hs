@@ -83,14 +83,14 @@ label :: (Show i, Show e) => T.Text -> i -> C.Asm TextLabelCtx e ()
 label lbl n = C.Asm $ \x -> do
     cf <- readIORef $ C.curFn x
     unless (isJust cf) $ err "stray label"
-    T.putStrLn $ ".L." <> lbl <> "." <> fromJust cf <> "." <> tshow n <> ":"
+    T.hPutStrLn (C.outHandle x) $ ".L." <> lbl <> "." <> fromJust cf <> "." <> tshow n <> ":"
 
 -- | goto label
 gotoLabel :: T.Text -> C.Asm TextLabelCtx e ()
 gotoLabel ident = C.Asm $ \x -> do
     cf <- readIORef $ C.curFn x
     unless (isJust cf) $ err "stray goto label"
-    T.putStrLn $ ".L.label." <> fromJust cf <> "." <> ident <> ":"
+    T.hPutStrLn (C.outHandle x) $ ".L.label." <> fromJust cf <> "." <> ident <> ":"
 
 -- | begin label
 begin :: (Show e, Show i) => i -> C.Asm TextLabelCtx e ()
@@ -109,7 +109,7 @@ cAse :: (Show e, Show i) => i -> C.Asm TextLabelCtx e ()
 cAse n = C.Asm $ \x -> do
     cf <- readIORef $ C.curFn x
     unless (isJust cf) $ err "stray case"
-    T.putStrLn $ ".L.case." <> fromJust cf <> "." <> tshow n <> ":"
+    T.hPutStrLn (C.outHandle x) $ ".L.case." <> fromJust cf <> "." <> tshow n <> ":"
 
 -- | break label
 break :: (Show e, Show i) => i -> C.Asm TextLabelCtx e ()
@@ -124,7 +124,7 @@ refReturn :: Show e => C.Asm TargetLabelCtx e ()
 refReturn = C.Asm $ \x -> do
     cf <- readIORef (C.curFn x)
     unless (isJust cf) $ err "stray label"
-    T.putStrLn $ ".L.return." <> fromJust cf
+    T.hPutStrLn (C.outHandle x) $ ".L.return." <> fromJust cf
 
 refCnt :: Show e => (C.AsmInfo a -> IORef (Maybe e)) -> T.Text -> C.Asm ctx a ()
 refCnt f mes = C.Asm $ \x -> do
@@ -132,7 +132,7 @@ refCnt f mes = C.Asm $ \x -> do
     unless (isJust cf) $ err $ "stray " <> mes
     n <- readIORef (f x)
     unless (isJust n) $ err $ "stray " <> mes
-    T.putStrLn $ ".L." <> mes <> "." <> fromJust cf <> "." <> tshow (fromJust n)
+    T.hPutStrLn (C.outHandle x) $ ".L." <> mes <> "." <> fromJust cf <> "." <> tshow (fromJust n)
 
 -- | reference for break label
 refBreak :: (Show e, Show i) => i -> C.Asm TargetLabelCtx e ()
@@ -155,7 +155,7 @@ refGoto :: T.Text -> C.Asm TargetLabelCtx e ()
 refGoto ident = C.Asm $ \x -> do
     cf <- readIORef (C.curFn x)
     unless (isJust cf) $ err "stray label"
-    T.putStrLn $ ".L.label." <> fromJust cf <> "." <> ident
+    T.hPutStrLn (C.outHandle x) $ ".L.label." <> fromJust cf <> "." <> ident
 
 -- | reference to begin label
 refBegin :: (Show e, Show i) => i -> C.Asm TargetLabelCtx e ()
@@ -174,7 +174,7 @@ ref :: (Show e, Show i) => T.Text -> i -> C.Asm TargetLabelCtx e ()
 ref lbl n = C.Asm $ \x -> do
     cf <- readIORef (C.curFn x)
     unless (isJust cf) $ err "stray label"
-    T.putStrLn $ ".L." <> lbl <> "." <> fromJust cf <> "." <> tshow n
+    T.hPutStrLn (C.outHandle x) $ ".L." <> lbl <> "." <> fromJust cf <> "." <> tshow n
 
 -- | generate cases and return abstract tree
 makeCases :: (Show e, Enum e, Integral e, Show i, Num i) => [ATree i] -> C.Asm TextLabelCtx e [ATree i]
@@ -184,12 +184,12 @@ makeCases cases = C.Asm $ \x -> do
         (ATNode (ATCase _ cn) t lhs rhs) -> do
             modifyIORef (C.lblCnt x) succ
             n' <- readIORef (C.lblCnt x)
-            T.putStrLn $ "\tcmp rax, " <> tshow cn
-            T.putStrLn $ "\tje .L.case." <> fromJust cf <> "." <> tshow n'
+            T.hPutStrLn (C.outHandle x) $ "\tcmp rax, " <> tshow cn
+            T.hPutStrLn (C.outHandle x) $ "\tje .L.case." <> fromJust cf <> "." <> tshow n'
             return $ ATNode (ATCase (fromIntegral n') cn) t lhs rhs
         (ATNode (ATDefault _) t lhs rhs) -> do
             modifyIORef (C.lblCnt x) succ
             n' <- readIORef (C.lblCnt x)
-            T.putStrLn $ "\tjmp .L.case." <> fromJust cf <> "." <> tshow n'
+            T.hPutStrLn (C.outHandle x) $ "\tjmp .L.case." <> fromJust cf <> "." <> tshow n'
             return $ ATNode (ATDefault $ fromIntegral n') t lhs rhs
         at -> return at

@@ -58,8 +58,13 @@ $ gcc -no-pie t.s -o out
 For one liner:
 
 ```sh
-$ echo 'int printf(); int main() { printf("hello world!\n"); }' | stack exec htcc -- /dev/stdin | gcc -xassembler -no-pie -o out -  
+$ echo 'int printf(); int main() { printf("hello world!\n"); }' | stack exec htcc -- /dev/stdin | gcc -x assembler -no-pie -o out -
 ```
+
+When using `-r`/`--run-asm`, htcc uses the driver selected by
+`$HTCC_ASSEMBLER` for both assembly and linking.
+On hosts where `gcc` points to clang, set `HTCC_ASSEMBLER` to a
+GNU-compatible compiler driver before running htcc.
 
 ## AST diagram generation
 
@@ -164,8 +169,9 @@ The implementation description is available in [here](https://falgon.github.io/h
 ## Specification and Requirements
 
 htcc outputs x86_64 assembly according to System V ABI [[2]](#cite2) and
-[GCC 7.4.0](https://gcc.gnu.org/onlinedocs/7.4.0/) is used for assemble. 
-Perhaps a newer version of GCC will work, but not checked currently.
+[GCC 7.4.0](https://gcc.gnu.org/onlinedocs/7.4.0/) is used for assemble.
+Perhaps a newer version of GCC will work, but not checked currently. When
+assembling via `-r`, choose the driver with `HTCC_ASSEMBLER`.
 
 ## About emoji of commit messages
 

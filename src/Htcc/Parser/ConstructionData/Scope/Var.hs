@@ -15,6 +15,7 @@ module Htcc.Parser.ConstructionData.Scope.Var (
     Var (..),
     -- * The data type
     SomeVars,
+    GVarInitData (..),
     GVarInitWith (..),
     GVar (..),
     LVar (..),
@@ -32,6 +33,7 @@ module Htcc.Parser.ConstructionData.Scope.Var (
     addGVar,
     addLiteral,
     -- * Utilities
+    materializeTentativeIncompleteArray,
     initVars,
     resetLocal,
     fallBack
@@ -41,6 +43,7 @@ import           Control.DeepSeq                                 (NFData (..))
 import           Data.Bits                                       (Bits (..))
 import qualified Data.ByteString                                 as B
 import qualified Data.Map.Strict                                 as M
+import           Data.Maybe                                      (fromMaybe)
 import qualified Data.Text                                       as T
 import           GHC.Generics                                    (Generic,
                                                                   Generic1)
@@ -63,19 +66,67 @@ class Var a where
     vtype :: a i -> CT.StorageClass i
 
 -- | The informations type about initial value of the global variable
-data GVarInitWith i = GVarInitWithZero | GVarInitWithOG T.Text | GVarInitWithVal i
+data GVarInitData i
+    = GVarInitZeroBytes Natural
+    | GVarInitBytes Natural i
+    | GVarInitReloc Natural T.Text Integer
     deriving (Eq, Ord, Show, Generic)
 
-instance NFData i => NFData (GVarInitWith i)
+instance NFData i => NFData (GVarInitData i)
+
+-- | The informations type about initial value of the global variable
+data GVarInitWith i
+    = GVarInitWithZero
+    | GVarInitWithExternDecl
+    | GVarInitWithOG T.Text
+    | GVarInitWithVal i
+    | GVarInitWithData [GVarInitData i]
+    | GVarInitWithAST (ATree i)
+    deriving (Eq, Show, Generic)
+
+instance NFData i => NFData (GVarInitWith i) where
+    rnf GVarInitWithZero       = ()
+    rnf GVarInitWithExternDecl = ()
+    rnf (GVarInitWithOG ref)   = rnf ref
+    rnf (GVarInitWithVal val)  = rnf val
+    rnf (GVarInitWithData ds)  = rnf ds
+    rnf (GVarInitWithAST ast)  = ast `seq` ()
 
 -- | The data type of the global variable
 data GVar i = GVar -- ^ The constructor of the global variable
     {
-        gvtype   :: CT.StorageClass i, -- ^ The type of the global variable
-        initWith :: GVarInitWith i -- ^ The informations about initial value of the global variable
-    } deriving (Eq, Ord, Show, Generic)
+        gvtype      :: CT.StorageClass i, -- ^ The type of the global variable
+        initWith    :: GVarInitWith i, -- ^ The informations about initial value of the global variable
+        gvNestDepth :: !Natural -- ^ The nest depth where this declaration is currently visible.
+    } deriving (Eq, Show, Generic)
 
-instance NFData i => NFData (GVar i)
+instance NFData i => NFData (GVar i) where
+    rnf (GVar ty iw depth) = rnf ty `seq` rnf iw `seq` rnf depth
+
+materializeTentativeIncompleteArray :: Ord i => GVar i -> GVar i
+materializeTentativeIncompleteArray gvar = case initWith gvar of
+    GVarInitWithZero ->
+        gvar { gvtype = CT.mapTypeKind materializeTentativeArrayType $ gvtype gvar }
+    _ ->
+        gvar
+    where
+        materializeTentativeArrayType = go
+            where
+                go (CT.CTArray n innerTy) = CT.CTArray n $ go innerTy
+                go (CT.CTIncomplete (CT.IncompleteArray elemTy)) =
+                    materializeIncompleteArray elemTy
+                go ty = ty
+
+                materializeIncompleteArray elemTy
+                    | CT.isCTArray elemTy =
+                        fromMaybe fallback $
+                            CT.concatCTArray
+                                (CT.makeCTArray [1] $ CT.removeAllExtents elemTy)
+                                elemTy
+                    | otherwise =
+                        fallback
+                    where
+                        fallback = CT.CTArray 1 elemTy
 
 instance Var GVar where
     vtype = gvtype
@@ -135,9 +186,10 @@ type Literals a = [Literal a]
 -- | The data type of local variables
 data Vars a = Vars -- ^ The constructor of variables
     {
-        globals  :: GlobalVars a, -- ^ The global variables
-        locals   :: LocalVars a, -- ^ The local variables
-        literals :: Literals a -- ^ Literals
+        globals         :: GlobalVars a, -- ^ The global variables visible in the current scope
+        externalGlobals :: GlobalVars a, -- ^ Global declarations remembered for translation-unit compatibility checks
+        locals          :: LocalVars a, -- ^ The local variables
+        literals        :: Literals a -- ^ Literals
     } deriving (Show, Generic, Generic1)
 
 instance NFData a => NFData (Vars a)
@@ -145,7 +197,7 @@ instance NFData a => NFData (Vars a)
 {-# INLINE initVars #-}
 -- | Helper function representing an empty variables
 initVars :: Vars a
-initVars = Vars SM.initial SM.initial []
+initVars = Vars SM.initial SM.initial SM.initial []
 
 {-# INLINE resetLocal #-}
 -- | `resetLocal` initialize the local variable list for `Vars`
@@ -176,7 +228,11 @@ maximumOffset m
 {-# INLINE fallBack #-}
 -- | Organize variable list state after scoping
 fallBack :: Vars a -> Vars a -> Vars a
-fallBack pre post = pre { literals = literals post }
+fallBack pre post =
+    pre
+        { externalGlobals = externalGlobals post
+        , literals = literals post
+        }
 
 -- | If the specified token is `HT.TKIdent` and the local variable does not exist in the list, `addLVar` adds a new local variable to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
@@ -196,17 +252,73 @@ addLVar _ _ _ _ = Left (internalCE, HT.emptyToken)
 
 -- | If the specified token is `HT.TKIdent` and the global variable does not exist in the list, `addLVar` adds a new global variable to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
-addGVarWith :: Num i => CT.StorageClass i -> HT.TokenLC i -> GVarInitWith i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
-addGVarWith t cur@(_, HT.TKIdent ident) iw vars = flip (flip maybe $ const $ Left ("redeclaration of '" <> ident <> "' with no linkage", cur)) (lookupGVar ident vars) $ -- ODR
-    Right (atGVar (gvtype gvar) ident, vars { globals = M.insert ident gvar $ globals vars })
+addGVarWith :: (Ord i, Num i) => Natural -> CT.StorageClass i -> HT.TokenLC i -> GVarInitWith i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
+addGVarWith cnd t cur@(_, HT.TKIdent ident) iw vars = do
+    (visibleGVar, visibleGlobals') <- mergeIntoMap cnd (globals vars)
+    (_, externalGlobals') <- mergeIntoMap 0 (externalGlobals vars)
+    pure
+        ( atGVar (gvtype visibleGVar) ident
+        , vars
+            { globals = visibleGlobals'
+            , externalGlobals = externalGlobals'
+            }
+        )
     where
-        gvar = GVar t iw
-addGVarWith _ _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
+        mergeIntoMap storedDepth sts = case M.lookup ident sts of
+            Nothing ->
+                let new = newGVar storedDepth
+                 in Right (new, M.insert ident new sts)
+            Just existing ->
+                (\merged -> (merged, M.insert ident merged sts)) <$> mergeGVar storedDepth existing (newGVar storedDepth)
+
+        newGVar = GVar t iw
+
+        mergeGVar storedDepth lhs rhs = case mergeGVarTypes lhs rhs of
+            Nothing -> Left ("redeclaration of '" <> ident <> "' with no linkage", cur)
+            Just mergedType
+                | isExternDecl lhs && isExternDecl rhs ->
+                    Right $ lhs { gvtype = mergedType, gvNestDepth = storedDepth }
+                | isExternDecl lhs ->
+                    Right $ rhs { gvtype = mergedType, gvNestDepth = storedDepth }
+                | isExternDecl rhs ->
+                    Right $ lhs { gvtype = mergedType, gvNestDepth = storedDepth }
+                | isTentativeGVar lhs && isTentativeGVar rhs ->
+                    Right $ lhs { gvtype = mergedType, gvNestDepth = storedDepth }
+                | isTentativeGVar lhs ->
+                    Right $ rhs { gvtype = mergedType, gvNestDepth = storedDepth }
+                | isTentativeGVar rhs ->
+                    Right $ lhs { gvtype = mergedType, gvNestDepth = storedDepth }
+                | otherwise ->
+                    Left ("redeclaration of '" <> ident <> "' with no linkage", cur)
+
+        isTentativeGVar gvar = case initWith gvar of
+            GVarInitWithZero -> True
+            _                -> False
+
+        isExternDecl gvar = case initWith gvar of
+            GVarInitWithExternDecl -> True
+            _                      -> False
+
+        mergeGVarTypes lhs rhs = case (gvtype lhs, gvtype rhs) of
+            (CT.SCAuto lhsTy, CT.SCAuto rhsTy) ->
+                CT.SCAuto <$> CT.mergeCompatibleTypeKinds lhsTy rhsTy
+            (CT.SCStatic lhsTy, CT.SCStatic rhsTy) ->
+                CT.SCStatic <$> CT.mergeCompatibleTypeKinds lhsTy rhsTy
+            (CT.SCStatic lhsTy, CT.SCAuto rhsTy)
+                | isExternDecl rhs ->
+                CT.SCStatic <$> CT.mergeCompatibleTypeKinds lhsTy rhsTy
+            (CT.SCRegister lhsTy, CT.SCRegister rhsTy) ->
+                CT.SCRegister <$> CT.mergeCompatibleTypeKinds lhsTy rhsTy
+            (CT.SCUndef lhsTy, CT.SCUndef rhsTy) ->
+                CT.SCUndef <$> CT.mergeCompatibleTypeKinds lhsTy rhsTy
+            _ ->
+                Nothing
+addGVarWith _ _ _ _ _ = Left (internalCE, (HT.TokenLCNums 0 0, HT.TKEmpty))
 
 -- | If the specified token is `HT.TKIdent` and the global variable does not exist in the list, `addLVar` adds a new global variable that will be initialized by zero to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.
-addGVar :: Num i => CT.StorageClass i -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
-addGVar t ident = addGVarWith t ident GVarInitWithZero
+addGVar :: (Ord i, Num i) => Natural -> CT.StorageClass i -> HT.TokenLC i -> Vars i -> Either (SM.ASTError i) (ATree i, Vars i)
+addGVar cnd t ident = addGVarWith cnd t ident GVarInitWithZero
 
 -- | If the specified token is `HT.TKString`, `addLiteral` adds a new literal to the list,
 -- constructs a pair with the node representing the variable, wraps it in `Right` and return it. Otherwise, returns an error message and token pair wrapped in `Left`.

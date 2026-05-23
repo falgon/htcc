@@ -1,0 +1,4 @@
+interface:
+  display_name: "HTCC Review Comment Response"
+  short_description: "Resolve htcc review comments safely"
+  default_prompt: "Use $htcc-review-comment-response to validate and address htcc review comments end to end."

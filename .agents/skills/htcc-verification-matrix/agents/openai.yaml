@@ -1,0 +1,4 @@
+interface:
+  display_name: "HTCC Verification Matrix"
+  short_description: "Choose htcc verification commands"
+  default_prompt: "Use $htcc-verification-matrix to choose and report the right htcc verification commands."

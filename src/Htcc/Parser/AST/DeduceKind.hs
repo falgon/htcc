@@ -24,8 +24,8 @@ import           Htcc.Parser.AST.Core (ATKind (..), ATree (..))
 addKind :: (Eq i, Ord i, Show i) => ATree i -> ATree i -> Maybe (ATree i)
 addKind lhs rhs
     | all (CT.isFundamental . atype) [lhs, rhs] = Just $ ATNode ATAdd (CT.conversion (atype lhs) (atype rhs)) lhs rhs
-    | isJust (CT.deref $ atype lhs) && CT.isFundamental (atype rhs) = Just $ ATNode ATAddPtr (atype lhs) lhs rhs
-    | CT.isFundamental (atype lhs) && isJust (CT.deref $ atype rhs) = Just $ ATNode ATAddPtr (atype rhs) rhs lhs
+    | isJust (CT.deref $ atype lhs) && CT.isFundamental (atype rhs) = Just $ ATNode ATAddPtr (pointerOperandType lhs) lhs rhs
+    | CT.isFundamental (atype lhs) && isJust (CT.deref $ atype rhs) = Just $ ATNode ATAddPtr (pointerOperandType rhs) rhs lhs
     | otherwise = Nothing
 
 {-# INLINE subKind #-}
@@ -33,6 +33,17 @@ addKind lhs rhs
 subKind :: (Eq i, Ord i) => ATree i -> ATree i -> Maybe (ATree i)
 subKind lhs rhs
     | all (CT.isFundamental . atype) [lhs, rhs] = Just $ ATNode ATSub (CT.conversion (atype lhs) (atype rhs)) lhs rhs
-    | isJust (CT.deref $ atype lhs) && CT.isFundamental (atype rhs) = Just $ ATNode ATSubPtr (atype lhs) lhs rhs
-    | all (isJust . CT.deref . atype) [lhs, rhs] = Just $ ATNode ATPtrDis (atype lhs) lhs rhs
+    | isJust (CT.deref $ atype lhs) && CT.isFundamental (atype rhs) = Just $ ATNode ATSubPtr (pointerOperandType lhs) lhs rhs
+    | all (isJust . CT.deref . atype) [lhs, rhs] = Just $ ATNode ATPtrDis (CT.SCAuto $ CT.CTLong CT.CTInt) lhs rhs
     | otherwise = Nothing
+
+pointerOperandType :: Ord i => ATree i -> CT.StorageClass i
+pointerOperandType expr = case CT.toTypeKind ty of
+    CT.CTArray _ _ ->
+        maybe ty (CT.mapTypeKind CT.CTPtr) $ CT.deref ty
+    CT.CTIncomplete (CT.IncompleteArray elemTy) ->
+        CT.mapTypeKind (const $ CT.CTPtr elemTy) ty
+    _ ->
+        ty
+    where
+        ty = atype expr

@@ -15,16 +15,17 @@ module Htcc.Asm (
     casm
 ) where
 
-import           Data.Tuple.Extra                                      (uncurry3)
-
+import           Data.Bits                                             (Bits)
 import           Htcc.Asm.Generate
 import qualified Htcc.Asm.Intrinsic.Operand                            as O
 import qualified Htcc.Asm.Intrinsic.Structure.Internal                 as SI
 import qualified Htcc.Asm.Intrinsic.Structure.Section.Text.Instruction as TI
 import           Htcc.Parser                                           (ASTs)
+import qualified Htcc.Parser.ConstructionData.Scope.Function           as PF
 import           Htcc.Parser.ConstructionData.Scope.Var                (GlobalVars,
                                                                         Literals)
+import           Htcc.Utils                                            (uncurry4)
 
 -- | Generate full assembly code from string of C source code
-casm :: (O.IsOperand i, TI.UnaryInstruction i, TI.BinaryInstruction i, Integral i) => (ASTs i, GlobalVars i, Literals i) -> IO ()
-casm = SI.runAsm . uncurry3 casm'
+casm :: (Bits i, Read i, Show i, Ord i, O.IsOperand i, TI.UnaryInstruction i, TI.BinaryInstruction i, Integral i) => (ASTs i, GlobalVars i, Literals i, PF.Functions i) -> IO ()
+casm = SI.runAsm . uncurry4 casm'

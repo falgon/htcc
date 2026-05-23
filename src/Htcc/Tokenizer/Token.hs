@@ -17,6 +17,7 @@ module Htcc.Tokenizer.Token (
     TokenLC,
     Token (..),
     -- * Utilities for accessing to token data
+    keywordsTokens,
     length,
     emptyToken,
     isTKNum,
@@ -36,6 +37,7 @@ module Htcc.Tokenizer.Token (
 
 import           Control.DeepSeq                      (NFData (..),
                                                        NFData1 (..))
+import           Data.Bifunctor                       (bimap)
 import qualified Data.ByteString                      as B
 import           Data.Char                            (chr, isDigit, ord)
 import           Data.List                            (find)
@@ -111,7 +113,7 @@ instance Show i => Show (Token i) where
 instance Read i => Read (Token i) where
     readsPrec _ xxs@(x:xs)
         | isDigit x = [first (TKNum . (read :: String -> i) . (x:)) $ dropFst3 $ spanLen isDigit xs]
-        | x == '\"' = [maybe' (error "No parse: string literal was not closed") (spanStrLiteral $ T.pack xs) $ first (TKString . T.encodeUtf8 . flip T.append "\0") . second T.unpack]
+        | x == '\"' = [maybe' (error "No parse: string literal was not closed") (spanStrLiteral $ T.pack xs) $ bimap (TKString . T.encodeUtf8 . flip T.append "\0") T.unpack]
         | P.length xxs > 2 && T.pack (take 3 xxs) `elem` CR.strOps3 = [(TKReserved $ T.pack $ take 3 xxs, drop 3 xxs)]
         | not (null xs) && T.pack (take 2 xxs) `elem` CR.strOps2 = [(TKReserved $ T.pack $ take 2 xxs, drop 2 xxs)]
         | x `elem` CR.charOps = [(TKReserved (T.singleton x), xs)]
@@ -145,36 +147,39 @@ length (TKString s)   = B.length s
 length (TKMacro m t)  = CP.length m + T.length t
 length TKEmpty        = 0
 
+keywordsTokens :: [Token i]
+keywordsTokens = [
+    TKReturn
+  , TKWhile
+  , TKIf
+  , TKSwitch
+  , TKCase
+  , TKDefault
+  , TKElse
+  , TKFor
+  , TKBreak
+  , TKContinue
+  , TKEnum
+  , TKStruct
+  , TKSizeof
+  , TKGoto
+  , TKAlignof
+  , TKTypedef
+  , TKType $ CR.SCUndef CR.CTInt
+  , TKType $ CR.SCUndef CR.CTChar
+  , TKType $ CR.SCUndef $ CR.CTSigned CR.CTUndef
+  , TKType $ CR.SCUndef $ CR.CTShort CR.CTUndef
+  , TKType $ CR.SCUndef $ CR.CTLong CR.CTUndef
+  , TKType $ CR.SCUndef CR.CTVoid
+  , TKType $ CR.SCUndef CR.CTBool
+  , TKType $ CR.SCAuto CR.CTUndef
+  , TKType $ CR.SCStatic CR.CTUndef
+  , TKType $ CR.SCRegister CR.CTUndef
+  ]
+
 -- | Lookup keyword from `T.Text`. If the specified `T.Text` is not keyword as C language, `lookupKeyword` returns `Nothing`.
 lookupKeyword :: forall i. (Show i) => T.Text -> Maybe (Token i)
-lookupKeyword s = find ((==) s . tshow) [
-    TKReturn,
-    TKWhile,
-    TKIf,
-    TKSwitch,
-    TKCase,
-    TKDefault,
-    TKElse,
-    TKFor,
-    TKBreak,
-    TKContinue,
-    TKEnum,
-    TKStruct,
-    TKSizeof,
-    TKGoto,
-    TKAlignof,
-    TKTypedef,
-    TKType $ CR.SCUndef CR.CTInt,
-    TKType $ CR.SCUndef CR.CTChar,
-    TKType $ CR.SCUndef $ CR.CTSigned CR.CTUndef,
-    TKType $ CR.SCUndef $ CR.CTShort CR.CTUndef,
-    TKType $ CR.SCUndef $ CR.CTLong CR.CTUndef,
-    TKType $ CR.SCUndef CR.CTVoid,
-    TKType $ CR.SCUndef CR.CTBool,
-    TKReserved $ T.pack $ show (CR.SCAuto CR.CTUndef :: CR.StorageClass i),
-    TKReserved $ T.pack $ show (CR.SCStatic CR.CTUndef :: CR.StorageClass i),
-    TKReserved $ T.pack $ show (CR.SCRegister CR.CTUndef :: CR.StorageClass i)
-    ]
+lookupKeyword s = find ((==) s . tshow) keywordsTokens
 
 -- | `TokenLCNums` is data structure for storing the line number and character number of each token
 data TokenLCNums i = TokenLCNums -- ^ The constructor of `TokenLCNums`
