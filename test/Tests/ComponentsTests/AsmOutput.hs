@@ -9,6 +9,9 @@ import           Control.Monad                               (when)
 import qualified Data.ByteString                             as B
 import qualified Data.ByteString.Char8                       as BC
 import           Data.Either                                 (isLeft)
+import           Data.IORef                                  (modifyIORef',
+                                                              newIORef,
+                                                              readIORef)
 import qualified Data.Map.Strict                             as Map
 import qualified Data.Text                                   as T
 import qualified Data.Text.IO                                as T
@@ -57,7 +60,9 @@ import           System.IO                                   (IOMode (ReadMode, 
                                                               hClose,
                                                               openTempFile,
                                                               withBinaryFile)
-import           System.IO.Error                             (catchIOError)
+import           System.IO.Error                             (catchIOError,
+                                                              mkIOError,
+                                                              permissionErrorType)
 import           System.Posix.Files                          (createLink,
                                                               createSymbolicLink,
                                                               fileMode,
@@ -1677,6 +1682,91 @@ withReplacementOutputPathAndResolvedPathDirectFallbackTest =
                 "direct fallback should stage the replacement away from the target directory"
                 (stagedPath /= targetPath && takeDirectory stagedPath /= targetDir)
             assertEqual "direct fallback should replace the target output" replacementOutput replacedOutput
+    where
+        ignoreIOException = flip catchIOError $ const $ pure ()
+
+withReplacementOutputPathActionPermissionFailureNotRetriedTest :: Test
+withReplacementOutputPathActionPermissionFailureNotRetriedTest =
+    TestLabel "Asm.Output.with-replacement-output-path-action-permission-failure-not-retried" $ TestCase $ do
+        tmpDir <- getTemporaryDirectory
+        (targetPath, targetHandle) <- openTempFile tmpDir "htcc-output-target"
+        actionCalls <- newIORef (0 :: Int)
+        let staleOutput = "stale output\n"
+            cleanup =
+                ignoreIOException (hClose targetHandle)
+                    >> ignoreIOException (removeFile targetPath)
+            failingAction tmpOutputPath = do
+                modifyIORef' actionCalls succ
+                ioError $
+                    mkIOError
+                        permissionErrorType
+                        "simulated action permission failure"
+                        Nothing
+                        (Just tmpOutputPath)
+        flip finally cleanup $ do
+            hClose targetHandle
+            T.writeFile targetPath staleOutput
+            result <- try
+                (withReplacementOutputPathAndResolvedPath PreserveReplacementOutputMode targetPath $ \tmpOutputPath ->
+                    failingAction tmpOutputPath
+                )
+                :: IO (Either IOException (FilePath, ()))
+            case result of
+                Left _ ->
+                    pure ()
+                Right _ ->
+                    assertFailure "action PermissionDenied should be returned without direct fallback retry"
+            callCount <- readIORef actionCalls
+            targetOutput <- T.readFile targetPath
+            assertEqual "action PermissionDenied should not retry the action through direct fallback" 1 callCount
+            assertEqual "failed action should preserve the existing output" staleOutput targetOutput
+    where
+        ignoreIOException = flip catchIOError $ const $ pure ()
+
+withReplacementOutputPathPublishPermissionFailureNotRetriedTest :: Test
+withReplacementOutputPathPublishPermissionFailureNotRetriedTest =
+    TestLabel "Asm.Output.with-replacement-output-path-publish-permission-failure-not-retried" $ TestCase $ do
+        tmpDir <- getTemporaryDirectory
+        targetDir <- mkdtemp (tmpDir </> "htcc-output-publish-fallbackXXXXXX")
+        actionCalls <- newIORef (0 :: Int)
+        let targetPath = targetDir </> "htcc-output-target"
+            staleOutput = "stale output\n"
+            replacementOutput = "replacement output\n"
+            targetMode = ownerWriteMode
+            cleanup = do
+                ignoreIOException $ setFileMode targetDir 0o755
+                ignoreIOException $ setFileMode targetPath 0o644
+                ignoreIOException $ removeFile targetPath
+                ignoreIOException $ removeDirectoryRecursive targetDir
+        flip finally cleanup $ do
+            T.writeFile targetPath staleOutput
+            setFileMode targetPath targetMode
+            result <- try
+                (withReplacementOutputPathAndResolvedPath PreserveReplacementOutputMode targetPath $ \tmpOutputPath -> do
+                    modifyIORef' actionCalls succ
+                    T.writeFile tmpOutputPath replacementOutput
+                    setFileMode tmpOutputPath 0o644
+                    setFileMode targetDir 0o555
+                )
+                :: IO (Either IOException (FilePath, ()))
+            case result of
+                Left ioErr ->
+                    assertFailure $
+                        "publish PermissionDenied should reuse the staged artifact without rerunning the action: "
+                            <> show ioErr
+                Right (finalPath, ()) ->
+                    assertEqual "publish fallback should still report the target output path" targetPath finalPath
+            callCount <- readIORef actionCalls
+            setFileMode targetDir 0o755
+            replacedMode <- fileMode <$> getFileStatus targetPath
+            setFileMode targetPath $ replacedMode `unionFileModes` ownerReadMode
+            targetOutput <- T.readFile targetPath
+            assertEqual "publish PermissionDenied should not retry the action through direct fallback" 1 callCount
+            assertEqual
+                "publish fallback should preserve the unreadable existing output mode"
+                targetMode
+                (intersectFileModes replacedMode 0o777)
+            assertEqual "publish fallback should copy the staged output" replacementOutput targetOutput
     where
         ignoreIOException = flip catchIOError $ const $ pure ()
 
@@ -3311,6 +3401,8 @@ test = TestLabel "Asm.Output" $
         , hardLinkedFallbackReplacementRejectedTest
         , hardLinkedRenameReplacementPreservesAliasTest
         , withReplacementOutputPathAndResolvedPathDirectFallbackTest
+        , withReplacementOutputPathActionPermissionFailureNotRetriedTest
+        , withReplacementOutputPathPublishPermissionFailureNotRetriedTest
         , suppressWarnsRunAsmPreservesDirectiveLikePostWarningOutputTest
         , suppressWarnsRunAsmPreservesLeadInForRetainedErrorTest
         , suppressWarnsRunAsmPreservesWarningLabelErrorSnippetTest

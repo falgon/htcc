@@ -347,25 +347,38 @@ withReplacementOutputPathAndResolvedPath modeStrategy outputPath action = do
                                     pure (resolvedOutputPath, result)
                             | otherwise =
                                 ioError ioErr
-                    catchIOError
-                        ( do
-                            (tmpOutputPath, tmpOutputHandle) <- openTempFile outputDir outputTemplate
-                            finally
-                                ( do
+                        openStagedOutput =
+                            do
+                                (tmpOutputPath, tmpOutputHandle) <- openTempFile outputDir outputTemplate
+                                let cleanup =
+                                        ignoreIOException (hClose tmpOutputHandle)
+                                            *> ignoreIOException (removeFile tmpOutputPath)
+                                flip onException cleanup $ do
                                     setFileMode tmpOutputPath $ stagedOutputMode modeStrategy baseMode
                                     hClose tmpOutputHandle
+                                    pure tmpOutputPath
+                        publishStagedOutput tmpOutputPath stagedMode =
+                            renameFile tmpOutputPath resolvedOutputPath `catchIOError` \ioErr ->
+                                if isPermissionError ioErr
+                                    then replaceExistingOutputFromPath modeStrategy resolvedOutputPath baseMode stagedMode tmpOutputPath
+                                    else ioError ioErr
+                    stagingResult <- catchIOError
+                        (Right <$> openStagedOutput)
+                        (fmap Left . fallbackToDirect)
+                    case stagingResult of
+                        Left fallbackResult ->
+                            pure fallbackResult
+                        Right tmpOutputPath ->
+                            finally
+                                ( do
                                     result <- action tmpOutputPath
                                     currentMode <- fileMode <$> getFileStatus tmpOutputPath
-                                    setFileMode tmpOutputPath $
-                                        updatedOutputMode modeStrategy baseMode currentMode
-                                    renameFile tmpOutputPath resolvedOutputPath
+                                    let finalMode = updatedOutputMode modeStrategy baseMode currentMode
+                                    setFileMode tmpOutputPath finalMode
+                                    publishStagedOutput tmpOutputPath finalMode
                                     pure (resolvedOutputPath, result)
                                 )
-                                ( ignoreIOException (hClose tmpOutputHandle)
-                                    *> ignoreIOException (removeFile tmpOutputPath)
-                                )
-                        )
-                        fallbackToDirect
+                                (ignoreIOException (removeFile tmpOutputPath))
         else do
             result <- action resolvedOutputPath
             pure (resolvedOutputPath, result)
